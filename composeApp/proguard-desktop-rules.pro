@@ -1,3 +1,11 @@
+# ProGuard's return-type specialization narrows ActualParagraph()'s declared return type
+# from the Paragraph interface down to its only impl (SkiaParagraph). The bytecode still
+# pushes a Paragraph-typed value, so JVM 21's verifier rejects it at runtime with
+# "VerifyError: Bad return type" the moment any Text() renders (androidx.compose.ui.text).
+# Disable only method type-specialization; shrinking, obfuscation, class-merging,
+# inlining and every other optimization stay on.
+-optimizations !method/specialization/*
+
 -keepclasseswithmembers class * {
     native <methods>;
 }
@@ -19,6 +27,22 @@
 -dontnote io.ktor.**
 -dontnote org.slf4j.**
 -dontnote kotlinx.serialization.**
+
+# Skiko / Skia + Compose AWT interop. ProGuard obfuscation renames these classes, which
+# breaks compose.interop.blending on the transparent desktop window — Canvas/video then
+# render see-through (you can see the desktop behind them). Keep them un-obfuscated.
+-keep class org.jetbrains.skiko.** { *; }
+-keep class org.jetbrains.skia.** { *; }
+-keep class androidx.compose.ui.awt.** { *; }
+-keep class androidx.compose.ui.interop.** { *; }
+-dontwarn org.jetbrains.skiko.**
+-dontwarn org.jetbrains.skia.**
+
+# compottie (Lottie renderer) draws via skiko (PlatformShader.skiko, SkikoPathBuilder).
+# On release, proguard obfuscation mangles its internal classes so the renderer runs but
+# paints nothing — the animation stays blank with no crash. Keep them un-obfuscated.
+-keep class io.github.alexzhirkevich.compottie.** { *; }
+-dontwarn io.github.alexzhirkevich.compottie.**
 
 # Okhttp3
 -keep class okhttp3.** { *; }
