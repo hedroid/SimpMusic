@@ -126,15 +126,15 @@ fun LibraryDynamicPlaylistScreen(
     LaunchedEffect(query) {
         Logger.w("LibraryDynamicPlaylistScreen", "Check query: $query")
         tempFavorite = favorite.filter { it.title.contains(query, ignoreCase = true) || 
-	    it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
+            it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
         Logger.w("LibraryDynamicPlaylistScreen", "Check tempFavorite: $tempFavorite")
         tempFollowed = followed.filter { it.name.contains(query, ignoreCase = true) }
         Logger.w("LibraryDynamicPlaylistScreen", "Check tempFollowed: $tempFollowed")
         tempMostPlayed = mostPlayed.filter { it.title.contains(query, ignoreCase = true) || 
-	    it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
+            it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
         Logger.w("LibraryDynamicPlaylistScreen", "Check tempMostPlayed: $tempMostPlayed")
         tempDownloaded = downloaded.filter { it.title.contains(query, ignoreCase = true) || 
-	  it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
+	          it.artistName?.any { artistString -> artistString.contains(query, ignoreCase = true) } ?: false }
         Logger.w("LibraryDynamicPlaylistScreen", "Check tempDownloaded: $tempDownloaded")
         tempTopTracks =
             analyticsUIState.topTracks.data
