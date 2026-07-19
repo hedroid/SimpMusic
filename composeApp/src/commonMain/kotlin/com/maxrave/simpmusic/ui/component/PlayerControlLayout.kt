@@ -30,13 +30,13 @@ import androidx.compose.ui.unit.dp
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.ui.theme.seed
-import com.maxrave.simpmusic.ui.theme.transparent
 import com.maxrave.simpmusic.viewModel.UIEvent
 
 @Composable
 fun PlayerControlLayout(
     controllerState: ControlState,
     isSmallSize: Boolean = false,
+    contentColor: Color = Color.White,
     onUIEvent: (UIEvent) -> Unit,
 ) {
     val height = if (isSmallSize) 48.dp else 96.dp
@@ -56,7 +56,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(smallIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -71,7 +71,7 @@ fun PlayerControlLayout(
                     if (!isShuffle) {
                         Icon(
                             imageVector = Icons.Rounded.Shuffle,
-                            tint = Color.White,
+                            tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(smallIcon.first),
                         )
@@ -90,7 +90,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(mediumIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -105,7 +105,7 @@ fun PlayerControlLayout(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.SkipPrevious,
-                    tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
+                    tint = if (controllerState.isPreviousAvailable) contentColor else contentColor.copy(alpha = 0.4f),
                     contentDescription = "",
                     modifier = Modifier.size(mediumIcon.first),
                 )
@@ -115,7 +115,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(bigIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -130,14 +130,14 @@ fun PlayerControlLayout(
                     if (!isPlaying) {
                         Icon(
                             imageVector = Icons.Rounded.PlayCircle,
-                            tint = Color.White,
+                            tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(bigIcon.first),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.PauseCircle,
-                            tint = Color.White,
+                            tint = contentColor,
                             contentDescription = "",
                             modifier = Modifier.size(bigIcon.first),
                         )
@@ -149,7 +149,7 @@ fun PlayerControlLayout(
             Box(
                 modifier =
                     Modifier
-                        .background(transparent)
+                        .background(Color.Transparent)
                         .size(mediumIcon.second)
                         .aspectRatio(1f)
                         .clip(
@@ -164,7 +164,7 @@ fun PlayerControlLayout(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.SkipNext,
-                    tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
+                    tint = if (controllerState.isNextAvailable) contentColor else contentColor.copy(alpha = 0.4f),
                     contentDescription = "",
                     modifier = Modifier.size(mediumIcon.first),
                 )
@@ -189,7 +189,7 @@ fun PlayerControlLayout(
                         is RepeatState.None -> {
                             Icon(
                                 imageVector = Icons.Rounded.Repeat,
-                                tint = Color.White,
+                                tint = contentColor,
                                 contentDescription = "",
                                 modifier = Modifier.size(smallIcon.first),
                             )

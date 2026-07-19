@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -119,10 +120,10 @@ import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.SpotifyLoginDestination
-import com.maxrave.simpmusic.ui.theme.DarkColors
 import com.maxrave.simpmusic.ui.theme.md_theme_dark_primary
+import com.maxrave.simpmusic.expect.ui.isWallpaperDynamicColorSupported
+import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
-import com.maxrave.simpmusic.ui.theme.white
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
@@ -210,6 +211,7 @@ import simpmusic.composeapp.generated.resources.crossfade_description
 import simpmusic.composeapp.generated.resources.crossfade_dj_mode
 import simpmusic.composeapp.generated.resources.crossfade_dj_mode_description
 import simpmusic.composeapp.generated.resources.crossfade_duration
+import simpmusic.composeapp.generated.resources.custom_color
 import simpmusic.composeapp.generated.resources.custom_ai_model_id
 import simpmusic.composeapp.generated.resources.custom_model_id_messages
 import simpmusic.composeapp.generated.resources.daily
@@ -269,6 +271,7 @@ import simpmusic.composeapp.generated.resources.monthly
 import simpmusic.composeapp.generated.resources.never
 import simpmusic.composeapp.generated.resources.no_account
 import simpmusic.composeapp.generated.resources.normalize_volume
+import simpmusic.composeapp.generated.resources.not_available_while_casting
 import simpmusic.composeapp.generated.resources.open_system_equalizer
 import simpmusic.composeapp.generated.resources.openai
 import simpmusic.composeapp.generated.resources.openai_api_compatible
@@ -315,6 +318,14 @@ import simpmusic.composeapp.generated.resources.spotify_canvas_cache
 import simpmusic.composeapp.generated.resources.spotify_lyrícs_info
 import simpmusic.composeapp.generated.resources.storage
 import simpmusic.composeapp.generated.resources.such_as_music_video_lyrics_video_podcasts_and_more
+import simpmusic.composeapp.generated.resources.theme
+import simpmusic.composeapp.generated.resources.theme_color
+import simpmusic.composeapp.generated.resources.theme_color_custom
+import simpmusic.composeapp.generated.resources.theme_color_default
+import simpmusic.composeapp.generated.resources.theme_color_wallpaper
+import simpmusic.composeapp.generated.resources.theme_mode_dark
+import simpmusic.composeapp.generated.resources.theme_mode_light
+import simpmusic.composeapp.generated.resources.theme_mode_system
 import simpmusic.composeapp.generated.resources.third_party_libraries
 import simpmusic.composeapp.generated.resources.thumbnail_cache
 import simpmusic.composeapp.generated.resources.translation_language
@@ -458,6 +469,10 @@ fun SettingScreen(
     val autoBackupLastTime by viewModel.autoBackupLastTime.collectAsStateWithLifecycle()
     val updateChannel by viewModel.updateChannel.collectAsStateWithLifecycle()
     val enableLiquidGlass by viewModel.enableLiquidGlass.collectAsStateWithLifecycle()
+    val themeMode by sharedViewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_DARK)
+    val themeColorSource by sharedViewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
+    val customThemeColorHex by sharedViewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    var showColorPickerDialog by rememberSaveable { mutableStateOf(false) }
     val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
     val richPresenceEnabled by viewModel.richPresenceEnabled.collectAsStateWithLifecycle()
     val keepServiceAlive by viewModel.keepServiceAlive.collectAsStateWithLifecycle()
@@ -465,6 +480,7 @@ fun SettingScreen(
     val crossfadeEnabled by viewModel.crossfadeEnabled.collectAsStateWithLifecycle()
     val crossfadeDuration by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val crossfadeDjMode by viewModel.crossfadeDjMode.collectAsStateWithLifecycle()
+    val castState by viewModel.castState.collectAsStateWithLifecycle()
 
     val isCheckingUpdate by sharedViewModel.isCheckingUpdate.collectAsStateWithLifecycle()
 
@@ -520,7 +536,78 @@ fun SettingScreen(
         item(key = "user_interface") {
             Column {
                 Spacer(Modifier.height(16.dp))
-                Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = white)
+                Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
+                val themeModeLabels =
+                    listOf(
+                        DataStoreManager.THEME_MODE_SYSTEM to stringResource(Res.string.theme_mode_system),
+                        DataStoreManager.THEME_MODE_DARK to stringResource(Res.string.theme_mode_dark),
+                        DataStoreManager.THEME_MODE_LIGHT to stringResource(Res.string.theme_mode_light),
+                    )
+                SettingItem(
+                    title = stringResource(Res.string.theme),
+                    subtitle = themeModeLabels.firstOrNull { it.first == themeMode }?.second ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.theme) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect = themeModeLabels.map { (it.first == themeMode) to it.second },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val selected = state.selectOne?.getSelected()
+                                        themeModeLabels.firstOrNull { it.second == selected }?.first?.let {
+                                            sharedViewModel.setThemeMode(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                val colorSourceLabels =
+                    buildList {
+                        add(DataStoreManager.THEME_COLOR_DEFAULT to stringResource(Res.string.theme_color_default))
+                        if (isWallpaperDynamicColorSupported()) {
+                            add(DataStoreManager.THEME_COLOR_WALLPAPER to stringResource(Res.string.theme_color_wallpaper))
+                        }
+                        add(DataStoreManager.THEME_COLOR_CUSTOM to stringResource(Res.string.theme_color_custom))
+                    }
+                SettingItem(
+                    title = stringResource(Res.string.theme_color),
+                    subtitle = colorSourceLabels.firstOrNull { it.first == themeColorSource }?.second ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.theme_color) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect = colorSourceLabels.map { (it.first == themeColorSource) to it.second },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val selected = state.selectOne?.getSelected()
+                                        colorSourceLabels.firstOrNull { it.second == selected }?.first?.let {
+                                            sharedViewModel.setThemeColorSource(it)
+                                            if (it == DataStoreManager.THEME_COLOR_CUSTOM) {
+                                                showColorPickerDialog = true
+                                            }
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                if (themeColorSource == DataStoreManager.THEME_COLOR_CUSTOM) {
+                    SettingItem(
+                        title = stringResource(Res.string.custom_color),
+                        subtitle = "#${customThemeColorHex.takeLast(6)}",
+                        smallSubtitle = true,
+                        onClick = { showColorPickerDialog = true },
+                    )
+                }
                 SettingItem(
                     title = stringResource(Res.string.translucent_bottom_navigation_bar),
                     subtitle = stringResource(Res.string.you_can_see_the_content_below_the_bottom_bar),
@@ -555,7 +642,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.content),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -935,7 +1022,7 @@ fun SettingScreen(
                     Text(
                         text = stringResource(Res.string.audio),
                         style = typo().labelMedium,
-                        color = white,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                     SettingItem(
@@ -950,7 +1037,13 @@ fun SettingScreen(
                     )
                     SettingItem(
                         title = stringResource(Res.string.open_system_equalizer),
-                        subtitle = stringResource(Res.string.use_your_system_equalizer),
+                        subtitle =
+                            if (castState.isRemote) {
+                                stringResource(Res.string.not_available_while_casting)
+                            } else {
+                                stringResource(Res.string.use_your_system_equalizer)
+                            },
+                        isEnable = !castState.isRemote,
                         onClick = {
                             coroutineScope.launch {
                                 resultLauncher.launch()
@@ -965,7 +1058,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.playback),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -997,20 +1090,29 @@ fun SettingScreen(
             Column {
                 SettingItem(
                     title = stringResource(Res.string.crossfade),
-                    subtitle = stringResource(Res.string.crossfade_description),
+                    subtitle =
+                        if (castState.isRemote) {
+                            stringResource(Res.string.not_available_while_casting)
+                        } else {
+                            stringResource(Res.string.crossfade_description)
+                        },
                     smallSubtitle = true,
                     switch = (crossfadeEnabled to { viewModel.setCrossfadeEnabled(it) }),
+                    isEnable = !castState.isRemote,
                 )
                 AnimatedVisibility(visible = crossfadeEnabled) {
                     Column {
                         SettingItem(
                             title = stringResource(Res.string.crossfade_duration),
                             subtitle =
-                                if (crossfadeDuration == DataStoreManager.CROSSFADE_DURATION_AUTO) {
+                                if (castState.isRemote) {
+                                    stringResource(Res.string.not_available_while_casting)
+                                } else if (crossfadeDuration == DataStoreManager.CROSSFADE_DURATION_AUTO) {
                                     stringResource(Res.string.crossfade_auto)
                                 } else {
                                     "${crossfadeDuration / 1000}s"
                                 },
+                            isEnable = !castState.isRemote,
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
@@ -1065,9 +1167,15 @@ fun SettingScreen(
                         if (getPlatform() == Platform.Android) {
                             SettingItem(
                                 title = stringResource(Res.string.crossfade_dj_mode),
-                                subtitle = stringResource(Res.string.crossfade_dj_mode_description),
+                                subtitle =
+                                    if (castState.isRemote) {
+                                        stringResource(Res.string.not_available_while_casting)
+                                    } else {
+                                        stringResource(Res.string.crossfade_dj_mode_description)
+                                    },
                                 smallSubtitle = true,
                                 switch = ((crossfadeDjMode) to { viewModel.setCrossfadeDjMode(it) }),
+                                isEnable = !castState.isRemote,
                             )
                         }
                     }
@@ -1079,7 +1187,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.lyrics),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -1242,7 +1350,7 @@ fun SettingScreen(
         }
         item(key = "AI") {
             Column {
-                Text(text = stringResource(Res.string.ai), style = typo().labelMedium, color = white, modifier = Modifier.padding(vertical = 8.dp))
+                Text(text = stringResource(Res.string.ai), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(vertical = 8.dp))
                 SettingItem(
                     title = stringResource(Res.string.ai_provider),
                     subtitle =
@@ -1421,7 +1529,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.spotify),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -1469,7 +1577,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.discord_integration),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -1506,7 +1614,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.sponsorBlock),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -1566,7 +1674,7 @@ fun SettingScreen(
                         withLink(
                             LinkAnnotation.Url(
                                 "https://sponsor.ajay.app/",
-                                TextLinkStyles(style = SpanStyle(color = md_theme_dark_primary)),
+                                TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
                             ),
                         ) {
                             append("https://sponsor.ajay.app/")
@@ -1584,7 +1692,7 @@ fun SettingScreen(
                     Text(
                         text = stringResource(Res.string.storage),
                         style = typo().labelMedium,
-                        color = white,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
                     SettingItem(
@@ -1895,7 +2003,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.backup),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -2035,7 +2143,7 @@ fun SettingScreen(
                 Text(
                     text = stringResource(Res.string.about_us),
                     style = typo().labelMedium,
-                    color = white,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
                 SettingItem(
@@ -2170,6 +2278,72 @@ fun SettingScreen(
             },
         )
     }
+    if (showColorPickerDialog) {
+        val presetColors =
+            listOf(
+                "FF8ECAE6", "FF4C82EF", "FF9B72CF", "FFEF6C9B", "FFEF5350",
+                "FFF4A340", "FFFFCA28", "FF66BB6A", "FF26A69A", "FFBDBDBD",
+            )
+        var pendingHex by rememberSaveable { mutableStateOf(customThemeColorHex.takeLast(6)) }
+        val parsedColor = parseThemeColorHex(pendingHex)
+        AlertDialog(
+            onDismissRequest = { showColorPickerDialog = false },
+            title = { Text(text = stringResource(Res.string.custom_color), style = typo().titleSmall) },
+            text = {
+                Column {
+                    presetColors.chunked(5).forEach { rowColors ->
+                        Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                            rowColors.forEach { hex ->
+                                val color = parseThemeColorHex(hex) ?: Color.Gray
+                                val isSelected = pendingHex.equals(hex.takeLast(6), ignoreCase = true)
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .padding(4.dp)
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                            .border(
+                                                width = if (isSelected) 3.dp else 0.dp,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
+                                                shape = CircleShape,
+                                            ).clickable { pendingHex = hex.takeLast(6) },
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    TextField(
+                        value = pendingHex,
+                        onValueChange = { pendingHex = it.removePrefix("#").take(8).uppercase() },
+                        label = { Text("HEX") },
+                        prefix = { Text("#") },
+                        singleLine = true,
+                        isError = parsedColor == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = parsedColor != null,
+                    onClick = {
+                        parsedColor?.let {
+                            val argb = "FF${pendingHex.takeLast(6).uppercase()}"
+                            sharedViewModel.setCustomThemeColor(argb)
+                            sharedViewModel.setThemeColorSource(DataStoreManager.THEME_COLOR_CUSTOM)
+                        }
+                        showColorPickerDialog = false
+                    },
+                ) { Text(text = stringResource(Res.string.change)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showColorPickerDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
+    }
     if (showYouTubeAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
@@ -2178,7 +2352,7 @@ fun SettingScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
-                color = Color(0xFF242424),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = AlertDialogDefaults.TonalElevation,
                 shadowElevation = 1.dp,
             ) {
@@ -2207,14 +2381,14 @@ fun SettingScreen(
                                 onClick = { showYouTubeAccountDialog = false },
                                 colors =
                                     IconButtonDefaults.iconButtonColors().copy(
-                                        contentColor = Color.White,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
                                     ),
                                 modifier =
                                     Modifier
                                         .align(Alignment.CenterStart)
                                         .fillMaxHeight(),
                             ) {
-                                Icon(Icons.Outlined.Close, null, tint = Color.White)
+                                Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.onSurface)
                             }
                             Text(
                                 stringResource(Res.string.youtube_account),
@@ -2270,7 +2444,7 @@ fun SettingScreen(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(it.name, style = typo().labelMedium, color = white)
+                                        Text(it.name, style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
                                         Text(it.email, style = typo().bodySmall)
                                     }
                                     Spacer(Modifier.width(12.dp))
@@ -2375,7 +2549,7 @@ fun SettingScreen(
                                         Text(
                                             modifier = Modifier.fillMaxWidth(),
                                             text = verify.second ?: "",
-                                            color = DarkColors.error,
+                                            color = MaterialTheme.colorScheme.error,
                                         )
                                     }
                                 },
@@ -2547,13 +2721,16 @@ fun SettingScreen(
             onDismissRequest = {
                 showThirdPartyLibraries = false
             },
-            containerColor = Color.Black,
+            containerColor = MaterialTheme.colorScheme.surface,
             dragHandle = {},
             scrimColor = Color.Black,
             sheetState = sheetState,
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
             shape = RectangleShape,
         ) {
+            // Capture theme colors here: the ChipColors getters below run outside composition.
+            val surfaceContainerHighestColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            val onSurfaceColor = MaterialTheme.colorScheme.onSurface
             LibrariesContainer(
                 libraries?.copy(
                     libraries =
@@ -2571,9 +2748,9 @@ fun SettingScreen(
                         licenseChipColors =
                             object : ChipColors {
                                 override val containerColor: Color
-                                    get() = Color.DarkGray
+                                    get() = surfaceContainerHighestColor
                                 override val contentColor: Color
-                                    get() = Color.White
+                                    get() = onSurfaceColor
                             },
                     ),
                 header = {
@@ -2596,6 +2773,7 @@ fun SettingScreen(
                                         Modifier
                                             .size(32.dp),
                                         true,
+                                        tint = MaterialTheme.colorScheme.onSurface,
                                     ) {
                                         coroutineScope.launch {
                                             sheetState.hide()
@@ -2628,6 +2806,7 @@ fun SettingScreen(
                     Modifier
                         .size(32.dp),
                     true,
+                    tint = MaterialTheme.colorScheme.onSurface,
                 ) {
                     navController.navigateUp()
                 }
