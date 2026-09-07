@@ -5,6 +5,10 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
 import com.eygraber.uri.Uri
+import com.maxrave.domain.extension.now
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.format
+import kotlinx.datetime.format.byUnicodePattern
 import com.maxrave.common.Config
 import com.maxrave.common.QUALITY
 import com.maxrave.common.SELECTED_LANGUAGE
@@ -48,6 +52,7 @@ import org.koin.core.component.inject
 import org.simpmusic.lastfm.isLastfmAvailable
 import org.jetbrains.compose.resources.getString as formatString
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.backup_create_failed
 import simpmusic.composeapp.generated.resources.backup_create_success
 import simpmusic.composeapp.generated.resources.backup_in_progress
@@ -336,6 +341,7 @@ class SettingsViewModel(
         getAutoBackupEnabled()
         getAutoBackupFrequency()
         getAutoBackupMaxFiles()
+        getBackupLocation()
         getAutoBackupLastTime()
         viewModelScope.launch {
             calculateDataFraction(
@@ -1317,6 +1323,43 @@ class SettingsViewModel(
         }
     }
 
+    private val _backupLocation = MutableStateFlow<String?>(null)
+    val backupLocation: StateFlow<String?> = _backupLocation
+
+    private fun getBackupLocation() {
+        viewModelScope.launch {
+            dataStoreManager.getString("backup_location").collect { location ->
+                _backupLocation.value = location?.takeIf { it.isNotBlank() }
+            }
+        }
+    }
+
+    fun setBackupLocation(uri: String) {
+        viewModelScope.launch {
+            dataStoreManager.putString("backup_location", uri)
+        }
+    }
+
+    /**
+     * Manual backup without a save dialog: writes straight into the configured
+     * backup location (or the Documents/SimpMusic default) and shows a toast.
+     */
+    fun backupNow() {
+        viewModelScope.launch {
+            val formatter =
+                LocalDateTime.Format {
+                    byUnicodePattern("yyyyMMddHHmmss")
+                }
+            val fileName = "${getString(Res.string.app_name)}_${now().format(formatter)}.backup"
+            val target = withContext(Dispatchers.IO) { resolveBackupTargetUri(fileName) }
+            if (target == null) {
+                makeToast(getString(Res.string.backup_create_failed))
+            } else {
+                backup(target)
+            }
+        }
+    }
+
     fun backup(uri: Uri) {
         viewModelScope.launch {
             runCatching {
@@ -2116,6 +2159,13 @@ expect suspend fun backupNative(
     uri: Uri,
     backupDownloaded: Boolean,
 )
+
+/**
+ * Creates the document to write a backup into: the user-configured backup folder
+ * when one is set (falling back to the default on failure), otherwise a new file
+ * under Documents/SimpMusic. Returns null when no target could be created.
+ */
+expect suspend fun resolveBackupTargetUri(fileName: String): Uri?
 
 expect fun getPackageName(): String
 

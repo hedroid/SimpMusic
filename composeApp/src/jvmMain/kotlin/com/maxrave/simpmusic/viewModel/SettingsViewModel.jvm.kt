@@ -113,3 +113,4 @@ actual fun changeLanguageNative(code: String) {
         ),
     )
 }
+actual suspend fun resolveBackupTargetUri(fileName: String): Uri? = null

@@ -18,3 +18,5 @@ expect fun fileSaverResult(
     mimeType: String,
     onResultUri: (String?) -> Unit,
 ): FilePickerLauncher
+@Composable
+expect fun directoryPickerResult(onResultUri: (String?) -> Unit): FilePickerLauncher

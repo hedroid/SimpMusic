@@ -3,6 +3,8 @@ package com.maxrave.simpmusic.service.backup
 import android.content.ContentValues
 import android.content.Context
 import android.os.Build
+import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -50,19 +52,20 @@ class AutoBackupWorker(
             // Get backup settings
             val backupDownloaded = dataStoreManager.backupDownloaded.first() == DataStoreManager.TRUE
             val maxFiles = dataStoreManager.autoBackupMaxFiles.first()
+            val customLocation = dataStoreManager.getString("backup_location").first().takeUnless { it.isNullOrBlank() }
 
             // Create temp backup file
             val tempBackupFile = createBackupFile(backupDownloaded)
 
-            // Save to Downloads/SimpMusic folder
-            val success = saveToDownloads(tempBackupFile)
+            // Save into the configured backup folder, or Documents/SimpMusic by default
+            val success = saveBackup(tempBackupFile, customLocation)
 
             // Delete temp file
             tempBackupFile.delete()
 
             if (success) {
                 // Cleanup old backups
-                cleanupOldBackups(maxFiles)
+                cleanupOldBackups(maxFiles, customLocation)
 
                 // Update last backup time
                 dataStoreManager.setAutoBackupLastTime(System.currentTimeMillis())
@@ -149,22 +152,49 @@ class AutoBackupWorker(
         }
     }
 
-    private fun saveToDownloads(backupFile: File): Boolean {
+    private fun saveBackup(
+        backupFile: File,
+        customLocation: String?,
+    ): Boolean {
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val fileName = "simpmusic_backup_$timestamp.zip"
 
+        if (customLocation != null) {
+            try {
+                val treeUri = Uri.parse(customLocation)
+                val target =
+                    DocumentsContract.createDocument(
+                        context.contentResolver,
+                        treeUri,
+                        "application/zip",
+                        fileName,
+                    )
+                if (target != null) {
+                    context.contentResolver.openOutputStream(target)?.use { output ->
+                        backupFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Logger.i(TAG, "Backup saved to configured folder: $fileName")
+                    return true
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "Configured backup folder unavailable, falling back to default: ${e.message}")
+            }
+        }
+
         return try {
             val contentValues = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                put(MediaStore.Downloads.MIME_TYPE, "application/zip")
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Downloads.RELATIVE_PATH, "Download/SimpMusic")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/SimpMusic")
                 }
             }
 
             val uri = context.contentResolver.insert(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                contentValues
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                contentValues,
             )
 
             uri?.let { outputUri ->
@@ -173,16 +203,23 @@ class AutoBackupWorker(
                         input.copyTo(output)
                     }
                 }
-                Logger.i(TAG, "Backup saved to Downloads/SimpMusic/$fileName")
+                Logger.i(TAG, "Backup saved to Documents/SimpMusic/$fileName")
                 true
             } ?: false
         } catch (e: Exception) {
-            Logger.e(TAG, "Error saving to Downloads: ${e.message}")
+            Logger.e(TAG, "Error saving backup: ${e.message}")
             false
         }
     }
 
-    private fun cleanupOldBackups(maxFiles: Int) {
+    private fun cleanupOldBackups(
+        maxFiles: Int,
+        customLocation: String?,
+    ) {
+        if (customLocation != null) {
+            cleanupOldBackupsInTree(customLocation, maxFiles)
+            return
+        }
         try {
             val projection = arrayOf(
                 MediaStore.Downloads._ID,
@@ -197,7 +234,7 @@ class AutoBackupWorker(
             }
 
             val selectionArgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf("Download/SimpMusic/", "simpmusic_backup_%.zip")
+                arrayOf("Documents/SimpMusic/", "simpmusic_backup_%.zip")
             } else {
                 arrayOf("simpmusic_backup_%.zip")
             }
@@ -205,7 +242,7 @@ class AutoBackupWorker(
             val sortOrder = "${MediaStore.Downloads.DATE_ADDED} DESC"
 
             context.contentResolver.query(
-                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
                 projection,
                 selection,
                 selectionArgs,
@@ -244,5 +281,44 @@ class AutoBackupWorker(
 
     companion object {
         private const val TAG = "AutoBackupWorker"
+    }
+
+    private fun cleanupOldBackupsInTree(
+        customLocation: String,
+        maxFiles: Int,
+    ) {
+        try {
+            val treeUri = Uri.parse(customLocation)
+            val rootDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootDocId)
+
+            val backups =
+                context.contentResolver
+                    .query(
+                        childrenUri,
+                        arrayOf(
+                            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                        ),
+                        "${DocumentsContract.Document.COLUMN_DISPLAY_NAME} LIKE ?",
+                        arrayOf("simpmusic_backup_%.zip"),
+                        "${DocumentsContract.Document.COLUMN_LAST_MODIFIED} DESC",
+                    )?.use { cursor ->
+                        buildList<Pair<String, String>> {
+                            while (cursor.moveToNext()) {
+                                add(cursor.getString(0) to cursor.getString(1))
+                            }
+                        }
+                    } ?: return
+
+            backups.drop(maxFiles).forEach { (docId, name) ->
+                val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                context.contentResolver.delete(docUri, null, null)
+                Logger.i(TAG, "Deleted old backup: $name")
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "Error cleaning up old backups in configured folder: ${e.message}")
+        }
     }
 }

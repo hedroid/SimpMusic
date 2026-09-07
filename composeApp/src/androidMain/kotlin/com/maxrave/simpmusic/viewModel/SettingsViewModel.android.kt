@@ -10,7 +10,14 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import coil3.imageLoader
 import com.eygraber.uri.Uri
+import android.content.ContentResolver
+import android.content.ContentValues
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 import com.eygraber.uri.toAndroidUri
+import com.eygraber.uri.toKmpUri
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.common.Config
 import com.maxrave.common.DB_NAME
 import com.maxrave.common.DOWNLOAD_EXOPLAYER_FOLDER
@@ -25,6 +32,7 @@ import com.maxrave.simpmusic.extension.getSizeOfFile
 import com.maxrave.simpmusic.extension.zipInputStream
 import com.maxrave.simpmusic.extension.zipOutputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import multiplatform.network.cmptoast.ToastGravity
@@ -275,6 +283,50 @@ private fun restoreFolder(
         Logger.e("BackupRestore", "Error restoring file: ${targetFile.name}")
     }
 }
+
+actual suspend fun resolveBackupTargetUri(fileName: String): Uri? {
+    val application: Context = getKoin().get()
+    val resolver = application.contentResolver
+    val dataStoreManager: DataStoreManager = getKoin().get()
+    val custom = dataStoreManager.getString("backup_location").first().takeUnless { it.isNullOrBlank() }
+
+    if (custom != null) {
+        try {
+            val treeUri = Uri.parse(custom).toAndroidUri()
+            val created = DocumentsContract.createDocument(resolver, treeUri, "application/octet-stream", fileName)
+            if (created != null) return created.toKmpUri()
+        } catch (e: Exception) {
+            Logger.e("BackupLocation", "Configured backup folder unavailable, falling back to default: ${e.message}")
+        }
+    }
+    return createDefaultBackupTargetUri(resolver, fileName)
+}
+
+private fun createDefaultBackupTargetUri(
+    resolver: ContentResolver,
+    fileName: String,
+): Uri? =
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values =
+                ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/SimpMusic")
+                }
+            resolver.insert(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)?.toKmpUri()
+        } else {
+            val folder =
+                File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "SimpMusic",
+                )
+            if (folder.exists() || folder.mkdirs()) android.net.Uri.fromFile(File(folder, fileName)).toKmpUri() else null
+        }
+    } catch (e: Exception) {
+        Logger.e("BackupLocation", "Could not create default backup target: ${e.message}")
+        null
+    }
 
 operator fun File.div(child: String): File = File(this, child)
 

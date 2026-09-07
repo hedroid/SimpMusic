@@ -1042,41 +1042,28 @@ class SharedViewModel(
     fun checkForUpdate() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
-            val updateChannel = dataStoreManager.updateChannel.first()
+            // Keep this read ahead of the first DataStore write: on a fresh install
+            // MainActivity performs runBlocking DataStore writes on the main thread,
+            // and enqueuing our write before theirs can wedge the DataStore actor
+            // behind the blocked main looper, leaving the app stuck on the splash.
+            dataStoreManager.updateChannel.first()
             dataStoreManager.putString(
                 "CheckForUpdateAt",
                 System.currentTimeMillis().toString(),
             )
-            if (updateChannel == DataStoreManager.GITHUB) {
-                updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
-
-                        else -> {
-                            log("Check for update error: ${response.message}", LogLevel.WARN)
-                        }
+            updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
+                val data = response.data
+                when (response) {
+                    is Resource.Success if (data != null) -> {
+                        _updateResponse.value = data
+                        showedUpdateDialog = true
                     }
-                    _isCheckingUpdate.value = false
-                }
-            } else if (updateChannel == DataStoreManager.FDROID) {
-                updateRepository.checkForFdroidUpdate().collectLatest { response ->
-                    val data = response.data
-                    when (response) {
-                        is Resource.Success if (data != null) -> {
-                            _updateResponse.value = data
-                            showedUpdateDialog = true
-                        }
 
-                        else -> {
-                            log("Check for update error: ${response.message}", LogLevel.WARN)
-                        }
+                    else -> {
+                        log("Check for update error: ${response.message}", LogLevel.WARN)
                     }
-                    _isCheckingUpdate.value = false
                 }
+                _isCheckingUpdate.value = false
             }
         }
     }

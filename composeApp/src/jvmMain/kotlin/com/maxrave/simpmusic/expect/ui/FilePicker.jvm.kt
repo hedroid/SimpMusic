@@ -26,3 +26,10 @@ actual fun fileSaverResult(
             onResultUri(File(getHomeFolderPath(emptyList()), fileName).absolutePath)
         }
     }
+@Composable
+actual fun directoryPickerResult(onResultUri: (String?) -> Unit): FilePickerLauncher =
+    object : FilePickerLauncher {
+        override fun launch() {
+            onResultUri(null)
+        }
+    }
