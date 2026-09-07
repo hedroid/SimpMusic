@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ninja-build nasm yasm patchelf \
         libass-dev libfreetype6-dev libfribidi-dev libharfbuzz-dev \
         libfontconfig1-dev \
-        libasound2-dev libpulse-dev \
+        libasound2-dev libpulse-dev librubberband-dev \
         libxml2-dev zlib1g-dev libbz2-dev liblzma-dev \
         libssl-dev \
         libdav1d-dev \
@@ -55,6 +55,20 @@ RUN git clone --depth 1 --branch v7.351.0 --recursive \
 # Decoders/demuxers are trimmed to what YouTube Music actually serves, plus the
 # protocol stack for https. Encoders are dropped entirely: SimpMusic only ever
 # plays back.
+#
+# The filter whitelist is the ONLY place a filter can go missing: Linux is the
+# only bundle built with --disable-filters, so the macOS and Windows slices ship
+# every filter FFmpeg builds by default and simply have these already. Anything
+# the app's `af` graphs name must therefore be listed here as well, or the graph
+# fails to parse on Linux alone.
+#
+# The four beyond aecho are what convolution reverb needs:
+#   afir   - the partitioned convolution itself; the impulse response arrives as
+#            a SECOND input pad, not as an option, so it needs
+#   amovie - a source filter that opens the generated IR WAV and feeds that pad,
+#   asplit + amix - the wet/dry blend: afir's dry/wet are input/output GAIN, not
+#            a mix, so the dry path is split off before afir and mixed back after
+#            (amix `weights` is a runtime command -> live mix slider).
 # ---------------------------------------------------------------------------
 RUN git clone --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg && \
     cd ffmpeg && \
@@ -63,7 +77,7 @@ RUN git clone --depth 1 --branch n7.1.1 https://github.com/FFmpeg/FFmpeg.git ffm
         --enable-shared --disable-static \
         --disable-programs --disable-doc --disable-debug \
         --disable-encoders --disable-muxers --disable-devices \
-        --disable-filters --enable-filter=aresample,atempo,rubberband,scale,format,aformat,anull,null,volume,lavfi,acompressor,firequalizer,equalizer,highpass,lowpass,dynaudnorm,loudnorm,aecho \
+        --disable-filters --enable-filter=aresample,atempo,rubberband,scale,format,aformat,anull,null,volume,lavfi,acompressor,firequalizer,equalizer,highpass,lowpass,dynaudnorm,loudnorm,aecho,afir,amovie,asplit,amix \
         --enable-openssl --enable-protocol=https,http,tls,file,pipe,crypto,hls,data \
         --enable-libdav1d \
         --enable-version3 \
@@ -90,7 +104,7 @@ RUN git clone --depth 1 --branch v0.41.0 https://github.com/mpv-player/mpv.git &
         -Dlua=disabled -Djavascript=disabled \
         -Dlibarchive=disabled -Dlibbluray=disabled -Ddvdnav=disabled \
         -Dcdda=disabled -Duchardet=disabled \
-        -Drubberband=disabled -Dzimg=disabled \
+        -Drubberband=enabled -Dzimg=disabled \
         -Dmanpage-build=disabled && \
     ninja -C build -j$(nproc) && ninja -C build install
 

@@ -182,6 +182,10 @@ import simpmusic.composeapp.generated.resources.ai_provider
 import simpmusic.composeapp.generated.resources.anonymous
 import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.audio
+import simpmusic.composeapp.generated.resources.audio_delay
+import simpmusic.composeapp.generated.resources.audio_delay_description
+import simpmusic.composeapp.generated.resources.audio_reverb
+import simpmusic.composeapp.generated.resources.audio_reverb_description
 import simpmusic.composeapp.generated.resources.author
 import simpmusic.composeapp.generated.resources.auto_backup
 import simpmusic.composeapp.generated.resources.auto_backup_description
@@ -199,6 +203,7 @@ import simpmusic.composeapp.generated.resources.blog_notification_description
 import simpmusic.composeapp.generated.resources.blog_notification_title
 import simpmusic.composeapp.generated.resources.buy_me_a_coffee
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.animated_artwork_info
 import simpmusic.composeapp.generated.resources.canvas_info
 import simpmusic.composeapp.generated.resources.categories_sponsor_block
 import simpmusic.composeapp.generated.resources.change
@@ -238,6 +243,7 @@ import simpmusic.composeapp.generated.resources.discord_integration
 import simpmusic.composeapp.generated.resources.donation
 import simpmusic.composeapp.generated.resources.download_quality
 import simpmusic.composeapp.generated.resources.downloaded_cache
+import simpmusic.composeapp.generated.resources.enable_animated_artwork
 import simpmusic.composeapp.generated.resources.enable_canvas
 import simpmusic.composeapp.generated.resources.enable_liquid_glass_effect
 import simpmusic.composeapp.generated.resources.enable_liquid_glass_effect_description
@@ -511,6 +517,7 @@ fun SettingScreen(
     val spotifyLoggedIn by viewModel.spotifyLogIn.collectAsStateWithLifecycle()
     val spotifyLyrics by viewModel.spotifyLyrics.collectAsStateWithLifecycle()
     val spotifyCanvas by viewModel.spotifyCanvas.collectAsStateWithLifecycle()
+    val amAnimatedArtwork by viewModel.amAnimatedArtwork.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -556,6 +563,8 @@ fun SettingScreen(
     val loggedIn by viewModel.loggedIn.collectAsStateWithLifecycle()
     val syncFollowToYouTube by viewModel.syncFollowToYouTube.collectAsStateWithLifecycle()
     val equalizerEnabled by viewModel.equalizerEnabled.collectAsStateWithLifecycle()
+    val delayEnabled by viewModel.delayEnabled.collectAsStateWithLifecycle()
+    val reverbEnabled by viewModel.reverbEnabled.collectAsStateWithLifecycle()
     val lastfmLoggedIn by viewModel.lastfmLoggedIn.collectAsStateWithLifecycle()
     val lastfmUsername by viewModel.lastfmUsername.collectAsStateWithLifecycle()
     val lastfmScrobbleEnabled by viewModel.lastfmScrobbleEnabled.collectAsStateWithLifecycle()
@@ -1081,11 +1090,10 @@ fun SettingScreen(
                     smallSubtitle = true,
                     switch = (syncFollowToYouTube to { viewModel.setSyncFollowToYouTube(it) }),
                     // Writing to someone's YouTube account needs a session, so the row is dead
-                    // while signed out. onDisable turns the stored flag back off when that
-                    // happens: SettingItem keys its LaunchedEffect on isEnable, so signing out
-                    // mid-session clears it too, not just a cold start in the signed-out state.
+                    // while signed out. Clearing the stored flag is NOT done from here: the reset
+                    // belongs to the logout itself (SettingsViewModel.setUsedAccount /
+                    // logOutAllYouTube), which runs whether or not Settings is ever opened.
                     isEnable = loggedIn == DataStoreManager.TRUE,
-                    onDisable = { viewModel.setSyncFollowToYouTube(false) },
                 )
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
@@ -1329,6 +1337,31 @@ fun SettingScreen(
                 // the shape the user built rather than to flat.
                 AnimatedVisibility(visible = equalizerEnabled) {
                     EqualizerSection()
+                }
+                // Beside the equalizer rather than in its own group: all three are the same kind of
+                // thing — one stored setting reshaping the audio on both backends — and a user
+                // hunting for "reverb" looks wherever the sound settings are, not under a heading
+                // they have to guess.
+                SettingItem(
+                    title = stringResource(Res.string.audio_delay),
+                    subtitle = stringResource(Res.string.audio_delay_description),
+                    smallSubtitle = true,
+                    switch = (delayEnabled to { viewModel.setDelayEnabled(it) }),
+                )
+                // Only while on, like the curve — and the three values survive the switch, so
+                // turning it back on returns to the echo the user dialled in.
+                AnimatedVisibility(visible = delayEnabled) {
+                    DelaySection()
+                }
+                SettingItem(
+                    title = stringResource(Res.string.audio_reverb),
+                    subtitle = stringResource(Res.string.audio_reverb_description),
+                    smallSubtitle = true,
+                    switch = (reverbEnabled to { viewModel.setReverbEnabled(it) }),
+                )
+                // Same again: the room and the wet level outlive the switch.
+                AnimatedVisibility(visible = reverbEnabled) {
+                    ReverbSection()
                 }
                 SettingItem(
                     title = stringResource(Res.string.save_playback_state),
@@ -1837,11 +1870,6 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.use_ai_translation_description),
                     switch = (useAITranslation to { viewModel.setAITranslation(it) }),
                     isEnable = isHasApiKey,
-                    onDisable = {
-                        if (useAITranslation) {
-                            viewModel.setAITranslation(false)
-                        }
-                    },
                 )
             }
         }
@@ -1883,22 +1911,20 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.spotify_lyrícs_info),
                     switch = (spotifyLyrics to { viewModel.setSpotifyLyrics(it) }),
                     isEnable = spotifyLoggedIn,
-                    onDisable = {
-                        if (spotifyLyrics) {
-                            viewModel.setSpotifyLyrics(false)
-                        }
-                    },
                 )
                 SettingItem(
                     title = stringResource(Res.string.enable_canvas),
                     subtitle = stringResource(Res.string.canvas_info),
                     switch = (spotifyCanvas to { viewModel.setSpotifyCanvas(it) }),
                     isEnable = spotifyLoggedIn,
-                    onDisable = {
-                        if (spotifyCanvas) {
-                            viewModel.setSpotifyCanvas(false)
-                        }
-                    },
+                )
+                // Sits with the canvas because it replaces it, but carries no isEnable: the two
+                // rows above need a Spotify session and this one needs no account at all, so
+                // gating it on spotifyLoggedIn would lock it away from the users it works for.
+                SettingItem(
+                    title = stringResource(Res.string.enable_animated_artwork),
+                    subtitle = stringResource(Res.string.animated_artwork_info),
+                    switch = (amAnimatedArtwork to { viewModel.setAMAnimatedArtwork(it) }),
                 )
             }
         }
@@ -1938,11 +1964,6 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.rich_presence_info),
                     switch = (richPresenceEnabled to { viewModel.setDiscordRichPresenceEnabled(it) }),
                     isEnable = discordLoggedIn,
-                    onDisable = {
-                        if (discordLoggedIn) {
-                            viewModel.setDiscordRichPresenceEnabled(false)
-                        }
-                    },
                 )
             }
         }
@@ -1985,11 +2006,6 @@ fun SettingScreen(
                         subtitle = stringResource(Res.string.scrobbling_info),
                         switch = (lastfmScrobbleEnabled to { viewModel.setLastfmScrobbleEnabled(it) }),
                         isEnable = lastfmLoggedIn,
-                        onDisable = {
-                            if (lastfmScrobbleEnabled) {
-                                viewModel.setLastfmScrobbleEnabled(false)
-                            }
-                        },
                     )
                 }
             }
