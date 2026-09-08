@@ -77,6 +77,8 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -123,6 +125,7 @@ import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LoadingDialog
+import com.maxrave.simpmusic.ui.component.ModelIdDropdownField
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SettingItem
 import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
@@ -142,6 +145,7 @@ import com.maxrave.simpmusic.ui.theme.parseThemeColorHex
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.ImportViewModel
+import com.maxrave.simpmusic.viewModel.AiModelsState
 import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
@@ -174,6 +178,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.simpmusic.aiservice.AIHost
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.about_us
 import simpmusic.composeapp.generated.resources.add_an_account
@@ -234,6 +239,7 @@ import simpmusic.composeapp.generated.resources.custom_ai_model_id
 import simpmusic.composeapp.generated.resources.custom_color
 import simpmusic.composeapp.generated.resources.custom_model_id_messages
 import simpmusic.composeapp.generated.resources.daily
+import simpmusic.composeapp.generated.resources.deepseek
 import simpmusic.composeapp.generated.resources.database
 import simpmusic.composeapp.generated.resources.default_models
 import simpmusic.composeapp.generated.resources.description_and_licenses
@@ -408,6 +414,7 @@ import simpmusic.composeapp.generated.resources.video_download_quality
 import simpmusic.composeapp.generated.resources.video_quality
 import simpmusic.composeapp.generated.resources.warning
 import simpmusic.composeapp.generated.resources.weekly
+import simpmusic.composeapp.generated.resources.zhipu
 import simpmusic.composeapp.generated.resources.what_segments_will_be_skipped
 import simpmusic.composeapp.generated.resources.you_can_see_the_content_below_the_bottom_bar
 import simpmusic.composeapp.generated.resources.youtube_account
@@ -1712,6 +1719,8 @@ fun SettingScreen(
                         when (aiProvider) {
                             DataStoreManager.AI_PROVIDER_OPENAI -> stringResource(Res.string.openai)
                             DataStoreManager.AI_PROVIDER_GEMINI -> stringResource(Res.string.gemini)
+                            DataStoreManager.AI_PROVIDER_DEEPSEEK -> stringResource(Res.string.deepseek)
+                            DataStoreManager.AI_PROVIDER_ZHIPU -> stringResource(Res.string.zhipu)
                             DataStoreManager.AI_PROVIDER_CUSTOM_OPENAI -> stringResource(Res.string.openai_api_compatible)
                             else -> stringResource(Res.string.unknown)
                         },
@@ -1723,11 +1732,15 @@ fun SettingScreen(
                                     SettingAlertState.SelectData(
                                         listSelect =
                                             listOf(
-                                                (mainLyricsProvider == DataStoreManager.AI_PROVIDER_OPENAI) to
+                                                (aiProvider == DataStoreManager.AI_PROVIDER_OPENAI) to
                                                     runBlocking { getString(Res.string.openai) },
-                                                (mainLyricsProvider == DataStoreManager.AI_PROVIDER_GEMINI) to
+                                                (aiProvider == DataStoreManager.AI_PROVIDER_GEMINI) to
                                                     runBlocking { getString(Res.string.gemini) },
-                                                (mainLyricsProvider == DataStoreManager.AI_PROVIDER_CUSTOM_OPENAI) to
+                                                (aiProvider == DataStoreManager.AI_PROVIDER_DEEPSEEK) to
+                                                    runBlocking { getString(Res.string.deepseek) },
+                                                (aiProvider == DataStoreManager.AI_PROVIDER_ZHIPU) to
+                                                    runBlocking { getString(Res.string.zhipu) },
+                                                (aiProvider == DataStoreManager.AI_PROVIDER_CUSTOM_OPENAI) to
                                                     runBlocking { getString(Res.string.openai_api_compatible) },
                                             ),
                                     ),
@@ -1737,6 +1750,8 @@ fun SettingScreen(
                                             when (state.selectOne?.getSelected()) {
                                                 runBlocking { getString(Res.string.openai) } -> DataStoreManager.AI_PROVIDER_OPENAI
                                                 runBlocking { getString(Res.string.gemini) } -> DataStoreManager.AI_PROVIDER_GEMINI
+                                                runBlocking { getString(Res.string.deepseek) } -> DataStoreManager.AI_PROVIDER_DEEPSEEK
+                                                runBlocking { getString(Res.string.zhipu) } -> DataStoreManager.AI_PROVIDER_ZHIPU
                                                 runBlocking {
                                                     getString(
                                                         Res.string.openai_api_compatible,
@@ -1762,11 +1777,13 @@ fun SettingScreen(
                                 title = runBlocking { getString(Res.string.ai_api_key) },
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.ai_api_key) },
+                                        label = "",
                                         value = "",
                                         verifyCodeBlock = {
                                             (it.isNotEmpty()) to runBlocking { getString(Res.string.invalid_api_key) }
                                         },
+                                        isSecret = true,
+                                        placeholder = if (isHasApiKey) "************" else null,
                                     ),
                                 message = "",
                                 confirm =
@@ -1778,19 +1795,28 @@ fun SettingScreen(
                         )
                     },
                 )
+                val aiProviderDefaultModel =
+                    when (aiProvider) {
+                        DataStoreManager.AI_PROVIDER_OPENAI -> AIHost.OPENAI.defaultModelId
+                        DataStoreManager.AI_PROVIDER_GEMINI -> AIHost.GEMINI.defaultModelId
+                        DataStoreManager.AI_PROVIDER_DEEPSEEK -> AIHost.DEEPSEEK.defaultModelId
+                        DataStoreManager.AI_PROVIDER_ZHIPU -> AIHost.ZHIPU.defaultModelId
+                        else -> AIHost.CUSTOM_OPENAI.defaultModelId
+                    }
                 SettingItem(
                     title = stringResource(Res.string.custom_ai_model_id),
-                    subtitle = customModelId.ifEmpty { stringResource(Res.string.default_models) },
+                    subtitle = customModelId.ifEmpty { stringResource(Res.string.default_models, aiProviderDefaultModel) },
                     onClick = {
+                        viewModel.resetAiModelsState()
                         viewModel.setAlertData(
                             SettingAlertState(
                                 title = runBlocking { getString(Res.string.custom_ai_model_id) },
                                 textField =
                                     SettingAlertState.TextFieldData(
                                         label = runBlocking { getString(Res.string.custom_ai_model_id) },
-                                        value = "",
+                                        value = if (isHasApiKey) customModelId.ifEmpty { aiProviderDefaultModel } else "",
                                         verifyCodeBlock = {
-                                            (it.isNotEmpty() && !it.contains(" ")) to runBlocking { getString(Res.string.invalid) }
+                                            (!it.contains(" ")) to runBlocking { getString(Res.string.invalid) }
                                         },
                                     ),
                                 message = runBlocking { getString(Res.string.custom_model_id_messages) },
@@ -1799,6 +1825,7 @@ fun SettingScreen(
                                         viewModel.setCustomModelId(state.textField?.value ?: "")
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
+                                modelPicker = true,
                             ),
                         )
                     },
@@ -2943,41 +2970,87 @@ fun SettingScreen(
                                 alertState.textField.verifyCodeBlock?.invoke(
                                     alertState.textField.value,
                                 ) ?: (true to null)
-                            TextField(
-                                value = alertState.textField.value,
-                                onValueChange = {
-                                    viewModel.setAlertData(
-                                        alertState.copy(
-                                            textField =
-                                                alertState.textField.copy(
-                                                    value = it,
-                                                ),
-                                        ),
-                                    )
-                                },
-                                isError = !verify.first,
-                                label = { Text(text = alertState.textField.label) },
-                                supportingText = {
-                                    if (!verify.first) {
-                                        Text(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            text = verify.second ?: "",
-                                            color = MaterialTheme.colorScheme.error,
+                            if (alertState.modelPicker) {
+                                val aiModelsState by viewModel.aiModelsState.collectAsStateWithLifecycle()
+                                ModelIdDropdownField(
+                                    value = alertState.textField.value,
+                                    onValueChange = {
+                                        viewModel.setAlertData(
+                                            alertState.copy(
+                                                textField =
+                                                    alertState.textField.copy(
+                                                        value = it,
+                                                    ),
+                                            ),
                                         )
-                                    }
-                                },
-                                trailingIcon = {
-                                    if (!verify.first) {
-                                        SimpIcons.Error
-                                    }
-                                },
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            vertical = 6.dp,
-                                        ),
-                            )
+                                    },
+                                    state = aiModelsState,
+                                    onOpen = {
+                                        if (aiModelsState is AiModelsState.Idle || aiModelsState is AiModelsState.Error) {
+                                            viewModel.fetchAiModels()
+                                        }
+                                    },
+                                    isError = !verify.first && alertState.textField.value.isNotEmpty(),
+                                    supportingError = if (!verify.first && alertState.textField.value.isNotEmpty()) verify.second else null,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                vertical = 6.dp,
+                                            ),
+                                )
+                            } else {
+                                // Empty input only disables confirm (via verifyCodeBlock);
+                                // the error look is reserved for non-empty values that fail checks.
+                                val showFieldError = !verify.first && alertState.textField.value.isNotEmpty()
+                                TextField(
+                                    value = alertState.textField.value,
+                                    onValueChange = {
+                                        viewModel.setAlertData(
+                                            alertState.copy(
+                                                textField =
+                                                    alertState.textField.copy(
+                                                        value = it,
+                                                    ),
+                                            ),
+                                        )
+                                    },
+                                    isError = showFieldError,
+                                    label =
+                                        alertState.textField.label
+                                            .takeIf { it.isNotEmpty() }
+                                            ?.let { label -> { Text(text = label) } },
+                                    placeholder =
+                                        alertState.textField.placeholder
+                                            ?.let { hint -> { Text(text = hint) } },
+                                    visualTransformation =
+                                        if (alertState.textField.isSecret) {
+                                            PasswordVisualTransformation('*')
+                                        } else {
+                                            VisualTransformation.None
+                                        },
+                                    supportingText = {
+                                        if (showFieldError) {
+                                            Text(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                text = verify.second ?: "",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    },
+                                    trailingIcon = {
+                                        if (showFieldError) {
+                                            SimpIcons.Error
+                                        }
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                vertical = 6.dp,
+                                            ),
+                                )
+                            }
                         }
                     }
                 } else if (alertState.selectOne != null) {

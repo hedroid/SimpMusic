@@ -428,7 +428,7 @@
     <string name="ai_api_key">کلید API هوش مصنوعی شما</string>
     <string name="invalid_api_key">کلید API نامعتبر</string>
     <string name="custom_ai_model_id">شناسه مدل هوش مصنوعی سفارشی</string>
-    <string name="default_models">مدل‌های پیش‌فرض «gemini-2.0-flash» و «gpt-4o» هستند</string>
+    <string name="default_models">پیش‌فرض: %1$s</string>
     <string name="invalid">نا معتبر</string>
     <string name="custom_model_id_messages">لطفاً دقیقاً شناسه مدل ارائه دهنده هوش مصنوعی خود را وارد کنید.</string>
     <string name="favorite_podcasts">پادکست‌های مورد علاقه</string>

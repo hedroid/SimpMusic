@@ -414,7 +414,7 @@
     <string name="ai_api_key">आपकी एआई एपीआई कुंजी</string>
     <string name="invalid_api_key">अमान्य एपीआई कुंजी</string>
     <string name="custom_ai_model_id">कस्टम एआई मॉडल आईडी</string>
-    <string name="default_models">डिफ़ॉल्ट मॉडल \"gemini-2.0-flash\" और \"gpt-4o\" हैं</string>
+    <string name="default_models">डिफ़ॉल्ट: %1$s</string>
     <string name="invalid">अमान्य</string>
     <string name="custom_model_id_messages">कृपया अपने एआई प्रदाता से सटीक मॉडल आईडी दर्ज करें।</string>
     <string name="favorite_podcasts">पसंदीदा पॉडकास्ट</string>

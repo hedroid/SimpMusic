@@ -429,7 +429,7 @@
     <string name="ai_api_key">La seva clau de l'API de la IA</string>
     <string name="invalid_api_key">Clau de l'API de la IA invàlida</string>
     <string name="custom_ai_model_id">ID de model d'IA personalitzat</string>
-    <string name="default_models">Els models per defecte són \"gemini-2.0-flash\" i \"gpt-4o\"</string>
+    <string name="default_models">Per defecte: %1$s</string>
     <string name="invalid">Invàlid</string>
     <string name="custom_model_id_messages">Per favor, introdueixi l'ID de model exacte del seu proveïdor d'IA</string>
     <string name="favorite_podcasts">Podcasts preferits</string>

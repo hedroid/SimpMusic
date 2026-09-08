@@ -156,6 +156,8 @@ class SettingsViewModel(
     val aiProvider: StateFlow<String> = _aiProvider
     private val _isHasApiKey = MutableStateFlow<Boolean>(false)
     val isHasApiKey: StateFlow<Boolean> = _isHasApiKey
+    private val _aiApiKey = MutableStateFlow<String>("")
+    val aiApiKey: StateFlow<String> = _aiApiKey
     private val _useAITranslation = MutableStateFlow<Boolean>(false)
     val useAITranslation: StateFlow<Boolean> = _useAITranslation
     private val _customModelId = MutableStateFlow<String>("")
@@ -164,6 +166,10 @@ class SettingsViewModel(
     val customOpenAIBaseUrl: StateFlow<String> = _customOpenAIBaseUrl
     private val _customOpenAIHeaders = MutableStateFlow<String>("")
     val customOpenAIHeaders: StateFlow<String> = _customOpenAIHeaders
+
+    /** Model-list fetch state for the custom AI model dialog. */
+    private val _aiModelsState = MutableStateFlow<AiModelsState>(AiModelsState.Idle)
+    val aiModelsState: StateFlow<AiModelsState> = _aiModelsState
     private val _crossfadeEnabled = MutableStateFlow<Boolean>(false)
     val crossfadeEnabled: StateFlow<Boolean> = _crossfadeEnabled
     private val _crossfadeDuration = MutableStateFlow<Int>(5000)
@@ -816,8 +822,26 @@ class SettingsViewModel(
     fun setAIProvider(provider: String) {
         viewModelScope.launch {
             dataStoreManager.setAIProvider(provider)
+            // A model ID picked on the previous provider would fail on the new one —
+            // fall back to the new provider's default (empty custom ID).
+            dataStoreManager.setCustomModelId("")
             getAIProvider()
         }
+    }
+
+    /** Fetches the model list from the currently configured provider into [aiModelsState]. */
+    fun fetchAiModels() {
+        viewModelScope.launch {
+            _aiModelsState.value = AiModelsState.Loading
+            commonRepository
+                .listAiModels()
+                .onSuccess { models -> _aiModelsState.value = AiModelsState.Success(models) }
+                .onFailure { e -> _aiModelsState.value = AiModelsState.Error(e.message) }
+        }
+    }
+
+    fun resetAiModelsState() {
+        _aiModelsState.value = AiModelsState.Idle
     }
 
     private fun getAITranslation() {
@@ -838,9 +862,9 @@ class SettingsViewModel(
     private fun getAIApiKey() {
         viewModelScope.launch {
             dataStoreManager.aiApiKey.collect { aiApiKey ->
+                _aiApiKey.value = aiApiKey
                 if (aiApiKey.isNotEmpty()) {
                     _isHasApiKey.value = true
-                    log("getAIApiKey: $aiApiKey")
                 } else {
                     _isHasApiKey.value = false
                 }
@@ -2121,12 +2145,19 @@ data class SettingAlertState(
     val multipleSelect: SelectData? = null,
     val confirm: Pair<String, (SettingAlertState) -> Unit>,
     val dismiss: String,
+    // When true, the dialog renders a "fetch model list" action below the text field
+    // (AI custom model dialog) whose result is picked from [SettingsViewModel.aiModelsState].
+    val modelPicker: Boolean = false,
 ) {
     data class TextFieldData(
         val label: String,
         val value: String = "",
         // User typing string -> (true or false, If false, show error message)
         val verifyCodeBlock: ((String) -> Pair<Boolean, String?>)? = null,
+        // Mask the field's characters (API keys) with '*'.
+        val isSecret: Boolean = false,
+        // Hint shown in the empty field (e.g. masked asterisks for a saved key).
+        val placeholder: String? = null,
     )
 
     data class SelectData(
@@ -2145,6 +2176,17 @@ data class SettingBasicAlertState(
     val confirm: Pair<String, () -> Unit>,
     val dismiss: String,
 )
+
+/** Progress of the `GET /models` call made from the custom AI model dialog. */
+sealed interface AiModelsState {
+    data object Idle : AiModelsState
+
+    data object Loading : AiModelsState
+
+    data class Error(val reason: String?) : AiModelsState
+
+    data class Success(val models: List<String>) : AiModelsState
+}
 
 expect suspend fun calculateDataFraction(cacheRepository: CacheRepository): SettingsStorageSectionFraction?
 

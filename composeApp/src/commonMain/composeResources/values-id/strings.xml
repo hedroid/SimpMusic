@@ -437,7 +437,7 @@
     <string name="ai_api_key">Kunci API AI Anda</string>
     <string name="invalid_api_key">Kunci API tidak valid</string>
     <string name="custom_ai_model_id">AI Model Khsusus</string>
-    <string name="default_models">Model bawaan adalah \"gemini-2.0-flash\" dan \"gpt-4o\"</string>
+    <string name="default_models">Bawaan: %1$s</string>
     <string name="invalid">Tidak valid</string>
     <string name="custom_model_id_messages">Harap masukkan Model ID yang sesuai dari penyedia AI Anda.</string>
     <string name="favorite_podcasts">Podcast favorit</string>
