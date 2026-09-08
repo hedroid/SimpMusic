@@ -132,6 +132,8 @@ import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.Error
+import com.maxrave.simpmusic.ui.icon.Visibility
+import com.maxrave.simpmusic.ui.icon.VisibilityOff
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -545,6 +547,7 @@ fun SettingScreen(
     val autoCheckUpdate by viewModel.autoCheckUpdate.collectAsStateWithLifecycle()
     val aiProvider by viewModel.aiProvider.collectAsStateWithLifecycle()
     val isHasApiKey by viewModel.isHasApiKey.collectAsStateWithLifecycle()
+    val aiApiKey by viewModel.aiApiKey.collectAsStateWithLifecycle()
     val useAITranslation by viewModel.useAITranslation.collectAsStateWithLifecycle()
     val translationLanguage by viewModel.translationLanguage.collectAsStateWithLifecycle()
     val customModelId by viewModel.customModelId.collectAsStateWithLifecycle()
@@ -921,7 +924,7 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.language),
-                    subtitle = SUPPORTED_LANGUAGE.getLanguageFromCode(language ?: "en-US"),
+subtitle = SUPPORTED_LANGUAGE.getLanguageFromCode(language ?: "en-US"),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
@@ -1778,7 +1781,9 @@ fun SettingScreen(
                                 textField =
                                     SettingAlertState.TextFieldData(
                                         label = "",
-                                        value = "",
+                                        // Prefill the stored key so the eye toggle has
+                                        // something to reveal when re-opening the dialog.
+                                        value = aiApiKey,
                                         verifyCodeBlock = {
                                             (it.isNotEmpty()) to runBlocking { getString(Res.string.invalid_api_key) }
                                         },
@@ -2970,6 +2975,11 @@ fun SettingScreen(
                                 alertState.textField.verifyCodeBlock?.invoke(
                                     alertState.textField.value,
                                 ) ?: (true to null)
+                            // Secret fields (API keys) start masked; the eye toggle in the
+                            // trailing slot switches between mask and plain text. Plain
+                            // `remember` (not saveable) so every dialog open starts masked.
+                            val secretFieldVisible =
+                                remember { mutableStateOf(false) }
                             if (alertState.modelPicker) {
                                 val aiModelsState by viewModel.aiModelsState.collectAsStateWithLifecycle()
                                 ModelIdDropdownField(
@@ -3005,12 +3015,12 @@ fun SettingScreen(
                                 val showFieldError = !verify.first && alertState.textField.value.isNotEmpty()
                                 TextField(
                                     value = alertState.textField.value,
-                                    onValueChange = {
+                                    onValueChange = { newValue ->
                                         viewModel.setAlertData(
                                             alertState.copy(
                                                 textField =
                                                     alertState.textField.copy(
-                                                        value = it,
+                                                        value = newValue,
                                                     ),
                                             ),
                                         )
@@ -3024,7 +3034,7 @@ fun SettingScreen(
                                         alertState.textField.placeholder
                                             ?.let { hint -> { Text(text = hint) } },
                                     visualTransformation =
-                                        if (alertState.textField.isSecret) {
+                                        if (alertState.textField.isSecret && !secretFieldVisible.value) {
                                             PasswordVisualTransformation('*')
                                         } else {
                                             VisualTransformation.None
@@ -3039,8 +3049,32 @@ fun SettingScreen(
                                         }
                                     },
                                     trailingIcon = {
-                                        if (showFieldError) {
-                                            SimpIcons.Error
+                                        when {
+                                            alertState.textField.isSecret -> {
+                                                IconButton(
+                                                    onClick = {
+                                                        secretFieldVisible.value = !secretFieldVisible.value
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector =
+                                                            if (secretFieldVisible.value) {
+                                                                SimpIcons.VisibilityOff
+                                                            } else {
+                                                                SimpIcons.Visibility
+                                                            },
+                                                        contentDescription = null,
+                                                    )
+                                                }
+                                            }
+
+                                            showFieldError -> {
+                                                Icon(
+                                                    imageVector = SimpIcons.Error,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                )
+                                            }
                                         }
                                     },
                                     modifier =
