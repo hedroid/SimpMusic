@@ -868,4 +868,5 @@
     <string name="month_full_dec">December</string>
     <string name="backup_location">Backup location</string>
     <string name="backup_location_default">Documents/SimpMusic (default)</string>
+    <string name="language_follow_system">Follow system</string>
 </resources>

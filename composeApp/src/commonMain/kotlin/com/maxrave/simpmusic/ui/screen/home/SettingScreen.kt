@@ -290,6 +290,7 @@ import simpmusic.composeapp.generated.resources.keep_your_youtube_playlist_offli
 import simpmusic.composeapp.generated.resources.kill_service_on_exit
 import simpmusic.composeapp.generated.resources.kill_service_on_exit_description
 import simpmusic.composeapp.generated.resources.language
+import simpmusic.composeapp.generated.resources.language_follow_system
 import simpmusic.composeapp.generated.resources.last_backup
 import simpmusic.composeapp.generated.resources.last_checked_at
 import simpmusic.composeapp.generated.resources.lastfm_integration
@@ -924,7 +925,12 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.language),
-subtitle = SUPPORTED_LANGUAGE.getLanguageFromCode(language ?: "en-US"),
+                    subtitle =
+                        if (language.isNullOrEmpty()) {
+                            stringResource(Res.string.language_follow_system)
+                        } else {
+                            SUPPORTED_LANGUAGE.getLanguageFromCode(language)
+                        },
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(

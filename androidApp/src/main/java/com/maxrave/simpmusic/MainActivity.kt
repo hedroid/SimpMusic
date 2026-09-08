@@ -152,19 +152,25 @@ class MainActivity : AppCompatActivity() {
                     putString("location", "US")
                 }
             } else {
-                putString(SELECTED_LANGUAGE, "en-US")
+                // System language has no translation: keep the preference empty so the
+                // app stays on the system locale (resources fall back to English).
+                putString(SELECTED_LANGUAGE, "")
             }
             // Fetch the selected language from wherever it was stored. In this case its SharedPref
             getString(SELECTED_LANGUAGE)?.let {
                 Logger.d("Locale Key", "getString: $it")
-                // Set this locale using the AndroidX library that will handle the storage itself
-                val localeList = LocaleListCompat.forLanguageTags(it)
-                AppCompatDelegate.setApplicationLocales(localeList)
+                // Set this locale using the AndroidX library that will handle the storage itself.
+                // Empty means "follow system" — no explicit locale to apply.
+                if (it.isNotEmpty()) {
+                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(it))
+                }
                 // Set the migration flag to ensure that this is executed only once
                 putString(FIRST_TIME_MIGRATION, STATUS_DONE)
             }
         }
-        if (AppCompatDelegate.getApplicationLocales().toLanguageTags() !=
+        if (AppCompatDelegate.getApplicationLocales().toLanguageTags()
+                .isNotEmpty() &&
+            AppCompatDelegate.getApplicationLocales().toLanguageTags() !=
             getString(
                 SELECTED_LANGUAGE,
             )

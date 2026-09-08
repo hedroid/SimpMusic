@@ -838,4 +838,5 @@
     <string name="month_full_dec">十二月</string>
     <string name="backup_location">备份位置</string>
     <string name="backup_location_default">Documents/SimpMusic（默认）</string>
+    <string name="language_follow_system">跟随系统</string>
 </resources>
