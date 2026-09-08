@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 // Deliberate wildcard: androidx material3 1.5.0-alpha26 turned ExposedDropdownMenuBoxScope's
 // ExposedDropdownMenu member into a top-level extension, while the desktop JB material3
 // (1.12.0-alpha01 ≈ androidx alpha19) still ships the member. A wildcard tolerates both shapes;
@@ -12,7 +13,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
+import org.jetbrains.compose.resources.stringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.follow_app_language
 
 /**
  * The shortlist offered by the dropdown — major languages only; anything else can be typed
@@ -32,29 +39,6 @@ val COMMON_TRANSLATION_LANGUAGES: List<Pair<String, String>> =
 /** Friendly name for a stored language code; anything outside the shortlist shows as the raw code. */
 fun languageDisplayName(code: String): String =
     COMMON_TRANSLATION_LANGUAGES.firstOrNull { it.first == code }?.second ?: code
-
-/**
- * The app language as a dialog prefill: the shortlist entry when one matches ("zh-Hant" for
- * Traditional Chinese, including zh-TW/HK/MO locales), otherwise the language's 2-letter
- * code. The stored app language is empty while following the system locale, so the caller
- * passes the runtime locale tag ([androidx.compose.ui.text.intl.Locale.current]) as the
- * fallback. Mirrors the default the DataStore layer resolves for consumers, so saving the
- * prefilled value changes nothing.
- */
-fun appLanguageToTranslationCode(
-    appLanguage: String?,
-    systemLanguageTag: String,
-): String {
-    val tag = appLanguage?.takeIf { it.isNotEmpty() } ?: systemLanguageTag
-    val isTraditionalChinese =
-        tag.startsWith("zh-Hant", ignoreCase = true) ||
-            Regex("^zh[-_](tw|hk|mo)", RegexOption.IGNORE_CASE).containsMatchIn(tag)
-    return when {
-        isTraditionalChinese -> "zh-Hant"
-        tag.length >= 2 -> tag.substring(0..1)
-        else -> "en"
-    }
-}
 
 /**
  * Editable text field holding a language code, with a dropdown of common languages.
@@ -85,6 +69,8 @@ fun LanguageDropdownField(
             // Unify with the app's other dropdown fields (DropdownButton): the theme's
             // default bodyLarge (18sp) dwarfs the dialog around it.
             textStyle = typo().bodyMedium,
+            // Label styling stays M3-default (bodyLarge sunken / bodySmall floating) to match
+            // every other field in the settings dialogs — only the input text is bodyMedium.
             label = label?.takeIf { it.isNotEmpty() }?.let { text -> { Text(text = text) } },
             placeholder = emptyHint?.let { hint -> { Text(text = hint, style = typo().bodyMedium) } },
             supportingText = {
@@ -112,6 +98,34 @@ fun LanguageDropdownField(
             // the dialog surface (surfaceContainerHigh) so the menu reads as part of it.
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
+            // Explicit "follow the app language" entry — picking it empties the field, which
+            // saves as "" (= follow) rather than pinning the resolved app language.
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(Res.string.follow_app_language),
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                    )
+                },
+                // Mark the effective choice, mirroring the radio list of the language setting:
+                // the follow entry is selected while the field is empty.
+                trailingIcon = {
+                    if (value.isEmpty()) {
+                        Icon(
+                            imageVector = SimpIcons.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                },
+                onClick = {
+                    onValueChange("")
+                    expanded = false
+                },
+                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+            )
             COMMON_TRANSLATION_LANGUAGES.forEach { (code, name) ->
                 DropdownMenuItem(
                     text = {
@@ -120,6 +134,16 @@ fun LanguageDropdownField(
                             style = typo().bodyMedium,
                             maxLines = 1,
                         )
+                    },
+                    trailingIcon = {
+                        if (value == code) {
+                            Icon(
+                                imageVector = SimpIcons.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     },
                     onClick = {
                         onValueChange(code)

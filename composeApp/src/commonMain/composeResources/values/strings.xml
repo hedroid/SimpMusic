@@ -260,6 +260,7 @@
     <string name="use_ai_translation_description">Enable lyrics translation using AI</string>
     <string name="translation_language">Translation Language</string>
     <string name="follow_app_language">Follow app language</string>
+    <string name="follow_app_language_current">Follow app language (current: %1$s)</string>
     <string name="email">Email</string>
     <string name="password">Password</string>
     <string name="please_enter_your_email_and_password">Please enter your email and password</string>
@@ -870,4 +871,5 @@
     <string name="backup_location">Backup location</string>
     <string name="backup_location_default">Documents/SimpMusic (default)</string>
     <string name="language_follow_system">Follow system</string>
+    <string name="language_follow_system_current">Follow system (current: %1$s)</string>
 </resources>

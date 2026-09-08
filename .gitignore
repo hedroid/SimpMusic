@@ -46,3 +46,5 @@ sentry.properties
 /desktopApp/generated.conveyor.conf
 # Conveyor output directory
 /output/
+# Local AI-agent project memory (contains the signing password, not for the repo)
+/AGENTS.md

@@ -130,7 +130,6 @@ import com.maxrave.simpmusic.ui.component.LanguageDropdownField
 import com.maxrave.simpmusic.ui.component.ModelIdDropdownField
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SettingItem
-import com.maxrave.simpmusic.ui.component.appLanguageToTranslationCode
 import com.maxrave.simpmusic.ui.component.languageDisplayName
 import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
@@ -265,6 +264,7 @@ import simpmusic.composeapp.generated.resources.enable_spotify_lyrics
 import simpmusic.composeapp.generated.resources.equalizer
 import simpmusic.composeapp.generated.resources.equalizer_description
 import simpmusic.composeapp.generated.resources.follow_app_language
+import simpmusic.composeapp.generated.resources.follow_app_language_current
 import simpmusic.composeapp.generated.resources.free_space
 import simpmusic.composeapp.generated.resources.gemini
 import simpmusic.composeapp.generated.resources.guest
@@ -297,6 +297,7 @@ import simpmusic.composeapp.generated.resources.kill_service_on_exit
 import simpmusic.composeapp.generated.resources.kill_service_on_exit_description
 import simpmusic.composeapp.generated.resources.language
 import simpmusic.composeapp.generated.resources.language_follow_system
+import simpmusic.composeapp.generated.resources.language_follow_system_current
 import simpmusic.composeapp.generated.resources.last_backup
 import simpmusic.composeapp.generated.resources.last_checked_at
 import simpmusic.composeapp.generated.resources.lastfm_integration
@@ -513,8 +514,10 @@ fun SettingScreen(
     val enableTranslucentNavBar by remember { viewModel.translucentBottomBar.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val language by viewModel.language.collectAsStateWithLifecycle()
     // Empty stored app language = follow the system locale; the runtime locale stands in for
-    // it when prefilling the translation-language dialogs.
+    // it when naming the effective language.
     val systemLanguageTag = Locale.current.toLanguageTag()
+    val currentAppLanguageName =
+        SUPPORTED_LANGUAGE.getLanguageFromLanguageTag(language?.takeIf { it.isNotEmpty() } ?: systemLanguageTag)
     val location by viewModel.location.collectAsStateWithLifecycle()
     val quality by viewModel.quality.collectAsStateWithLifecycle()
     val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
@@ -936,7 +939,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.language),
                     subtitle =
                         if (language.isNullOrEmpty()) {
-                            stringResource(Res.string.language_follow_system)
+                            stringResource(Res.string.language_follow_system_current, currentAppLanguageName)
                         } else {
                             SUPPORTED_LANGUAGE.getLanguageFromCode(language)
                         },
@@ -947,13 +950,24 @@ fun SettingScreen(
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            SUPPORTED_LANGUAGE.items.map {
-                                                (it.toString() == SUPPORTED_LANGUAGE.getLanguageFromCode(language ?: "en-US")) to it.toString()
-                                            },
+                                            // An explicit "Follow system" entry, not a preselected
+                                            // system language: confirming a preselected entry would
+                                            // pin the resolved code and silently drop follow-system.
+                                            listOf(language.isNullOrEmpty() to runBlocking { getString(Res.string.language_follow_system) }) +
+                                                SUPPORTED_LANGUAGE.items.map {
+                                                    (!language.isNullOrEmpty() && it.toString() == SUPPORTED_LANGUAGE.getLanguageFromCode(language)) to it.toString()
+                                                },
                                     ),
                                 confirm =
                                     runBlocking { getString(Res.string.change) } to { state ->
-                                        val code = SUPPORTED_LANGUAGE.getCodeFromLanguage(state.selectOne?.getSelected() ?: "English")
+                                        val selected = state.selectOne?.getSelected() ?: ""
+                                        val code =
+                                            if (selected == runBlocking { getString(Res.string.language_follow_system) }) {
+                                                // Empty storage = follow the system locale.
+                                                ""
+                                            } else {
+                                                SUPPORTED_LANGUAGE.getCodeFromLanguage(selected)
+                                            }
                                         viewModel.setBasicAlertData(
                                             SettingBasicAlertState(
                                                 title = runBlocking { getString(Res.string.warning) },
@@ -1615,19 +1629,18 @@ fun SettingScreen(
                     // "" (or the not-yet-loaded null) means no explicit choice: follow the app language.
                     subtitle =
                         translationLanguage?.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
-                            ?: stringResource(Res.string.follow_app_language),
+                            ?: stringResource(Res.string.follow_app_language_current, currentAppLanguageName),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
                                 title = runBlocking { getString(Res.string.translation_language) },
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.translation_language) },
-                                        // Prefill with the app language when nothing is stored, so the
-                                        // default always reads as a concrete choice.
-                                        value =
-                                            translationLanguage?.takeIf { it.isNotEmpty() }
-                                                ?: appLanguageToTranslationCode(language, systemLanguageTag),
+                                        // No label: the dialog title already names the field,
+                                        // and a label would render as large sunken text while
+                                        // the field is empty (the default state here).
+                                        label = "",
+                                        value = translationLanguage ?: "",
                                         // Empty is a valid choice here — it means "follow the app language".
                                         verifyCodeBlock = {
                                             (it.isEmpty() || it.isLanguageCode()) to
@@ -1651,18 +1664,16 @@ fun SettingScreen(
                     title = stringResource(Res.string.youtube_subtitle_language),
                     subtitle =
                         youtubeSubtitleLanguage.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
-                            ?: stringResource(Res.string.follow_app_language),
+                            ?: stringResource(Res.string.follow_app_language_current, currentAppLanguageName),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
                                 title = runBlocking { getString(Res.string.youtube_subtitle_language) },
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.youtube_subtitle_language) },
-                                        // Same prefill contract as the translation language dialog.
-                                        value =
-                                            youtubeSubtitleLanguage.takeIf { it.isNotEmpty() }
-                                                ?: appLanguageToTranslationCode(language, systemLanguageTag),
+                                        // No label — same reasoning as the translation language dialog.
+                                        label = "",
+                                        value = youtubeSubtitleLanguage,
                                         verifyCodeBlock = {
                                             (it.isEmpty() || it.isLanguageCode()) to
                                                 runBlocking { getString(Res.string.invalid_language_code) }
