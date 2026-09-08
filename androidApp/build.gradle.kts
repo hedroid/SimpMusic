@@ -20,7 +20,10 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.maxrave.simpmusic"
+        // Fork identity: Kotlin namespaces stay com.maxrave.simpmusic (code layout);
+        // only the installed app id is re-branded. ${applicationId} placeholders in the
+        // manifest (providers) follow automatically.
+        applicationId = "com.github.hedroid.simpmusic"
         minSdk = 26
         targetSdk = 36
         versionCode =
