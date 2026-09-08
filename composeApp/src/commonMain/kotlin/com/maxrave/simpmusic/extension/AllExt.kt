@@ -236,6 +236,16 @@ fun String.isTwoLetterCode(): Boolean {
     return regex.matches(this)
 }
 
+/**
+ * A 2-letter language code optionally followed by script/region subtags ("zh-Hant", "pt-BR").
+ * The extra subtags matter to YouTube's tlang and the AI prompt; the SimpMusic lyrics server
+ * only ever sees the bare 2-letter form.
+ */
+fun String.isLanguageCode(): Boolean {
+    val regex = "^[A-Za-z]{2}(-[A-Za-z0-9]{2,8})*$".toRegex()
+    return regex.matches(this)
+}
+
 fun FilterState.displayNameRes(): StringResource =
     when (this) {
         FilterState.NewerFirst -> Res.string.newer_first

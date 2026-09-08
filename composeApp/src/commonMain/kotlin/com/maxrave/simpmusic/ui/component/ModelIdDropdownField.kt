@@ -89,6 +89,9 @@ fun ModelIdDropdownField(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            // Same as LanguageDropdownField: keep the menu off the AMOLED near-black default
+            // so it doesn't read as a black slab over the dialog.
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
             when (state) {
                 is AiModelsState.Success ->

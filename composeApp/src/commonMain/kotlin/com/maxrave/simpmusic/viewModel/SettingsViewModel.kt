@@ -1060,7 +1060,9 @@ class SettingsViewModel(
 
     fun getTranslationLanguage() {
         viewModelScope.launch {
-            dataStoreManager.translationLanguage.collect { translationLanguage ->
+            // Raw on purpose: the settings UI must distinguish "user chose a code" from
+            // "" (= follow the app language); the resolved flow is for lyrics consumers.
+            dataStoreManager.rawTranslationLanguage.collect { translationLanguage ->
                 _translationLanguage.emit(translationLanguage)
             }
         }
@@ -2096,7 +2098,8 @@ class SettingsViewModel(
 
     fun getYoutubeSubtitleLanguage() {
         viewModelScope.launch {
-            dataStoreManager.youtubeSubtitleLanguage.collect { language ->
+            // Raw on purpose — "" (= follow the app language) must reach the settings UI.
+            dataStoreManager.rawYoutubeSubtitleLanguage.collect { language ->
                 _youtubeSubtitleLanguage.emit(language)
             }
         }
@@ -2148,6 +2151,9 @@ data class SettingAlertState(
     // When true, the dialog renders a "fetch model list" action below the text field
     // (AI custom model dialog) whose result is picked from [SettingsViewModel.aiModelsState].
     val modelPicker: Boolean = false,
+    // When true, the text field becomes an editable dropdown listing common languages
+    // (translation language / YouTube subtitle language dialogs).
+    val languagePicker: Boolean = false,
 ) {
     data class TextFieldData(
         val label: String,

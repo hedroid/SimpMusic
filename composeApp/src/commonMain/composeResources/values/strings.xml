@@ -263,7 +263,7 @@
     <string name="email">Email</string>
     <string name="password">Password</string>
     <string name="please_enter_your_email_and_password">Please enter your email and password</string>
-    <string name="translation_language_message">Type language code (Eg: en) (2 letters). If you want to set same with SimpMusic's language, please make edit box empty.</string>
+    <string name="translation_language_message">Pick a common language from the dropdown, or type a language code (e.g. en, zh-Hant). Leave empty to follow the app language.</string>
     <string name="invalid_language_code">Invalid language code</string>
     <string name="lyrics_provider_youtube">Lyrics provided by YouTube</string>
     <string name="lyrics_provider_betterlyrics">Lyrics provided by BetterLyrics</string>
@@ -531,6 +531,7 @@
     <string name="openai_api_compatible">Custom OpenAI Compatible</string>
     <string name="ai_api_key">Your AI API Key</string>
     <string name="invalid_api_key">Invalid API key</string>
+    <string name="ai_api_key_message">Enter the API key issued by your AI provider. It is stored locally on your device only.</string>
     <string name="custom_ai_model_id">Custom AI model ID</string>
     <string name="default_models">Default: %1$s</string>
     <string name="invalid">Invalid</string>
@@ -565,7 +566,7 @@
     <string name="crossfade_skip_album">Keep albums continuous</string>
     <string name="crossfade_skip_album_description">Skip the crossfade between tracks of the same album, so albums meant to run without gaps still do. The transition out of the album still crossfades.</string>
     <string name="youtube_subtitle_language">YouTube Subtitle Translation Language</string>
-    <string name="youtube_subtitle_language_message">Type language code (Eg: en) (2 letters). This is the preferred translation language for YouTube subtitles.</string>
+    <string name="youtube_subtitle_language_message">Pick a common language from the dropdown, or type a language code (e.g. en, zh-Hant). This is the preferred translation language for YouTube subtitles. Leave empty to follow the app language.</string>
     <string name="use_anonymous">Use anonymous name to contribute</string>
     <string name="contributor_name">Contributor name</string>
     <string name="contributor_email">Contributor email</string>

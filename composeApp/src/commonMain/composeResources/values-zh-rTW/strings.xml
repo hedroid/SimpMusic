@@ -259,7 +259,7 @@
     <string name="email">電子信箱</string>
     <string name="password">密碼</string>
     <string name="please_enter_your_email_and_password">請輸入您的電子信箱和密碼</string>
-    <string name="translation_language_message">輸入語言代碼（例如：en）（2 個字母）。 如果您想設定與SimpMusic的語言相同，請留空。</string>
+    <string name="translation_language_message">從下拉選單選擇常見語言，或手動輸入語言代碼（如 en、zh-Hant）。留空則跟隨應用程式語言。</string>
     <string name="invalid_language_code">無效的語言代碼</string>
     <string name="lyrics_provider_youtube">歌詞由Youtube提供</string>
     <string name="lyrics_provider_betterlyrics">歌詞由 BetterLyrics 提供</string>
@@ -438,6 +438,7 @@
     <string name="openai_api_compatible">客製化 OpenAI 相容</string>
     <string name="ai_api_key">你的AI API金鑰</string>
     <string name="invalid_api_key">此金鑰不可用</string>
+    <string name="ai_api_key_message">輸入你的 AI 服務商提供的 API 金鑰，金鑰僅保存在本裝置。</string>
     <string name="custom_ai_model_id">自訂大模型ID</string>
     <string name="default_models">預設：%1$s</string>
     <string name="invalid">不可用</string>
@@ -467,7 +468,7 @@
     <string name="crossfade_dj_mode">DJ風格過渡</string>
     <string name="crossfade_dj_mode_description">在交叉淡入淡出期間套用低通和高通濾波器掃描，以獲得更平滑、類似 DJ 的過渡效果（類似於 Apple Music Automix）。</string>
     <string name="youtube_subtitle_language">YouTube 字幕翻譯目標語言</string>
-    <string name="youtube_subtitle_language_message">輸入語言代碼（例：en，2 個字母）。這是您 YouTube 字幕的偏好翻譯語言。</string>
+    <string name="youtube_subtitle_language_message">從下拉選單選擇常見語言，或手動輸入語言代碼（如 en、zh-Hant）。這是您 YouTube 字幕的偏好翻譯語言，留空則跟隨應用程式語言。</string>
     <string name="use_anonymous">匿名提供貢獻</string>
     <string name="contributor_name">貢獻者姓名或稱謂</string>
     <string name="contributor_email">貢獻者電子郵件</string>

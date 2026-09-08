@@ -117,7 +117,7 @@ import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.simpmusic.expect.ui.isWallpaperDynamicColorSupported
 import com.maxrave.simpmusic.extension.bytesToMB
 import com.maxrave.simpmusic.extension.displayString
-import com.maxrave.simpmusic.extension.isTwoLetterCode
+import com.maxrave.simpmusic.extension.isLanguageCode
 import com.maxrave.simpmusic.extension.isValidProxyHost
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.ActionButton
@@ -125,9 +125,12 @@ import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LoadingDialog
+import com.maxrave.simpmusic.ui.component.LanguageDropdownField
 import com.maxrave.simpmusic.ui.component.ModelIdDropdownField
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SettingItem
+import com.maxrave.simpmusic.ui.component.appLanguageToTranslationCode
+import com.maxrave.simpmusic.ui.component.languageDisplayName
 import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Close
@@ -186,6 +189,7 @@ import simpmusic.composeapp.generated.resources.about_us
 import simpmusic.composeapp.generated.resources.add_an_account
 import simpmusic.composeapp.generated.resources.ai
 import simpmusic.composeapp.generated.resources.ai_api_key
+import simpmusic.composeapp.generated.resources.ai_api_key_message
 import simpmusic.composeapp.generated.resources.ai_provider
 import simpmusic.composeapp.generated.resources.anonymous
 import simpmusic.composeapp.generated.resources.app_name
@@ -259,6 +263,7 @@ import simpmusic.composeapp.generated.resources.enable_sponsor_block
 import simpmusic.composeapp.generated.resources.enable_spotify_lyrics
 import simpmusic.composeapp.generated.resources.equalizer
 import simpmusic.composeapp.generated.resources.equalizer_description
+import simpmusic.composeapp.generated.resources.follow_app_language
 import simpmusic.composeapp.generated.resources.free_space
 import simpmusic.composeapp.generated.resources.gemini
 import simpmusic.composeapp.generated.resources.guest
@@ -1603,7 +1608,10 @@ fun SettingScreen(
 
                 SettingItem(
                     title = stringResource(Res.string.translation_language),
-                    subtitle = translationLanguage ?: "",
+                    // "" (or the not-yet-loaded null) means no explicit choice: follow the app language.
+                    subtitle =
+                        translationLanguage?.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
+                            ?: stringResource(Res.string.follow_app_language),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
@@ -1611,11 +1619,17 @@ fun SettingScreen(
                                 textField =
                                     SettingAlertState.TextFieldData(
                                         label = runBlocking { getString(Res.string.translation_language) },
-                                        value = translationLanguage ?: "",
+                                        // Prefill with the app language when nothing is stored, so the
+                                        // default always reads as a concrete choice.
+                                        value =
+                                            translationLanguage?.takeIf { it.isNotEmpty() }
+                                                ?: appLanguageToTranslationCode(language),
+                                        // Empty is a valid choice here — it means "follow the app language".
                                         verifyCodeBlock = {
-                                            (it.length == 2 && it.isTwoLetterCode()) to
+                                            (it.isEmpty() || it.isLanguageCode()) to
                                                 runBlocking { getString(Res.string.invalid_language_code) }
                                         },
+                                        placeholder = runBlocking { getString(Res.string.follow_app_language) },
                                     ),
                                 message = runBlocking { getString(Res.string.translation_language_message) },
                                 confirm =
@@ -1623,6 +1637,7 @@ fun SettingScreen(
                                         viewModel.setTranslationLanguage(state.textField?.value ?: "")
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
+                                languagePicker = true,
                             ),
                         )
                     },
@@ -1630,7 +1645,9 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.youtube_subtitle_language),
-                    subtitle = youtubeSubtitleLanguage,
+                    subtitle =
+                        youtubeSubtitleLanguage.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
+                            ?: stringResource(Res.string.follow_app_language),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
@@ -1638,11 +1655,15 @@ fun SettingScreen(
                                 textField =
                                     SettingAlertState.TextFieldData(
                                         label = runBlocking { getString(Res.string.youtube_subtitle_language) },
-                                        value = youtubeSubtitleLanguage,
+                                        // Same prefill contract as the translation language dialog.
+                                        value =
+                                            youtubeSubtitleLanguage.takeIf { it.isNotEmpty() }
+                                                ?: appLanguageToTranslationCode(language),
                                         verifyCodeBlock = {
-                                            (it.length == 2 && it.isTwoLetterCode()) to
+                                            (it.isEmpty() || it.isLanguageCode()) to
                                                 runBlocking { getString(Res.string.invalid_language_code) }
                                         },
+                                        placeholder = runBlocking { getString(Res.string.follow_app_language) },
                                     ),
                                 message = runBlocking { getString(Res.string.youtube_subtitle_language_message) },
                                 confirm =
@@ -1650,6 +1671,7 @@ fun SettingScreen(
                                         viewModel.setYoutubeSubtitleLanguage(state.textField?.value ?: "")
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
+                                languagePicker = true,
                             ),
                         )
                     },
@@ -1786,7 +1808,9 @@ fun SettingScreen(
                                 title = runBlocking { getString(Res.string.ai_api_key) },
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = "",
+                                        // The in-field hint: "Your AI API Key" inside the box,
+                                        // floating above it once the user starts typing.
+                                        label = runBlocking { getString(Res.string.ai_api_key) },
                                         // Prefill the stored key so the eye toggle has
                                         // something to reveal when re-opening the dialog.
                                         value = aiApiKey,
@@ -1796,7 +1820,7 @@ fun SettingScreen(
                                         isSecret = true,
                                         placeholder = if (isHasApiKey) "************" else null,
                                     ),
-                                message = "",
+                                message = runBlocking { getString(Res.string.ai_api_key_message) },
                                 confirm =
                                     runBlocking { getString(Res.string.set) } to { state ->
                                         viewModel.setAIApiKey(state.textField?.value ?: "")
@@ -3008,6 +3032,34 @@ fun SettingScreen(
                                     },
                                     isError = !verify.first && alertState.textField.value.isNotEmpty(),
                                     supportingError = if (!verify.first && alertState.textField.value.isNotEmpty()) verify.second else null,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                vertical = 6.dp,
+                                            ),
+                                )
+                            } else if (alertState.languagePicker) {
+                                // Empty is a valid choice here (it means "follow the app
+                                // language"), so the error look only appears for non-empty
+                                // values that fail the code check.
+                                val showFieldError = !verify.first && alertState.textField.value.isNotEmpty()
+                                LanguageDropdownField(
+                                    value = alertState.textField.value,
+                                    onValueChange = { newValue ->
+                                        viewModel.setAlertData(
+                                            alertState.copy(
+                                                textField =
+                                                    alertState.textField.copy(
+                                                        value = newValue,
+                                                    ),
+                                            ),
+                                        )
+                                    },
+                                    label = alertState.textField.label,
+                                    emptyHint = alertState.textField.placeholder,
+                                    isError = showFieldError,
+                                    supportingError = if (showFieldError) verify.second else null,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
