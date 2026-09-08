@@ -35,16 +35,26 @@ fun languageDisplayName(code: String): String =
 
 /**
  * The app language as a dialog prefill: the shortlist entry when one matches ("zh-Hant" for
- * Traditional Chinese), otherwise the language's 2-letter code. Mirrors the default the
- * DataStore layer resolves for consumers, so saving the prefilled value changes nothing.
+ * Traditional Chinese, including zh-TW/HK/MO locales), otherwise the language's 2-letter
+ * code. The stored app language is empty while following the system locale, so the caller
+ * passes the runtime locale tag ([androidx.compose.ui.text.intl.Locale.current]) as the
+ * fallback. Mirrors the default the DataStore layer resolves for consumers, so saving the
+ * prefilled value changes nothing.
  */
-fun appLanguageToTranslationCode(appLanguage: String?): String =
-    when {
-        appLanguage == null -> "en"
-        appLanguage.startsWith("zh-Hant") -> "zh-Hant"
-        appLanguage.length >= 2 -> appLanguage.substring(0..1)
+fun appLanguageToTranslationCode(
+    appLanguage: String?,
+    systemLanguageTag: String,
+): String {
+    val tag = appLanguage?.takeIf { it.isNotEmpty() } ?: systemLanguageTag
+    val isTraditionalChinese =
+        tag.startsWith("zh-Hant", ignoreCase = true) ||
+            Regex("^zh[-_](tw|hk|mo)", RegexOption.IGNORE_CASE).containsMatchIn(tag)
+    return when {
+        isTraditionalChinese -> "zh-Hant"
+        tag.length >= 2 -> tag.substring(0..1)
         else -> "en"
     }
+}
 
 /**
  * Editable text field holding a language code, with a dropdown of common languages.
@@ -72,8 +82,11 @@ fun LanguageDropdownField(
             onValueChange = onValueChange,
             isError = isError,
             singleLine = true,
+            // Unify with the app's other dropdown fields (DropdownButton): the theme's
+            // default bodyLarge (18sp) dwarfs the dialog around it.
+            textStyle = typo().bodyMedium,
             label = label?.takeIf { it.isNotEmpty() }?.let { text -> { Text(text = text) } },
-            placeholder = emptyHint?.let { hint -> { Text(text = hint) } },
+            placeholder = emptyHint?.let { hint -> { Text(text = hint, style = typo().bodyMedium) } },
             supportingText = {
                 if (isError && supportingError != null) {
                     Text(

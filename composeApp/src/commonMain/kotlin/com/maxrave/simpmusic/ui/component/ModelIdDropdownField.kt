@@ -62,6 +62,9 @@ fun ModelIdDropdownField(
             onValueChange = onValueChange,
             isError = isError,
             singleLine = true,
+            // Unify with the app's other dropdown fields (DropdownButton): the theme's
+            // default bodyLarge (18sp) dwarfs the dialog around it.
+            textStyle = typo().bodyMedium,
             supportingText = {
                 if (isError && supportingError != null) {
                     Text(

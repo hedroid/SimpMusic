@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -511,6 +512,9 @@ fun SettingScreen(
 
     val enableTranslucentNavBar by remember { viewModel.translucentBottomBar.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val language by viewModel.language.collectAsStateWithLifecycle()
+    // Empty stored app language = follow the system locale; the runtime locale stands in for
+    // it when prefilling the translation-language dialogs.
+    val systemLanguageTag = Locale.current.toLanguageTag()
     val location by viewModel.location.collectAsStateWithLifecycle()
     val quality by viewModel.quality.collectAsStateWithLifecycle()
     val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
@@ -1623,7 +1627,7 @@ fun SettingScreen(
                                         // default always reads as a concrete choice.
                                         value =
                                             translationLanguage?.takeIf { it.isNotEmpty() }
-                                                ?: appLanguageToTranslationCode(language),
+                                                ?: appLanguageToTranslationCode(language, systemLanguageTag),
                                         // Empty is a valid choice here — it means "follow the app language".
                                         verifyCodeBlock = {
                                             (it.isEmpty() || it.isLanguageCode()) to
@@ -1658,7 +1662,7 @@ fun SettingScreen(
                                         // Same prefill contract as the translation language dialog.
                                         value =
                                             youtubeSubtitleLanguage.takeIf { it.isNotEmpty() }
-                                                ?: appLanguageToTranslationCode(language),
+                                                ?: appLanguageToTranslationCode(language, systemLanguageTag),
                                         verifyCodeBlock = {
                                             (it.isEmpty() || it.isLanguageCode()) to
                                                 runBlocking { getString(Res.string.invalid_language_code) }
