@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shrinks the launcher glyph inside the adaptive-icon canvas so the Now Bar capsule
+     icon reads smaller without regenerating the webp layers (affects every surface that
+     renders the launcher icon, home screen included). -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_foreground"
+    android:inset="12%" />
