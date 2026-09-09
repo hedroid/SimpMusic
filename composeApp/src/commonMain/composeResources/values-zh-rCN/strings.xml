@@ -208,7 +208,10 @@
     <string name="help_build_lyrics_database">帮助SimpMusic 歌词建立歌词数据库</string>
     <string name="help_build_lyrics_database_description">将您保存的歌词发送到 SimpMusic 歌词数据库中</string>
     <string name="notification_lyrics">通知栏歌词</string>
-    <string name="notification_lyrics_description">在媒体通知中实时滚动显示当前歌词行（媒体卡片、锁屏、胶囊）</string>
+    <string name="notification_lyrics_description">在媒体通知中实时滚动显示当前歌词行</string>
+    <string name="notification_lyrics_content">通知栏歌词内容</string>
+    <string name="notification_lyrics_content_original">原文</string>
+    <string name="notification_lyrics_content_original_and_translation">原文 + 译文</string>
     <string name="customactivityoncrash_error_activity_close_app">关闭应用</string>
     <string name="customactivityoncrash_error_activity_error_details">错误信息</string>
     <string name="customactivityoncrash_error_activity_error_details_title">错误信息</string>

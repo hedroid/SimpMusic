@@ -124,6 +124,9 @@ class SettingsViewModel(
 
     private var _notificationLyrics: MutableStateFlow<String?> = MutableStateFlow(null)
     val notificationLyrics: StateFlow<String?> = _notificationLyrics
+    private var _notificationLyricsMode: MutableStateFlow<String> =
+        MutableStateFlow(DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL)
+    val notificationLyricsMode: StateFlow<String> = _notificationLyricsMode
     private var _playerCacheLimit: MutableStateFlow<Int?> = MutableStateFlow(null)
     val playerCacheLimit: StateFlow<Int?> = _playerCacheLimit
     private var _playVideoInsteadOfAudio: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -306,6 +309,7 @@ class SettingsViewModel(
         getLyricsProvider()
         getUseTranslation()
         getNotificationLyrics()
+        getNotificationLyricsMode()
         getPlayVideoInsteadOfAudio()
         getRadioAudioOnly()
         getVideoQuality()
@@ -1105,6 +1109,20 @@ class SettingsViewModel(
     fun setNotificationLyrics(enable: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setNotificationLyrics(enable)
+        }
+    }
+
+    fun getNotificationLyricsMode() {
+        viewModelScope.launch {
+            dataStoreManager.notificationLyricsMode.collect { mode ->
+                _notificationLyricsMode.emit(mode)
+            }
+        }
+    }
+
+    fun setNotificationLyricsMode(mode: String) {
+        viewModelScope.launch {
+            dataStoreManager.setNotificationLyricsMode(mode)
         }
     }
 

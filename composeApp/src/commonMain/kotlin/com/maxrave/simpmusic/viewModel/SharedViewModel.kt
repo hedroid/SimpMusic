@@ -24,6 +24,7 @@ import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.canvas.CanvasResult
 import com.maxrave.domain.data.model.download.DownloadProgress
 import com.maxrave.domain.data.model.intent.GenericIntent
+import com.maxrave.domain.data.model.metadata.Line
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.model.update.UpdateData
@@ -80,6 +81,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.cancellable
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
@@ -296,14 +298,29 @@ class SharedViewModel(
                 }
             // Feed the parsed lyric lines to the service handler so it can drive the
             // notification-lyrics line (media card / capsule) even while no player screen is open.
+            // Both modes carry the ORIGINAL lyrics — the notification replaces the artist slot
+            // with the current line, and showing a translation there instead would swap the
+            // language the user is actually listening to.
             val notificationLyricsJob =
                 launch {
-                    nowPlayingScreenData
-                        .map { it.lyricsData }
-                        .distinctUntilChanged()
-                        .collect { data ->
+                    dataStoreManager.notificationLyricsMode
+                        .combine(
+                            nowPlayingScreenData
+                                .map { it.lyricsData }
+                                .distinctUntilChanged(),
+                        ) { mode, data ->
+                            mode to data
+                        }.collect { (mode, data) ->
                             val lines =
-                                data?.let { it.translatedLyrics?.first?.lines ?: it.lyrics.lines }
+                                data?.let { d ->
+                                    val originalLines = d.lyrics.lines.orEmpty()
+                                    val translatedLines = d.translatedLyrics?.first?.lines.orEmpty()
+                                    if (mode == DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL_AND_TRANSLATION && translatedLines.isNotEmpty()) {
+                                        mergeTranslationIntoLines(originalLines, translatedLines)
+                                    } else {
+                                        originalLines
+                                    }
+                                }
                             mediaPlayerHandler.updateLyricLines(lines)
                         }
                 }
@@ -1622,6 +1639,42 @@ class SharedViewModel(
                         lyrics,
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * The notification line renders one text per timestamp, so ORIGINAL_AND_TRANSLATION mode
+     * appends the translation to the original words instead of showing it on its own. Every
+     * provider pairs translations with the original timestamps (AI copies them per index,
+     * SimpMusic/YouTube pairs are time-validated on arrival), so match by exact start time
+     * and fall back to the same-index line when a provider's timing drifted.
+     */
+    private fun mergeTranslationIntoLines(
+        originalLines: List<Line>,
+        translatedLines: List<Line>,
+    ): List<Line> {
+        if (originalLines.isEmpty() || translatedLines.isEmpty()) return originalLines
+        val translationByTime = HashMap<Long, String>(translatedLines.size)
+        translatedLines.forEach { line ->
+            val ts = line.startTimeMs.toLongOrNull() ?: return@forEach
+            val words = line.words.trim()
+            if (words.isNotEmpty()) translationByTime[ts] = words
+        }
+        val sameIndexFallback = translatedLines.size == originalLines.size
+        return originalLines.mapIndexed { index, line ->
+            val translation =
+                translationByTime[line.startTimeMs.toLongOrNull()]
+                    ?: if (sameIndexFallback) translatedLines[index].words.trim() else null
+            if (translation.isNullOrEmpty() || translation == line.words) {
+                line
+            } else {
+                Line(
+                    startTimeMs = line.startTimeMs,
+                    endTimeMs = line.endTimeMs,
+                    words = "${line.words.trim()} · $translation",
+                    syllables = line.syllables,
+                )
             }
         }
     }

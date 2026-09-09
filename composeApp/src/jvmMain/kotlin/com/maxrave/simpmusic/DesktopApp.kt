@@ -29,6 +29,7 @@ import coil3.request.crossfade
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.SingleInstanceManager
 import com.maxrave.common.AppIdentity
+import com.maxrave.data.dataStore.systemLanguageTag
 import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
@@ -190,10 +191,13 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
 
     val language =
         runBlocking {
+            // Empty stored language = follow system: resolve the runtime locale first —
+            // substring(0..1) on "" would crash the desktop app at startup.
             getKoin()
                 .get<DataStoreManager>()
                 .language
                 .first()
+                .ifEmpty { systemLanguageTag() }
                 .substring(0..1)
         }
     changeLanguageNative(language)

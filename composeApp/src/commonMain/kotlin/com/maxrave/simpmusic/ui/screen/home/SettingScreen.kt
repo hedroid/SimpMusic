@@ -428,6 +428,9 @@ import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
 import simpmusic.composeapp.generated.resources.youtube_transcript
 import simpmusic.composeapp.generated.resources.notification_lyrics
+import simpmusic.composeapp.generated.resources.notification_lyrics_content
+import simpmusic.composeapp.generated.resources.notification_lyrics_content_original
+import simpmusic.composeapp.generated.resources.notification_lyrics_content_original_and_translation
 import simpmusic.composeapp.generated.resources.notification_lyrics_description
 import java.time.Instant
 import java.time.ZoneId
@@ -565,6 +568,7 @@ fun SettingScreen(
     val customOpenAIBaseUrl by viewModel.customOpenAIBaseUrl.collectAsStateWithLifecycle()
     val customOpenAIHeaders by viewModel.customOpenAIHeaders.collectAsStateWithLifecycle()
     val notificationLyrics by viewModel.notificationLyrics.collectAsStateWithLifecycle()
+    val notificationLyricsMode by viewModel.notificationLyricsMode.collectAsStateWithLifecycle()
     val backupDownloaded by viewModel.backupDownloaded.collectAsStateWithLifecycle()
     val backupLocation by viewModel.backupLocation.collectAsStateWithLifecycle()
     val autoBackupEnabled by viewModel.autoBackupEnabled.collectAsStateWithLifecycle()
@@ -1693,6 +1697,48 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.notification_lyrics_description),
                     // Null = not loaded yet; the stored default is on.
                     switch = ((notificationLyrics?.let { it == DataStoreManager.TRUE } ?: true) to { viewModel.setNotificationLyrics(it) }),
+                )
+                // Gated on the toggle above: with the lyric line off there is nothing to configure.
+                // Both options carry the original — the translation alone would replace the lyrics
+                // the user is listening to.
+                SettingItem(
+                    title = stringResource(Res.string.notification_lyrics_content),
+                    subtitle =
+                        if (notificationLyricsMode == DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL_AND_TRANSLATION) {
+                            stringResource(Res.string.notification_lyrics_content_original_and_translation)
+                        } else {
+                            stringResource(Res.string.notification_lyrics_content_original)
+                        },
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.notification_lyrics_content) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            listOf(
+                                                (notificationLyricsMode == DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL) to
+                                                    runBlocking { getString(Res.string.notification_lyrics_content_original) },
+                                                (notificationLyricsMode == DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL_AND_TRANSLATION) to
+                                                    runBlocking { getString(Res.string.notification_lyrics_content_original_and_translation) },
+                                            ),
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        viewModel.setNotificationLyricsMode(
+                                            when (state.selectOne?.getSelected()) {
+                                                runBlocking { getString(Res.string.notification_lyrics_content_original_and_translation) } ->
+                                                    DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL_AND_TRANSLATION
+
+                                                else -> DataStoreManager.NOTIFICATION_LYRICS_MODE_ORIGINAL
+                                            },
+                                        )
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                    isEnable = (notificationLyrics?.let { it == DataStoreManager.TRUE } ?: true),
                 )
             }
         }
