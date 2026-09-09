@@ -294,6 +294,19 @@ class SharedViewModel(
                         _shareSavedLyrics.value = it == TRUE
                     }
                 }
+            // Feed the parsed lyric lines to the service handler so it can drive the
+            // notification-lyrics line (media card / capsule) even while no player screen is open.
+            val notificationLyricsJob =
+                launch {
+                    nowPlayingScreenData
+                        .map { it.lyricsData }
+                        .distinctUntilChanged()
+                        .collect { data ->
+                            val lines =
+                                data?.let { it.translatedLyrics?.first?.lines ?: it.lyrics.lines }
+                            mediaPlayerHandler.updateLyricLines(lines)
+                        }
+                }
 //            val controllerStateJob =
 //                launch {
 //                    controllerState.map { it.isLiked }.distinctUntilChanged().collectLatest {
@@ -308,6 +321,7 @@ class SharedViewModel(
             checkGetVideoJob.join()
             lyricsProviderJob.join()
             shareSavedLyricsJob.join()
+            notificationLyricsJob.join()
 //            controllerStateJob.join()
         }
 

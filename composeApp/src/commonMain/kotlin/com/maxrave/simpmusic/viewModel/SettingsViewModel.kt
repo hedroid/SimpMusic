@@ -121,6 +121,9 @@ class SettingsViewModel(
     val translationLanguage: StateFlow<String?> = _translationLanguage
     private var _useTranslation: MutableStateFlow<String?> = MutableStateFlow(null)
     val useTranslation: StateFlow<String?> = _useTranslation
+
+    private var _notificationLyrics: MutableStateFlow<String?> = MutableStateFlow(null)
+    val notificationLyrics: StateFlow<String?> = _notificationLyrics
     private var _playerCacheLimit: MutableStateFlow<Int?> = MutableStateFlow(null)
     val playerCacheLimit: StateFlow<Int?> = _playerCacheLimit
     private var _playVideoInsteadOfAudio: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -302,6 +305,7 @@ class SettingsViewModel(
         getYoutubeSubtitleLanguage()
         getLyricsProvider()
         getUseTranslation()
+        getNotificationLyrics()
         getPlayVideoInsteadOfAudio()
         getRadioAudioOnly()
         getVideoQuality()
@@ -1087,6 +1091,20 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setEnableTranslateLyric(useTranslation)
             getUseTranslation()
+        }
+    }
+
+    fun getNotificationLyrics() {
+        viewModelScope.launch {
+            dataStoreManager.notificationLyrics.collect { enabled ->
+                _notificationLyrics.emit(enabled)
+            }
+        }
+    }
+
+    fun setNotificationLyrics(enable: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setNotificationLyrics(enable)
         }
     }
 
