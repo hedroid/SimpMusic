@@ -844,4 +844,5 @@
     <string name="backup_location_default">Documents/SimpMusic（默认）</string>
     <string name="language_follow_system">跟随系统</string>
     <string name="language_follow_system_current">跟随系统（当前：%1$s）</string>
+    <!-- Listen Together -->
 </resources>
