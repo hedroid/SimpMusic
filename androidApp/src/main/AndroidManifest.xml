@@ -40,7 +40,7 @@
         </intent>
     </queries>
     <queries>
-        <package android:name="com.github.hedroid.simpmusic" />
+        <package android:name="com.maxrave.simpmusic" />
     </queries>
     <queries>
         <intent>
