@@ -29,13 +29,21 @@ class LogInViewModel(
         viewModelScope.launch {
             cookie
                 .split("; ")
-                .filter { it.isNotEmpty() }
-                .associate {
-                    val (key, value) = it.split("=")
-                    key to value
+                .mapNotNull { pair ->
+                    // Values may contain '=' (base64 padding); pairs without '=' are skipped
+                    // rather than crashing the destructuring.
+                    val separator = pair.indexOf('=')
+                    if (separator > 0) {
+                        pair.substring(0, separator) to pair.substring(separator + 1)
+                    } else {
+                        null
+                    }
                 }.let {
-                    dataStoreManager.setSpdc(it["sp_dc"] ?: "")
-                    _spotifyStatus.value = true
+                    // Only call it a login when sp_dc was actually present; an empty
+                    // capture would otherwise claim success and navigate away.
+                    val spdc = it.toMap()["sp_dc"] ?: ""
+                    dataStoreManager.setSpdc(spdc)
+                    _spotifyStatus.value = spdc.isNotEmpty()
                 }
         }
     }

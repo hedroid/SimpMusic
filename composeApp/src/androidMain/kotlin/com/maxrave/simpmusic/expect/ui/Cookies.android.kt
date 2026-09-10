@@ -1,9 +1,14 @@
 package com.maxrave.simpmusic.expect.ui
 
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Message
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JsResult
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Box
@@ -19,7 +24,9 @@ actual fun createWebViewCookieManager(): WebViewCookieManager =
         override fun getCookie(url: String): String {
             val cookie = CookieManager.getInstance()
             return if (cookie.hasCookies()) {
-                cookie.getCookie(url)
+                // The platform can hand back null for a URL with no cookies even though
+                // other domains have some; callers treat this as a plain String.
+                cookie.getCookie(url) ?: ""
             } else {
                 ""
             }
@@ -47,6 +54,45 @@ actual fun PlatformWebView(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT,
                         )
+
+                    // The login pages' Google/Facebook SSO buttons open their flows as popups
+                    // (window.open / target=_blank). Without multi-window support the tap does
+                    // nothing at all; with it, the popup URL is captured in onCreateWindow and
+                    // loaded into this WebView so the OAuth flow stays in-app.
+                    settings.setSupportMultipleWindows(true)
+
+                    fun routeExternal(url: String) {
+                        when {
+                            url.startsWith("about:") -> Unit
+                            else ->
+                                runCatching {
+                                    val intent =
+                                        if (url.startsWith("intent:")) {
+                                            Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+                                        } else {
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        }
+                                    intent.addCategory(Intent.CATEGORY_BROWSABLE)
+                                    context.startActivity(intent)
+                                }
+                        }
+                    }
+
+                    fun overrideForUrl(
+                        url: String,
+                        isForMainFrame: Boolean,
+                    ): Boolean =
+                        if (!isForMainFrame || url.startsWith("http")) {
+                            false
+                        } else {
+                            // Deep links (fb://, intent:// to Google services, mailto:, ...) must
+                            // never fall through to WebView's default handling: it calls
+                            // startActivity itself and crashes the app with
+                            // ActivityNotFoundException when nothing can handle the intent.
+                            routeExternal(url)
+                            true
+                        }
+
                     webViewClient =
                         object : WebViewClient() {
                             override fun onPageFinished(
@@ -57,7 +103,83 @@ actual fun PlatformWebView(
                                     onPageFinished(it)
                                 }
                             }
+
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView,
+                                request: WebResourceRequest,
+                            ): Boolean = overrideForUrl(request.url.toString(), request.isForMainFrame)
+
+                            @Deprecated("Deprecated in Java")
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView,
+                                url: String,
+                            ): Boolean = overrideForUrl(url, true)
                         }
+
+                    webChromeClient =
+                        object : WebChromeClient() {
+                            override fun onCreateWindow(
+                                view: WebView,
+                                isDialog: Boolean,
+                                isUserGesture: Boolean,
+                                resultMsg: Message,
+                            ): Boolean {
+                                val main = view
+                                // Offscreen WebView whose only job is to hand us the popup's
+                                // first navigation; every URL it sees is diverted into the
+                                // main WebView (or an external app for non-http schemes).
+                                val diverted = booleanArrayOf(false)
+                                val divert =
+                                    fun(v: WebView, url: String) {
+                                        // Popups can start life on about:blank; wait for the
+                                        // real navigation instead of consuming the one shot.
+                                        if (diverted[0] || url.startsWith("about:")) return
+                                        diverted[0] = true
+                                        if (url.startsWith("http")) {
+                                            main.loadUrl(url)
+                                        } else {
+                                            routeExternal(url)
+                                        }
+                                        v.post { v.destroy() }
+                                    }
+                                val popup =
+                                    WebView(view.context).apply {
+                                        webViewClient =
+                                            object : WebViewClient() {
+                                                override fun shouldOverrideUrlLoading(
+                                                    v: WebView,
+                                                    request: WebResourceRequest,
+                                                ): Boolean {
+                                                    if (request.isForMainFrame) divert(v, request.url.toString())
+                                                    return true
+                                                }
+
+                                                @Deprecated("Deprecated in Java")
+                                                override fun shouldOverrideUrlLoading(
+                                                    v: WebView,
+                                                    url: String,
+                                                ): Boolean {
+                                                    divert(v, url)
+                                                    return true
+                                                }
+
+                                                override fun onPageStarted(
+                                                    v: WebView,
+                                                    url: String,
+                                                    favicon: Bitmap?,
+                                                ) {
+                                                    // Fallback for popups whose initial navigation
+                                                    // never consults shouldOverrideUrlLoading.
+                                                    divert(v, url)
+                                                }
+                                            }
+                                    }
+                                (resultMsg.obj as WebView.WebViewTransport).webView = popup
+                                resultMsg.sendToTarget()
+                                return true
+                            }
+                        }
+
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
 

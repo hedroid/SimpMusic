@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,11 +49,14 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.log_in_to_spotify
+import simpmusic.composeapp.generated.resources.login_failed
 import simpmusic.composeapp.generated.resources.login_success
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
@@ -101,6 +105,7 @@ fun SpotifyLoginScreen(
 
     val state = rememberWebViewState()
     val cookieManager = createWebViewCookieManager()
+    val captureScope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
         Column {
@@ -165,10 +170,16 @@ fun SpotifyLoginScreen(
                 cookie.takeIf {
                     it.isNotEmpty()
                 }?.let { cookie ->
+                    // Not every cookie pair is "k=v": values may contain '=' (base64 padding),
+                    // and stray pairs without '=' must not blow up the whole parse.
                     val cookies =
-                        cookie.split("; ").map {
-                            val (key, value) = it.split("=")
-                            key to value
+                        cookie.split("; ").mapNotNull { pair ->
+                            val separator = pair.indexOf('=')
+                            if (separator > 0) {
+                                pair.substring(0, separator) to pair.substring(separator + 1)
+                            } else {
+                                null
+                            }
                         }
                     viewModel.setFullSpotifyCookies(cookies)
                 }
@@ -178,13 +189,25 @@ fun SpotifyLoginScreen(
                 // appeared to do nothing.
                 val statusUrl = Regex("^https://accounts\\.spotify\\.com/(?:[^/]+/)?status(?:\\?.*)?$")
                 if (statusUrl.matches(url)) {
-                    cookie
-                        .takeIf {
-                            it.isNotEmpty()
-                        }?.let {
-                            viewModel.saveSpotifySpdc(it)
+                    captureScope.launch {
+                        // The cookie jar can lag behind the finished navigation right after
+                        // an OAuth redirect. Re-read briefly instead of wiping a session
+                        // that was never captured — otherwise the login silently does
+                        // nothing and the just-created session is destroyed too.
+                        var cookieString = cookie
+                        var attempts = 0
+                        while (cookieString.isEmpty() && attempts < 10) {
+                            delay(300)
+                            cookieString = cookieManager.getCookie(url)
+                            attempts++
                         }
-                    cookieManager.removeAllCookies()
+                        if (cookieString.isNotEmpty()) {
+                            viewModel.saveSpotifySpdc(cookieString)
+                            cookieManager.removeAllCookies()
+                        } else {
+                            viewModel.makeToast(getStringBlocking(Res.string.login_failed))
+                        }
+                    }
                 }
             }
         }
