@@ -78,6 +78,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_success
+import simpmusic.composeapp.generated.resources.netease_qr_hint
 import simpmusic.composeapp.generated.resources.netease_qr_risk
 import simpmusic.composeapp.generated.resources.netease_cookie_hint
 import simpmusic.composeapp.generated.resources.netease_login_cookie
@@ -324,6 +325,14 @@ private fun QrMethod(
         Spacer(Modifier.height(16.dp))
 
         if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED || qrUi == NeteaseLoginViewModel.QrUi.RISK) {
+            Text(
+                text = stringResource(Res.string.netease_qr_hint),
+                style = typo().bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            Spacer(Modifier.height(10.dp))
             Button(
                 onClick = { onStartLoading(); onRefresh(null) },
                 shape = RoundedCornerShape(20.dp),

@@ -916,6 +916,7 @@
     <string name="manage_your_netease_account">Manage your NetEase account</string>
     <string name="netease_logout_warning">You will need to sign in again to use the NetEase source</string>
     <string name="netease_qr_risk">Security check triggered — please use web login</string>
+    <string name="netease_qr_hint">The QR code comes from NetEase's API; once you confirm on your phone, the app listens for the result and saves the session cookie</string>
     <string name="netease_dev_login_title">Your MUSIC_U cookie value of NetEase, or a full cookie string</string>
     <string name="netease_login_by_captcha">Log in with code</string>
     <string name="netease_cookie_hint">Paste your MUSIC_U cookie value, or a full cookie string exported from a logged-in browser</string>
