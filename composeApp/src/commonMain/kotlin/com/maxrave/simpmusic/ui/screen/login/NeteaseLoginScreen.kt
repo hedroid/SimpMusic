@@ -341,17 +341,17 @@ private fun QrMethod(
                 modifier = Modifier.fillMaxWidth(0.72f),
             ) { Text(stringResource(Res.string.netease_qr_refresh)) }
             Spacer(Modifier.height(10.dp))
-            // 直达网页登录 tab
+            // 直达网页登录 tab:高对比(描边 + 主题前景色文字),避免红字叠淡红底看不清
             OutlinedButton(
                 onClick = onUseWeb,
                 shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = neteaseRed),
-                border = androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent),
-                modifier =
-                    Modifier
-                        .fillMaxWidth(0.72f)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(neteaseRed.copy(alpha = 0.10f)),
+                colors =
+                    ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                border =
+                    androidx.compose.foundation.BorderStroke(1.dp, neteaseRed.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth(0.72f),
             ) { Text(stringResource(Res.string.netease_qr_use_web)) }
             Spacer(Modifier.height(10.dp))
         }
