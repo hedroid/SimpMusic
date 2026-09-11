@@ -225,6 +225,7 @@ import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.liked
 import simpmusic.composeapp.generated.resources.list_all_cookies_of_this_page
+import simpmusic.composeapp.generated.resources.netease_dev_login_title
 import simpmusic.composeapp.generated.resources.lrclib
 import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.merging_audio_and_video
@@ -3440,10 +3441,13 @@ sealed class DevLogInType {
 
     data object Discord : DevLogInType()
 
+    data object NetEase : DevLogInType()
+
     suspend fun getTitle(): String =
         when (this) {
             is Spotify -> getString(Res.string.your_sp_dc_param_of_spotify_cookie)
             is YouTube -> getString(Res.string.your_youtube_cookie)
             is Discord -> getString(Res.string.your_discord_token)
+            is NetEase -> getString(Res.string.netease_dev_login_title)
         }
 }

@@ -18,6 +18,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import com.maxrave.simpmusic.ui.component.DevLogInBottomSheet
+import com.maxrave.simpmusic.ui.component.DevLogInType
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,7 +43,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -49,6 +51,7 @@ import com.maxrave.simpmusic.expect.ui.PlatformWebView
 import com.maxrave.simpmusic.expect.ui.createWebViewCookieManager
 import com.maxrave.simpmusic.expect.ui.rememberWebViewState
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.LogoDev
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
@@ -103,6 +106,18 @@ fun NeteaseLoginScreen(
     LaunchedEffect(Unit) {
         viewModel.phoneMessage.collect { scope.launch { snackbarHostState.showSnackbar(it) } }
     }
+    var devLoginSheet by rememberSaveable { mutableStateOf(false) }
+    if (devLoginSheet) {
+        DevLogInBottomSheet(
+            onDismiss = { devLoginSheet = false },
+            type = DevLogInType.NetEase,
+            onDone = { cookie ->
+                devLoginSheet = false
+                viewModel.loginByCookie(cookie)
+            },
+        )
+    }
+
     LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect {
             scope.launch {
@@ -124,6 +139,12 @@ fun NeteaseLoginScreen(
                     ) {
                         navController.navigateUp()
                     }
+                }
+            },
+            actions = {
+                // 与 Spotify/YouTube 登录页一致:右上角开发者小按钮 → 底部弹框粘贴 Cookie
+                IconButton(onClick = { devLoginSheet = true }) {
+                    Icon(SimpIcons.LogoDev, "Developer Mode")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -150,18 +171,12 @@ fun NeteaseLoginScreen(
                 onClick = { viewModel.setMethod(NeteaseLoginViewModel.Method.WEB) },
                 label = { Text(stringResource(Res.string.netease_login_web)) },
             )
-            FilterChip(
-                selected = method == NeteaseLoginViewModel.Method.COOKIE,
-                onClick = { viewModel.setMethod(NeteaseLoginViewModel.Method.COOKIE) },
-                label = { Text(stringResource(Res.string.netease_login_cookie)) },
-            )
         }
 
         Box(modifier = Modifier.weight(1f)) {
             when (method) {
                 NeteaseLoginViewModel.Method.QR -> QrMethod(qrContent, qrUi, loading) { viewModel.startQrLogin() }
                 NeteaseLoginViewModel.Method.PHONE -> PhoneMethod(loading, captchaSent, viewModel)
-                NeteaseLoginViewModel.Method.COOKIE -> CookieMethod(loading, viewModel)
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
             }
             SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -233,7 +248,6 @@ private fun PhoneMethod(
 ) {
     var phone by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf("86") }
-    var password by rememberSaveable { mutableStateOf("") }
     var captcha by rememberSaveable { mutableStateOf("") }
 
     Column(
@@ -261,20 +275,6 @@ private fun PhoneMethod(
             )
         }
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text(stringResource(Res.string.netease_password)) },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        Button(
-            onClick = { viewModel.loginByPhone(phone, password, countryCode) },
-            enabled = !loading,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(Res.string.netease_login_by_password)) }
-
-        OutlinedTextField(
             value = captcha,
             onValueChange = { captcha = it },
             label = { Text(stringResource(Res.string.netease_captcha)) },
@@ -292,38 +292,6 @@ private fun PhoneMethod(
                 modifier = Modifier.weight(1f),
             ) { Text(stringResource(Res.string.netease_login_by_captcha)) }
         }
-    }
-}
-
-@Composable
-private fun CookieMethod(
-    loading: Boolean,
-    viewModel: NeteaseLoginViewModel,
-) {
-    var raw by rememberSaveable { mutableStateOf("") }
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-    ) {
-        Text(
-            text = stringResource(Res.string.netease_cookie_hint),
-            style = typo().bodyMedium,
-        )
-        OutlinedTextField(
-            value = raw,
-            onValueChange = { raw = it },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 3,
-        )
-        Button(
-            onClick = { viewModel.loginByCookie(raw) },
-            enabled = !loading && raw.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(Res.string.netease_login_cookie)) }
     }
 }
 

@@ -24,7 +24,7 @@ class NeteaseLoginViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val dataStoreManager: DataStoreManager,
 ) : ViewModel() {
-    enum class Method { QR, PHONE, WEB, COOKIE }
+    enum class Method { QR, PHONE, WEB }
 
     enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED }
 
@@ -101,21 +101,6 @@ class NeteaseLoginViewModel(
     }
 
     // ---------------------------------------------------------------- phone
-
-    fun loginByPhone(
-        phone: String,
-        password: String,
-        countryCode: String,
-    ) {
-        if (phone.isBlank() || password.isBlank()) return
-        _loading.value = true
-        viewModelScope.launch {
-            client.loginByPhone(phone, password, countryCode)
-                .onSuccess { finishLoginFromBody(it) }
-                .onFailure { _phoneMessage.emit(it.message ?: "login failed") }
-            _loading.value = false
-        }
-    }
 
     fun sendCaptcha(
         phone: String,

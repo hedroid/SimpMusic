@@ -907,6 +907,7 @@
     <string name="netease_captcha">SMS code</string>
     <string name="netease_send_captcha">Send code</string>
     <string name="netease_login_by_password">Log in with password</string>
+    <string name="netease_dev_login_title">Your MUSIC_U cookie value of NetEase, or a full cookie string</string>
     <string name="netease_login_by_captcha">Log in with code</string>
     <string name="netease_cookie_hint">Paste your MUSIC_U cookie value, or a full cookie string exported from a logged-in browser</string>
     <string name="netease_quality_standard">Standard (128kbps)</string>
