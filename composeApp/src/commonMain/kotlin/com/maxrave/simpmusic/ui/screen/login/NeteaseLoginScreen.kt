@@ -78,6 +78,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_success
+import simpmusic.composeapp.generated.resources.netease_qr_generating
 import simpmusic.composeapp.generated.resources.netease_qr_hint
 import simpmusic.composeapp.generated.resources.netease_qr_risk
 import simpmusic.composeapp.generated.resources.netease_cookie_hint
@@ -311,6 +312,7 @@ private fun QrMethod(
                     NeteaseLoginViewModel.QrUi.EXPIRED -> stringResource(Res.string.netease_qr_expired)
                     NeteaseLoginViewModel.QrUi.RISK -> stringResource(Res.string.netease_qr_risk)
                     NeteaseLoginViewModel.QrUi.LOGGED_IN -> stringResource(Res.string.login_success)
+                    NeteaseLoginViewModel.QrUi.LOADING -> stringResource(Res.string.netease_qr_generating)
                     else -> stringResource(Res.string.netease_qr_waiting_scan)
                 },
             style = typo().labelLarge,

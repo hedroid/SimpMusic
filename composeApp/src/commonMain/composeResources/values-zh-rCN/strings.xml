@@ -870,7 +870,8 @@
     <string name="netease_login_phone">手机号</string>
     <string name="netease_login_web">网页</string>
     <string name="netease_login_cookie">Cookie</string>
-    <string name="netease_qr_waiting_scan">用网易云 App 扫码…</string>
+    <string name="netease_qr_generating">正在生成二维码...</string>
+    <string name="netease_qr_waiting_scan">请使用网易云音乐扫码登录</string>
     <string name="netease_qr_scanned">已扫码，请在手机上确认</string>
     <string name="netease_qr_expired">二维码已过期，点击刷新</string>
     <string name="netease_phone_number">手机号</string>

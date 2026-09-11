@@ -899,7 +899,8 @@
     <string name="netease_login_phone">Phone</string>
     <string name="netease_login_web">Web</string>
     <string name="netease_login_cookie">Cookie</string>
-    <string name="netease_qr_waiting_scan">Scan with the NetEase app…</string>
+    <string name="netease_qr_generating">Generating QR code...</string>
+    <string name="netease_qr_waiting_scan">Scan with the NetEase Music app to sign in</string>
     <string name="netease_qr_scanned">Scanned — confirm on your phone</string>
     <string name="netease_qr_expired">QR expired — tap to refresh</string>
     <string name="netease_phone_number">Phone number</string>
