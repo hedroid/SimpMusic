@@ -267,6 +267,10 @@ fun AppBottomNavigationBar(
                             var moved = false
                             var lastHover: MusicSource? = null
                             val downTime = down.uptimeMillis
+                            // 容差用系统标准:长按超时 = viewConfiguration,位移 = touchSlop 的 3 倍
+                            // (原先 24px≈6dp,手指按住的微抖就会杀死长按)
+                            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
+                            val moveTolerance = viewConfiguration.touchSlop * 3
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -286,10 +290,10 @@ fun AppBottomNavigationBar(
                                     break
                                 }
                                 val elapsed = change.uptimeMillis - downTime
-                                if (!moved && (change.position - start).getDistance() > 24f) {
+                                if (!longPressed && (change.position - start).getDistance() > moveTolerance) {
                                     moved = true
                                 }
-                                if (!longPressed && elapsed > 380 && !moved) {
+                                if (!longPressed && elapsed > longPressTimeout && !moved) {
                                     longPressed = true
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     showSourceFan = true
