@@ -308,6 +308,7 @@ import simpmusic.composeapp.generated.resources.log_in_to_spotify
 import simpmusic.composeapp.generated.resources.netease
 import simpmusic.composeapp.generated.resources.netease_account
 import simpmusic.composeapp.generated.resources.manage_your_netease_account
+import simpmusic.composeapp.generated.resources.netease_logout_warning
 import simpmusic.composeapp.generated.resources.log_in_to_netease
 import simpmusic.composeapp.generated.resources.log_out_from_netease
 import simpmusic.composeapp.generated.resources.intro_login_to_netease
@@ -3024,29 +3025,40 @@ fun SettingScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Spacer(Modifier.width(24.dp))
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(neteaseAccountThumbUrl.ifEmpty { null })
-                                        .crossfade(550)
-                                        .build(),
-                                placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
-                                error = rememberVectorPainter(SimpIcons.PeopleAlt),
-                                contentDescription = neteaseAccountName,
-                                modifier =
-                                    Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape),
-                            )
+                            if (neteaseAccountThumbUrl.isNotEmpty()) {
+                                AsyncImage(
+                                    model =
+                                        ImageRequest
+                                            .Builder(LocalPlatformContext.current)
+                                            .data(neteaseAccountThumbUrl)
+                                            .crossfade(550)
+                                            .build(),
+                                    placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                    error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                    contentDescription = neteaseAccountName,
+                                    modifier =
+                                        Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape),
+                                )
+                            } else {
+                                Icon(
+                                    SimpIcons.PeopleAlt,
+                                    contentDescription = null,
+                                    modifier =
+                                        Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape),
+                                )
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    neteaseAccountName.ifEmpty { "NetEase user" },
+                                    neteaseAccountName.ifEmpty { stringResource(Res.string.netease) },
                                     style = typo().labelMedium,
                                     color = MaterialTheme.colorScheme.onBackground,
                                 )
-                                Text("网易云音乐", style = typo().bodySmall)
+                                Text(stringResource(Res.string.netease), style = typo().bodySmall)
                             }
                             Spacer(Modifier.width(12.dp))
                             AnimatedVisibility(visible = true) {
@@ -3065,12 +3077,12 @@ fun SettingScreen(
                         Column {
                             ActionButton(
                                 icon = SimpIcons.Close,
-                                text = Res.string.log_out,
+                                text = Res.string.log_out_from_netease,
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(
                                         title = runBlocking { getString(Res.string.warning) },
-                                        message = runBlocking { getString(Res.string.log_out_warning) },
+                                        message = runBlocking { getString(Res.string.netease_logout_warning) },
                                         confirm =
                                             runBlocking { getString(Res.string.log_out) } to {
                                                 viewModel.logOutNetease()
@@ -3224,12 +3236,12 @@ fun SettingScreen(
                             }
                             ActionButton(
                                 icon = SimpIcons.Close,
-                                text = Res.string.log_out,
+                                text = Res.string.log_out_from_netease,
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(
                                         title = runBlocking { getString(Res.string.warning) },
-                                        message = runBlocking { getString(Res.string.log_out_warning) },
+                                        message = runBlocking { getString(Res.string.netease_logout_warning) },
                                         confirm =
                                             runBlocking { getString(Res.string.log_out) } to {
                                                 viewModel.logOutAllYouTube()
