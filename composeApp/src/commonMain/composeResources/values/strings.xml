@@ -887,7 +887,7 @@
     <string name="netease">NetEase Music</string>
     <string name="log_in_to_netease">Log in to NetEase</string>
     <string name="log_out_from_netease">Log out of NetEase</string>
-    <string name="intro_login_to_netease">Add NetEase as a second music source (experimental)</string>
+    <string name="intro_login_to_netease">NetEase as a second music source</string>
     <string name="netease_login_to_netease">Log in to NetEase</string>
     <string name="netease_quality">NetEase streaming quality</string>
     <string name="netease_download_quality">NetEase download quality</string>

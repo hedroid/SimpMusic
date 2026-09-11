@@ -23,6 +23,8 @@ import androidx.compose.material3.Icon
 import com.maxrave.simpmusic.ui.component.DevLogInBottomSheet
 import com.maxrave.simpmusic.ui.component.DevLogInType
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import multiplatform.network.cmptoast.ToastGravity
+import multiplatform.network.cmptoast.showToast
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -132,9 +134,8 @@ fun NeteaseLoginScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loginSuccess.collect {
-            scope.launch {
-                snackbarHostState.showSnackbar(getString(Res.string.login_success) + " · $it")
-            }
+            // toast 在跳转后依然可见;snackbar 会随页面离开而消失
+            showToast(getString(Res.string.login_success) + " · $it", ToastGravity.Bottom)
             navController.navigateUp()
         }
     }

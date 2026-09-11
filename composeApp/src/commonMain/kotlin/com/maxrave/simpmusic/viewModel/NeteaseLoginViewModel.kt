@@ -98,7 +98,9 @@ class NeteaseLoginViewModel(
                                     return@launch
                                 }
                                 is NeteaseQrStatus.Confirmed -> {
-                                    finishLogin(status.cookies)
+                                    val finalCookies = status.cookies
+                                    // 独立协程执行收尾:轮询 job 的任何取消/异常都不再牵连登录流程
+                                    viewModelScope.launch { finishLogin(finalCookies) }
                                     return@launch
                                 }
                             }

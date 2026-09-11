@@ -567,24 +567,6 @@ fun SettingScreen(
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
     val neteaseAutoSwitch by viewModel.neteaseAutoSwitch.collectAsStateWithLifecycle()
-    var qualityDialogTarget by rememberSaveable { mutableStateOf<NeteaseQualityTarget?>(null) }
-    if (qualityDialogTarget != null) {
-        NeteaseQualityDialog(
-            current =
-                when (qualityDialogTarget) {
-                    NeteaseQualityTarget.DOWNLOAD -> neteaseDownloadQuality
-                    else -> neteaseQuality
-                },
-            onPick = { key ->
-                when (qualityDialogTarget) {
-                    NeteaseQualityTarget.DOWNLOAD -> viewModel.setNeteaseDownloadQuality(key)
-                    else -> viewModel.setNeteaseQuality(key)
-                }
-                qualityDialogTarget = null
-            },
-            onDismiss = { qualityDialogTarget = null },
-        )
-    }
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -1376,6 +1358,124 @@ fun SettingScreen(
                 }
             }
         }
+        item(key = "netease") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.netease),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                SettingItem(
+                    title =
+                        if (neteaseLoggedIn) {
+                            stringResource(Res.string.log_out_from_netease)
+                        } else {
+                            stringResource(Res.string.log_in_to_netease)
+                        },
+                    subtitle =
+                        if (neteaseLoggedIn) {
+                            neteaseAccountName.ifEmpty { stringResource(Res.string.logged_in) }
+                        } else {
+                            stringResource(Res.string.intro_login_to_netease)
+                        },
+                    onClick = {
+                        if (neteaseLoggedIn) {
+                            viewModel.confirmLogOut(
+                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
+                            ) { viewModel.logOutNetease() }
+                        } else {
+                            navController.navigate(NeteaseLoginDestination)
+                        }
+                    },
+                )
+                // 与 YTM 音质同款 SettingAlertState 单选弹框
+                val neteaseQualityOptions =
+                    mapOf(
+                        "JYMASTER" to Res.string.netease_quality_jymaster,
+                        "SKY" to Res.string.netease_quality_sky,
+                        "JYEFFECT" to Res.string.netease_quality_jyeffect,
+                        "HIRES" to Res.string.netease_quality_hires,
+                        "LOSSLESS" to Res.string.netease_quality_lossless,
+                        "EXHIGH" to Res.string.netease_quality_exhigh,
+                        "HIGHER" to Res.string.netease_quality_higher,
+                        "STANDARD" to Res.string.netease_quality_standard,
+                    )
+                val qualityLabelToKey =
+                    neteaseQualityOptions.entries.associate { (key, res) ->
+                        runBlocking { getString(res) } to key
+                    }
+                SettingItem(
+                    title = stringResource(Res.string.netease_quality),
+                    subtitle =
+                        neteaseQualityOptions[neteaseQuality]?.let { stringResource(it) }
+                            ?: neteaseQuality,
+                    smallSubtitle = true,
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                                (key == neteaseQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        qualityLabelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseQuality(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_download_quality),
+                    subtitle =
+                        neteaseQualityOptions[neteaseDownloadQuality]?.let { stringResource(it) }
+                            ?: neteaseDownloadQuality,
+                    smallSubtitle = true,
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_download_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                                (key == neteaseDownloadQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        qualityLabelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseDownloadQuality(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_follow_sync),
+                    subtitle = stringResource(Res.string.netease_follow_sync_description),
+                    switch = (neteaseFollowSync to { viewModel.setNeteaseFollowSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_auto_switch),
+                    subtitle = stringResource(Res.string.netease_auto_switch_description),
+                    switch = (neteaseAutoSwitch to { viewModel.setNeteaseAutoSwitch(it) }),
+                )
+            }
+        }
         if (getPlatform() == Platform.Android) {
             item(key = "audio") {
                 Column {
@@ -2037,68 +2137,6 @@ fun SettingScreen(
                     title = stringResource(Res.string.enable_animated_artwork),
                     subtitle = stringResource(Res.string.animated_artwork_info),
                     switch = (amAnimatedArtwork to { viewModel.setAMAnimatedArtwork(it) }),
-                )
-            }
-        }
-        item(key = "netease") {
-            Column {
-                Text(
-                    text = stringResource(Res.string.netease),
-                    style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                SettingItem(
-                    title =
-                        if (neteaseLoggedIn) {
-                            stringResource(Res.string.log_out_from_netease)
-                        } else {
-                            stringResource(Res.string.log_in_to_netease)
-                        },
-                    subtitle =
-                        if (neteaseLoggedIn) {
-                            neteaseAccountName.ifEmpty { stringResource(Res.string.logged_in) }
-                        } else {
-                            stringResource(Res.string.intro_login_to_netease)
-                        },
-                    onClick = {
-                        if (neteaseLoggedIn) {
-                            viewModel.confirmLogOut(
-                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
-                            ) { viewModel.logOutNetease() }
-                        } else {
-                            navController.navigate(NeteaseLoginDestination)
-                        }
-                    },
-                )
-                // TODO(NETEASE_NEXT): 两个音质选择换成 SettingItem 自带的 selectOne 样式,
-                // 与 download_quality 行为一致;首版用 AlertDialog 兜底。
-                SettingItem(
-                    title = stringResource(Res.string.netease_quality),
-                    subtitle = neteaseQualityLabel(neteaseQuality),
-                    isEnable = neteaseLoggedIn,
-                    onClick = {
-                        qualityDialogTarget = NeteaseQualityTarget.STREAM
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.netease_download_quality),
-                    subtitle = neteaseQualityLabel(neteaseDownloadQuality),
-                    isEnable = neteaseLoggedIn,
-                    onClick = {
-                        qualityDialogTarget = NeteaseQualityTarget.DOWNLOAD
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.netease_follow_sync),
-                    subtitle = stringResource(Res.string.netease_follow_sync_description),
-                    switch = (neteaseFollowSync to { viewModel.setNeteaseFollowSync(it) }),
-                    isEnable = neteaseLoggedIn,
-                )
-                SettingItem(
-                    title = stringResource(Res.string.netease_auto_switch),
-                    subtitle = stringResource(Res.string.netease_auto_switch_description),
-                    switch = (neteaseAutoSwitch to { viewModel.setNeteaseAutoSwitch(it) }),
                 )
             }
         }
@@ -3636,56 +3674,3 @@ private fun ImportProgressDialog(
 // 网易云音质选择(feat/netease-source)
 // ----------------------------------------------------------------------------
 
-private enum class NeteaseQualityTarget { STREAM, DOWNLOAD }
-
-@Composable
-private fun neteaseQualityLabel(key: String): String =
-    when (key) {
-        "STANDARD" -> stringResource(Res.string.netease_quality_standard)
-        "HIGHER" -> stringResource(Res.string.netease_quality_higher)
-        "EXHIGH" -> stringResource(Res.string.netease_quality_exhigh)
-        "LOSSLESS" -> stringResource(Res.string.netease_quality_lossless)
-        "HIRES" -> stringResource(Res.string.netease_quality_hires)
-        "JYEFFECT" -> stringResource(Res.string.netease_quality_jyeffect)
-        "SKY" -> stringResource(Res.string.netease_quality_sky)
-        "JYMASTER" -> stringResource(Res.string.netease_quality_jymaster)
-        else -> key
-    }
-
-private val NETEASE_QUALITY_KEYS =
-    listOf("JYMASTER", "SKY", "JYEFFECT", "HIRES", "LOSSLESS", "EXHIGH", "HIGHER", "STANDARD")
-
-@Composable
-private fun NeteaseQualityDialog(
-    current: String,
-    onPick: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.netease_quality)) },
-        text = {
-            Column {
-                NETEASE_QUALITY_KEYS.forEach { key ->
-                    Text(
-                        text = neteaseQualityLabel(key),
-                        style = typo().bodyLarge,
-                        color =
-                            if (key == current) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onPick(key) }
-                                .padding(vertical = 12.dp),
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {},
-    )
-}

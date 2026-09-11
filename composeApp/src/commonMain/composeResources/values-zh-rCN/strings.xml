@@ -858,7 +858,7 @@
     <string name="netease">网易云音乐</string>
     <string name="log_in_to_netease">登录网易云</string>
     <string name="log_out_from_netease">退出网易云登录</string>
-    <string name="intro_login_to_netease">接入网易云作为第二音源（实验性）</string>
+    <string name="intro_login_to_netease">接入网易云音源</string>
     <string name="netease_login_to_netease">登录网易云</string>
     <string name="netease_quality">网易云在线音质</string>
     <string name="netease_download_quality">网易云下载音质</string>
