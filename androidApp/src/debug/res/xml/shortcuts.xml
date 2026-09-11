@@ -11,7 +11,7 @@
         android:shortcutShortLabel="@string/home">
         <intent
             android:action="com.maxrave.simpmusic.action.HOME"
-            android:targetPackage="com.maxrave.simpmusic"
+            android:targetPackage="com.maxrave.simpmusic.dev"
             android:targetClass="com.maxrave.simpmusic.MainActivity" />
     </shortcut>
     <shortcut
@@ -21,7 +21,7 @@
         android:shortcutShortLabel="@string/search">
         <intent
             android:action="com.maxrave.simpmusic.action.SEARCH"
-            android:targetPackage="com.maxrave.simpmusic"
+            android:targetPackage="com.maxrave.simpmusic.dev"
             android:targetClass="com.maxrave.simpmusic.MainActivity" />
     </shortcut>
     <shortcut
@@ -31,7 +31,7 @@
         android:shortcutShortLabel="@string/library">
         <intent
             android:action="com.maxrave.simpmusic.action.LIBRARY"
-            android:targetPackage="com.maxrave.simpmusic"
+            android:targetPackage="com.maxrave.simpmusic.dev"
             android:targetClass="com.maxrave.simpmusic.MainActivity" />
     </shortcut>
 </shortcuts>

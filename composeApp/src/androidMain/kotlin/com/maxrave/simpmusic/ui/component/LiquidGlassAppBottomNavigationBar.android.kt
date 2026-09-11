@@ -189,6 +189,15 @@ actual fun LiquidGlassAppBottomNavigationBar(
         currentBackStackEntry?.destination?.let { current ->
             Logger.d(TAG, "LiquidGlassAppBottomNavigationBar: current route: ${current.route}")
             isInSearchDestination = current.hasRoute(SearchDestination::class)
+            // Programmatic navigation (launcher shortcuts, deep links) must move the highlight
+            // too — same rule as the flat bar. Deeper screens keep the last tab highlighted.
+            current.hierarchy
+                .firstNotNullOfOrNull { destination ->
+                    bottomNavScreens.firstOrNull { screen ->
+                        destination.hasRoute(screen.destination::class)
+                    }
+                }
+                ?.let { selectedIndex = it.ordinal }
         }
     }
 

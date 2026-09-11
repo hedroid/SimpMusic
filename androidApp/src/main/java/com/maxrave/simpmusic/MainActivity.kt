@@ -122,7 +122,9 @@ class MainActivity : AppCompatActivity() {
         }
         Logger.d("MainActivity", "onCreate: ")
         val data = (intent?.data ?: intent?.getStringExtra(Intent.EXTRA_TEXT)?.toUri())?.toKmpUriOrNull()
-        if (data != null) {
+        // Launcher shortcuts carry an action but no data URI — without this branch they would be
+        // dropped here and the app would cold-start on the home screen instead of the shortcut's tab.
+        if (data != null || GenericIntent.isShortcutAction(intent?.action)) {
             viewModel.setIntent(
                 GenericIntent(
                     action = intent.action,

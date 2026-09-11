@@ -59,6 +59,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_MEDIUM_LOWER_BOUND
 import coil3.toUri
+import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
@@ -85,6 +86,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
+import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.navigation.graph.AppNavigationGraph
 import com.maxrave.simpmusic.ui.screen.MiniPlayer
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreen
@@ -205,6 +207,24 @@ fun App(
 
     LaunchedEffect(intent) {
         val intent = intent ?: return@LaunchedEffect
+        // Launcher shortcuts (long-press the app icon): action-only intents with no data URI.
+        // Navigate exactly like tapping the tab itself: pop to start, save/restore sibling tab state.
+        if (GenericIntent.isShortcutAction(intent.action)) {
+            val destination = when (intent.action) {
+                GenericIntent.ACTION_SEARCH -> SearchDestination
+                GenericIntent.ACTION_LIBRARY -> LibraryDestination
+                else -> HomeDestination
+            }
+            viewModel.setIntent(null)
+            navController.navigate(destination) {
+                popUpTo(navController.graph.startDestinationId) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+            return@LaunchedEffect
+        }
         val data = intent.data
         Logger.d("MainActivity", "onCreate: $data")
         if (data != null) {

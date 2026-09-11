@@ -86,6 +86,15 @@ fun AppBottomNavigationBar(
             selectedIndex = BottomNavScreen.Home.ordinal
         }
     }
+    // Programmatic navigation (launcher shortcuts, deep links) swaps the destination without
+    // going through selectTab, so the highlight must follow the back stack. Only top-level
+    // tab routes match — deeper screens leave the highlight where the last tab tap put it.
+    LaunchedEffect(currentBackStackEntry) {
+        val hierarchy = currentBackStackEntry?.destination?.hierarchy ?: return@LaunchedEffect
+        bottomNavScreens
+            .firstOrNull { screen -> hierarchy.any { it.hasRoute(screen.destination::class) } }
+            ?.let { selectedIndex = it.ordinal }
+    }
     val selectTab: (BottomNavScreen) -> Unit = { screen ->
         if (selectedIndex == screen.ordinal) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {
@@ -263,6 +272,13 @@ fun AppNavigationRail(
         ) {
             selectedIndex = BottomNavScreen.Home.ordinal
         }
+    }
+    // See AppBottomNavigationBar: programmatic navigation must move the highlight too.
+    LaunchedEffect(currentBackStackEntry) {
+        val hierarchy = currentBackStackEntry?.destination?.hierarchy ?: return@LaunchedEffect
+        bottomNavScreens
+            .firstOrNull { screen -> hierarchy.any { it.hasRoute(screen.destination::class) } }
+            ?.let { selectedIndex = it.ordinal }
     }
     NavigationRail {
         Spacer(Modifier.height(16.dp))
