@@ -324,6 +324,7 @@ class SettingsViewModel(
         getRadioAudioOnly()
         getVideoQuality()
         getSpotifyLogIn()
+        getNeteaseLogIn()
         getSpotifyLyrics()
         getSyncFollowToYouTube()
         getEqualizer()

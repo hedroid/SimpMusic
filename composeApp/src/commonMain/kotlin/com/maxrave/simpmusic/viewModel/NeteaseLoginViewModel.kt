@@ -5,6 +5,7 @@ import com.maxrave.logger.Logger
 import androidx.lifecycle.viewModelScope
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.netease.NeteaseQrLoginSession
 import com.maxrave.netease.model.NeteaseQrStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +31,9 @@ class NeteaseLoginViewModel(
     enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED, LOGGED_IN }
 
     private val client get() = neteaseRepository.client
+
+    /** 扫码专用会话(NeriPlayer 架构):独立 client + 内存 cookie,803 内部完成验证 */
+    private val qrSession = NeteaseQrLoginSession()
 
     private val _method = MutableStateFlow(Method.QR)
     val method: StateFlow<Method> = _method
@@ -64,9 +68,10 @@ class NeteaseLoginViewModel(
 
     fun startQrLogin() {
         pollJob?.cancel()
+        qrSession.reset()
         _qrUi.value = QrUi.LOADING
         viewModelScope.launch {
-            client.createQrSession()
+            qrSession.createSession()
                 .onSuccess { session ->
                     _qrContent.value = session.qrContent
                     _qrUi.value = QrUi.WAITING_SCAN
@@ -83,7 +88,7 @@ class NeteaseLoginViewModel(
             viewModelScope.launch {
                 while (true) {
                     delay(3000)
-                    client.checkQrLogin(key)
+                    qrSession.checkLogin(key)
                         .onSuccess { status ->
                             when (status) {
                                 is NeteaseQrStatus.WaitingForScan -> _qrUi.value = QrUi.WAITING_SCAN
