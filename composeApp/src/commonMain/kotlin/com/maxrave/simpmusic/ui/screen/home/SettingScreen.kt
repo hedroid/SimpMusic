@@ -306,6 +306,8 @@ import simpmusic.composeapp.generated.resources.log_in_to_discord
 import simpmusic.composeapp.generated.resources.log_in_to_lastfm
 import simpmusic.composeapp.generated.resources.log_in_to_spotify
 import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.netease_account
+import simpmusic.composeapp.generated.resources.manage_your_netease_account
 import simpmusic.composeapp.generated.resources.log_in_to_netease
 import simpmusic.composeapp.generated.resources.log_out_from_netease
 import simpmusic.composeapp.generated.resources.intro_login_to_netease
@@ -563,6 +565,8 @@ fun SettingScreen(
     val amAnimatedArtwork by viewModel.amAnimatedArtwork.collectAsStateWithLifecycle()
     val neteaseLoggedIn by viewModel.neteaseLogIn.collectAsStateWithLifecycle()
     val neteaseAccountName by viewModel.neteaseAccountName.collectAsStateWithLifecycle()
+    val neteaseAccountThumbUrl by viewModel.neteaseAccountThumbUrlState.collectAsStateWithLifecycle()
+    var showNeteaseAccountDialog by rememberSaveable { mutableStateOf(false) }
     val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
@@ -1369,21 +1373,19 @@ fun SettingScreen(
                 SettingItem(
                     title =
                         if (neteaseLoggedIn) {
-                            stringResource(Res.string.log_out_from_netease)
+                            stringResource(Res.string.netease_account)
                         } else {
                             stringResource(Res.string.log_in_to_netease)
                         },
                     subtitle =
                         if (neteaseLoggedIn) {
-                            neteaseAccountName.ifEmpty { stringResource(Res.string.logged_in) }
+                            stringResource(Res.string.manage_your_netease_account)
                         } else {
                             stringResource(Res.string.intro_login_to_netease)
                         },
                     onClick = {
                         if (neteaseLoggedIn) {
-                            viewModel.confirmLogOut(
-                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
-                            ) { viewModel.logOutNetease() }
+                            showNeteaseAccountDialog = true
                         } else {
                             navController.navigate(NeteaseLoginDestination)
                         }
@@ -2968,6 +2970,98 @@ fun SettingScreen(
             },
         )
     }
+    if (showNeteaseAccountDialog) {
+        BasicAlertDialog(
+            onDismissRequest = { },
+            modifier = Modifier.wrapContentSize(),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = AlertDialogDefaults.TonalElevation,
+                shadowElevation = 1.dp,
+            ) {
+                Column {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                    ) {
+                        IconButton(
+                            onClick = { showNeteaseAccountDialog = false },
+                            colors =
+                                IconButtonDefaults.iconButtonColors().copy(
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                ),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxHeight(),
+                        ) {
+                            Icon(SimpIcons.Close, null, tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Text(
+                            stringResource(Res.string.netease_account),
+                            style = typo().titleMedium,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.Center)
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .wrapContentWidth(),
+                        )
+                    }
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(neteaseAccountThumbUrl.ifEmpty { null })
+                                    .crossfade(550)
+                                    .build(),
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape),
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = neteaseAccountName.ifEmpty { "NetEase user" },
+                                style = typo().bodyLarge,
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            showNeteaseAccountDialog = false
+                            viewModel.confirmLogOut(
+                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
+                            ) { viewModel.logOutNetease() }
+                        },
+                        modifier =
+                            Modifier
+                                .align(Alignment.End)
+                                .padding(end = 12.dp, bottom = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.log_out_from_netease),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     if (showYouTubeAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },

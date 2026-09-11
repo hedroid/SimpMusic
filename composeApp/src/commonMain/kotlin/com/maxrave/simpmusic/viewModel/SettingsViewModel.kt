@@ -1852,6 +1852,9 @@ class SettingsViewModel(
     private var _neteaseAccountName: MutableStateFlow<String> = MutableStateFlow("")
     val neteaseAccountName: StateFlow<String> = _neteaseAccountName
 
+    private var _neteaseAccountThumbUrlState: MutableStateFlow<String> = MutableStateFlow("")
+    val neteaseAccountThumbUrlState: StateFlow<String> = _neteaseAccountThumbUrlState
+
     private var _neteaseQuality: MutableStateFlow<String> = MutableStateFlow("EXHIGH")
     val neteaseQuality: StateFlow<String> = _neteaseQuality
 
@@ -1865,6 +1868,9 @@ class SettingsViewModel(
     val neteaseAutoSwitch: StateFlow<Boolean> = _neteaseAutoSwitch
 
     fun getNeteaseLogIn() {
+        viewModelScope.launch {
+            dataStoreManager.neteaseAccountThumbUrl.collect { _neteaseAccountThumbUrlState.value = it }
+        }
         viewModelScope.launch {
             combineStates(
                 dataStoreManager.neteaseCookie,

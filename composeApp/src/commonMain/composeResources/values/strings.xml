@@ -912,6 +912,8 @@
     <string name="netease_qr_refresh">Refresh QR code</string>
     <string name="netease_qr_use_web">Use web login</string>
     <string name="netease_verify_hint">Complete the security check below — login continues automatically</string>
+    <string name="netease_account">NetEase account</string>
+    <string name="manage_your_netease_account">Manage your NetEase account</string>
     <string name="netease_dev_login_title">Your MUSIC_U cookie value of NetEase, or a full cookie string</string>
     <string name="netease_login_by_captcha">Log in with code</string>
     <string name="netease_cookie_hint">Paste your MUSIC_U cookie value, or a full cookie string exported from a logged-in browser</string>

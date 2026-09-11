@@ -76,22 +76,14 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_success
-import simpmusic.composeapp.generated.resources.netease_verify_hint
 import simpmusic.composeapp.generated.resources.netease_cookie_hint
-import simpmusic.composeapp.generated.resources.netease_login_by_captcha
-import simpmusic.composeapp.generated.resources.netease_login_by_password
 import simpmusic.composeapp.generated.resources.netease_login_cookie
-import simpmusic.composeapp.generated.resources.netease_login_phone
 import simpmusic.composeapp.generated.resources.netease_login_qr
 import simpmusic.composeapp.generated.resources.netease_login_to_netease
 import simpmusic.composeapp.generated.resources.netease_login_web
-import simpmusic.composeapp.generated.resources.netease_password
-import simpmusic.composeapp.generated.resources.netease_phone_number
 import simpmusic.composeapp.generated.resources.netease_qr_expired
 import simpmusic.composeapp.generated.resources.netease_qr_scanned
 import simpmusic.composeapp.generated.resources.netease_qr_waiting_scan
-import simpmusic.composeapp.generated.resources.netease_captcha
-import simpmusic.composeapp.generated.resources.netease_send_captcha
 
 private const val NETEASE_WEB_LOGIN_URL = "https://music.163.com/#/login"
 
@@ -108,8 +100,6 @@ fun NeteaseLoginScreen(
     val qrContent by viewModel.qrContent.collectAsStateWithLifecycle()
     val qrUi by viewModel.qrUi.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
-    val captchaSent by viewModel.captchaSent.collectAsStateWithLifecycle()
-    val verifyUrl by viewModel.verifyUrl.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -177,11 +167,6 @@ fun NeteaseLoginScreen(
                 label = { Text(stringResource(Res.string.netease_login_qr)) },
             )
             FilterChip(
-                selected = method == NeteaseLoginViewModel.Method.PHONE,
-                onClick = { viewModel.setMethod(NeteaseLoginViewModel.Method.PHONE) },
-                label = { Text(stringResource(Res.string.netease_login_phone)) },
-            )
-            FilterChip(
                 selected = method == NeteaseLoginViewModel.Method.WEB,
                 onClick = { viewModel.setMethod(NeteaseLoginViewModel.Method.WEB) },
                 label = { Text(stringResource(Res.string.netease_login_web)) },
@@ -197,8 +182,6 @@ fun NeteaseLoginScreen(
                         loading = loading,
                         onRefresh = { viewModel.startQrLogin() }
                     )
-                NeteaseLoginViewModel.Method.PHONE ->
-                    PhoneMethod(loading, captchaSent, verifyUrl, viewModel)
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
             }
             SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -222,7 +205,9 @@ private fun QrMethod(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                // 底部让位,使内容组的视觉中心整体上移(原本垂直居中偏下)
+                .padding(bottom = 88.dp),
     ) {
         Text(
             text = stringResource(Res.string.netease_qr_title),
@@ -307,85 +292,6 @@ private fun QrMethod(
                 modifier = Modifier.fillMaxWidth(0.72f),
             ) { Text(stringResource(Res.string.netease_qr_refresh)) }
             Spacer(Modifier.height(10.dp))
-        }
-    }
-}
-
-@Composable
-private fun PhoneMethod(
-    loading: Boolean,
-    captchaSent: Boolean,
-    verifyUrl: String?,
-    viewModel: NeteaseLoginViewModel,
-) {
-    if (verifyUrl != null) {
-        // -462 风控:滑块验证页,验证通过后自动重试登录
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = stringResource(Res.string.netease_verify_hint),
-                style = typo().bodyMedium,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-            )
-            val verifyState = rememberWebViewState()
-            val cookieManager = createWebViewCookieManager()
-            Box(modifier = Modifier.weight(1f)) {
-                PlatformWebView(
-                    state = verifyState,
-                    initUrl = verifyUrl,
-                ) { url ->
-                    if (url.startsWith("https://st.music.163.com")) {
-                        viewModel.onVerifyPageFinished(cookieManager.getCookie("https://music.163.com").orEmpty())
-                    }
-                }
-            }
-        }
-        return
-    }
-    var phone by rememberSaveable { mutableStateOf("") }
-    var countryCode by rememberSaveable { mutableStateOf("86") }
-    var captcha by rememberSaveable { mutableStateOf("") }
-
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = countryCode,
-                onValueChange = { countryCode = it.take(4) },
-                label = { Text("+") },
-                modifier = Modifier.size(width = 88.dp, height = 64.dp),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text(stringResource(Res.string.netease_phone_number)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-        }
-        OutlinedTextField(
-            value = captcha,
-            onValueChange = { captcha = it },
-            label = { Text(stringResource(Res.string.netease_captcha)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { viewModel.sendCaptcha(phone, countryCode) },
-                enabled = !loading && !captchaSent,
-            ) { Text(stringResource(Res.string.netease_send_captcha)) }
-            Button(
-                onClick = { viewModel.loginByCaptcha(phone, captcha, countryCode) },
-                enabled = !loading,
-                modifier = Modifier.weight(1f),
-            ) { Text(stringResource(Res.string.netease_login_by_captcha)) }
         }
     }
 }

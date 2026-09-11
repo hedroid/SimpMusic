@@ -883,6 +883,8 @@
     <string name="netease_qr_refresh">刷新二维码</string>
     <string name="netease_qr_use_web">使用网页登录</string>
     <string name="netease_verify_hint">完成下方安全验证后，将自动继续登录</string>
+    <string name="netease_account">网易云账户</string>
+    <string name="manage_your_netease_account">管理您的网易云账户</string>
     <string name="netease_dev_login_title">粘贴网易云 MUSIC_U 的值,或完整 Cookie 串</string>
     <string name="netease_login_by_captcha">验证码登录</string>
     <string name="netease_cookie_hint">粘贴 MUSIC_U 的值，或已登录浏览器导出的完整 Cookie 串</string>
