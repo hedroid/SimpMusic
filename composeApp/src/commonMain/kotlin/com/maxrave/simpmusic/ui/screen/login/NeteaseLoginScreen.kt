@@ -57,6 +57,7 @@ import simpmusic.composeapp.generated.resources.netease_qr_subtitle
 import simpmusic.composeapp.generated.resources.netease_qr_refresh
 import simpmusic.composeapp.generated.resources.netease_qr_use_web
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -65,6 +66,7 @@ import com.maxrave.simpmusic.expect.ui.PlatformWebView
 import com.maxrave.simpmusic.expect.ui.createWebViewCookieManager
 import com.maxrave.simpmusic.expect.ui.rememberWebViewState
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.LogoDev
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
@@ -183,6 +185,7 @@ fun NeteaseLoginScreen(
                         loading = loading,
                         onRefresh = { viewModel.startQrLogin(it) },
                         onStartLoading = { viewModel.beginQrLoading() },
+                        onUseWeb = { viewModel.setMethod(NeteaseLoginViewModel.Method.WEB) },
                     )
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
             }
@@ -198,6 +201,7 @@ private fun QrMethod(
     loading: Boolean,
     onRefresh: (com.maxrave.netease.model.NeteaseFingerprint?) -> Unit,
     onStartLoading: () -> Unit,
+    onUseWeb: () -> Unit,
 ) {
     val platformContext = coil3.compose.LocalPlatformContext.current
     LaunchedEffect(Unit) {
@@ -250,12 +254,13 @@ private fun QrMethod(
                 qrContent?.let { content ->
                     remember(content) { runCatching { NeteaseQrEncoder.encode(content) }.getOrNull() }
                 }
+            val qrUnusable = qrUi == NeteaseLoginViewModel.QrUi.EXPIRED || qrUi == NeteaseLoginViewModel.QrUi.RISK
             if (qrContent != null && matrix != null) {
                 Canvas(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .alpha(if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED) 0.35f else 1f),
+                            .alpha(if (qrUnusable) 0.35f else 1f),
                 ) {
                     val n = matrix.size
                     val cell = size.minDimension / n
@@ -274,6 +279,25 @@ private fun QrMethod(
             }
             if (loading && qrContent == null) {
                 CircularProgressIndicator(color = neteaseRed, modifier = Modifier.size(42.dp))
+            }
+            // 通用"二维码不可用"样式:半透明码 + 中央刷新徽标
+            if (qrUnusable && qrContent != null) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(2.dp, neteaseRed, CircleShape),
+                ) {
+                    Icon(
+                        SimpIcons.History,
+                        contentDescription = null,
+                        tint = neteaseRed,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
         }
 
@@ -299,14 +323,27 @@ private fun QrMethod(
         )
         Spacer(Modifier.height(16.dp))
 
-        if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED) {
+        if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED || qrUi == NeteaseLoginViewModel.QrUi.RISK) {
             Button(
-                onClick = { onRefresh(null) },
+                onClick = { onStartLoading(); onRefresh(null) },
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = neteaseRed),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
                 modifier = Modifier.fillMaxWidth(0.72f),
             ) { Text(stringResource(Res.string.netease_qr_refresh)) }
+            Spacer(Modifier.height(10.dp))
+            // 直达网页登录 tab
+            OutlinedButton(
+                onClick = onUseWeb,
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = neteaseRed),
+                border = androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.72f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(neteaseRed.copy(alpha = 0.10f)),
+            ) { Text(stringResource(Res.string.netease_qr_use_web)) }
             Spacer(Modifier.height(10.dp))
         }
     }
