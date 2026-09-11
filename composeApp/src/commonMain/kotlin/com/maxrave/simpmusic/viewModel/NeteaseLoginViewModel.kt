@@ -1,58 +1,26 @@
 package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.ViewModel
-import com.maxrave.logger.Logger
 import androidx.lifecycle.viewModelScope
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.manager.DataStoreManager
-import com.maxrave.netease.NeteaseQrLoginSession
-import com.maxrave.netease.model.NeteaseQrStatus
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import com.maxrave.logger.Logger
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 
 /**
- * 网易云登录:四种方式(扫码/手机号/网页/Cookie 粘贴)共享一个成功出口 —— 拿到含 MUSIC_U
- * 的 cookie 集合后走 [NeteaseRepositoryImpl.saveLoginCookies] 校验落盘。
+ * 网易云登录(YTM 登录页同款形态:全屏 WebView)。
+ * 网页自带扫码/手机号/滑块验证,这里只负责:Cookie 弹框粘贴 / 网页 Cookie 捕获,
+ * 两者汇入同一个校验出口 [NeteaseRepositoryImpl.saveLoginCookies]。
  */
 class NeteaseLoginViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val dataStoreManager: DataStoreManager,
 ) : ViewModel() {
-    enum class Method { QR, WEB }
-
-    enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED, LOGGED_IN }
-
     private val client get() = neteaseRepository.client
-
-    /** 扫码专用会话(NeriPlayer 架构):独立 client + 内存 cookie,803 内部完成验证 */
-    private val qrSession = NeteaseQrLoginSession()
-
-    private val _method = MutableStateFlow(Method.QR)
-    val method: StateFlow<Method> = _method
-
-    fun setMethod(method: Method) {
-        if (method != Method.QR) pollJob?.cancel() // 离开扫码页即停轮询
-        _method.value = method
-    }
-
-    private val _qrContent = MutableStateFlow<String?>(null)
-    val qrContent: StateFlow<String?> = _qrContent
-
-    private val _qrUi = MutableStateFlow(QrUi.IDLE)
-    val qrUi: StateFlow<QrUi> = _qrUi
-
-    private val _phoneMessage = MutableSharedFlow<String>()
-    val phoneMessage: SharedFlow<String> = _phoneMessage
-
-
 
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
@@ -61,73 +29,10 @@ class NeteaseLoginViewModel(
     private val _loginSuccess = MutableSharedFlow<String?>(extraBufferCapacity = 1)
     val loginSuccess: SharedFlow<String?> = _loginSuccess
 
-    private var pollJob: Job? = null
+    private val _message = MutableSharedFlow<String>()
+    val message: SharedFlow<String> = _message
 
-    // ---------------------------------------------------------------- QR
-
-    fun startQrLogin() {
-        pollJob?.cancel()
-        qrSession.reset()
-        _qrUi.value = QrUi.LOADING
-        viewModelScope.launch {
-            qrSession.createSession()
-                .onSuccess { session ->
-                    _qrContent.value = session.qrContent
-                    _qrUi.value = QrUi.WAITING_SCAN
-                    poll(session.key)
-                }.onFailure {
-                    _qrUi.value = QrUi.EXPIRED
-                    _phoneMessage.emit(it.message ?: "QR session failed")
-                }
-        }
-    }
-
-    private fun poll(key: String) {
-        pollJob =
-            viewModelScope.launch {
-                while (true) {
-                    delay(3000)
-                    qrSession.checkLogin(key)
-                        .onSuccess { status ->
-                            when (status) {
-                                is NeteaseQrStatus.WaitingForScan -> _qrUi.value = QrUi.WAITING_SCAN
-                                is NeteaseQrStatus.ScannedWaitingForConfirm -> _qrUi.value = QrUi.SCANNED
-                                is NeteaseQrStatus.Expired -> {
-                                    _qrUi.value = QrUi.EXPIRED
-                                    return@launch
-                                }
-                                is NeteaseQrStatus.Confirmed -> {
-                                    val finalCookies = status.cookies
-                                    // 独立协程执行收尾:轮询 job 的任何取消/异常都不再牵连登录流程
-                                    viewModelScope.launch { finishLogin(finalCookies) }
-                                    return@launch
-                                }
-                            }
-                        }
-                }
-            }
-    }
-
-    // ---------------------------------------------------------------- phone
-
-    /**
-     * 手机号登录的 cookie 同时出现在响应体 cookie 字段与 Set-Cookie 头;client 已合并头部,
-     * 这里再兜底合并 body 里的,然后统一校验。
-     */
-    private suspend fun finishLoginFromBody(body: kotlinx.serialization.json.JsonObject) {
-        val bodyCookie = (body["cookie"] as? JsonPrimitive)?.content ?: ""
-        val extra =
-            bodyCookie.split(";")
-                .mapNotNull { part ->
-                    val name = part.substringBefore('=', "").trim()
-                    val value = part.substringAfter('=', "").trim()
-                    if (name.isEmpty()) null else name to value
-                }.toMap()
-        finishLogin(client.currentCookies() + extra)
-    }
-
-    // ---------------------------------------------------------------- cookie paste / web
-
+    /** Cookie 弹框粘贴:支持 MUSIC_U 裸值或完整 cookie 串 */
     fun loginByCookie(raw: String) {
         if (raw.isBlank()) return
         _loading.value = true
@@ -148,36 +53,27 @@ class NeteaseLoginViewModel(
                     .mapNotNull { part ->
                         val name = part.substringBefore('=', "").trim()
                         val value = part.substringAfter('=', "").trim()
-                        if (name.isEmpty()) null else name to value
+                        if (name.isEmpty() || value.isEmpty()) null else name to value
                     }.toMap()
             finishLogin(cookies)
             _loading.value = false
         }
     }
 
-    // ---------------------------------------------------------------- shared exit
-
     private suspend fun finishLogin(cookies: Map<String, String>) {
-        pollJob?.cancel()
         Logger.d(TAG, "finishLogin: cookie keys=${cookies.keys}")
         neteaseRepository.saveLoginCookies(cookies)
             .onSuccess { account ->
                 Logger.d(TAG, "finishLogin: success account=${account?.nickname}")
-                _qrUi.value = QrUi.LOGGED_IN
                 dataStoreManager.setSelectedSource(com.maxrave.domain.source.MusicSource.NETEASE.name)
                 _loginSuccess.emit(account?.nickname)
             }.onFailure {
                 Logger.e(TAG, "finishLogin failed", it)
-                _phoneMessage.emit(it.message ?: "登录校验失败")
+                _message.emit(it.message ?: "登录校验失败")
             }
     }
 
     private companion object {
         const val TAG = "NeteaseLogin"
-    }
-
-    override fun onCleared() {
-        pollJob?.cancel()
-        super.onCleared()
     }
 }

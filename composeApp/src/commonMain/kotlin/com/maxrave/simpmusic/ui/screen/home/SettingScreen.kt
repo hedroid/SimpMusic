@@ -2982,80 +2982,105 @@ fun SettingScreen(
                 tonalElevation = AlertDialogDefaults.TonalElevation,
                 shadowElevation = 1.dp,
             ) {
-                Column {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                    ) {
-                        IconButton(
-                            onClick = { showNeteaseAccountDialog = false },
-                            colors =
-                                IconButtonDefaults.iconButtonColors().copy(
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                ),
+                // 与 YouTube 账户弹框同构:LazyColumn + 账户行(头像/名称/已登录徽标) + ActionButton 页脚
+                LazyColumn(modifier = Modifier.padding(8.dp)) {
+                    item {
+                        Box(
                             modifier =
                                 Modifier
-                                    .align(Alignment.CenterStart)
-                                    .fillMaxHeight(),
+                                    .fillMaxWidth()
+                                    .height(48.dp),
                         ) {
-                            Icon(SimpIcons.Close, null, tint = MaterialTheme.colorScheme.onSurface)
-                        }
-                        Text(
-                            stringResource(Res.string.netease_account),
-                            style = typo().titleMedium,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.Center)
-                                    .wrapContentHeight(align = Alignment.CenterVertically)
-                                    .wrapContentWidth(),
-                        )
-                    }
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(neteaseAccountThumbUrl.ifEmpty { null })
-                                    .crossfade(550)
-                                    .build(),
-                            contentDescription = null,
-                            modifier =
-                                Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape),
-                        )
-                        Spacer(Modifier.width(16.dp))
-                        Column {
+                            IconButton(
+                                onClick = { showNeteaseAccountDialog = false },
+                                colors =
+                                    IconButtonDefaults.iconButtonColors().copy(
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            ) {
+                                Icon(SimpIcons.Close, null, tint = MaterialTheme.colorScheme.onSurface)
+                            }
                             Text(
-                                text = neteaseAccountName.ifEmpty { "NetEase user" },
-                                style = typo().bodyLarge,
+                                stringResource(Res.string.netease_account),
+                                style = typo().titleMedium,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.Center)
+                                        .wrapContentHeight(align = Alignment.CenterVertically)
+                                        .wrapContentWidth(),
                             )
                         }
                     }
-                    TextButton(
-                        onClick = {
-                            showNeteaseAccountDialog = false
-                            viewModel.confirmLogOut(
-                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
-                            ) { viewModel.logOutNetease() }
-                        },
-                        modifier =
-                            Modifier
-                                .align(Alignment.End)
-                                .padding(end = 12.dp, bottom = 8.dp),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.log_out_from_netease),
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                    item {
+                        Row(
+                            modifier =
+                                Modifier
+                                    .padding(vertical = 8.dp)
+                                    .clickable { },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Spacer(Modifier.width(24.dp))
+                            AsyncImage(
+                                model =
+                                    ImageRequest
+                                        .Builder(LocalPlatformContext.current)
+                                        .data(neteaseAccountThumbUrl.ifEmpty { null })
+                                        .crossfade(550)
+                                        .build(),
+                                placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                contentDescription = neteaseAccountName,
+                                modifier =
+                                    Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    neteaseAccountName.ifEmpty { "NetEase user" },
+                                    style = typo().labelMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                )
+                                Text("网易云音乐", style = typo().bodySmall)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            AnimatedVisibility(visible = true) {
+                                Text(
+                                    stringResource(Res.string.signed_in),
+                                    style = typo().bodySmall,
+                                    maxLines = 2,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.widthIn(0.dp, 64.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(24.dp))
+                        }
+                    }
+                    item {
+                        Column {
+                            ActionButton(
+                                icon = SimpIcons.Close,
+                                text = Res.string.log_out,
+                            ) {
+                                viewModel.setBasicAlertData(
+                                    SettingBasicAlertState(
+                                        title = runBlocking { getString(Res.string.warning) },
+                                        message = runBlocking { getString(Res.string.log_out_warning) },
+                                        confirm =
+                                            runBlocking { getString(Res.string.log_out) } to {
+                                                viewModel.logOutNetease()
+                                                showNeteaseAccountDialog = false
+                                            },
+                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
             }
