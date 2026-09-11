@@ -76,6 +76,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_success
+import simpmusic.composeapp.generated.resources.netease_verify_hint
 import simpmusic.composeapp.generated.resources.netease_cookie_hint
 import simpmusic.composeapp.generated.resources.netease_login_by_captcha
 import simpmusic.composeapp.generated.resources.netease_login_by_password
@@ -108,6 +109,7 @@ fun NeteaseLoginScreen(
     val qrUi by viewModel.qrUi.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
     val captchaSent by viewModel.captchaSent.collectAsStateWithLifecycle()
+    val verifyUrl by viewModel.verifyUrl.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -195,7 +197,8 @@ fun NeteaseLoginScreen(
                         loading = loading,
                         onRefresh = { viewModel.startQrLogin() }
                     )
-                NeteaseLoginViewModel.Method.PHONE -> PhoneMethod(loading, captchaSent, viewModel)
+                NeteaseLoginViewModel.Method.PHONE ->
+                    PhoneMethod(loading, captchaSent, verifyUrl, viewModel)
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
             }
             SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -312,8 +315,32 @@ private fun QrMethod(
 private fun PhoneMethod(
     loading: Boolean,
     captchaSent: Boolean,
+    verifyUrl: String?,
     viewModel: NeteaseLoginViewModel,
 ) {
+    if (verifyUrl != null) {
+        // -462 风控:滑块验证页,验证通过后自动重试登录
+        Column(modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = stringResource(Res.string.netease_verify_hint),
+                style = typo().bodyMedium,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+            )
+            val verifyState = rememberWebViewState()
+            val cookieManager = createWebViewCookieManager()
+            Box(modifier = Modifier.weight(1f)) {
+                PlatformWebView(
+                    state = verifyState,
+                    initUrl = verifyUrl,
+                ) { url ->
+                    if (url.startsWith("https://st.music.163.com")) {
+                        viewModel.onVerifyPageFinished(cookieManager.getCookie("https://music.163.com").orEmpty())
+                    }
+                }
+            }
+        }
+        return
+    }
     var phone by rememberSaveable { mutableStateOf("") }
     var countryCode by rememberSaveable { mutableStateOf("86") }
     var captcha by rememberSaveable { mutableStateOf("") }

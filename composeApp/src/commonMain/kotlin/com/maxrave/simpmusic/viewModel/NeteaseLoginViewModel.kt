@@ -55,6 +55,12 @@ class NeteaseLoginViewModel(
     private val _captchaSent = MutableStateFlow(false)
     val captchaSent: StateFlow<Boolean> = _captchaSent
 
+    /** -462 风控的滑块验证页;非空时手机号页显示 WebView,验证完成自动重试登录 */
+    private val _verifyUrl = MutableStateFlow<String?>(null)
+    val verifyUrl: StateFlow<String?> = _verifyUrl
+    private var pendingCaptchaLogin: Triple<String, String, String>? = null
+    private var verifyRetried = false
+
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
@@ -133,9 +139,48 @@ class NeteaseLoginViewModel(
         countryCode: String,
     ) {
         if (phone.isBlank() || captcha.isBlank()) return
+        pendingCaptchaLogin = Triple(phone, captcha, countryCode)
+        verifyRetried = false
         _loading.value = true
         viewModelScope.launch {
             client.loginByCaptcha(phone, captcha, countryCode)
+                .onSuccess { body ->
+                    val code = (body["code"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    val verifyUrl =
+                        (
+                            (body["data"] as? kotlinx.serialization.json.JsonObject)
+                                ?.get("verifyUrl") as? kotlinx.serialization.json.JsonPrimitive
+                        )?.content.orEmpty()
+                    if (code == "-462" && verifyUrl.isNotBlank()) {
+                        Logger.d(TAG, "risk control -462, showing verify page")
+                        _verifyUrl.value = verifyUrl
+                        _phoneMessage.emit("请完成安全验证后自动继续")
+                    } else {
+                        finishLoginFromBody(body)
+                    }
+                }.onFailure { _phoneMessage.emit(it.message ?: "login failed") }
+            _loading.value = false
+        }
+    }
+
+    /** 滑块验证页回调:收割 WebView 会话 cookie 喂给主 client,自动重试登录 */
+    fun onVerifyPageFinished(rawCookie: String) {
+        if (verifyRetried) return
+        val pending = pendingCaptchaLogin ?: return
+        val parsed =
+            rawCookie.split(";")
+                .mapNotNull { part ->
+                    val name = part.substringBefore('=', "").trim()
+                    val value = part.substringAfter('=', "").trim()
+                    if (name.isEmpty() || value.isEmpty()) null else name to value
+                }.toMap()
+        if (parsed.isEmpty()) return
+        verifyRetried = true
+        viewModelScope.launch {
+            client.seedCookies(client.currentCookies() + parsed)
+            _verifyUrl.value = null
+            _loading.value = true
+            client.loginByCaptcha(pending.first, pending.second, pending.third)
                 .onSuccess { finishLoginFromBody(it) }
                 .onFailure { _phoneMessage.emit(it.message ?: "login failed") }
             _loading.value = false
