@@ -39,7 +39,16 @@ class NeteaseLoginViewModel(
     val method: StateFlow<Method> = _method
 
     fun setMethod(method: Method) {
-        if (method != Method.QR) pollJob?.cancel() // 离开扫码页即停轮询
+        if (method != Method.QR) {
+            pollJob?.cancel() // 离开扫码页即停轮询
+        } else if (_method.value != Method.QR) {
+            // 切回扫码页:二维码还在屏幕上但轮询已被停掉 —— 恢复它,否则"扫了没反应"
+            val key = currentQrKey
+            if (key != null && _qrUi.value in listOf(QrUi.WAITING_SCAN, QrUi.SCANNED)) {
+                Logger.d(TAG, "re-enter QR tab, resume polling")
+                poll(key)
+            }
+        }
         _method.value = method
     }
 
@@ -63,6 +72,7 @@ class NeteaseLoginViewModel(
 
     private var pollJob: Job? = null
     private var qrAutoRefreshCount = 0
+    private var currentQrKey: String? = null
 
     // ---------------------------------------------------------------- QR
 
@@ -75,6 +85,7 @@ class NeteaseLoginViewModel(
                 .onSuccess { session ->
                     _qrContent.value = session.qrContent
                     _qrUi.value = QrUi.WAITING_SCAN
+                    currentQrKey = session.key
                     poll(session.key)
                 }.onFailure {
                     _qrUi.value = QrUi.EXPIRED
