@@ -326,7 +326,7 @@ private fun QrMethod(
         )
         Spacer(Modifier.height(16.dp))
 
-        // 操作区常驻:生成二维码过程中(LOADING)置灰不可点,其余状态可用
+        // 操作区常驻:LOADING 期间仅"刷新"置灰;网页登录始终可点(不依赖二维码)
         val actionsEnabled = qrUi != NeteaseLoginViewModel.QrUi.LOADING
         Text(
             text = stringResource(Res.string.netease_qr_hint),
@@ -348,7 +348,6 @@ private fun QrMethod(
         // 直达网页登录 tab:高对比(描边 + 主题前景色文字)
         OutlinedButton(
             onClick = onUseWeb,
-            enabled = actionsEnabled,
             shape = RoundedCornerShape(20.dp),
             colors =
                 ButtonDefaults.outlinedButtonColors(
