@@ -1849,6 +1849,9 @@ class SettingsViewModel(
     private var _neteaseLogIn: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val neteaseLogIn: StateFlow<Boolean> = _neteaseLogIn
 
+    private var _neteaseAccounts: MutableStateFlow<List<com.maxrave.domain.data.entities.NeteaseAccountEntity>> = MutableStateFlow(emptyList())
+    val neteaseAccounts: StateFlow<List<com.maxrave.domain.data.entities.NeteaseAccountEntity>> = _neteaseAccounts
+
     private var _neteaseAccountName: MutableStateFlow<String> = MutableStateFlow("")
     val neteaseAccountName: StateFlow<String> = _neteaseAccountName
 
@@ -1925,13 +1928,28 @@ class SettingsViewModel(
         viewModelScope.launch { dataStoreManager.setNeteaseAutoSwitch(enabled) }
     }
 
-    /** 退出网易云:清会话;若当前选中源是网易云则回落 YTM,避免扇形/主页指向空源 */
-    fun logOutNetease() {
+    fun getAllNeteaseAccounts() {
+        viewModelScope.launch {
+            neteaseRepository.getNeteaseAccounts().collect { _neteaseAccounts.value = it }
+        }
+    }
+
+    fun setUsedNeteaseAccount(acc: com.maxrave.domain.data.entities.NeteaseAccountEntity) {
+        viewModelScope.launch {
+            neteaseRepository.setUsedNeteaseAccount(acc.userId)
+            delay(200)
+            getAllNeteaseAccounts()
+        }
+    }
+
+    /** 退出全部网易云账户;若当前选中源是网易云则回落 YTM */
+    fun logOutAllNetease() {
         viewModelScope.launch {
             neteaseRepository.logout()
             if (dataStoreManager.selectedSource.first() == MusicSource.NETEASE.name) {
                 dataStoreManager.setSelectedSource(MusicSource.YOUTUBE_MUSIC.name)
             }
+            _neteaseAccounts.value = emptyList()
             _neteaseLogIn.value = false
         }
     }
