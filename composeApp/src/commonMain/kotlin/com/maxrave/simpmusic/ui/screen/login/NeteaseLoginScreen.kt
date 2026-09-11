@@ -242,8 +242,12 @@ private fun QrMethod(
                     .background(Color.White)
                     .padding(12.dp),
         ) {
-            if (qrContent != null) {
-                val matrix = remember(qrContent) { NeteaseQrEncoder.encode(qrContent) }
+            // 编码失败绝不允许炸组合(上次 135 字节超限就是这么崩的)
+            val matrix =
+                qrContent?.let { content ->
+                    remember(content) { runCatching { NeteaseQrEncoder.encode(content) }.getOrNull() }
+                }
+            if (qrContent != null && matrix != null) {
                 Canvas(
                     modifier =
                         Modifier
