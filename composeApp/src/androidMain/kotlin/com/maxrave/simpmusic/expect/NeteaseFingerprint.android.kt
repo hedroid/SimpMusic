@@ -29,6 +29,7 @@ private const val YD_UA =
 
 actual suspend fun harvestNeteaseFingerprint(context: PlatformContext): NeteaseFingerprint? {
     val appContext = context as? Context ?: return null
+    com.maxrave.logger.Logger.d("NeteaseFingerprint", "harvest start")
     return runCatching {
         val pageLoaded = CompletableDeferred<Unit>()
         val tokenResult = CompletableDeferred<NeteaseFingerprint?>()
@@ -126,6 +127,14 @@ actual suspend fun harvestNeteaseFingerprint(context: PlatformContext): NeteaseF
                     NeteaseFingerprint(cookies = readCookieMap())
                 }
             } finally {
+                val snap =
+                    runCatching {
+                        tokenResult.getCompletedOrNull()
+                    }.getOrNull()
+                com.maxrave.logger.Logger.d(
+                    "NeteaseFingerprint",
+                    "harvest done tokenLen=${snap?.ydToken?.length ?: -1} sDeviceIdLen=${snap?.sDeviceId?.length ?: -1} cookies=${snap?.cookies?.keys}",
+                )
                 runCatching {
                     webView.removeJavascriptInterface(YD_BRIDGE)
                     webView.stopLoading()
@@ -148,6 +157,10 @@ private fun readCookieMap(): Map<String, String> {
             it.substring(0, idx) to it.substring(idx + 1)
         }
 }
+
+@kotlinx.coroutines.ExperimentalCoroutinesApi
+private fun <T> kotlinx.coroutines.CompletableDeferred<T>.getCompletedOrNull(): T? =
+    if (isCompleted) getCompleted() else null
 
 private suspend fun WebView.evaluateJavascriptSuspend(script: String): String? =
     withContext(Dispatchers.Main) {

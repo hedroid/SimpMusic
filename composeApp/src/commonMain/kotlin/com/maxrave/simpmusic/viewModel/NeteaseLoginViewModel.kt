@@ -77,6 +77,12 @@ class NeteaseLoginViewModel(
 
     // ---------------------------------------------------------------- QR
 
+    /** 收割指纹期间由 Screen 调用:卡片先转圈,避免数秒空白被当成"二维码出不来" */
+    fun beginQrLoading() {
+        _loading.value = true
+        _qrUi.value = QrUi.LOADING
+    }
+
     fun startQrLogin(fingerprint: com.maxrave.netease.model.NeteaseFingerprint? = null) {
         val fp = fingerprint ?: lastFingerprint
         pollJob?.cancel()
@@ -89,10 +95,12 @@ class NeteaseLoginViewModel(
                 .onSuccess { session ->
                     _qrContent.value = session.qrContent
                     _qrUi.value = QrUi.WAITING_SCAN
+                    _loading.value = false
                     currentQrKey = session.key
                     poll(session.key)
                 }.onFailure {
                     _qrUi.value = QrUi.EXPIRED
+                    _loading.value = false
                     _phoneMessage.emit(it.message ?: "QR session failed")
                 }
         }

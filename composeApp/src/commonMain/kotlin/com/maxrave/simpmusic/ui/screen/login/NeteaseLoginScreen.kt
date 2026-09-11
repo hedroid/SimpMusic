@@ -181,7 +181,8 @@ fun NeteaseLoginScreen(
                         qrContent = qrContent,
                         qrUi = qrUi,
                         loading = loading,
-                        onRefresh = { viewModel.startQrLogin() }
+                        onRefresh = { viewModel.startQrLogin(it) },
+                        onStartLoading = { viewModel.beginQrLoading() },
                     )
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
             }
@@ -196,10 +197,12 @@ private fun QrMethod(
     qrUi: NeteaseLoginViewModel.QrUi,
     loading: Boolean,
     onRefresh: (com.maxrave.netease.model.NeteaseFingerprint?) -> Unit,
+    onStartLoading: () -> Unit,
 ) {
     val platformContext = coil3.compose.LocalPlatformContext.current
     LaunchedEffect(Unit) {
         if (qrContent == null) {
+            onStartLoading()
             onRefresh(
                 com.maxrave.simpmusic.expect.harvestNeteaseFingerprint(platformContext),
             )
