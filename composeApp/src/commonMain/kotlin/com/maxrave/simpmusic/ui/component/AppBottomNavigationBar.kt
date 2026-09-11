@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -27,8 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.maxrave.domain.source.MusicSource
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -72,7 +69,6 @@ fun AppBottomNavigationBar(
     // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
     var showSourceMenu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val capsuleAlpha by animateFloatAsState(if (showSourceMenu) 0f else 1f, label = "sourceMenuCapsuleAlpha")
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
     // Library here while keeping the ordinal they were declared with, so that the numbering stays
@@ -161,8 +157,7 @@ fun AppBottomNavigationBar(
                 .fillMaxWidth()
                 .windowInsetsPadding(NavigationBarDefaults.windowInsets)
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 8.dp)
-                .graphicsLayerAlphaCompat(capsuleAlpha),
+                .padding(top = 4.dp, bottom = 8.dp),
     ) {
         BoxWithConstraints(Modifier.weight(1f, fill = false)) {
             // Every tab the same width, capped so two tabs on a wide screen do not stretch into
@@ -285,43 +280,41 @@ fun AppBottomNavigationBar(
             ) {
                 BottomNavScreen.Search.icon()
             }
-        }
-    }
 
-    // 音源菜单:标准 Material DropdownMenu —— 材质/配色自动随主题(与导航栏一致),锚定搜索钮上方
-    DropdownMenu(
-        expanded = showSourceMenu,
-        onDismissRequest = { showSourceMenu = false },
-        offset = androidx.compose.ui.unit.DpOffset(0.dp, (-300).dp),
-    ) {
-        DropdownMenuItem(
-            text = { Text("YouTube Music") },
-            leadingIcon = { Icon(SimpIcons.YouTubeMusic, null, modifier = Modifier.size(24.dp)) },
-            trailingIcon = {
-                if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
-            },
-            onClick = {
-                onSourceSelected(MusicSource.YOUTUBE_MUSIC)
-                showSourceMenu = false
-            },
-        )
-        DropdownMenuItem(
-            text = { Text(stringResource(Res.string.netease)) },
-            leadingIcon = { Icon(SimpIcons.NeteaseCloudMusic, null, modifier = Modifier.size(24.dp)) },
-            trailingIcon = {
-                if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
-            },
-            enabled = neteaseLoggedIn,
-            onClick = {
-                onSourceSelected(MusicSource.NETEASE)
-                showSourceMenu = false
-            },
-        )
+            // 音源菜单:锚定在搜索按钮上,标准 Material DropdownMenu —— 材质/配色随主题,
+            // 按钮在屏幕底部,菜单自动翻到按钮上方弹出。
+            DropdownMenu(
+                expanded = showSourceMenu,
+                onDismissRequest = { showSourceMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("YouTube Music") },
+                    leadingIcon = { Icon(SimpIcons.YouTubeMusic, null, modifier = Modifier.size(24.dp)) },
+                    trailingIcon = {
+                        if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
+                    },
+                    onClick = {
+                        onSourceSelected(MusicSource.YOUTUBE_MUSIC)
+                        showSourceMenu = false
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.netease)) },
+                    leadingIcon = { Icon(SimpIcons.NeteaseCloudMusic, null, modifier = Modifier.size(24.dp)) },
+                    trailingIcon = {
+                        if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
+                    },
+                    enabled = neteaseLoggedIn,
+                    onClick = {
+                        onSourceSelected(MusicSource.NETEASE)
+                        showSourceMenu = false
+                    },
+                )
+            }
+        }
     }
     }
 }
-
-private fun Modifier.graphicsLayerAlphaCompat(alpha: Float): Modifier = graphicsLayer { this.alpha = alpha }
 
 
 // Mirrors the glass tab bar's geometry (TabWidth/BarHeight/BlobHeight/BarInset in
