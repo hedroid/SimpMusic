@@ -3070,6 +3070,13 @@ fun SettingScreen(
                     item {
                         Column {
                             ActionButton(
+                                icon = SimpIcons.PeopleAlt,
+                                text = Res.string.guest,
+                            ) {
+                                viewModel.useGuestNetease()
+                                showNeteaseAccountDialog = false
+                            }
+                            ActionButton(
                                 icon = SimpIcons.PlaylistAdd,
                                 text = Res.string.add_an_account,
                             ) {

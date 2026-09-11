@@ -1942,6 +1942,19 @@ class SettingsViewModel(
         }
     }
 
+    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM */
+    fun useGuestNetease() {
+        viewModelScope.launch {
+            neteaseRepository.useGuest()
+            if (dataStoreManager.selectedSource.first() == MusicSource.NETEASE.name) {
+                dataStoreManager.setSelectedSource(MusicSource.YOUTUBE_MUSIC.name)
+            }
+            delay(200)
+            getAllNeteaseAccounts()
+            _neteaseLogIn.value = false
+        }
+    }
+
     /** 退出全部网易云账户;若当前选中源是网易云则回落 YTM */
     fun logOutAllNetease() {
         viewModelScope.launch {
