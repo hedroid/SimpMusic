@@ -19,19 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.maxrave.domain.source.MusicSource
-import kotlin.math.atan2
-import kotlin.math.sqrt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -40,6 +35,10 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.simpmusic.extension.greyScale
+import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
+import com.maxrave.simpmusic.ui.icon.YouTubeMusic
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestination
@@ -70,26 +69,10 @@ fun AppBottomNavigationBar(
     neteaseLoggedIn: Boolean = false,
     onSourceSelected: (MusicSource) -> Unit = { _ -> },
 ) {
-    // ------------------------------------------------ 音源扇形切换状态(feat/netease-source)
-    var showSourceFan by remember { mutableStateOf(false) }
-    var fanHover by remember { mutableStateOf<MusicSource?>(null) }
+    // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
+    var showSourceMenu by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
-    val searchCenterInParent = remember { mutableStateOf(Offset.Zero) }
-    val capsuleAlpha by animateFloatAsState(if (showSourceFan) 0f else 1f, label = "sourceFanCapsuleAlpha")
-
-    fun hoverFromAngle(
-        dx: Float,
-        dy: Float,
-    ): MusicSource? {
-        val distance = sqrt(dx * dx + dy * dy)
-        if (distance < 40f) return null // 太贴近圆心视为未选
-        val angle = Math.toDegrees(atan2(-dy, dx).toDouble()) // 数学角,-180..180
-        return when {
-            angle in 96.0..140.0 -> MusicSource.YOUTUBE_MUSIC
-            angle > 140.0 || angle < -155.0 -> MusicSource.NETEASE
-            else -> null
-        }
-    }
+    val capsuleAlpha by animateFloatAsState(if (showSourceMenu) 0f else 1f, label = "sourceMenuCapsuleAlpha")
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
     // Library here while keeping the ordinal they were declared with, so that the numbering stays
@@ -249,71 +232,48 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .onGloballyPositioned { coordinates ->
-                        searchCenterInParent.value =
-                            coordinates.positionInParent() +
-                                Offset(
-                                    coordinates.size.width / 2f,
-                                    coordinates.size.height / 2f,
-                                )
-                    }
-                    .pointerInput(selectedSource, neteaseLoggedIn) {
-                        // 长按弹出扇形 → 拖动悬停 → 抬指选择/取消;短按仍是进搜索。
-                        // 手势从按下节点持续派发,即使手指移出按钮/父容器 bounds。
+                    .pointerInput(Unit) {
+                        // 通用长按:按住超过系统长按时长 → 震动 + 弹出音源菜单;短按进搜索。
+                        // 超时基于绝对 deadline —— 按住不动(无事件流)也能按时触发。
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             val start = down.position
                             var longPressed = false
                             var moved = false
-                            var lastHover: MusicSource? = null
-                            val downTime = down.uptimeMillis
-                            // 容差用系统标准:长按超时 = viewConfiguration,位移 = touchSlop 的 3 倍
-                            // (原先 24px≈6dp,手指按住的微抖就会杀死长按)
+                            var lastEventUptime = down.uptimeMillis
                             val longPressTimeout = viewConfiguration.longPressTimeoutMillis
                             val moveTolerance = viewConfiguration.touchSlop * 3
                             while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) {
+                                val remaining =
                                     if (longPressed) {
-                                        val pick = fanHover
-                                        if (pick != null && pick != selectedSource &&
-                                            (pick == MusicSource.YOUTUBE_MUSIC || neteaseLoggedIn)
-                                        ) {
-                                            onSourceSelected(pick)
-                                        }
-                                        showSourceFan = false
-                                        fanHover = null
-                                    } else if (!moved) {
+                                        60_000L
+                                    } else {
+                                        (longPressTimeout - (lastEventUptime - down.uptimeMillis)).coerceAtLeast(16L)
+                                    }
+                                val event = withTimeoutOrNull(remaining) { awaitPointerEvent() }
+                                if (event == null) {
+                                    if (!longPressed && !moved) {
+                                        longPressed = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        showSourceMenu = true
+                                    }
+                                    continue
+                                }
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                lastEventUptime = change.uptimeMillis
+                                if (!change.pressed) {
+                                    if (!longPressed && !moved) {
                                         selectTab(BottomNavScreen.Search)
                                     }
                                     break
                                 }
-                                val elapsed = change.uptimeMillis - downTime
                                 if (!longPressed && (change.position - start).getDistance() > moveTolerance) {
                                     moved = true
-                                }
-                                if (!longPressed && elapsed > longPressTimeout && !moved) {
-                                    longPressed = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    showSourceFan = true
-                                }
-                                if (longPressed) {
-                                    val dx = change.position.x - size.width / 2f
-                                    val dy = change.position.y - size.height / 2f
-                                    val hover = hoverFromAngle(dx, dy)
-                                    if (hover != lastHover) {
-                                        if (hover != null && (hover == MusicSource.YOUTUBE_MUSIC || neteaseLoggedIn)) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        }
-                                        lastHover = hover
-                                        fanHover = hover
-                                    }
                                 }
                             }
                         }
                     },
-            contentAlignment = Alignment.Center,
+
         ) {
             CompositionLocalProvider(
                 LocalContentColor provides
@@ -328,14 +288,34 @@ fun AppBottomNavigationBar(
         }
     }
 
-    // 扇形覆盖层:绘制在 bar bounds 之外(向上),靠 Compose 默认不裁剪
-    if (showSourceFan) {
-        SourceFanOverlay(
-            center = searchCenterInParent.value,
-            selected = selectedSource,
-            neteaseLoggedIn = neteaseLoggedIn,
-            hover = fanHover,
-            modifier = Modifier.matchParentSize(),
+    // 音源菜单:标准 Material DropdownMenu —— 材质/配色自动随主题(与导航栏一致),锚定搜索钮上方
+    DropdownMenu(
+        expanded = showSourceMenu,
+        onDismissRequest = { showSourceMenu = false },
+        offset = androidx.compose.ui.unit.DpOffset(0.dp, (-300).dp),
+    ) {
+        DropdownMenuItem(
+            text = { Text("YouTube Music") },
+            leadingIcon = { Icon(SimpIcons.YouTubeMusic, null, modifier = Modifier.size(24.dp)) },
+            trailingIcon = {
+                if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
+            },
+            onClick = {
+                onSourceSelected(MusicSource.YOUTUBE_MUSIC)
+                showSourceMenu = false
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.netease)) },
+            leadingIcon = { Icon(SimpIcons.NeteaseCloudMusic, null, modifier = Modifier.size(24.dp)) },
+            trailingIcon = {
+                if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
+            },
+            enabled = neteaseLoggedIn,
+            onClick = {
+                onSourceSelected(MusicSource.NETEASE)
+                showSourceMenu = false
+            },
         )
     }
     }
