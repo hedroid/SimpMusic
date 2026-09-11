@@ -326,37 +326,39 @@ private fun QrMethod(
         )
         Spacer(Modifier.height(16.dp))
 
-        if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED || qrUi == NeteaseLoginViewModel.QrUi.RISK) {
-            Text(
-                text = stringResource(Res.string.netease_qr_hint),
-                style = typo().bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp),
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { onStartLoading(); onRefresh(null) },
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = neteaseRed),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
-                modifier = Modifier.fillMaxWidth(0.72f),
-            ) { Text(stringResource(Res.string.netease_qr_refresh)) }
-            Spacer(Modifier.height(10.dp))
-            // 直达网页登录 tab:高对比(描边 + 主题前景色文字),避免红字叠淡红底看不清
-            OutlinedButton(
-                onClick = onUseWeb,
-                shape = RoundedCornerShape(20.dp),
-                colors =
-                    ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                border =
-                    androidx.compose.foundation.BorderStroke(1.dp, neteaseRed.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth(0.72f),
-            ) { Text(stringResource(Res.string.netease_qr_use_web)) }
-            Spacer(Modifier.height(10.dp))
-        }
+        // 操作区常驻:生成二维码过程中(LOADING)置灰不可点,其余状态可用
+        val actionsEnabled = qrUi != NeteaseLoginViewModel.QrUi.LOADING
+        Text(
+            text = stringResource(Res.string.netease_qr_hint),
+            style = typo().bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = { onStartLoading(); onRefresh(null) },
+            enabled = actionsEnabled,
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = neteaseRed),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth(0.72f),
+        ) { Text(stringResource(Res.string.netease_qr_refresh)) }
+        Spacer(Modifier.height(10.dp))
+        // 直达网页登录 tab:高对比(描边 + 主题前景色文字)
+        OutlinedButton(
+            onClick = onUseWeb,
+            enabled = actionsEnabled,
+            shape = RoundedCornerShape(20.dp),
+            colors =
+                ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+            border =
+                androidx.compose.foundation.BorderStroke(1.dp, neteaseRed.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth(0.72f),
+        ) { Text(stringResource(Res.string.netease_qr_use_web)) }
+        Spacer(Modifier.height(10.dp))
     }
 }
 
