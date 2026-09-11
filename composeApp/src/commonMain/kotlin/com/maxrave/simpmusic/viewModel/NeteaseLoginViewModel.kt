@@ -28,7 +28,7 @@ class NeteaseLoginViewModel(
 ) : ViewModel() {
     enum class Method { QR, WEB }
 
-    enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED, LOGGED_IN }
+    enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED, RISK, LOGGED_IN }
 
     private val client get() = neteaseRepository.client
 
@@ -73,12 +73,16 @@ class NeteaseLoginViewModel(
     private var pollJob: Job? = null
     private var qrAutoRefreshCount = 0
     private var currentQrKey: String? = null
+    private var lastFingerprint: com.maxrave.netease.model.NeteaseFingerprint? = null
 
     // ---------------------------------------------------------------- QR
 
-    fun startQrLogin() {
+    fun startQrLogin(fingerprint: com.maxrave.netease.model.NeteaseFingerprint? = null) {
+        val fp = fingerprint ?: lastFingerprint
         pollJob?.cancel()
         qrSession.reset()
+        qrSession.setFingerprint(fp)
+        if (fingerprint != null) lastFingerprint = fingerprint
         _qrUi.value = QrUi.LOADING
         viewModelScope.launch {
             qrSession.createSession()
@@ -107,13 +111,18 @@ class NeteaseLoginViewModel(
                                     qrAutoRefreshCount = 0 // 用户已扫码,会话有效
                                     _qrUi.value = QrUi.SCANNED
                                 }
+                                is NeteaseQrStatus.RiskControl -> {
+                                    // -462:换码无效,明确引导网页登录,不再自动刷新
+                                    _qrUi.value = QrUi.RISK
+                                    return@launch
+                                }
                                 is NeteaseQrStatus.Expired -> {
                                     _qrUi.value = QrUi.EXPIRED
-                                    // 风控下 unikey 可能被快速作废:自动换码最多 3 次,不再让用户手动点刷新
+                                    // 800:自动换码最多 3 次
                                     if (qrAutoRefreshCount < 3) {
                                         qrAutoRefreshCount++
                                         Logger.d(TAG, "QR expired, auto refresh #$qrAutoRefreshCount")
-                                        startQrLogin()
+                                        startQrLogin(lastFingerprint)
                                     }
                                     return@launch
                                 }

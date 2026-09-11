@@ -76,6 +76,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_success
+import simpmusic.composeapp.generated.resources.netease_qr_risk
 import simpmusic.composeapp.generated.resources.netease_cookie_hint
 import simpmusic.composeapp.generated.resources.netease_login_cookie
 import simpmusic.composeapp.generated.resources.netease_login_qr
@@ -194,9 +195,16 @@ private fun QrMethod(
     qrContent: String?,
     qrUi: NeteaseLoginViewModel.QrUi,
     loading: Boolean,
-    onRefresh: () -> Unit,
+    onRefresh: (com.maxrave.netease.model.NeteaseFingerprint?) -> Unit,
 ) {
-    LaunchedEffect(Unit) { if (qrContent == null) onRefresh() }
+    val platformContext = coil3.compose.LocalPlatformContext.current
+    LaunchedEffect(Unit) {
+        if (qrContent == null) {
+            onRefresh(
+                com.maxrave.simpmusic.expect.harvestNeteaseFingerprint(platformContext),
+            )
+        }
+    }
     val neteaseRed = Color(0xFFC72535)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -269,6 +277,7 @@ private fun QrMethod(
                 when (qrUi) {
                     NeteaseLoginViewModel.QrUi.SCANNED -> stringResource(Res.string.netease_qr_scanned)
                     NeteaseLoginViewModel.QrUi.EXPIRED -> stringResource(Res.string.netease_qr_expired)
+                    NeteaseLoginViewModel.QrUi.RISK -> stringResource(Res.string.netease_qr_risk)
                     NeteaseLoginViewModel.QrUi.LOGGED_IN -> stringResource(Res.string.login_success)
                     else -> stringResource(Res.string.netease_qr_waiting_scan)
                 },
@@ -285,7 +294,7 @@ private fun QrMethod(
 
         if (qrUi == NeteaseLoginViewModel.QrUi.EXPIRED) {
             Button(
-                onClick = onRefresh,
+                onClick = { onRefresh(null) },
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = neteaseRed),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
