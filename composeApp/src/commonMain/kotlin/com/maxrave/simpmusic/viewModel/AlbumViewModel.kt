@@ -12,6 +12,8 @@ import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.repository.AlbumRepository
+import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.toAlbumEntity
@@ -19,6 +21,7 @@ import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,14 +34,18 @@ import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.playlist_is_empty
+import simpmusic.composeapp.generated.resources.removed_download
 
 class AlbumViewModel(
     private val songRepository: SongRepository,
     private val albumRepository: AlbumRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
+    private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
+    private val localPlaylistRepository: LocalPlaylistRepository by inject<LocalPlaylistRepository>()
     private val _uiState: MutableStateFlow<AlbumUIState> = MutableStateFlow(AlbumUIState.initial())
     val uiState: StateFlow<AlbumUIState> = _uiState
 
@@ -63,7 +70,7 @@ class AlbumViewModel(
                                             id = null,
                                             name = "",
                                         ),
-                                    year = data.year ?: now().year.toString(),
+                                    year = data.year?.takeIf { it.isNotBlank() } ?: now().year.toString(),
                                     trackCount = data.trackCount,
                                     description = data.description,
                                     length = data.duration ?: "",
@@ -121,7 +128,11 @@ class AlbumViewModel(
                                                 id = albumEntity.artistId?.firstOrNull(),
                                                 name = albumEntity.artistName?.firstOrNull() ?: "",
                                             ),
-                                        year = albumEntity.year ?: now().year.toString(),
+                                        // Older installs stored the literal "null" while the
+                                        // year parser was locale-broken — treat it as missing too.
+                                        year = albumEntity.year
+                                            ?.takeIf { it.isNotBlank() && it != "null" }
+                                            ?: now().year.toString(),
                                         trackCount = albumEntity.trackCount,
                                         description = albumEntity.description,
                                         length = albumEntity.duration ?: "",
@@ -275,6 +286,50 @@ class AlbumViewModel(
                     it.thumbnails ?: "",
                 )
             }
+        }
+    }
+
+    /** Stop an in-flight album download; finished tracks keep their files. */
+    fun cancelDownloadingAlbum() {
+        viewModelScope.launch {
+            albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_NOT_DOWNLOADED)
+            _uiState.update {
+                it.copy(
+                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                )
+            }
+            val fullListSong =
+                songRepository
+                    .getSongsByListVideoId(uiState.value.listTrack.map { it.videoId })
+                    .singleOrNull() ?: emptyList()
+            fullListSong.forEach { song ->
+                if (song.downloadState == DownloadState.STATE_PREPARING || song.downloadState == DownloadState.STATE_DOWNLOADING) {
+                    downloadUtils.removeDownload(song.videoId)
+                    songRepository.updateDownloadState(song.videoId, DownloadState.STATE_NOT_DOWNLOADED)
+                }
+            }
+            makeToast(getString(Res.string.download_cancelled))
+        }
+    }
+
+    fun removeDownloadedAlbum() {
+        viewModelScope.launch {
+            albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_NOT_DOWNLOADED)
+            _uiState.update {
+                it.copy(
+                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                )
+            }
+            // Only songs no other downloaded container references are actually removed.
+            removeExclusiveTrackDownloads(
+                tracks = uiState.value.listTrack.map { it.videoId },
+                songRepository = songRepository,
+                downloadUtils = downloadUtils,
+                playlistRepository = playlistRepository,
+                albumRepository = albumRepository,
+                localPlaylistRepository = localPlaylistRepository,
+            )
+            makeToast(getString(Res.string.removed_download))
         }
     }
 }

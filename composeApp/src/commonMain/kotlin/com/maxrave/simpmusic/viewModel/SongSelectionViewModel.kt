@@ -5,13 +5,18 @@ import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -24,6 +29,7 @@ import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.play_next
+import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.removed_from_YouTube_playlist
 
 /**
@@ -39,11 +45,30 @@ class SongSelectionViewModel(
     private val localPlaylistRepository: LocalPlaylistRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject()
+    private val playlistRepository: PlaylistRepository by inject()
+    private val albumRepository: AlbumRepository by inject()
 
     val listLocalPlaylist: StateFlow<List<LocalPlaylistEntity>> =
         localPlaylistRepository
             .getAllLocalPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Whether EVERY song in the last checked selection is on disk, recomputed by
+     * [checkAllDownloaded] when a screen opens its selection sheet. Drives the sheet's download
+     * row: all downloaded → "downloaded" (blue, removes the batch); otherwise → plain "download"
+     * that only fills in what is missing.
+     */
+    private val _allSelectedDownloaded = MutableStateFlow(false)
+    val allSelectedDownloaded: StateFlow<Boolean> = _allSelectedDownloaded.asStateFlow()
+
+    fun checkAllDownloaded(videoIds: List<String>) {
+        viewModelScope.launch {
+            val songs = songsOf(videoIds)
+            _allSelectedDownloaded.value =
+                songs.isNotEmpty() && songs.all { it.downloadState == DownloadState.STATE_DOWNLOADED }
+        }
+    }
 
     /**
      * Each call inserts right after the current track, so playing them in order would leave the
@@ -101,6 +126,27 @@ class SongSelectionViewModel(
                 )
             }
             makeToast(getString(Res.string.downloading))
+        }
+    }
+
+    /**
+     * The removal counterpart of [download], offered by the downloaded-songs grid where every
+     * selection is already on disk: drops the selected downloads and demotes the containers that
+     * referenced them, so their re-download watchers do not queue the songs right back.
+     */
+    fun removeDownload(videoIds: List<String>) {
+        viewModelScope.launch {
+            val downloaded =
+                songsOf(videoIds).filter { it.downloadState == DownloadState.STATE_DOWNLOADED }
+            if (downloaded.isEmpty()) return@launch
+            downloaded.forEach { song ->
+                // Demote before deleting, same as the single-song menu: a container still
+                // claiming "downloaded" would re-queue the song the moment it vanishes.
+                demoteDownloadedContainers(song.videoId, playlistRepository, albumRepository, localPlaylistRepository)
+                downloadUtils.removeDownload(song.videoId)
+                songRepository.updateDownloadState(song.videoId, DownloadState.STATE_NOT_DOWNLOADED)
+            }
+            makeToast(getString(Res.string.removed_download))
         }
     }
 

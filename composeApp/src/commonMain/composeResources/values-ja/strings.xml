@@ -46,6 +46,12 @@
     <string name="follow">フォロー</string>
     <string name="retry">再試行</string>
     <string name="removed_download">ダウンロードを削除しました</string>
+    <string name="remove_download_title">ダウンロードを削除しますか？</string>
+    <string name="remove_download_message">ダウンロードした曲が削除されます。いつでも再度ダウンロードできます。</string>
+    <string name="cancel_download_title">ダウンロードをキャンセルしますか？</string>
+    <string name="cancel_download_message">ダウンロードを停止し、未完了の部分を破棄します。完了した曲は保持されます。</string>
+    <string name="cancel_download_confirm">ダウンロードをキャンセル</string>
+    <string name="download_cancelled">ダウンロードをキャンセルしました</string>
     <string name="share_url">URL を共有</string>
     <string name="available_online">オンラインで利用可能</string>
     <string name="unavailable">利用できません</string>

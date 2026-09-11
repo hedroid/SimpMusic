@@ -185,6 +185,11 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.cancel_download_title
+import simpmusic.composeapp.generated.resources.cancel_download_message
+import simpmusic.composeapp.generated.resources.cancel_download_confirm
+import simpmusic.composeapp.generated.resources.remove_download_title
+import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.add_to_a_playlist
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.album
@@ -1443,6 +1448,8 @@ fun NowPlayingBottomSheet(
     var sleepTimerWarning by remember { mutableStateOf(false) }
     var isBottomSheetVisible by rememberSaveable { mutableStateOf(false) }
     var changePlaybackSpeedPitch by remember { mutableStateOf(false) }
+    var showCancelDownloadDialog by remember { mutableStateOf(false) }
+    var showRemoveDownloadDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -1536,6 +1543,58 @@ fun NowPlayingBottomSheet(
             },
             text = {
                 Text(text = stringResource(Res.string.sleep_timer_warning), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showRemoveDownloadDialog) {
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showRemoveDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                }) {
+                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.remove_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.remove_download_message), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showCancelDownloadDialog) {
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showCancelDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                }) {
+                    Text(text = stringResource(Res.string.cancel_download_confirm), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.cancel_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.cancel_download_message), style = typo().bodyMedium)
             },
         )
     }
@@ -1798,7 +1857,13 @@ fun NowPlayingBottomSheet(
                                 else -> Res.string.download
                             },
                     ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                        // Removing or cancelling throws away a finished/progressing download, so
+                        // both get a confirmation; only starting a download stays immediate.
+                        when (uiState.songUIState.downloadState) {
+                            DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> showCancelDownloadDialog = true
+                            DownloadState.STATE_DOWNLOADED -> showRemoveDownloadDialog = true
+                            else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                        }
                     }
                     ActionButton(
                         icon = SimpIcons.PlaylistAdd,

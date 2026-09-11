@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
+import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
+import com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
@@ -16,6 +18,7 @@ import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
@@ -31,6 +34,7 @@ import com.maxrave.simpmusic.viewModel.PlaylistUIState.Error
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Loading
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,11 +52,13 @@ import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
 import simpmusic.composeapp.generated.resources.downloading
+import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.playlist_is_empty
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.radio_not_available
+import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.shuffle_not_available
 import simpmusic.composeapp.generated.resources.synced
@@ -65,6 +71,7 @@ class PlaylistViewModel(
     private val playlistRepository: PlaylistRepository,
 ) : BaseViewModel() {
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
+    private val albumRepository: AlbumRepository by inject<AlbumRepository>()
     private var _uiState = MutableStateFlow<PlaylistUIState>(Loading)
     val uiState: StateFlow<PlaylistUIState> = _uiState
 
@@ -104,10 +111,19 @@ class PlaylistViewModel(
                             val id = playlistEntity.value?.id ?: return@collectLatest
                             if (state == STATE_DOWNLOADING || state == STATE_DOWNLOADED) {
                                 getFullTracks { tracks ->
+                                    // The fetch outlives this collector's cancellation, so an
+                                    // in-flight callback can land after removeDownloadedPlaylist()
+                                    // already reset the playlist to NOT_DOWNLOADED — with the
+                                    // captured "downloaded" state it would queue every track right
+                                    // back. Re-read the live state instead.
+                                    val liveState = downloadState.value
+                                    if (liveState != STATE_DOWNLOADING && liveState != STATE_DOWNLOADED) {
+                                        return@getFullTracks
+                                    }
                                     newUpdateJob =
                                         launch {
                                             val listSongs = songRepository.getSongsByListVideoId(tracks.toListVideoId()).firstOrNull() ?: emptyList()
-                                            if (state == STATE_DOWNLOADED && listSongs.isNotEmpty()) {
+                                            if (liveState == STATE_DOWNLOADED && listSongs.isNotEmpty()) {
                                                 listSongs.filter { it.downloadState != STATE_DOWNLOADED }.let { notDownloaded ->
                                                     if (notDownloaded.isNotEmpty()) {
                                                         downloadTracks(notDownloaded.map { it.videoId })
@@ -118,6 +134,12 @@ class PlaylistViewModel(
                                                 }
                                             }
                                             downloadUtils.downloads.collectLatest { downloads ->
+                                                // Same guard as the callback above: a playlist
+                                                // demoted mid-flight must not be written back.
+                                                val live = downloadState.value
+                                                if (live != STATE_DOWNLOADING && live != STATE_DOWNLOADED) {
+                                                    return@collectLatest
+                                                }
                                                 var count = 0
                                                 tracks.forEachIndexed { index, track ->
                                                     val trackDownloadState = downloads[track.videoId]?.first?.state
@@ -650,6 +672,59 @@ class PlaylistViewModel(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Mirror of [downloadFullPlaylist]: reset the playlist's state first so the init-block watcher
+     * (which re-downloads missing tracks while the playlist claims to be downloaded) cancels,
+     * then drop every track's DownloadManager entry and DB state.
+     */
+    fun removeDownloadedPlaylist() {
+        viewModelScope.launch {
+            val id = playlistEntity.value?.id ?: return@launch
+            updatePlaylistDownloadState(id, STATE_NOT_DOWNLOADED)
+            // Same beat as LocalPlaylistViewModel: let the NOT_DOWNLOADED flip reach the init
+            // watcher (which would otherwise re-queue missing tracks) before rows change.
+            delay(500)
+            getFullTracks { tracks ->
+                // Only songs no other downloaded container references are actually removed.
+                viewModelScope.launch {
+                    removeExclusiveTrackDownloads(
+                        tracks = tracks.toListVideoId(),
+                        songRepository = songRepository,
+                        downloadUtils = downloadUtils,
+                        playlistRepository = playlistRepository,
+                        albumRepository = albumRepository,
+                        localPlaylistRepository = localPlaylistRepository,
+                    )
+                }
+            }
+            makeToast(getString(Res.string.removed_download))
+        }
+    }
+
+    /**
+     * Stop an in-flight full-playlist download from the header button: reset the playlist first
+     * (kills the init watcher), then cancel only tracks still preparing/downloading — songs that
+     * already finished keep their files, so resuming later only fetches the gap.
+     */
+    fun cancelDownloadingPlaylist() {
+        viewModelScope.launch {
+            val id = playlistEntity.value?.id ?: return@launch
+            updatePlaylistDownloadState(id, STATE_NOT_DOWNLOADED)
+            delay(500)
+            getFullTracks { tracks ->
+                viewModelScope.launch {
+                    songRepository.getSongsByListVideoId(tracks.toListVideoId()).firstOrNull()?.forEach { song ->
+                        if (song.downloadState == STATE_PREPARING || song.downloadState == STATE_DOWNLOADING) {
+                            downloadUtils.removeDownload(song.videoId)
+                            songRepository.updateDownloadState(song.videoId, STATE_NOT_DOWNLOADED)
+                        }
+                    }
+                }
+            }
+            makeToast(getString(Res.string.download_cancelled))
         }
     }
 

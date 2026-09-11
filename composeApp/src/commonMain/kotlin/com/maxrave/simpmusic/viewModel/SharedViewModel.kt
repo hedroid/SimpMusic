@@ -96,6 +96,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
+import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
@@ -136,6 +137,8 @@ class SharedViewModel(
     val liked: SharedFlow<Boolean> = _liked.asSharedFlow()
 
     var isServiceRunning: Boolean = false
+
+    private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
 
     private var _sleepTimerState = MutableStateFlow(SleepTimerState(false, 0))
     val sleepTimerState: StateFlow<SleepTimerState> = _sleepTimerState
@@ -551,6 +554,10 @@ class SharedViewModel(
         checkAllDownloadingSongs()
         checkAllDownloadingPlaylists()
         checkAllDownloadingLocalPlaylists()
+        // The counterpart the resets above have never had: a container is only promoted to
+        // STATE_DOWNLOADED from its own screen's ViewModel, so a download finishing after the
+        // user left the screen left it stuck at "downloading" forever.
+        promoteCompletedDownloads()
     }
 
     fun setIntent(intent: GenericIntent?) {
@@ -1026,6 +1033,49 @@ class SharedViewModel(
             }
         }
     }
+
+    /**
+     * Promote "downloading" containers to STATE_DOWNLOADED from this app-scoped singleton, so a
+     * playlist/album still gets marked when its downloads finish after the user has left its
+     * screen — the screen ViewModels only do this while they are alive.
+     */
+    private fun promoteCompletedDownloads() {
+        viewModelScope.launch {
+            downloadUtils.downloadTask.collect { tasks ->
+                // Only re-check when at least one track has actually completed; progress noise
+                // never reaches this map, but a failure-only emission has nothing to promote.
+                if (!tasks.values.any { it == DownloadState.STATE_DOWNLOADED }) {
+                    return@collect
+                }
+                playlistRepository.getAllDownloadingPlaylist().first().forEach { container ->
+                    val tracks =
+                        when (container) {
+                            is AlbumEntity -> container.tracks
+                            is PlaylistEntity -> container.tracks
+                            else -> null
+                        }
+                    if (!tracks.isNullOrEmpty() && allTracksDownloaded(tracks)) {
+                        when (container) {
+                            is AlbumEntity -> albumRepository.updateAlbumDownloadState(container.browseId, DownloadState.STATE_DOWNLOADED)
+                            is PlaylistEntity -> playlistRepository.updatePlaylistDownloadState(container.id, DownloadState.STATE_DOWNLOADED)
+                            else -> {}
+                        }
+                    }
+                }
+                localPlaylistRepository.getAllDownloadingLocalPlaylists().first().forEach { playlist ->
+                    val tracks = playlist.tracks
+                    if (!tracks.isNullOrEmpty() && allTracksDownloaded(tracks)) {
+                        localPlaylistRepository.updateLocalPlaylistDownloadState(DownloadState.STATE_DOWNLOADED, playlist.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun allTracksDownloaded(tracks: List<String>): Boolean =
+        songRepository.getSongsByListVideoId(tracks).first().let { songs ->
+            songs.size == tracks.size && songs.all { it.downloadState == DownloadState.STATE_DOWNLOADED }
+        }
 
     private fun getFormat(mediaId: String?) {
         if (mediaId != _format.value?.videoId && !mediaId.isNullOrEmpty()) {

@@ -46,6 +46,12 @@
     <string name="follow">Follow</string>
     <string name="retry">Retry</string>
     <string name="removed_download">Removed download</string>
+    <string name="remove_download_title">Remove download?</string>
+    <string name="remove_download_message">Downloaded songs will be removed. You can download them again anytime.</string>
+    <string name="cancel_download_title">Cancel download?</string>
+    <string name="cancel_download_message">Stops the download and discards unfinished parts. Completed songs are kept.</string>
+    <string name="cancel_download_confirm">Cancel download</string>
+    <string name="download_cancelled">Download cancelled</string>
     <string name="share_url">Share URL</string>
     <string name="available_online">Available online</string>
     <string name="unavailable">Unavailable</string>

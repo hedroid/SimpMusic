@@ -13,8 +13,10 @@ import com.maxrave.common.Config
 import com.maxrave.common.QUALITY
 import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.common.VIDEO_QUALITY
+import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.GoogleAccountEntity
+import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.lyrics.RomanizationDictionaryState
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.ReverbPreset
@@ -22,10 +24,13 @@ import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AccountRepository
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.CacheRepository
 import com.maxrave.domain.repository.CommonRepository
+import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.LyricsRomanizerRepository
+import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.LogLevel
@@ -84,6 +89,9 @@ class SettingsViewModel(
 ) : BaseViewModel() {
     private val databasePath: String? = commonRepository.getDatabasePath()
     private val downloadUtils: DownloadHandler by inject()
+    private val playlistRepository: PlaylistRepository by inject()
+    private val albumRepository: AlbumRepository by inject()
+    private val localPlaylistRepository: LocalPlaylistRepository by inject()
 
     val castState: StateFlow<GenericCastState> get() = mediaPlayerHandler.castState
 
@@ -1333,6 +1341,18 @@ class SettingsViewModel(
                 songs.forEach { song ->
                     songRepository.updateDownloadState(song.videoId, DownloadState.STATE_NOT_DOWNLOADED)
                 }
+            }
+            // The containers those songs belong to must drop out of "downloaded" too, or their
+            // re-download watcher queues everything right back the next time they are opened.
+            playlistRepository.getAllDownloadedPlaylist().firstOrNull()?.forEach { container ->
+                when (container) {
+                    is PlaylistEntity -> playlistRepository.updatePlaylistDownloadState(container.id, DownloadState.STATE_NOT_DOWNLOADED)
+                    is AlbumEntity -> albumRepository.updateAlbumDownloadState(container.browseId, DownloadState.STATE_NOT_DOWNLOADED)
+                    else -> {}
+                }
+            }
+            localPlaylistRepository.getDownloadedLocalPlaylists().firstOrNull()?.forEach { playlist ->
+                localPlaylistRepository.updateLocalPlaylistDownloadState(DownloadState.STATE_NOT_DOWNLOADED, playlist.id)
             }
             makeToast(getString(Res.string.clear_downloaded_cache))
             getDownloadedCacheSize()

@@ -177,6 +177,10 @@ fun ArtistScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
+    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
+    LaunchedEffect(showSelectionSheet) {
+        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
+    }
 
     LaunchedEffect(channelId) {
         if (channelId != artistScreenState.data.channelId) {
@@ -644,6 +648,11 @@ fun ArtistScreen(
                         onAddToPlaylist = { showSelectionAddToPlaylist = true },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
+                            selectionState.exit()
+                        },
+                        allDownloaded = allSelectedDownloaded,
+                        onRemoveDownload = {
+                            selectionViewModel.removeDownload(selectedIds)
                             selectionState.exit()
                         },
                         onAddToFavorite = {

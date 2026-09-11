@@ -18,6 +18,7 @@ import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.mediaservice.handler.SleepTimerState
+import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
@@ -28,11 +29,13 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
@@ -59,6 +62,7 @@ class NowPlayingBottomSheetViewModel(
     private val songRepository: SongRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject()
+    private val albumRepository: AlbumRepository by inject()
     private val _uiState: MutableStateFlow<NowPlayingBottomSheetUIState> =
         MutableStateFlow(
             NowPlayingBottomSheetUIState(
@@ -214,6 +218,18 @@ class NowPlayingBottomSheetViewModel(
             }
     }
 
+    /**
+     * After the song's own download was removed, every downloaded container referencing it must
+     * drop out of "downloaded" too, or its re-download watcher queues the song right back.
+     */
+    private suspend fun demoteDownloadedContainersOf(videoId: String) =
+        demoteDownloadedContainers(
+            videoId = videoId,
+            playlistRepository = playlistRepository,
+            albumRepository = albumRepository,
+            localPlaylistRepository = localPlaylistRepository,
+        )
+
     fun onUIEvent(ev: NowPlayingBottomSheetUIEvent) {
         val songUIState = uiState.value.songUIState
         if (songUIState.videoId.isEmpty()) return
@@ -279,6 +295,11 @@ class NowPlayingBottomSheetViewModel(
                         }
 
                         DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> {
+                            // Demote FIRST: while a referencing container still claims to be
+                            // downloaded, its re-download watcher can observe the song vanishing
+                            // and queue it right back — undoing the removal the user just asked
+                            // for. Once demoted, nothing watches the song anymore.
+                            demoteDownloadedContainersOf(songUIState.videoId)
                             downloadUtils.removeDownload(songUIState.videoId)
                             songRepository.updateDownloadState(
                                 songUIState.videoId,
@@ -288,6 +309,7 @@ class NowPlayingBottomSheetViewModel(
                         }
 
                         DownloadState.STATE_DOWNLOADED -> {
+                            demoteDownloadedContainersOf(songUIState.videoId)
                             downloadUtils.removeDownload(songUIState.videoId)
                             songRepository.updateDownloadState(
                                 songUIState.videoId,

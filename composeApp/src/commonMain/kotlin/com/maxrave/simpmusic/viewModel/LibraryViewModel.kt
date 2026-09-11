@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
 import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.entities.AlbumEntity
+import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
@@ -14,6 +15,7 @@ import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.data.type.RecentlyType
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.AnalyticsRepository
 import com.maxrave.domain.repository.CommonRepository
@@ -27,6 +29,7 @@ import com.maxrave.domain.utils.isRadioPlaylistId
 import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -34,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -49,8 +53,10 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.minus
 import kotlinx.datetime.number
 import kotlinx.datetime.plus
+import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
+import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
 import simpmusic.composeapp.generated.resources.youtube_liked_music
@@ -65,6 +71,8 @@ class LibraryViewModel(
     private val albumRepository: AlbumRepository,
     private val podcastRepository: PodcastRepository,
 ) : BaseViewModel() {
+    private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
+
     private val _currentScreen: MutableStateFlow<LibraryChipType> = MutableStateFlow(LibraryChipType.YOUR_LIBRARY)
     val currentScreen: StateFlow<LibraryChipType> get() = _currentScreen.asStateFlow()
     private val _recentlyAdded: MutableStateFlow<LocalResource<List<RecentlyType>>> =
@@ -279,9 +287,60 @@ class LibraryViewModel(
 
     fun getDownloadedPlaylist() {
         viewModelScope.launch {
-            playlistRepository.getAllDownloadedPlaylist().collect { values ->
+            playlistRepository.getAllDownloadedPlaylist().combine(
+                localPlaylistRepository.getDownloadedLocalPlaylists(),
+            ) { remote, local ->
+                (remote + local).sortedByDescending {
+                    when (it) {
+                        is AlbumEntity -> it.downloadedAt
+                        is PlaylistEntity -> it.downloadedAt
+                        is LocalPlaylistEntity -> it.downloadedAt
+                        else -> null
+                    }
+                }
+            }.collect { values ->
                 _downloadedPlaylist.value = LocalResource.Success(values)
             }
+        }
+    }
+
+    /**
+     * Remove one playlist's/album's download from the Library grid (long-press). Same shape as the
+     * detail screens' removal, minus their watchers: reset the container first, then remove the
+     * downloads of the songs it owns exclusively — tracks another downloaded container references
+     * keep their files, so deleting A never breaks B's offline copy.
+     */
+    fun removeDownloadedPlaylist(item: PlaylistType) {
+        viewModelScope.launch {
+            val tracks =
+                when (item) {
+                    is PlaylistEntity -> {
+                        playlistRepository.updatePlaylistDownloadState(item.id, STATE_NOT_DOWNLOADED)
+                        item.tracks
+                    }
+
+                    is AlbumEntity -> {
+                        albumRepository.updateAlbumDownloadState(item.browseId, STATE_NOT_DOWNLOADED)
+                        item.tracks
+                    }
+
+                    is LocalPlaylistEntity -> {
+                        localPlaylistRepository.updateLocalPlaylistDownloadState(STATE_NOT_DOWNLOADED, item.id)
+                        item.tracks
+                    }
+
+                    else -> return@launch
+                } ?: return@launch
+            removeExclusiveTrackDownloads(
+                tracks = tracks,
+                songRepository = songRepository,
+                downloadUtils = downloadUtils,
+                playlistRepository = playlistRepository,
+                albumRepository = albumRepository,
+                localPlaylistRepository = localPlaylistRepository,
+            )
+            makeToast(getString(Res.string.removed_download))
+            getDownloadedPlaylist()
         }
     }
 

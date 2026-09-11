@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,6 +63,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.copy
@@ -76,6 +78,7 @@ import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -99,7 +102,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.chart
+import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
+import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded_playlists
 import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
@@ -113,6 +118,8 @@ import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
+import simpmusic.composeapp.generated.resources.remove_download_message
+import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
@@ -148,6 +155,14 @@ fun LibraryScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
+    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
+    LaunchedEffect(showSelectionSheet) {
+        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
+    }
+    // The playlist/album tile long-pressed in the downloaded grid, awaiting the confirm dialog.
+    // Plain remember: the payload is not saveable and the dialog is short-lived enough that a
+    // process death mid-confirm can just start over.
+    var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
     val hazeState =
         rememberHazeState(
@@ -329,6 +344,9 @@ fun LibraryScreen(
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
                     onScrolling = onScrolling,
+                    onRemoveDownload = { item ->
+                        removeDownloadTarget = item
+                    },
                 ) {
                     viewModel.getDownloadedPlaylist()
                 }
@@ -580,6 +598,11 @@ fun LibraryScreen(
                     selectionViewModel.download(selectedIds)
                     selectionState.exit()
                 },
+                allDownloaded = allSelectedDownloaded,
+                onRemoveDownload = {
+                    selectionViewModel.removeDownload(selectedIds)
+                    selectionState.exit()
+                },
                 onAddToFavorite = {
                     selectionViewModel.addToFavorite(selectedIds)
                     selectionState.exit()
@@ -599,6 +622,29 @@ fun LibraryScreen(
                     selectionState.exit()
                 },
                 onYTPlaylistClick = {},
+            )
+        }
+        removeDownloadTarget?.let { target ->
+            AlertDialog(
+                containerColor = rememberSurfaceDarkColors().container,
+                titleContentColor = rememberSurfaceDarkColors().content,
+                textContentColor = rememberSurfaceDarkColors().content,
+                title = { Text(text = stringResource(Res.string.remove_download_title)) },
+                text = { Text(text = stringResource(Res.string.remove_download_message)) },
+                onDismissRequest = { removeDownloadTarget = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.removeDownloadedPlaylist(target)
+                        removeDownloadTarget = null
+                    }) {
+                        Text(text = stringResource(Res.string.delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { removeDownloadTarget = null }) {
+                        Text(text = stringResource(Res.string.cancel))
+                    }
+                },
             )
         }
     }

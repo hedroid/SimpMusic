@@ -85,6 +85,9 @@ internal inline fun <reified T> GridLibraryPlaylist(
     // the scroll offset by hand, which is what left a screen-tall hole above the Wrapped tab.
     noinline header: (@Composable () -> Unit)? = null,
     noinline createNewPlaylist: (() -> Unit)? = null,
+    // Long-pressing a tile, wired only by the downloaded-playlists tab to offer removing that
+    // playlist's download without opening it.
+    noinline onRemoveDownload: ((PlaylistType) -> Unit)? = null,
     noinline onReload: () -> Unit,
 ) {
     Logger.w("GridLibraryPlaylist", "Generic Type: ${T::class.simpleName}")
@@ -271,6 +274,7 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             },
                             data = item,
                             thumbSize = 132.dp,
+                            onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
                         )
                     }
 

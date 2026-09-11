@@ -46,6 +46,12 @@
     <string name="follow">팔로우</string>
     <string name="retry">다시 시도</string>
     <string name="removed_download">다운로드 제거 완료</string>
+    <string name="remove_download_title">다운로드를 삭제할까요?</string>
+    <string name="remove_download_message">다운로드한 곡이 삭제됩니다. 언제든지 다시 다운로드할 수 있습니다.</string>
+    <string name="cancel_download_title">다운로드를 취소할까요?</string>
+    <string name="cancel_download_message">다운로드를 중지하고 완료되지 않은 부분을 삭제합니다. 완료된 곡은 유지됩니다.</string>
+    <string name="cancel_download_confirm">다운로드 취소</string>
+    <string name="download_cancelled">다운로드가 취소되었습니다</string>
     <string name="share_url">URL 공유</string>
     <string name="available_online">온라인에서 이용 가능</string>
     <string name="unavailable">사용할 수 없음</string>

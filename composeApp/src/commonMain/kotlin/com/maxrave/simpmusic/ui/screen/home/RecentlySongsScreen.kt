@@ -81,6 +81,10 @@ fun RecentlySongsScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
+    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
+    LaunchedEffect(showSelectionSheet) {
+        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
+    }
 
     val recentlyItems = viewModel.recentlySongs.collectAsLazyPagingItems()
     val playingTrack by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsState(initial = null)
@@ -293,6 +297,11 @@ fun RecentlySongsScreen(
             onAddToPlaylist = { showSelectionAddToPlaylist = true },
             onDownload = {
                 selectionViewModel.download(selectedIds)
+                selectionState.exit()
+            },
+            allDownloaded = allSelectedDownloaded,
+            onRemoveDownload = {
+                selectionViewModel.removeDownload(selectedIds)
                 selectionState.exit()
             },
             onAddToFavorite = {

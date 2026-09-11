@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -92,6 +93,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
@@ -155,14 +157,21 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.cancel_download_title
+import simpmusic.composeapp.generated.resources.cancel_download_message
+import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
+import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.radio
+import simpmusic.composeapp.generated.resources.remove_download_message
+import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.search
 import simpmusic.composeapp.generated.resources.unlimited
 
@@ -206,11 +215,17 @@ fun PlaylistScreen(
     }
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var showRemoveDownloadDialog by rememberSaveable { mutableStateOf(false) }
+    var showCancelDownloadDialog by rememberSaveable { mutableStateOf(false) }
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
+    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
+    LaunchedEffect(showSelectionSheet) {
+        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
+    }
 
     val filteredTrack by remember {
         derivedStateOf {
@@ -735,9 +750,7 @@ fun PlaylistScreen(
                                                                                             Modifier
                                                                                                 .fillMaxSize()
                                                                                                 .clickable {
-                                                                                                    viewModel.makeToast(
-                                                                                                        getStringBlocking(Res.string.downloaded),
-                                                                                                    )
+                                                                                                    showRemoveDownloadDialog = true
                                                                                                 },
                                                                                         contentAlignment = Alignment.Center,
                                                                                     ) {
@@ -756,9 +769,7 @@ fun PlaylistScreen(
                                                                                             Modifier
                                                                                                 .fillMaxSize()
                                                                                                 .clickable {
-                                                                                                    viewModel.makeToast(
-                                                                                                        getStringBlocking(Res.string.downloading),
-                                                                                                    )
+                                                                                                    showCancelDownloadDialog = true
                                                                                                 },
                                                                                         contentAlignment = Alignment.Center,
                                                                                     ) {
@@ -956,9 +967,7 @@ fun PlaylistScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            viewModel.makeToast(
-                                                                                                getStringBlocking(Res.string.downloaded),
-                                                                                            )
+                                                                                            showRemoveDownloadDialog = true
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
@@ -977,9 +986,7 @@ fun PlaylistScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            viewModel.makeToast(
-                                                                                                getStringBlocking(Res.string.downloading),
-                                                                                            )
+                                                                                            showCancelDownloadDialog = true
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
@@ -1299,6 +1306,11 @@ fun PlaylistScreen(
                             selectionViewModel.download(selectedIds)
                             selectionState.exit()
                         },
+                        allDownloaded = allSelectedDownloaded,
+                        onRemoveDownload = {
+                            selectionViewModel.removeDownload(selectedIds)
+                            selectionState.exit()
+                        },
                         onAddToFavorite = {
                             selectionViewModel.addToFavorite(selectedIds)
                             selectionState.exit()
@@ -1434,5 +1446,53 @@ fun PlaylistScreen(
                 navController.navigateUp()
             }
         }
+    }
+    if (showCancelDownloadDialog) {
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            titleContentColor = rememberSurfaceDarkColors().content,
+            textContentColor = rememberSurfaceDarkColors().content,
+            title = { Text(text = stringResource(Res.string.cancel_download_title)) },
+            text = { Text(text = stringResource(Res.string.cancel_download_message)) },
+            onDismissRequest = { showCancelDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.cancelDownloadingPlaylist()
+                    showCancelDownloadDialog = false
+                }) {
+                    Text(text = stringResource(Res.string.cancel_download_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
+    }
+    if (showRemoveDownloadDialog) {
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            titleContentColor = rememberSurfaceDarkColors().content,
+            textContentColor = rememberSurfaceDarkColors().content,
+            title = { Text(text = stringResource(Res.string.remove_download_title)) },
+            text = { Text(text = stringResource(Res.string.remove_download_message)) },
+            onDismissRequest = { showRemoveDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeDownloadedPlaylist()
+                    showRemoveDownloadDialog = false
+                }) {
+                    Text(text = stringResource(Res.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRemoveDownloadDialog = false
+                }) {
+                    Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
     }
 }

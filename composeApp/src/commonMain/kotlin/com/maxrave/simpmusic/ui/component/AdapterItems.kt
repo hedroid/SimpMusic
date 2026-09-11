@@ -312,6 +312,9 @@ fun HomeItemContentPlaylist(
     data: HomeContentType,
     thumbSize: Dp = 160.dp,
     forceDark: Boolean = LocalForceDarkText.current,
+    // Null keeps the plain tap behaviour; set only where a long-press action exists (the
+    // Library's downloaded-playlist grid uses it to offer removing the download).
+    onLongClick: (() -> Unit)? = null,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     Box(
@@ -319,9 +322,10 @@ fun HomeItemContentPlaylist(
             .wrapContentSize()
             .focusable(true)
             .clip(RoundedCornerShape(8.dp))
-            .clickable {
-                onClick()
-            },
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         Column(
             modifier =
