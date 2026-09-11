@@ -268,7 +268,7 @@ fun AppBottomNavigationBar(
                             }
                         }
                     },
-
+            contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(
                 LocalContentColor provides
