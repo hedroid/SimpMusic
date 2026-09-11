@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.ViewModel
+import com.maxrave.logger.Logger
 import androidx.lifecycle.viewModelScope
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.manager.DataStoreManager
@@ -26,7 +27,7 @@ class NeteaseLoginViewModel(
 ) : ViewModel() {
     enum class Method { QR, PHONE, WEB }
 
-    enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED }
+    enum class QrUi { IDLE, LOADING, WAITING_SCAN, SCANNED, EXPIRED, LOGGED_IN }
 
     private val client get() = neteaseRepository.client
 
@@ -34,6 +35,7 @@ class NeteaseLoginViewModel(
     val method: StateFlow<Method> = _method
 
     fun setMethod(method: Method) {
+        if (method != Method.QR) pollJob?.cancel() // 离开扫码页即停轮询
         _method.value = method
     }
 
@@ -182,13 +184,21 @@ class NeteaseLoginViewModel(
 
     private suspend fun finishLogin(cookies: Map<String, String>) {
         pollJob?.cancel()
+        Logger.d(TAG, "finishLogin: cookie keys=${cookies.keys}")
         neteaseRepository.saveLoginCookies(cookies)
             .onSuccess { account ->
+                Logger.d(TAG, "finishLogin: success account=${account?.nickname}")
+                _qrUi.value = QrUi.LOGGED_IN
                 dataStoreManager.setSelectedSource(com.maxrave.domain.source.MusicSource.NETEASE.name)
-                _loginSuccess.emit(account.nickname)
+                _loginSuccess.emit(account?.nickname)
             }.onFailure {
+                Logger.e(TAG, "finishLogin failed", it)
                 _phoneMessage.emit(it.message ?: "登录校验失败")
             }
+    }
+
+    private companion object {
+        const val TAG = "NeteaseLogin"
     }
 
     override fun onCleared() {

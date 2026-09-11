@@ -192,8 +192,7 @@ fun NeteaseLoginScreen(
                         qrContent = qrContent,
                         qrUi = qrUi,
                         loading = loading,
-                        onRefresh = { viewModel.startQrLogin() },
-                        onUseWeb = { viewModel.setMethod(NeteaseLoginViewModel.Method.WEB) },
+                        onRefresh = { viewModel.startQrLogin() }
                     )
                 NeteaseLoginViewModel.Method.PHONE -> PhoneMethod(loading, captchaSent, viewModel)
                 NeteaseLoginViewModel.Method.WEB -> WebMethod(innerPadding, viewModel)
@@ -209,7 +208,6 @@ private fun QrMethod(
     qrUi: NeteaseLoginViewModel.QrUi,
     loading: Boolean,
     onRefresh: () -> Unit,
-    onUseWeb: () -> Unit,
 ) {
     LaunchedEffect(Unit) { if (qrContent == null) onRefresh() }
     val neteaseRed = Color(0xFFC72535)
@@ -282,6 +280,7 @@ private fun QrMethod(
                 when (qrUi) {
                     NeteaseLoginViewModel.QrUi.SCANNED -> stringResource(Res.string.netease_qr_scanned)
                     NeteaseLoginViewModel.QrUi.EXPIRED -> stringResource(Res.string.netease_qr_expired)
+                    NeteaseLoginViewModel.QrUi.LOGGED_IN -> stringResource(Res.string.login_success)
                     else -> stringResource(Res.string.netease_qr_waiting_scan)
                 },
             style = typo().labelLarge,
@@ -305,17 +304,6 @@ private fun QrMethod(
             ) { Text(stringResource(Res.string.netease_qr_refresh)) }
             Spacer(Modifier.height(10.dp))
         }
-        OutlinedButton(
-            onClick = onUseWeb,
-            shape = RoundedCornerShape(20.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = neteaseRed),
-            border = androidx.compose.foundation.BorderStroke(0.dp, Color.Transparent),
-            modifier =
-                Modifier
-                    .fillMaxWidth(0.72f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(neteaseRed.copy(alpha = 0.10f)),
-        ) { Text(stringResource(Res.string.netease_qr_use_web)) }
     }
 }
 
