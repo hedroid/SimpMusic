@@ -878,6 +878,10 @@
     <string name="netease_captcha">验证码</string>
     <string name="netease_send_captcha">发送验证码</string>
     <string name="netease_login_by_password">密码登录</string>
+    <string name="netease_qr_title">扫码登录</string>
+    <string name="netease_qr_subtitle">打开网易云音乐 App，扫一扫登录</string>
+    <string name="netease_qr_refresh">刷新二维码</string>
+    <string name="netease_qr_use_web">使用网页登录</string>
     <string name="netease_dev_login_title">粘贴网易云 MUSIC_U 的值,或完整 Cookie 串</string>
     <string name="netease_login_by_captcha">验证码登录</string>
     <string name="netease_cookie_hint">粘贴 MUSIC_U 的值，或已登录浏览器导出的完整 Cookie 串</string>
