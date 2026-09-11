@@ -198,6 +198,11 @@ class LibraryViewModel(
     }
 
     fun getYouTubePlaylist() {
+
+        // TODO(NETEASE_NEXT): 登录网易云后,LibraryChipType 增加 NETEASE_PLAYLIST 分区,
+        // 数据走 NeteaseRepositoryImpl.getLibraryPlaylists()(红心歌单固定首位);
+        // "混合"tab 收敛跨源个性化内容:YTM mixes 之外追加 getRadarPlaylists()(私人/粉丝雷达)
+        // 与 getDailyPicks()(每日推荐 30 首)分区,tab 可见条件改为「YT 或网易任一登录」。
         _youTubePlaylist.value = LocalResource.Loading()
         viewModelScope.launch {
             playlistRepository.getLibraryPlaylist().collect { data ->
@@ -360,6 +365,9 @@ class LibraryViewModel(
      * ranking query followed by a song lookup.
      */
     fun getMonthlyRecaps() {
+
+        // TODO(NETEASE_NEXT): 听歌分析基于本地 Room 统计,网易云歌曲落库(source 列)后自动
+        // 被覆盖;可选增强:交叉 /user/record 账号级听歌排行做校准。无需结构性改动。
         _monthlyRecaps.value = LocalResource.Loading()
         viewModelScope.launch {
             val today = now().date

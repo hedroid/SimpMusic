@@ -142,6 +142,7 @@ import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
+import com.maxrave.simpmusic.ui.navigation.destination.login.NeteaseLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LastfmLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.SpotifyLoginDestination
@@ -304,6 +305,24 @@ import simpmusic.composeapp.generated.resources.local_tracking_title
 import simpmusic.composeapp.generated.resources.log_in_to_discord
 import simpmusic.composeapp.generated.resources.log_in_to_lastfm
 import simpmusic.composeapp.generated.resources.log_in_to_spotify
+import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.log_in_to_netease
+import simpmusic.composeapp.generated.resources.log_out_from_netease
+import simpmusic.composeapp.generated.resources.intro_login_to_netease
+import simpmusic.composeapp.generated.resources.netease_quality
+import simpmusic.composeapp.generated.resources.netease_download_quality
+import simpmusic.composeapp.generated.resources.netease_follow_sync
+import simpmusic.composeapp.generated.resources.netease_follow_sync_description
+import simpmusic.composeapp.generated.resources.netease_auto_switch
+import simpmusic.composeapp.generated.resources.netease_auto_switch_description
+import simpmusic.composeapp.generated.resources.netease_quality_standard
+import simpmusic.composeapp.generated.resources.netease_quality_higher
+import simpmusic.composeapp.generated.resources.netease_quality_exhigh
+import simpmusic.composeapp.generated.resources.netease_quality_lossless
+import simpmusic.composeapp.generated.resources.netease_quality_hires
+import simpmusic.composeapp.generated.resources.netease_quality_jyeffect
+import simpmusic.composeapp.generated.resources.netease_quality_sky
+import simpmusic.composeapp.generated.resources.netease_quality_jymaster
 import simpmusic.composeapp.generated.resources.log_out
 import simpmusic.composeapp.generated.resources.log_out_from_discord
 import simpmusic.composeapp.generated.resources.log_out_from_lastfm
@@ -542,6 +561,30 @@ fun SettingScreen(
     val spotifyLyrics by viewModel.spotifyLyrics.collectAsStateWithLifecycle()
     val spotifyCanvas by viewModel.spotifyCanvas.collectAsStateWithLifecycle()
     val amAnimatedArtwork by viewModel.amAnimatedArtwork.collectAsStateWithLifecycle()
+    val neteaseLoggedIn by viewModel.neteaseLogIn.collectAsStateWithLifecycle()
+    val neteaseAccountName by viewModel.neteaseAccountName.collectAsStateWithLifecycle()
+    val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
+    val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
+    val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
+    val neteaseAutoSwitch by viewModel.neteaseAutoSwitch.collectAsStateWithLifecycle()
+    var qualityDialogTarget by rememberSaveable { mutableStateOf<NeteaseQualityTarget?>(null) }
+    if (qualityDialogTarget != null) {
+        NeteaseQualityDialog(
+            current =
+                when (qualityDialogTarget) {
+                    NeteaseQualityTarget.DOWNLOAD -> neteaseDownloadQuality
+                    else -> neteaseQuality
+                },
+            onPick = { key ->
+                when (qualityDialogTarget) {
+                    NeteaseQualityTarget.DOWNLOAD -> viewModel.setNeteaseDownloadQuality(key)
+                    else -> viewModel.setNeteaseQuality(key)
+                }
+                qualityDialogTarget = null
+            },
+            onDismiss = { qualityDialogTarget = null },
+        )
+    }
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -1994,6 +2037,68 @@ fun SettingScreen(
                     title = stringResource(Res.string.enable_animated_artwork),
                     subtitle = stringResource(Res.string.animated_artwork_info),
                     switch = (amAnimatedArtwork to { viewModel.setAMAnimatedArtwork(it) }),
+                )
+            }
+        }
+        item(key = "netease") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.netease),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                SettingItem(
+                    title =
+                        if (neteaseLoggedIn) {
+                            stringResource(Res.string.log_out_from_netease)
+                        } else {
+                            stringResource(Res.string.log_in_to_netease)
+                        },
+                    subtitle =
+                        if (neteaseLoggedIn) {
+                            neteaseAccountName.ifEmpty { stringResource(Res.string.logged_in) }
+                        } else {
+                            stringResource(Res.string.intro_login_to_netease)
+                        },
+                    onClick = {
+                        if (neteaseLoggedIn) {
+                            viewModel.confirmLogOut(
+                                confirmLabel = runBlocking { getString(Res.string.log_out_from_netease) },
+                            ) { viewModel.logOutNetease() }
+                        } else {
+                            navController.navigate(NeteaseLoginDestination)
+                        }
+                    },
+                )
+                // TODO(NETEASE_NEXT): 两个音质选择换成 SettingItem 自带的 selectOne 样式,
+                // 与 download_quality 行为一致;首版用 AlertDialog 兜底。
+                SettingItem(
+                    title = stringResource(Res.string.netease_quality),
+                    subtitle = neteaseQualityLabel(neteaseQuality),
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        qualityDialogTarget = NeteaseQualityTarget.STREAM
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_download_quality),
+                    subtitle = neteaseQualityLabel(neteaseDownloadQuality),
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        qualityDialogTarget = NeteaseQualityTarget.DOWNLOAD
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_follow_sync),
+                    subtitle = stringResource(Res.string.netease_follow_sync_description),
+                    switch = (neteaseFollowSync to { viewModel.setNeteaseFollowSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_auto_switch),
+                    subtitle = stringResource(Res.string.netease_auto_switch_description),
+                    switch = (neteaseAutoSwitch to { viewModel.setNeteaseAutoSwitch(it) }),
                 )
             }
         }
@@ -3525,5 +3630,62 @@ private fun ImportProgressDialog(
                 }
             }
         },
+    )
+}
+// ----------------------------------------------------------------------------
+// 网易云音质选择(feat/netease-source)
+// ----------------------------------------------------------------------------
+
+private enum class NeteaseQualityTarget { STREAM, DOWNLOAD }
+
+@Composable
+private fun neteaseQualityLabel(key: String): String =
+    when (key) {
+        "STANDARD" -> stringResource(Res.string.netease_quality_standard)
+        "HIGHER" -> stringResource(Res.string.netease_quality_higher)
+        "EXHIGH" -> stringResource(Res.string.netease_quality_exhigh)
+        "LOSSLESS" -> stringResource(Res.string.netease_quality_lossless)
+        "HIRES" -> stringResource(Res.string.netease_quality_hires)
+        "JYEFFECT" -> stringResource(Res.string.netease_quality_jyeffect)
+        "SKY" -> stringResource(Res.string.netease_quality_sky)
+        "JYMASTER" -> stringResource(Res.string.netease_quality_jymaster)
+        else -> key
+    }
+
+private val NETEASE_QUALITY_KEYS =
+    listOf("JYMASTER", "SKY", "JYEFFECT", "HIRES", "LOSSLESS", "EXHIGH", "HIGHER", "STANDARD")
+
+@Composable
+private fun NeteaseQualityDialog(
+    current: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.netease_quality)) },
+        text = {
+            Column {
+                NETEASE_QUALITY_KEYS.forEach { key ->
+                    Text(
+                        text = neteaseQualityLabel(key),
+                        style = typo().bodyLarge,
+                        color =
+                            if (key == current) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(key) }
+                                .padding(vertical = 12.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {},
     )
 }

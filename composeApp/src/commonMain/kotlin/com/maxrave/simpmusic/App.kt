@@ -153,6 +153,8 @@ fun App(
     val showNotificationPermissionDialog by viewModel.showNotificationPermissionDialog.collectAsStateWithLifecycle()
 
     val isTranslucentBottomBar by viewModel.getTranslucentBottomBar().collectAsStateWithLifecycle(DataStoreManager.FALSE)
+    val selectedSourceValue by viewModel.selectedSource.collectAsStateWithLifecycle()
+    val neteaseLoggedInValue by viewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     val isLiquidGlassEnabled by viewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     // Analytics only makes sense with local tracking on, so its tab follows that setting.
     val isLocalTrackingEnabled by viewModel.getLocalTrackingEnabled().collectAsStateWithLifecycle(DataStoreManager.FALSE)
@@ -520,9 +522,13 @@ fun App(
                                     isTranslucentBackground = isTranslucentBottomBar == TRUE,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                ) { klass ->
-                                    viewModel.reloadDestination(klass)
-                                }
+                                    selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                    neteaseLoggedIn = neteaseLoggedInValue,
+                                    onSourceSelected = { viewModel.setSelectedSource(it) },
+                                    reloadDestinationIfNeeded = { klass ->
+                                        viewModel.reloadDestination(klass)
+                                    },
+                                )
                             }
                         }
                     }

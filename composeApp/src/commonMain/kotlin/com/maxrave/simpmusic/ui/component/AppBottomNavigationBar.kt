@@ -18,7 +18,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.maxrave.domain.source.MusicSource
+import kotlin.math.atan2
+import kotlin.math.sqrt
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -51,7 +66,30 @@ fun AppBottomNavigationBar(
     showAnalyticsTab: Boolean = false,
     showMixForYouTab: Boolean = false,
     reloadDestinationIfNeeded: (KClass<*>) -> Unit = { _ -> },
+    selectedSource: MusicSource = MusicSource.YOUTUBE_MUSIC,
+    neteaseLoggedIn: Boolean = false,
+    onSourceSelected: (MusicSource) -> Unit = { _ -> },
 ) {
+    // ------------------------------------------------ 音源扇形切换状态(feat/netease-source)
+    var showSourceFan by remember { mutableStateOf(false) }
+    var fanHover by remember { mutableStateOf<MusicSource?>(null) }
+    val haptic = LocalHapticFeedback.current
+    val searchCenterInParent = remember { mutableStateOf(Offset.Zero) }
+    val capsuleAlpha by animateFloatAsState(if (showSourceFan) 0f else 1f, label = "sourceFanCapsuleAlpha")
+
+    fun hoverFromAngle(
+        dx: Float,
+        dy: Float,
+    ): MusicSource? {
+        val distance = sqrt(dx * dx + dy * dy)
+        if (distance < 40f) return null // 太贴近圆心视为未选
+        val angle = Math.toDegrees(atan2(-dy, dx).toDouble()) // 数学角,-180..180
+        return when {
+            angle in 96.0..140.0 -> MusicSource.YOUTUBE_MUSIC
+            angle > 140.0 || angle < -155.0 -> MusicSource.NETEASE
+            else -> null
+        }
+    }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
     // Library here while keeping the ordinal they were declared with, so that the numbering stays
@@ -128,6 +166,7 @@ fun AppBottomNavigationBar(
     val indicatorColor =
         MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (isTranslucentBackground) 0.85f else 1f)
 
+    Box {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         // One centred cluster — capsule, gap, FAB — exactly like the glass bar: fill = false keeps
@@ -139,7 +178,8 @@ fun AppBottomNavigationBar(
                 .fillMaxWidth()
                 .windowInsetsPadding(NavigationBarDefaults.windowInsets)
                 .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 8.dp),
+                .padding(top = 4.dp, bottom = 8.dp)
+                .graphicsLayerAlphaCompat(capsuleAlpha),
     ) {
         BoxWithConstraints(Modifier.weight(1f, fill = false)) {
             // Every tab the same width, capped so two tabs on a wide screen do not stretch into
@@ -209,7 +249,66 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .clickable { selectTab(BottomNavScreen.Search) },
+                    .onGloballyPositioned { coordinates ->
+                        searchCenterInParent.value =
+                            coordinates.positionInParent() +
+                                Offset(
+                                    coordinates.size.width / 2f,
+                                    coordinates.size.height / 2f,
+                                )
+                    }
+                    .pointerInput(selectedSource, neteaseLoggedIn) {
+                        // 长按弹出扇形 → 拖动悬停 → 抬指选择/取消;短按仍是进搜索。
+                        // 手势从按下节点持续派发,即使手指移出按钮/父容器 bounds。
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            val start = down.position
+                            var longPressed = false
+                            var moved = false
+                            var lastHover: MusicSource? = null
+                            val downTime = down.uptimeMillis
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) {
+                                    if (longPressed) {
+                                        val pick = fanHover
+                                        if (pick != null && pick != selectedSource &&
+                                            (pick == MusicSource.YOUTUBE_MUSIC || neteaseLoggedIn)
+                                        ) {
+                                            onSourceSelected(pick)
+                                        }
+                                        showSourceFan = false
+                                        fanHover = null
+                                    } else if (!moved) {
+                                        selectTab(BottomNavScreen.Search)
+                                    }
+                                    break
+                                }
+                                val elapsed = change.uptimeMillis - downTime
+                                if (!moved && (change.position - start).getDistance() > 24f) {
+                                    moved = true
+                                }
+                                if (!longPressed && elapsed > 380 && !moved) {
+                                    longPressed = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showSourceFan = true
+                                }
+                                if (longPressed) {
+                                    val dx = change.position.x - size.width / 2f
+                                    val dy = change.position.y - size.height / 2f
+                                    val hover = hoverFromAngle(dx, dy)
+                                    if (hover != lastHover) {
+                                        if (hover != null && (hover == MusicSource.YOUTUBE_MUSIC || neteaseLoggedIn)) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                        lastHover = hover
+                                        fanHover = hover
+                                    }
+                                }
+                            }
+                        }
+                    },
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(
@@ -224,7 +323,22 @@ fun AppBottomNavigationBar(
             }
         }
     }
+
+    // 扇形覆盖层:绘制在 bar bounds 之外(向上),靠 Compose 默认不裁剪
+    if (showSourceFan) {
+        SourceFanOverlay(
+            center = searchCenterInParent.value,
+            selected = selectedSource,
+            neteaseLoggedIn = neteaseLoggedIn,
+            hover = fanHover,
+            modifier = Modifier.matchParentSize(),
+        )
+    }
+    }
 }
+
+private fun Modifier.graphicsLayerAlphaCompat(alpha: Float): Modifier = graphicsLayer { this.alpha = alpha }
+
 
 // Mirrors the glass tab bar's geometry (TabWidth/BarHeight/BlobHeight/BarInset in
 // LiquidGlassTabBar.android.kt) so the two bars are one form in two materials.

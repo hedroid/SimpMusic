@@ -883,4 +883,39 @@
     <string name="backup_location_default">Documents/SimpMusic (default)</string>
     <string name="language_follow_system">Follow system</string>
     <string name="language_follow_system_current">Follow system (current: %1$s)</string>
+    <!-- NetEase source (feat/netease-source) -->
+    <string name="netease">NetEase Music</string>
+    <string name="log_in_to_netease">Log in to NetEase</string>
+    <string name="log_out_from_netease">Log out of NetEase</string>
+    <string name="intro_login_to_netease">Add NetEase as a second music source (experimental)</string>
+    <string name="netease_login_to_netease">Log in to NetEase</string>
+    <string name="netease_quality">NetEase streaming quality</string>
+    <string name="netease_download_quality">NetEase download quality</string>
+    <string name="netease_follow_sync">Sync follows with NetEase</string>
+    <string name="netease_follow_sync_description">Following or unfollowing an artist also applies to your NetEase account</string>
+    <string name="netease_auto_switch">Auto-switch source for unavailable songs</string>
+    <string name="netease_auto_switch_description">Fall back to YouTube Music when a NetEase song has no license or is VIP-only</string>
+    <string name="netease_login_qr">QR code</string>
+    <string name="netease_login_phone">Phone</string>
+    <string name="netease_login_web">Web</string>
+    <string name="netease_login_cookie">Cookie</string>
+    <string name="netease_qr_waiting_scan">Scan with the NetEase app…</string>
+    <string name="netease_qr_scanned">Scanned — confirm on your phone</string>
+    <string name="netease_qr_expired">QR expired — tap to refresh</string>
+    <string name="netease_phone_number">Phone number</string>
+    <string name="netease_password">Password</string>
+    <string name="netease_captcha">SMS code</string>
+    <string name="netease_send_captcha">Send code</string>
+    <string name="netease_login_by_password">Log in with password</string>
+    <string name="netease_login_by_captcha">Log in with code</string>
+    <string name="netease_cookie_hint">Paste your MUSIC_U cookie value, or a full cookie string exported from a logged-in browser</string>
+    <string name="netease_quality_standard">Standard (128kbps)</string>
+    <string name="netease_quality_higher">Higher (192kbps)</string>
+    <string name="netease_quality_exhigh">Very high (320kbps)</string>
+    <string name="netease_quality_lossless">Lossless (VIP)</string>
+    <string name="netease_quality_hires">Hi-Res (VIP)</string>
+    <string name="netease_quality_jyeffect">HD surround (VIP)</string>
+    <string name="netease_quality_sky">Immersive surround (VIP)</string>
+    <string name="netease_quality_jymaster">Ultra master (VIP)</string>
+
 </resources>

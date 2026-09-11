@@ -125,6 +125,23 @@ class SharedViewModel(
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val cacheRepository: CacheRepository,
 ) : BaseViewModel() {
+
+    // ---------------------------------------------------------------- 音源切换(feat/netease-source)
+
+    /** 当前激活音源,扇形菜单与各页面 TODO 分支共用这一份状态 */
+    val selectedSource: StateFlow<String> =
+        dataStoreManager.selectedSource
+            .stateIn(viewModelScope, SharingStarted.Eagerly, com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC.name)
+
+    val neteaseLoggedIn: StateFlow<Boolean> =
+        dataStoreManager.neteaseCookie
+            .map { it.isNotEmpty() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
+        viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
+    }
+
     var isFirstLiked: Boolean = false
     var isFirstMiniplayer: Boolean = false
     var isFirstSuggestions: Boolean = false

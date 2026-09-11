@@ -40,6 +40,9 @@ paging = "3.5.1"
 customactivityoncrash = "2.4.0"
 aboutlibraries = "15.0.2" # BUG Can not upgrade version
 ktor = "3.5.2"
+# Pure-Kotlin multiplatform BigInteger — needed by the NetEase weapi RSA step (common code has
+# no java.math.BigInteger). Tiny lib, no transitive deps.
+kotlinx-bigint = "0.3.10"
 brotli = "0.1.2"
 ksoup = "0.6.0"
 # Lyrics romanization. Both are plain Java, so one dependency covers Android AND the JVM desktop
@@ -180,6 +183,7 @@ kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-seria
 brotli-dec = { group = "org.brotli", name = "dec", version.ref = "brotli" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
+kotlinx-bigint = { module = "com.ionspin.kotlin:bignum", version.ref = "kotlinx-bigint" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test"}
 kuromoji-ipadic = { module = "com.atilika.kuromoji:kuromoji-ipadic", version.ref = "kuromoji-ipadic" }
 pinyin4j = { module = "com.belerweb:pinyin4j", version.ref = "pinyin4j" }

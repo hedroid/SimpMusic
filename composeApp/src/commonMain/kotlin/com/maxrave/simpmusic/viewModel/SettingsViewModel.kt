@@ -22,6 +22,7 @@ import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.ReverbPreset
 import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.AlbumRepository
@@ -92,6 +93,7 @@ class SettingsViewModel(
     private val playlistRepository: PlaylistRepository by inject()
     private val albumRepository: AlbumRepository by inject()
     private val localPlaylistRepository: LocalPlaylistRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
 
     val castState: StateFlow<GenericCastState> get() = mediaPlayerHandler.castState
 
@@ -1838,6 +1840,92 @@ class SettingsViewModel(
                 delay(500)
             }
             getSpotifyLogIn()
+        }
+    }
+
+    // ---------------------------------------------------------------- 网易云音源
+
+    private var _neteaseLogIn: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val neteaseLogIn: StateFlow<Boolean> = _neteaseLogIn
+
+    private var _neteaseAccountName: MutableStateFlow<String> = MutableStateFlow("")
+    val neteaseAccountName: StateFlow<String> = _neteaseAccountName
+
+    private var _neteaseQuality: MutableStateFlow<String> = MutableStateFlow("EXHIGH")
+    val neteaseQuality: StateFlow<String> = _neteaseQuality
+
+    private var _neteaseDownloadQuality: MutableStateFlow<String> = MutableStateFlow("LOSSLESS")
+    val neteaseDownloadQuality: StateFlow<String> = _neteaseDownloadQuality
+
+    private var _neteaseFollowSync: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val neteaseFollowSync: StateFlow<Boolean> = _neteaseFollowSync
+
+    private var _neteaseAutoSwitch: MutableStateFlow<Boolean> = MutableStateFlow(true)
+    val neteaseAutoSwitch: StateFlow<Boolean> = _neteaseAutoSwitch
+
+    fun getNeteaseLogIn() {
+        viewModelScope.launch {
+            combineStates(
+                dataStoreManager.neteaseCookie,
+                dataStoreManager.neteaseAccountName,
+                dataStoreManager.neteaseQuality,
+                dataStoreManager.neteaseDownloadQuality,
+                dataStoreManager.neteaseFollowSync,
+                dataStoreManager.neteaseAutoSwitch,
+            )
+        }
+    }
+
+    /** DataStore → StateFlow 的一次性搬运,避免六个独立 collect */
+    private suspend fun combineStates(
+        cookie: kotlinx.coroutines.flow.Flow<String>,
+        name: kotlinx.coroutines.flow.Flow<String>,
+        quality: kotlinx.coroutines.flow.Flow<String>,
+        downloadQuality: kotlinx.coroutines.flow.Flow<String>,
+        followSync: kotlinx.coroutines.flow.Flow<String>,
+        autoSwitch: kotlinx.coroutines.flow.Flow<String>,
+    ) {
+        kotlinx.coroutines.flow.combine(
+            cookie,
+            name,
+            quality,
+            downloadQuality,
+            followSync,
+            autoSwitch,
+        ) { values -> values }.collect { state ->
+            _neteaseLogIn.value = (state[0] as String).isNotEmpty()
+            _neteaseAccountName.value = state[1] as String
+            _neteaseQuality.value = state[2] as String
+            _neteaseDownloadQuality.value = state[3] as String
+            _neteaseFollowSync.value = (state[4] as String) == DataStoreManager.TRUE
+            _neteaseAutoSwitch.value = (state[5] as String) == DataStoreManager.TRUE
+        }
+    }
+
+    fun setNeteaseQuality(quality: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseQuality(quality) }
+    }
+
+    fun setNeteaseDownloadQuality(quality: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseDownloadQuality(quality) }
+    }
+
+    fun setNeteaseFollowSync(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setNeteaseFollowSync(enabled) }
+    }
+
+    fun setNeteaseAutoSwitch(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setNeteaseAutoSwitch(enabled) }
+    }
+
+    /** 退出网易云:清会话;若当前选中源是网易云则回落 YTM,避免扇形/主页指向空源 */
+    fun logOutNetease() {
+        viewModelScope.launch {
+            neteaseRepository.logout()
+            if (dataStoreManager.selectedSource.first() == MusicSource.NETEASE.name) {
+                dataStoreManager.setSelectedSource(MusicSource.YOUTUBE_MUSIC.name)
+            }
+            _neteaseLogIn.value = false
         }
     }
 

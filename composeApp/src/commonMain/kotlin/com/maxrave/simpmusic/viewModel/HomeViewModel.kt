@@ -180,6 +180,11 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
+
+        // TODO(NETEASE_NEXT): 音源分支 —— selectedSource == NETEASE 时本页改走
+        // NeteaseRepositoryImpl.getHome()(已产出 YTM 形状 HomeItem:每日推荐歌单/私人雷达/
+        // 排行榜/推荐新歌/精品歌单,一次性拉取、无 continuation);mood/chart/newRelease
+        // 分区对网易源隐藏。YTM 侧保持现状零改动。
         loading.value = true
         _homeListState.value = ListState.LOADING
         language =
