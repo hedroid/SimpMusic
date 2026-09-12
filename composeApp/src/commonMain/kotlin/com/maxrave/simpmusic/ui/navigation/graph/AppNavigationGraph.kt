@@ -12,6 +12,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.ui.screen.home.NeteaseHomeScreen
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import org.koin.compose.koinInject
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.WrappedDestination
 import com.maxrave.simpmusic.ui.theme.ForceDarkContent
@@ -57,10 +63,21 @@ fun AppNavigationGraph(
     ) {
         // Bottom bar destinations
         composable<HomeDestination> {
-            HomeScreen(
-                onScrolling = onScrolling,
-                navController = navController,
-            )
+            // 独立页切换:网易态换 NeteaseHomeScreen(上游 HomeScreen 零改动),
+            // selected_source 持久化在 DataStore,冷启动自动恢复
+            val sharedViewModel: SharedViewModel = koinInject()
+            val selectedSource by sharedViewModel.selectedSource.collectAsStateWithLifecycle()
+            if (selectedSource == MusicSource.NETEASE.name) {
+                NeteaseHomeScreen(
+                    onScrolling = onScrolling,
+                    navController = navController,
+                )
+            } else {
+                HomeScreen(
+                    onScrolling = onScrolling,
+                    navController = navController,
+                )
+            }
         }
         composable<SearchDestination> {
             SearchScreen(

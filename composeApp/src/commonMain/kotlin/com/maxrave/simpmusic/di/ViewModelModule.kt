@@ -12,6 +12,7 @@ import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LogInViewModel
+import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
 import com.maxrave.simpmusic.viewModel.MoodViewModel
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
@@ -140,6 +141,11 @@ val viewModelModule =
         viewModel {
             NeteaseLoginViewModel(
                 get(),
+                get(),
+            )
+        }
+        viewModel {
+            NeteaseHomeViewModel(
                 get(),
             )
         }
