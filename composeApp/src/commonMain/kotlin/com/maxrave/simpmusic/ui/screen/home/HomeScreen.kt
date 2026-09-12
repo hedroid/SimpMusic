@@ -1093,22 +1093,24 @@ fun ChartData(
                 }
             }
         }
-        Text(
-            text = stringResource(Res.string.top_artists),
-            style = typo().headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 10.dp),
-        )
-        LazyHorizontalGrid(
-            rows = GridCells.Fixed(3),
-            modifier = Modifier.height(240.dp),
-            state = lazyListState2,
-            flingBehavior = snapperFlingBehavior2,
-        ) {
+        // 热门艺人:无艺人数据时整个隐藏(网易榜单无此区块)
+        if (chart.artists.itemArtists.isNotEmpty()) {
+            Text(
+                text = stringResource(Res.string.top_artists),
+                style = typo().headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+            )
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp),
+                state = lazyListState2,
+                flingBehavior = snapperFlingBehavior2,
+            ) {
             items(chart.artists.itemArtists.size, key = { index ->
                 val item = chart.artists.itemArtists[index]
                 item.title + item.browseId + index
@@ -1125,6 +1127,7 @@ fun ChartData(
                     data = data,
                     widthDp = gridWidthDp,
                 )
+            }
             }
         }
     }
