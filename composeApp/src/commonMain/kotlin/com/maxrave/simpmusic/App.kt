@@ -516,7 +516,18 @@ fun App(
                                     showMixForYouTab = showMixForYouTab,
                                     selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
                                     neteaseLoggedIn = neteaseLoggedInValue,
-                                    onSourceSelected = { viewModel.setSelectedSource(it) },
+                                    onSourceSelected = { source ->
+                                        if (selectedSourceValue != source.name) {
+                                            viewModel.setSelectedSource(source)
+                                            // 播放队列/正在播放与音源绑定:切源即停播清队列,回主页
+                                            viewModel.stopPlayer()
+                                            viewModel.isServiceRunning = false
+                                            navController.navigate(HomeDestination) {
+                                                popUpTo(navController.graph.startDestinationId) { saveState = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    },
                                     reloadDestinationIfNeeded = { klass ->
                                         viewModel.reloadDestination(klass)
                                     },
@@ -529,7 +540,18 @@ fun App(
                                     showMixForYouTab = showMixForYouTab,
                                     selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
                                     neteaseLoggedIn = neteaseLoggedInValue,
-                                    onSourceSelected = { viewModel.setSelectedSource(it) },
+                                    onSourceSelected = { source ->
+                                        if (selectedSourceValue != source.name) {
+                                            viewModel.setSelectedSource(source)
+                                            // 播放队列/正在播放与音源绑定:切源即停播清队列,回主页
+                                            viewModel.stopPlayer()
+                                            viewModel.isServiceRunning = false
+                                            navController.navigate(HomeDestination) {
+                                                popUpTo(navController.graph.startDestinationId) { saveState = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    },
                                     reloadDestinationIfNeeded = { klass ->
                                         viewModel.reloadDestination(klass)
                                     },
