@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
@@ -41,7 +41,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.log_in_to_netease
-import simpmusic.composeapp.generated.resources.netease
 import simpmusic.composeapp.generated.resources.netease_home_error
 import simpmusic.composeapp.generated.resources.netease_home_logged_out
 import simpmusic.composeapp.generated.resources.retry
@@ -110,19 +109,17 @@ fun NeteaseHomeScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         item(key = "header") {
-                            Column(
-                                Modifier
-                                    .statusBarsPadding()
-                                    .padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(Res.string.netease),
-                                    style = typo().headlineLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
+                            Column {
+                                // 复用上游主页顶栏(app 名+按时段问候+通知/历史/一起听/设置),
+                                // 网易态与 YT 态顶栏完全一致,内容区才是网易 feed
+                                HomeTopAppBar(navController = navController)
                                 if (!loggedIn) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier =
+                                            Modifier
+                                                .padding(start = 16.dp, end = 8.dp, top = 4.dp),
+                                    ) {
                                         Text(
                                             text = stringResource(Res.string.netease_home_logged_out),
                                             style = typo().bodySmall,
