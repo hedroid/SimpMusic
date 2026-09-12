@@ -32,7 +32,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.all
+import simpmusic.composeapp.generated.resources.commute
+import simpmusic.composeapp.generated.resources.energize
+import simpmusic.composeapp.generated.resources.feel_good
+import simpmusic.composeapp.generated.resources.focus
 import simpmusic.composeapp.generated.resources.music_video
+import simpmusic.composeapp.generated.resources.party
+import simpmusic.composeapp.generated.resources.relax
+import simpmusic.composeapp.generated.resources.romance
+import simpmusic.composeapp.generated.resources.sad
+import simpmusic.composeapp.generated.resources.sleep
+import simpmusic.composeapp.generated.resources.workout
 import simpmusic.composeapp.generated.resources.new_release
 import simpmusic.composeapp.generated.resources.song
 import simpmusic.composeapp.generated.resources.view_count
@@ -48,9 +59,46 @@ class HomeViewModel(
             .map { it == com.maxrave.domain.source.MusicSource.NETEASE.name }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    /** 网易态的 chips 标签(精选);YT 态为 null → HomeScreen 用原有写死 mood 列表 */
-    private val _neteaseChips = MutableStateFlow<List<String>>(emptyList())
-    val neteaseChips: StateFlow<List<String>> = _neteaseChips.asStateFlow()
+    /** 主页 chips(数据驱动):YT=mood 常量映射,网易=精选高质量标签;Screen 无源感知 */
+    data class HomeChip(
+        val label: String,
+        val params: String?, // null = 全部
+    )
+
+    private val _homeChips = MutableStateFlow<List<HomeChip>>(emptyList())
+    val homeChips: StateFlow<List<HomeChip>> = _homeChips.asStateFlow()
+
+    /** YT mood chips 的(资源,参数)表 —— 原上游写死列表,搬到 VM 统一成数据 */
+    private val ytChipTable =
+        listOf(
+            Res.string.all to null,
+            Res.string.relax to HOME_PARAMS_RELAX,
+            Res.string.sleep to HOME_PARAMS_SLEEP,
+            Res.string.energize to HOME_PARAMS_ENERGIZE,
+            Res.string.sad to HOME_PARAMS_SAD,
+            Res.string.romance to HOME_PARAMS_ROMANCE,
+            Res.string.feel_good to HOME_PARAMS_FEEL_GOOD,
+            Res.string.workout to HOME_PARAMS_WORKOUT,
+            Res.string.party to HOME_PARAMS_PARTY,
+            Res.string.commute to HOME_PARAMS_COMMUTE,
+            Res.string.focus to HOME_PARAMS_FOCUS,
+        )
+
+    private fun refreshChips() {
+        viewModelScope.launch {
+            _homeChips.value =
+                if (isNetease.value) {
+                    listOf(HomeChip(getString(Res.string.all), null)) +
+                        neteaseRepository.curatedHomeTags.map { HomeChip(it, it) }
+                } else {
+                    ytChipTable.map { HomeChip(getString(it.first), it.second) }
+                }
+        }
+    }
+
+    /** 图表地区选择器是否显示(数据层按源判定:网易榜单不分地区) */
+    private val _showRegionChart = MutableStateFlow(true)
+    val showRegionChart: StateFlow<Boolean> = _showRegionChart.asStateFlow()
     private val _homeItemList: MutableStateFlow<List<HomeItem>> =
         MutableStateFlow(arrayListOf())
     val homeItemList: StateFlow<List<HomeItem>> = _homeItemList
@@ -133,12 +181,7 @@ class HomeViewModel(
                 launch {
                     dataStoreManager.cookie.distinctUntilChanged().collect {
                         getHomeItemList(params.value)
-                        _accountInfo.emit(
-                            Pair(
-                                dataStoreManager.getString("AccountName").first(),
-                                dataStoreManager.getString("AccountThumbUrl").first(),
-                            ),
-                        )
+                        _accountInfo.emit(homeRepository.getAccountInfo().first())
                     }
                 }
             val job4 =
@@ -163,13 +206,13 @@ class HomeViewModel(
                 }
             // 源切换时整页重拉(懒刷新:本页可见,立即生效;两个方向都刷)
             launch {
-                dataStoreManager.selectedSource.collectLatest { source ->
-                    if (source == com.maxrave.domain.source.MusicSource.NETEASE.name) {
-                        _neteaseChips.value = neteaseRepository.curatedHomeTags
-                    }
+                dataStoreManager.selectedSource.collectLatest {
+                    refreshChips()
+                    _showRegionChart.value = homeRepository.showRegionChartSelector()
                     getHomeItemList(params.value)
                 }
             }
+            refreshChips()
             val job6 =
                 launch {
                     homeItemList.collectLatest { list ->
@@ -202,10 +245,6 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
-        if (isNetease.value) {
-            getNeteaseHomeItemList(params)
-            return
-        }
         loading.value = true
         _homeListState.value = ListState.LOADING
         language =
@@ -282,16 +321,7 @@ class HomeViewModel(
                     }
                     regionCodeChart.value = dataStoreManager.chartKey.first()
                     Logger.d("HomeViewModel", "getHomeItemList: $result")
-                    dataStoreManager.cookie.first().let {
-                        if (it != "") {
-                            _accountInfo.emit(
-                                Pair(
-                                    dataStoreManager.getString("AccountName").first(),
-                                    dataStoreManager.getString("AccountThumbUrl").first(),
-                                ),
-                            )
-                        }
-                    }
+                    _accountInfo.emit(homeRepository.getAccountInfo().first())
                     when {
                         home is Resource.Error -> home.message
                         exploreMoodItem is Resource.Error -> exploreMoodItem.message
@@ -305,51 +335,6 @@ class HomeViewModel(
                     }
                     loading.value = false
                 }
-            }
-    }
-
-    /**
-     * 网易态主页:feed=getHome()(选中标签时=该标签精品歌单行)、图表=排行榜、
-     * mood 区块=标签分组;无 continuation;新发行并入 feed 的"推荐新歌"行不重复给。
-     */
-    private fun getNeteaseHomeItemList(params: String?) {
-        loading.value = true
-        _homeListState.value = ListState.LOADING
-        homeJob?.cancel()
-        homeJob =
-            viewModelScope.launch {
-                // feed
-                val feed =
-                    if (params.isNullOrEmpty()) {
-                        neteaseRepository.getHome().getOrNull() ?: listOf()
-                    } else {
-                        // chip 选中态:页面数据换成该标签的高质量歌单(YT mood 同款交互)
-                        listOfNotNull(neteaseRepository.getHqPlaylistsRow(params).getOrNull())
-                    }
-                _homeItemList.value = feed
-                _continuation.value = null
-                _homeListState.value = ListState.PAGINATION_EXHAUST
-
-                // 图表(网易排行榜,无地区概念)
-                _chart.value = neteaseRepository.getHomeChart().getOrNull()
-                loadingChart.value = false
-
-                // 心情&场景 / 流派(网易高质量标签分组)
-                _exploreMoodItem.value = neteaseRepository.getMoodSections().getOrNull()
-
-                // 新发行:网易 feed 已含"推荐新歌"行,不重复
-                _newRelease.value = arrayListOf()
-
-                // 账户信息:网易源读网易账户键
-                if (dataStoreManager.neteaseCookie.first().isNotEmpty()) {
-                    _accountInfo.emit(
-                        Pair(
-                            dataStoreManager.neteaseAccountName.first(),
-                            dataStoreManager.neteaseAccountThumbUrl.first(),
-                        ),
-                    )
-                }
-                loading.value = false
             }
     }
 
@@ -392,14 +377,6 @@ class HomeViewModel(
     }
 
     fun exploreChart(region: String) {
-        if (isNetease.value) {
-            // 网易榜单不分地区,地区参数仅保留写入(回 YT 态时仍记住上次选择)
-            viewModelScope.launch {
-                dataStoreManager.setChartKey(region)
-                regionCodeChart.value = region
-            }
-            return
-        }
         viewModelScope.launch {
             loadingChart.value = true
             homeRepository

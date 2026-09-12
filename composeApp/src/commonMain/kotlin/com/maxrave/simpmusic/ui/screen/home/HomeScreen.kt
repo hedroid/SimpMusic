@@ -196,21 +196,6 @@ import simpmusic.composeapp.generated.resources.workout
 
 // DataStore key for blog-promo one-shot dialog. Bump the suffix (v2, v3, …) to re-promote.
 
-private val listOfHomeChip =
-    listOf(
-        Res.string.all,
-        Res.string.relax,
-        Res.string.sleep,
-        Res.string.energize,
-        Res.string.sad,
-        Res.string.romance,
-        Res.string.feel_good,
-        Res.string.workout,
-        Res.string.party,
-        Res.string.commute,
-        Res.string.focus,
-    )
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @ExperimentalFoundationApi
 @Composable
@@ -226,8 +211,7 @@ fun HomeScreen(
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
-    val isNetease by viewModel.isNetease.collectAsStateWithLifecycle()
-    val neteaseChips by viewModel.neteaseChips.collectAsStateWithLifecycle()
+    val homeChips by viewModel.homeChips.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val chart by viewModel.chart.collectAsStateWithLifecycle()
@@ -654,7 +638,8 @@ fun HomeScreen(
                                 ) {
                                     ChartTitle()
                                     Spacer(modifier = Modifier.height(5.dp))
-                                    Crossfade(targetState = if (isNetease) null else regionChart) {
+                                    val showRegionChart by viewModel.showRegionChart.collectAsStateWithLifecycle()
+                                    Crossfade(targetState = if (showRegionChart) regionChart else null) {
                                         Logger.w("HomeScreen", "regionChart: $it")
                                         if (it != null) {
                                             DropdownButton(
@@ -769,56 +754,13 @@ fun HomeScreen(
                             .background(Color.Transparent),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (isNetease) {
-                        // 网易态:精选高质量标签;params=标签名,选中即整页换该分类歌单
+                    // chips 数据驱动(VM 按源给出):YT=mood,网易=精选标签;选中即 setParams
+                    homeChips.forEach { chip ->
                         Chip(
                             isAnimated = loading,
-                            isSelected = params == null,
-                            text = stringResource(Res.string.all),
-                        ) { viewModel.setParams(null) }
-                        neteaseChips.forEach { tag ->
-                            Chip(
-                                isAnimated = loading,
-                                isSelected = params == tag,
-                                text = tag,
-                            ) { viewModel.setParams(tag) }
-                        }
-                        return@Row
-                    }
-                    listOfHomeChip.forEach { id ->
-                        val isSelected =
-                            when (params) {
-                                HOME_PARAMS_RELAX -> id == Res.string.relax
-                                HOME_PARAMS_SLEEP -> id == Res.string.sleep
-                                HOME_PARAMS_ENERGIZE -> id == Res.string.energize
-                                HOME_PARAMS_SAD -> id == Res.string.sad
-                                HOME_PARAMS_ROMANCE -> id == Res.string.romance
-                                HOME_PARAMS_FEEL_GOOD -> id == Res.string.feel_good
-                                HOME_PARAMS_WORKOUT -> id == Res.string.workout
-                                HOME_PARAMS_PARTY -> id == Res.string.party
-                                HOME_PARAMS_COMMUTE -> id == Res.string.commute
-                                HOME_PARAMS_FOCUS -> id == Res.string.focus
-                                else -> id == Res.string.all
-                            }
-                        Chip(
-                            isAnimated = loading,
-                            isSelected = isSelected,
-                            text = stringResource(id),
-                        ) {
-                            when (id) {
-                                Res.string.all -> viewModel.setParams(null)
-                                Res.string.relax -> viewModel.setParams(HOME_PARAMS_RELAX)
-                                Res.string.sleep -> viewModel.setParams(HOME_PARAMS_SLEEP)
-                                Res.string.energize -> viewModel.setParams(HOME_PARAMS_ENERGIZE)
-                                Res.string.sad -> viewModel.setParams(HOME_PARAMS_SAD)
-                                Res.string.romance -> viewModel.setParams(HOME_PARAMS_ROMANCE)
-                                Res.string.feel_good -> viewModel.setParams(HOME_PARAMS_FEEL_GOOD)
-                                Res.string.workout -> viewModel.setParams(HOME_PARAMS_WORKOUT)
-                                Res.string.party -> viewModel.setParams(HOME_PARAMS_PARTY)
-                                Res.string.commute -> viewModel.setParams(HOME_PARAMS_COMMUTE)
-                                Res.string.focus -> viewModel.setParams(HOME_PARAMS_FOCUS)
-                            }
-                        }
+                            isSelected = params == chip.params,
+                            text = chip.label,
+                        ) { viewModel.setParams(chip.params) }
                     }
                 }
             }
