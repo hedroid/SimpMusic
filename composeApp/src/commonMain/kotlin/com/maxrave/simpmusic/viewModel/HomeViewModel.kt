@@ -11,6 +11,7 @@ import com.maxrave.domain.data.model.mood.Mood
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
 import com.maxrave.domain.repository.HomeRepository
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.Resource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -37,7 +40,17 @@ import simpmusic.composeapp.generated.resources.view_count
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val homeRepository: HomeRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
+    /** 音源(复用上游 HomeScreen 的网易适配:数据层分发,UI 仅 chips/地区下拉感知源) */
+    val isNetease: StateFlow<Boolean> =
+        dataStoreManager.selectedSource
+            .map { it == com.maxrave.domain.source.MusicSource.NETEASE.name }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** 网易态的 chips 标签(精选);YT 态为 null → HomeScreen 用原有写死 mood 列表 */
+    private val _neteaseChips = MutableStateFlow<List<String>>(emptyList())
+    val neteaseChips: StateFlow<List<String>> = _neteaseChips.asStateFlow()
     private val _homeItemList: MutableStateFlow<List<HomeItem>> =
         MutableStateFlow(arrayListOf())
     val homeItemList: StateFlow<List<HomeItem>> = _homeItemList
@@ -148,6 +161,15 @@ class HomeViewModel(
                             }
                         }
                 }
+            // 源切换时整页重拉(懒刷新:本页可见,立即生效;两个方向都刷)
+            launch {
+                dataStoreManager.selectedSource.collectLatest { source ->
+                    if (source == com.maxrave.domain.source.MusicSource.NETEASE.name) {
+                        _neteaseChips.value = neteaseRepository.curatedHomeTags
+                    }
+                    getHomeItemList(params.value)
+                }
+            }
             val job6 =
                 launch {
                     homeItemList.collectLatest { list ->
@@ -180,11 +202,10 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
-
-        // TODO(NETEASE_NEXT): 音源分支 —— selectedSource == NETEASE 时本页改走
-        // NeteaseRepositoryImpl.getHome()(已产出 YTM 形状 HomeItem:每日推荐歌单/私人雷达/
-        // 排行榜/推荐新歌/精品歌单,一次性拉取、无 continuation);mood/chart/newRelease
-        // 分区对网易源隐藏。YTM 侧保持现状零改动。
+        if (isNetease.value) {
+            getNeteaseHomeItemList(params)
+            return
+        }
         loading.value = true
         _homeListState.value = ListState.LOADING
         language =
@@ -287,6 +308,51 @@ class HomeViewModel(
             }
     }
 
+    /**
+     * 网易态主页:feed=getHome()(选中标签时=该标签精品歌单行)、图表=排行榜、
+     * mood 区块=标签分组;无 continuation;新发行并入 feed 的"推荐新歌"行不重复给。
+     */
+    private fun getNeteaseHomeItemList(params: String?) {
+        loading.value = true
+        _homeListState.value = ListState.LOADING
+        homeJob?.cancel()
+        homeJob =
+            viewModelScope.launch {
+                // feed
+                val feed =
+                    if (params.isNullOrEmpty()) {
+                        neteaseRepository.getHome().getOrNull() ?: listOf()
+                    } else {
+                        // chip 选中态:页面数据换成该标签的高质量歌单(YT mood 同款交互)
+                        listOfNotNull(neteaseRepository.getHqPlaylistsRow(params).getOrNull())
+                    }
+                _homeItemList.value = feed
+                _continuation.value = null
+                _homeListState.value = ListState.PAGINATION_EXHAUST
+
+                // 图表(网易排行榜,无地区概念)
+                _chart.value = neteaseRepository.getHomeChart().getOrNull()
+                loadingChart.value = false
+
+                // 心情&场景 / 流派(网易高质量标签分组)
+                _exploreMoodItem.value = neteaseRepository.getMoodSections().getOrNull()
+
+                // 新发行:网易 feed 已含"推荐新歌"行,不重复
+                _newRelease.value = arrayListOf()
+
+                // 账户信息:网易源读网易账户键
+                if (dataStoreManager.neteaseCookie.first().isNotEmpty()) {
+                    _accountInfo.emit(
+                        Pair(
+                            dataStoreManager.neteaseAccountName.first(),
+                            dataStoreManager.neteaseAccountThumbUrl.first(),
+                        ),
+                    )
+                }
+                loading.value = false
+            }
+    }
+
     fun getContinueHomeItem(continuation: String?) {
         viewModelScope.launch {
             if (continuation.isNullOrEmpty()) {
@@ -326,6 +392,14 @@ class HomeViewModel(
     }
 
     fun exploreChart(region: String) {
+        if (isNetease.value) {
+            // 网易榜单不分地区,地区参数仅保留写入(回 YT 态时仍记住上次选择)
+            viewModelScope.launch {
+                dataStoreManager.setChartKey(region)
+                regionCodeChart.value = region
+            }
+            return
+        }
         viewModelScope.launch {
             loadingChart.value = true
             homeRepository

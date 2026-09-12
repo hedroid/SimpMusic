@@ -32,9 +32,18 @@
 - 长按搜索按钮 → 音源菜单（Material DropdownMenu，品牌图标+勾选），玻璃/扁平两套导航栏都支持。
 - `selected_source` 持久化 + 懒刷新语义已定。
 
-### 主页（独立页，`selected_source` 切换）→ M4 ✅ 完成
-- 已落地：NeteaseHomeScreen/NeteaseHomeViewModel（新文件），挂载点 AppNavigationGraph 按源切换，上游 HomeScreen 零改动；每日推荐歌单/雷达组/排行榜/推荐新歌/精品歌单五行渲染复用上游 HomeItem 组件；点歌播放全链路通（M1 取流部分提前落地：StreamRepository 纯数字 ID 路由 + https 升级 + Mp3Extractor 注册 + Track.toSongEntity 按源标注）。
-- 遗留：点歌单卡片跳 PlaylistDestination 走 YT 加载失败（M2 接管后即通）；歌词为 M1 剩余部分。
+### 主页（复用上游 HomeScreen，数据层分发）→ M4 ✅ 完成
+- 架构定稿（用户确认）：不做独立页，单一 HomeScreen，网易在数据层适配。
+  早期 NeteaseHomeScreen 独立页方案已删除（与上游 HomeItem 默认参数实例化的
+  HomeViewModel 纠缠产生账户信息串页 bug，且违背复用原则）。
+- HomeViewModel 分发：feed=getHome()/chip 标签精品行、图表=排行榜(Chart 形状,
+  地区下拉隐藏)、心情&场景/流派=高质量标签分组(Mood 形状)、账户=网易键。
+- HomeScreen 改动收敛两处：chips 行(网易态=精选标签 华语/欧美/日语/韩语/流行/
+  摇滚/民谣/电子/说唱/ACG,点击 setParams(标签) 整页刷新)与地区下拉隐藏。
+- MoodScreen 复用：MoodViewModel 分发,标签→高质量歌单列表。
+- 点歌播放全链路通（StreamRepository 纯数字 ID 路由+https+Mp3Extractor+
+  Track.toSongEntity 按源标注）。
+- 遗留：点歌单卡片跳 PlaylistDestination 走 YT 加载失败（M2 接管后即通）；歌词为 M1 剩余。
 - 新文件 `NeteaseHomeScreen` + `NeteaseHomeViewModel`，tab 挂载点按源二选一，上游 `HomeScreen` 零改动。
 - feed 行：每日推荐歌曲/歌单、雷达组（私人/时光/宝藏/新歌/乐迷/神秘）、排行榜、高质量歌单、推荐新歌。
 - 未登录网易时切到网易态：显示引导登录的空态（不闪退、不白屏）。

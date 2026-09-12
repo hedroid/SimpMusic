@@ -5,13 +5,17 @@ import com.maxrave.common.SELECTED_LANGUAGE
 import com.maxrave.domain.data.model.mood.moodmoments.MoodsMomentObject
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.HomeRepository
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.Resource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -19,10 +23,17 @@ import kotlinx.coroutines.withContext
 class MoodViewModel(
     dataStoreManager: DataStoreManager,
     private val homeRepository: HomeRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
     private val _moodsMomentObject: MutableStateFlow<MoodsMomentObject?> = MutableStateFlow(null)
     var moodsMomentObject: StateFlow<MoodsMomentObject?> = _moodsMomentObject
     var loading = MutableStateFlow<Boolean>(false)
+
+    /** 网易态:params 是高质量标签名,数据=该标签的高质量歌单(数据层分发,UI 不感知) */
+    val isNetease: StateFlow<Boolean> =
+        dataStoreManager.selectedSource
+            .map { it == com.maxrave.domain.source.MusicSource.NETEASE.name }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private var regionCode: String? = null
     private var language: String? = null
@@ -43,9 +54,20 @@ class MoodViewModel(
         if (params == loadedParams && _moodsMomentObject.value != null) return
         loading.value = true
         viewModelScope.launch {
-//            mainRepository.getMood(params, regionCode!!, SUPPORTED_LANGUAGE.serverCodes[SUPPORTED_LANGUAGE.codes.indexOf(language!!)]).collect{ values ->
-//                _moodsMomentObject.value = values
-//            }
+            if (isNetease.value) {
+                neteaseRepository.getMoodContent(params).fold(
+                    onSuccess = { data ->
+                        _moodsMomentObject.value = data
+                        loadedParams = params
+                    },
+                    onFailure = {
+                        _moodsMomentObject.value = null
+                        loadedParams = null
+                    },
+                )
+                loading.value = false
+                return@launch
+            }
             homeRepository.getMoodData(params).collect { values ->
                 Logger.w("MoodViewModel", "getMood: $values")
                 when (values) {

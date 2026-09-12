@@ -226,6 +226,8 @@ fun HomeScreen(
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
+    val isNetease by viewModel.isNetease.collectAsStateWithLifecycle()
+    val neteaseChips by viewModel.neteaseChips.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val chart by viewModel.chart.collectAsStateWithLifecycle()
@@ -652,7 +654,7 @@ fun HomeScreen(
                                 ) {
                                     ChartTitle()
                                     Spacer(modifier = Modifier.height(5.dp))
-                                    Crossfade(targetState = regionChart) {
+                                    Crossfade(targetState = if (isNetease) null else regionChart) {
                                         Logger.w("HomeScreen", "regionChart: $it")
                                         if (it != null) {
                                             DropdownButton(
@@ -767,6 +769,22 @@ fun HomeScreen(
                             .background(Color.Transparent),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    if (isNetease) {
+                        // 网易态:精选高质量标签;params=标签名,选中即整页换该分类歌单
+                        Chip(
+                            isAnimated = loading,
+                            isSelected = params == null,
+                            text = stringResource(Res.string.all),
+                        ) { viewModel.setParams(null) }
+                        neteaseChips.forEach { tag ->
+                            Chip(
+                                isAnimated = loading,
+                                isSelected = params == tag,
+                                text = tag,
+                            ) { viewModel.setParams(tag) }
+                        }
+                        return@Row
+                    }
                     listOfHomeChip.forEach { id ->
                         val isSelected =
                             when (params) {
