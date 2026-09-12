@@ -10,6 +10,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import coil3.compose.AsyncImage
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -331,21 +338,20 @@ private fun NeteaseHomeRow(
         )
         val songContents = contents.filterNotNull().filter { it.videoId != null }
         if (songContents.isNotEmpty()) {
-            // 歌曲行:3 行横向网格(歌曲卡较矮,3 行并排信息密度更合理)
+            // 歌曲行:3 行紧凑卡网格(120dp 方图+两行小字,避免大卡被行高裁切)
             val gridState = rememberLazyGridState()
             LazyHorizontalGrid(
                 rows = GridCells.Fixed(3),
                 modifier =
                     Modifier
                         .padding(top = 8.dp)
-                        .height(250.dp),
+                        .height(510.dp),
                 state = gridState,
             ) {
                 items(songContents, key = { it.videoId ?: it.title }) { content ->
-                    HomeItemSong(
+                    NeteaseSongCard(
+                        content = content,
                         onClick = { onSongClick(content) },
-                        onLongClick = { },
-                        data = content,
                     )
                 }
             }
@@ -414,5 +420,49 @@ private fun NeteaseCategorySections(
                 }
             }
         }
+    }
+}
+
+
+
+/** 网格专用紧凑歌曲卡:120dp 方图 + 标题/艺人两行小字(总高约 170dp,3 行网格用) */
+@Composable
+private fun NeteaseSongCard(
+    content: com.maxrave.domain.data.model.home.Content,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .width(120.dp)
+                .padding(4.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick),
+    ) {
+        AsyncImage(
+            model = content.thumbnails.lastOrNull()?.url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(8.dp)),
+        )
+        Text(
+            text = content.title,
+            style = typo().titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
+            text = content.artists?.joinToString(", ") { it.name ?: "" }.orEmpty(),
+            style = typo().bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
