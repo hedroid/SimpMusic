@@ -323,8 +323,10 @@ fun HomeScreen(
             }
         }
     }
-    LaunchedEffect(key1 = homeData) {
-        accountShow = homeData.find { it.subtitle == accountInfo?.first } == null
+    LaunchedEffect(key1 = homeData, key2 = accountInfo) {
+        // 账户信息晚于 homeData 到达也要重算;账户未登录(null)时允许通过,
+        // 渲染处的 accountInfo != null 条件负责不显示 —— 修复网易态账户卡永不出现
+        accountShow = accountInfo?.first?.let { name -> homeData.none { it.subtitle == name } } ?: true
     }
     LaunchedEffect(openAppTime) {
         Logger.w("HomeScreen", "openAppTime: $openAppTime")

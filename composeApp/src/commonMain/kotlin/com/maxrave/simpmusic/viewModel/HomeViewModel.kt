@@ -89,7 +89,7 @@ class HomeViewModel(
             _homeChips.value =
                 if (isNetease.value) {
                     listOf(HomeChip(getString(Res.string.all), null)) +
-                        neteaseRepository.curatedHomeTags.map { HomeChip(it, it) }
+                        neteaseRepository.getHotChips().map { HomeChip(it, it) }
                 } else {
                     ytChipTable.map { HomeChip(getString(it.first), it.second) }
                 }
