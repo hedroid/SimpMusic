@@ -329,18 +329,32 @@ private fun NeteaseHomeRow(
             style = typo().headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            items(contents.filterNotNull(), key = { it.videoId ?: it.playlistId ?: it.title }) { content ->
-                if (content.videoId != null) {
+        val songContents = contents.filterNotNull().filter { it.videoId != null }
+        if (songContents.isNotEmpty()) {
+            // 歌曲行:3 行横向网格(歌曲卡较矮,3 行并排信息密度更合理)
+            val gridState = rememberLazyGridState()
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier =
+                    Modifier
+                        .padding(top = 8.dp)
+                        .height(250.dp),
+                state = gridState,
+            ) {
+                items(songContents, key = { it.videoId ?: it.title }) { content ->
                     HomeItemSong(
                         onClick = { onSongClick(content) },
                         onLongClick = { },
                         data = content,
                     )
-                } else {
+                }
+            }
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(top = 8.dp),
+            ) {
+                items(contents.filterNotNull(), key = { it.playlistId ?: it.title }) { content ->
                     HomeItemContentPlaylist(
                         onClick = {
                             content.playlistId?.let { id ->
