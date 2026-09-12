@@ -632,6 +632,9 @@ fun HomeScreen(
                                 }
                             }
                             item {
+                                // 图表区块:无数据时整体隐藏(网易榜单拉取失败不残留空标题);
+                                // 加载中仍显示标题+转圈,保持 YT 态的加载观感
+                                if (chart != null || chartLoading) {
                                 Column(
                                     Modifier
                                         .padding(vertical = 10.dp)
@@ -683,6 +686,7 @@ fun HomeScreen(
                                             )
                                         }
                                     }
+                                }
                                 }
                             }
                         }
