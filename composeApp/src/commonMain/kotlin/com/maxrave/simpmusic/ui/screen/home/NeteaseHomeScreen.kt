@@ -345,7 +345,7 @@ private fun NeteaseHomeRow(
                 modifier =
                     Modifier
                         .padding(top = 8.dp)
-                        .height(510.dp),
+                        .height(460.dp),
                 state = gridState,
             ) {
                 items(songContents, key = { it.videoId ?: it.title }) { content ->
@@ -425,7 +425,7 @@ private fun NeteaseCategorySections(
 
 
 
-/** 网格专用紧凑歌曲卡:120dp 方图 + 标题/艺人两行小字(总高约 170dp,3 行网格用) */
+/** 网格专用紧凑歌曲卡:120dp 方图 + 标题/艺人两行小字(总高约 145dp,3 行网格用) */
 @Composable
 private fun NeteaseSongCard(
     content: com.maxrave.domain.data.model.home.Content,
@@ -434,7 +434,7 @@ private fun NeteaseSongCard(
     Column(
         modifier =
             Modifier
-                .width(120.dp)
+                .width(96.dp)
                 .padding(4.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick),
