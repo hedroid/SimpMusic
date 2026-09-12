@@ -57,3 +57,4 @@
 - DataStore pb 一律不做外部改写（键长变化会损坏解析）；改设置走 app 自己的 UI。
 - 磁盘：单次 debug 构建 ≈2GB，满了先清项目 build 目录与 ~/.gradle 旧版本缓存。
 - 冒烟探针：`/tmp/netease_cookies.json`（jvmTest 读取，不进仓库）驱动 `NewEndpointsProbe`。
+- **core 协议/数据层踩坑全录**：`core/service/netease/PITFALLS.md`（端点生死簿、响应形状坑、KMP 限制、Flow 契约、风控）——改网易相关代码前先读。
