@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -571,7 +572,13 @@ fun smoothScrimBrush(
 fun artworkScrimBrush(
     color: Color,
     steps: Int = 24,
-): Brush = smoothScrimBrush(from = color.copy(alpha = 0f), to = color, steps = steps)
+): Brush =
+    // 渐变向纯黑收拢:浅色封面(网易歌单普遍偏亮)时底部也足够暗,白色标题/作者行保持可读
+    smoothScrimBrush(
+        from = color.copy(alpha = 0f),
+        to = lerp(color, Color.Black, 0.45f),
+        steps = steps,
+    )
 
 fun Modifier.isElementVisible(onVisibilityChanged: (Boolean) -> Unit) =
     composed {
