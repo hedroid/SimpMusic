@@ -11,7 +11,6 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -24,10 +23,6 @@ class MoodViewModel(
     private val _moodsMomentObject: MutableStateFlow<MoodsMomentObject?> = MutableStateFlow(null)
     var moodsMomentObject: StateFlow<MoodsMomentObject?> = _moodsMomentObject
     var loading = MutableStateFlow<Boolean>(false)
-
-    /** 分类页布局:网易=网格(对标网页歌单广场),YT=货架行(数据层按源判定) */
-    private val _useGridLayout = MutableStateFlow(false)
-    val useGridLayout: StateFlow<Boolean> = _useGridLayout.asStateFlow()
 
     private var regionCode: String? = null
     private var language: String? = null
@@ -42,15 +37,15 @@ class MoodViewModel(
     init {
         regionCode = runBlocking { dataStoreManager.location.first() }
         language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
-        viewModelScope.launch {
-            _useGridLayout.value = homeRepository.useMoodGridLayout()
-        }
     }
 
     fun getMood(params: String) {
         if (params == loadedParams && _moodsMomentObject.value != null) return
         loading.value = true
         viewModelScope.launch {
+//            mainRepository.getMood(params, regionCode!!, SUPPORTED_LANGUAGE.serverCodes[SUPPORTED_LANGUAGE.codes.indexOf(language!!)]).collect{ values ->
+//                _moodsMomentObject.value = values
+//            }
             homeRepository.getMoodData(params).collect { values ->
                 Logger.w("MoodViewModel", "getMood: $values")
                 when (values) {

@@ -11,7 +11,6 @@ import com.maxrave.domain.data.model.mood.Mood
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
 import com.maxrave.domain.repository.HomeRepository
-import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.Resource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -22,8 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -32,18 +29,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.all
-import simpmusic.composeapp.generated.resources.commute
-import simpmusic.composeapp.generated.resources.energize
-import simpmusic.composeapp.generated.resources.feel_good
-import simpmusic.composeapp.generated.resources.focus
 import simpmusic.composeapp.generated.resources.music_video
-import simpmusic.composeapp.generated.resources.party
-import simpmusic.composeapp.generated.resources.relax
-import simpmusic.composeapp.generated.resources.romance
-import simpmusic.composeapp.generated.resources.sad
-import simpmusic.composeapp.generated.resources.sleep
-import simpmusic.composeapp.generated.resources.workout
 import simpmusic.composeapp.generated.resources.new_release
 import simpmusic.composeapp.generated.resources.song
 import simpmusic.composeapp.generated.resources.view_count
@@ -51,58 +37,7 @@ import simpmusic.composeapp.generated.resources.view_count
 class HomeViewModel(
     private val dataStoreManager: DataStoreManager,
     private val homeRepository: HomeRepository,
-    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
-    /** 音源(复用上游 HomeScreen 的网易适配:数据层分发,UI 仅 chips/地区下拉感知源) */
-    val isNetease: StateFlow<Boolean> =
-        dataStoreManager.selectedSource
-            .map { it == com.maxrave.domain.source.MusicSource.NETEASE.name }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    /** 主页 chips(数据驱动):YT=mood 常量映射,网易=精选高质量标签;Screen 无源感知 */
-    data class HomeChip(
-        val label: String,
-        val params: String?, // null = 全部
-    )
-
-    private val _homeChips = MutableStateFlow<List<HomeChip>>(emptyList())
-    val homeChips: StateFlow<List<HomeChip>> = _homeChips.asStateFlow()
-
-    /** YT mood chips 的(资源,参数)表 —— 原上游写死列表,搬到 VM 统一成数据 */
-    private val ytChipTable =
-        listOf(
-            Res.string.all to null,
-            Res.string.relax to HOME_PARAMS_RELAX,
-            Res.string.sleep to HOME_PARAMS_SLEEP,
-            Res.string.energize to HOME_PARAMS_ENERGIZE,
-            Res.string.sad to HOME_PARAMS_SAD,
-            Res.string.romance to HOME_PARAMS_ROMANCE,
-            Res.string.feel_good to HOME_PARAMS_FEEL_GOOD,
-            Res.string.workout to HOME_PARAMS_WORKOUT,
-            Res.string.party to HOME_PARAMS_PARTY,
-            Res.string.commute to HOME_PARAMS_COMMUTE,
-            Res.string.focus to HOME_PARAMS_FOCUS,
-        )
-
-    private fun refreshChips() {
-        viewModelScope.launch {
-            _homeChips.value =
-                if (isNetease.value) {
-                    listOf(HomeChip(getString(Res.string.all), null)) +
-                        neteaseRepository.getHotChips().map { HomeChip(it, it) }
-                } else {
-                    ytChipTable.map { HomeChip(getString(it.first), it.second) }
-                }
-        }
-    }
-
-    /** 图表地区选择器是否显示(数据层按源判定:网易榜单不分地区) */
-    private val _showRegionChart = MutableStateFlow(true)
-    val showRegionChart: StateFlow<Boolean> = _showRegionChart.asStateFlow()
-
-    /** chip 点击行为:网易=跳分类网格页,YT=页内 mood 过滤(数据层按源判定) */
-    private val _chipsNavigateToTag = MutableStateFlow(false)
-    val chipsNavigateToTag: StateFlow<Boolean> = _chipsNavigateToTag.asStateFlow()
     private val _homeItemList: MutableStateFlow<List<HomeItem>> =
         MutableStateFlow(arrayListOf())
     val homeItemList: StateFlow<List<HomeItem>> = _homeItemList
@@ -185,7 +120,12 @@ class HomeViewModel(
                 launch {
                     dataStoreManager.cookie.distinctUntilChanged().collect {
                         getHomeItemList(params.value)
-                        _accountInfo.emit(homeRepository.getAccountInfo().first())
+                        _accountInfo.emit(
+                            Pair(
+                                dataStoreManager.getString("AccountName").first(),
+                                dataStoreManager.getString("AccountThumbUrl").first(),
+                            ),
+                        )
                     }
                 }
             val job4 =
@@ -208,18 +148,6 @@ class HomeViewModel(
                             }
                         }
                 }
-            // 源切换时整页重拉(懒刷新:本页可见,立即生效;两个方向都刷)
-            launch {
-                dataStoreManager.selectedSource.collectLatest {
-                    refreshChips()
-            _showRegionChart.value = homeRepository.showRegionChartSelector()
-            _chipsNavigateToTag.value = homeRepository.chipsNavigateToTagPage()
-                    _showRegionChart.value = homeRepository.showRegionChartSelector()
-                    _chipsNavigateToTag.value = homeRepository.chipsNavigateToTagPage()
-                    getHomeItemList(params.value)
-                }
-            }
-            refreshChips()
             val job6 =
                 launch {
                     homeItemList.collectLatest { list ->
@@ -252,6 +180,11 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
+
+        // TODO(NETEASE_NEXT): 音源分支 —— selectedSource == NETEASE 时本页改走
+        // NeteaseRepositoryImpl.getHome()(已产出 YTM 形状 HomeItem:每日推荐歌单/私人雷达/
+        // 排行榜/推荐新歌/精品歌单,一次性拉取、无 continuation);mood/chart/newRelease
+        // 分区对网易源隐藏。YTM 侧保持现状零改动。
         loading.value = true
         _homeListState.value = ListState.LOADING
         language =
@@ -328,7 +261,16 @@ class HomeViewModel(
                     }
                     regionCodeChart.value = dataStoreManager.chartKey.first()
                     Logger.d("HomeViewModel", "getHomeItemList: $result")
-                    _accountInfo.emit(homeRepository.getAccountInfo().first())
+                    dataStoreManager.cookie.first().let {
+                        if (it != "") {
+                            _accountInfo.emit(
+                                Pair(
+                                    dataStoreManager.getString("AccountName").first(),
+                                    dataStoreManager.getString("AccountThumbUrl").first(),
+                                ),
+                            )
+                        }
+                    }
                     when {
                         home is Resource.Error -> home.message
                         exploreMoodItem is Resource.Error -> exploreMoodItem.message

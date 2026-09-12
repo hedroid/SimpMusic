@@ -196,6 +196,21 @@ import simpmusic.composeapp.generated.resources.workout
 
 // DataStore key for blog-promo one-shot dialog. Bump the suffix (v2, v3, …) to re-promote.
 
+private val listOfHomeChip =
+    listOf(
+        Res.string.all,
+        Res.string.relax,
+        Res.string.sleep,
+        Res.string.energize,
+        Res.string.sad,
+        Res.string.romance,
+        Res.string.feel_good,
+        Res.string.workout,
+        Res.string.party,
+        Res.string.commute,
+        Res.string.focus,
+    )
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @ExperimentalFoundationApi
 @Composable
@@ -211,7 +226,6 @@ fun HomeScreen(
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
-    val homeChips by viewModel.homeChips.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
     val chart by viewModel.chart.collectAsStateWithLifecycle()
@@ -324,8 +338,7 @@ fun HomeScreen(
         }
     }
     LaunchedEffect(key1 = homeData, key2 = accountInfo) {
-        // 账户信息晚于 homeData 到达也要重算;账户未登录(null)时允许通过,
-        // 渲染处的 accountInfo != null 条件负责不显示 —— 修复网易态账户卡永不出现
+        // 账户信息晚于 feed 到达也要重算(时序修复)
         accountShow = accountInfo?.first?.let { name -> homeData.none { it.subtitle == name } } ?: true
     }
     LaunchedEffect(openAppTime) {
@@ -632,9 +645,6 @@ fun HomeScreen(
                                 }
                             }
                             item {
-                                // 图表区块:无数据时整体隐藏(网易榜单拉取失败不残留空标题);
-                                // 加载中仍显示标题+转圈,保持 YT 态的加载观感
-                                if (chart != null || chartLoading) {
                                 Column(
                                     Modifier
                                         .padding(vertical = 10.dp)
@@ -643,8 +653,7 @@ fun HomeScreen(
                                 ) {
                                     ChartTitle()
                                     Spacer(modifier = Modifier.height(5.dp))
-                                    val showRegionChart by viewModel.showRegionChart.collectAsStateWithLifecycle()
-                                    Crossfade(targetState = if (showRegionChart) regionChart else null) {
+                                    Crossfade(targetState = regionChart) {
                                         Logger.w("HomeScreen", "regionChart: $it")
                                         if (it != null) {
                                             DropdownButton(
@@ -686,7 +695,6 @@ fun HomeScreen(
                                             )
                                         }
                                     }
-                                }
                                 }
                             }
                         }
@@ -760,18 +768,38 @@ fun HomeScreen(
                             .background(Color.Transparent),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // chips 数据驱动(VM 按源给出):YT=mood 页内过滤,网易=跳分类网格页
-                    val chipsNavigateToTag by viewModel.chipsNavigateToTag.collectAsStateWithLifecycle()
-                    homeChips.forEach { chip ->
+                    listOfHomeChip.forEach { id ->
+                        val isSelected =
+                            when (params) {
+                                HOME_PARAMS_RELAX -> id == Res.string.relax
+                                HOME_PARAMS_SLEEP -> id == Res.string.sleep
+                                HOME_PARAMS_ENERGIZE -> id == Res.string.energize
+                                HOME_PARAMS_SAD -> id == Res.string.sad
+                                HOME_PARAMS_ROMANCE -> id == Res.string.romance
+                                HOME_PARAMS_FEEL_GOOD -> id == Res.string.feel_good
+                                HOME_PARAMS_WORKOUT -> id == Res.string.workout
+                                HOME_PARAMS_PARTY -> id == Res.string.party
+                                HOME_PARAMS_COMMUTE -> id == Res.string.commute
+                                HOME_PARAMS_FOCUS -> id == Res.string.focus
+                                else -> id == Res.string.all
+                            }
                         Chip(
                             isAnimated = loading,
-                            isSelected = params == chip.params,
-                            text = chip.label,
+                            isSelected = isSelected,
+                            text = stringResource(id),
                         ) {
-                            if (chipsNavigateToTag && chip.params != null) {
-                                navController.navigate(MoodDestination(params = chip.params))
-                            } else {
-                                viewModel.setParams(chip.params)
+                            when (id) {
+                                Res.string.all -> viewModel.setParams(null)
+                                Res.string.relax -> viewModel.setParams(HOME_PARAMS_RELAX)
+                                Res.string.sleep -> viewModel.setParams(HOME_PARAMS_SLEEP)
+                                Res.string.energize -> viewModel.setParams(HOME_PARAMS_ENERGIZE)
+                                Res.string.sad -> viewModel.setParams(HOME_PARAMS_SAD)
+                                Res.string.romance -> viewModel.setParams(HOME_PARAMS_ROMANCE)
+                                Res.string.feel_good -> viewModel.setParams(HOME_PARAMS_FEEL_GOOD)
+                                Res.string.workout -> viewModel.setParams(HOME_PARAMS_WORKOUT)
+                                Res.string.party -> viewModel.setParams(HOME_PARAMS_PARTY)
+                                Res.string.commute -> viewModel.setParams(HOME_PARAMS_COMMUTE)
+                                Res.string.focus -> viewModel.setParams(HOME_PARAMS_FOCUS)
                             }
                         }
                     }
@@ -1104,24 +1132,23 @@ fun ChartData(
                 }
             }
         }
-        // 热门艺人:无艺人数据时整个隐藏(网易榜单无此区块)
         if (chart.artists.itemArtists.isNotEmpty()) {
-            Text(
-                text = stringResource(Res.string.top_artists),
-                style = typo().headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-            )
-            LazyHorizontalGrid(
-                rows = GridCells.Fixed(3),
-                modifier = Modifier.height(240.dp),
-                state = lazyListState2,
-                flingBehavior = snapperFlingBehavior2,
-            ) {
+        Text(
+            text = stringResource(Res.string.top_artists),
+            style = typo().headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+        )
+        LazyHorizontalGrid(
+            rows = GridCells.Fixed(3),
+            modifier = Modifier.height(240.dp),
+            state = lazyListState2,
+            flingBehavior = snapperFlingBehavior2,
+        ) {
             items(chart.artists.itemArtists.size, key = { index ->
                 val item = chart.artists.itemArtists[index]
                 item.title + item.browseId + index
@@ -1139,7 +1166,7 @@ fun ChartData(
                     widthDp = gridWidthDp,
                 )
             }
-            }
+        }
         }
     }
 }
