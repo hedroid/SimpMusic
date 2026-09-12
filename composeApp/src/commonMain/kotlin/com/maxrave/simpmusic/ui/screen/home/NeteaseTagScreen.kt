@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -114,7 +115,8 @@ fun NeteaseTagScreen(
                                 )
                             }
                         }
-                        item { EndOfPage() }
+                        // copyright 页脚:跨满整行(普通 item 只占一格宽,格式就不对了)
+                        item(span = { GridItemSpan(maxLineSpan) }) { EndOfPage() }
                     }
             }
         }
