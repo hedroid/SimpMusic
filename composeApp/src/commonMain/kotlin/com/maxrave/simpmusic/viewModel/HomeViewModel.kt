@@ -99,6 +99,10 @@ class HomeViewModel(
     /** 图表地区选择器是否显示(数据层按源判定:网易榜单不分地区) */
     private val _showRegionChart = MutableStateFlow(true)
     val showRegionChart: StateFlow<Boolean> = _showRegionChart.asStateFlow()
+
+    /** chip 点击行为:网易=跳分类网格页,YT=页内 mood 过滤(数据层按源判定) */
+    private val _chipsNavigateToTag = MutableStateFlow(false)
+    val chipsNavigateToTag: StateFlow<Boolean> = _chipsNavigateToTag.asStateFlow()
     private val _homeItemList: MutableStateFlow<List<HomeItem>> =
         MutableStateFlow(arrayListOf())
     val homeItemList: StateFlow<List<HomeItem>> = _homeItemList
@@ -208,7 +212,10 @@ class HomeViewModel(
             launch {
                 dataStoreManager.selectedSource.collectLatest {
                     refreshChips()
+            _showRegionChart.value = homeRepository.showRegionChartSelector()
+            _chipsNavigateToTag.value = homeRepository.chipsNavigateToTagPage()
                     _showRegionChart.value = homeRepository.showRegionChartSelector()
+                    _chipsNavigateToTag.value = homeRepository.chipsNavigateToTagPage()
                     getHomeItemList(params.value)
                 }
             }

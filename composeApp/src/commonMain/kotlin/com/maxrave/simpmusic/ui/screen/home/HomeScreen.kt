@@ -760,13 +760,20 @@ fun HomeScreen(
                             .background(Color.Transparent),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // chips 数据驱动(VM 按源给出):YT=mood,网易=精选标签;选中即 setParams
+                    // chips 数据驱动(VM 按源给出):YT=mood 页内过滤,网易=跳分类网格页
+                    val chipsNavigateToTag by viewModel.chipsNavigateToTag.collectAsStateWithLifecycle()
                     homeChips.forEach { chip ->
                         Chip(
                             isAnimated = loading,
                             isSelected = params == chip.params,
                             text = chip.label,
-                        ) { viewModel.setParams(chip.params) }
+                        ) {
+                            if (chipsNavigateToTag && chip.params != null) {
+                                navController.navigate(MoodDestination(params = chip.params))
+                            } else {
+                                viewModel.setParams(chip.params)
+                            }
+                        }
                     }
                 }
             }
