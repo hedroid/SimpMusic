@@ -28,6 +28,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +72,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.all
+import simpmusic.composeapp.generated.resources.let_s_pick_a_playlist_for_you
 import simpmusic.composeapp.generated.resources.netease_home_error
 import simpmusic.composeapp.generated.resources.retry
 
@@ -228,32 +235,13 @@ fun NeteaseHomeScreen(
                                     }
                                 }
                             }
-                            // 五组分类区块
-                            ready.sections?.sections?.forEach { section ->
-                                item(key = "section_${section.title}") {
-                                    Column(Modifier.padding(horizontal = 15.dp)) {
-                                        Text(
-                                            text = section.title,
-                                            style = typo().headlineMedium,
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                        )
-                                        LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.padding(top = 8.dp),
-                                        ) {
-                                            items(section.items, key = { it.title }) { tag ->
-                                                MoodMomentAndGenreHomeItem(
-                                                    title = tag.title,
-                                                    stripeColor = tag.stripeColor,
-                                                    onClick = {
-                                                        navController.navigate(
-                                                            NeteaseTagDestination(tag = tag.title),
-                                                        )
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    }
+                            // 五组分类区块:YT 同款 —— 每组 3 行横向网格(210dp),卡片带色条
+                            ready.sections?.let { mood ->
+                                item(key = "sections") {
+                                    NeteaseCategorySections(
+                                        sections = mood.sections,
+                                        navController = navController,
+                                    )
                                 }
                             }
                             item(key = "end") { EndOfPage() }
@@ -361,6 +349,54 @@ private fun NeteaseHomeRow(
                         },
                         data = content,
                     )
+                }
+            }
+        }
+    }
+}
+
+
+/** 分类区块:布局逐项对照上游 MoodMomentAndGenre(副标题+组标题+3 行横向网格),仅导航目标不同 */
+@Composable
+private fun NeteaseCategorySections(
+    sections: List<com.maxrave.domain.data.model.mood.MoodSection>,
+    navController: NavController,
+) {
+    Column(
+        Modifier
+            .padding(horizontal = 15.dp)
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = stringResource(Res.string.let_s_pick_a_playlist_for_you),
+            style = typo().bodyMedium,
+        )
+        sections.forEach { section ->
+            val gridState = rememberLazyGridState()
+            val flingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = gridState))
+            Text(
+                text = section.title,
+                style = typo().headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 5.dp),
+            )
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(210.dp),
+                state = gridState,
+                flingBehavior = flingBehavior,
+            ) {
+                items(section.items, key = { it.params }) { tag ->
+                    MoodMomentAndGenreHomeItem(
+                        title = tag.title,
+                        stripeColor = tag.stripeColor,
+                    ) {
+                        navController.navigate(NeteaseTagDestination(tag = tag.title))
+                    }
                 }
             }
         }
