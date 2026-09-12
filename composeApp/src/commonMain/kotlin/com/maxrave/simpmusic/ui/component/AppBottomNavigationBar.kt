@@ -18,13 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalHapticFeedback
 import com.maxrave.domain.source.MusicSource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -32,10 +27,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.simpmusic.extension.greyScale
-import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
-import com.maxrave.simpmusic.ui.icon.YouTubeMusic
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestination
@@ -68,7 +60,6 @@ fun AppBottomNavigationBar(
 ) {
     // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
     var showSourceMenu by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
     // Library here while keeping the ordinal they were declared with, so that the numbering stays
@@ -227,47 +218,10 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .pointerInput(Unit) {
-                        // 通用长按:按住超过系统长按时长 → 震动 + 弹出音源菜单;短按进搜索。
-                        // 超时基于绝对 deadline —— 按住不动(无事件流)也能按时触发。
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            val start = down.position
-                            var longPressed = false
-                            var moved = false
-                            var lastEventUptime = down.uptimeMillis
-                            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
-                            val moveTolerance = viewConfiguration.touchSlop * 3
-                            while (true) {
-                                val remaining =
-                                    if (longPressed) {
-                                        60_000L
-                                    } else {
-                                        (longPressTimeout - (lastEventUptime - down.uptimeMillis)).coerceAtLeast(16L)
-                                    }
-                                val event = withTimeoutOrNull(remaining) { awaitPointerEvent() }
-                                if (event == null) {
-                                    if (!longPressed && !moved) {
-                                        longPressed = true
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        showSourceMenu = true
-                                    }
-                                    continue
-                                }
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                lastEventUptime = change.uptimeMillis
-                                if (!change.pressed) {
-                                    if (!longPressed && !moved) {
-                                        selectTab(BottomNavScreen.Search)
-                                    }
-                                    break
-                                }
-                                if (!longPressed && (change.position - start).getDistance() > moveTolerance) {
-                                    moved = true
-                                }
-                            }
-                        }
-                    },
+                    .sourceSwitchGesture(
+                        onLongPress = { showSourceMenu = true },
+                        onTap = { selectTab(BottomNavScreen.Search) },
+                    ),
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(
@@ -283,34 +237,13 @@ fun AppBottomNavigationBar(
 
             // 音源菜单:锚定在搜索按钮上,标准 Material DropdownMenu —— 材质/配色随主题,
             // 按钮在屏幕底部,菜单自动翻到按钮上方弹出。
-            DropdownMenu(
+            SourceSwitchMenu(
                 expanded = showSourceMenu,
-                onDismissRequest = { showSourceMenu = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text("YouTube Music") },
-                    leadingIcon = { Icon(SimpIcons.YouTubeMusic, null, modifier = Modifier.size(24.dp)) },
-                    trailingIcon = {
-                        if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
-                    },
-                    onClick = {
-                        onSourceSelected(MusicSource.YOUTUBE_MUSIC)
-                        showSourceMenu = false
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.netease)) },
-                    leadingIcon = { Icon(SimpIcons.NeteaseCloudMusic, null, modifier = Modifier.size(24.dp)) },
-                    trailingIcon = {
-                        if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
-                    },
-                    enabled = neteaseLoggedIn,
-                    onClick = {
-                        onSourceSelected(MusicSource.NETEASE)
-                        showSourceMenu = false
-                    },
-                )
-            }
+                onDismiss = { showSourceMenu = false },
+                selectedSource = selectedSource,
+                neteaseLoggedIn = neteaseLoggedIn,
+                onSourceSelected = onSourceSelected,
+            )
         }
     }
     }

@@ -514,9 +514,13 @@ fun App(
                                     isScrolledToTop = isScrolledToTop,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                ) { klass ->
-                                    viewModel.reloadDestination(klass)
-                                }
+                                    selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                    neteaseLoggedIn = neteaseLoggedInValue,
+                                    onSourceSelected = { viewModel.setSelectedSource(it) },
+                                    reloadDestinationIfNeeded = { klass ->
+                                        viewModel.reloadDestination(klass)
+                                    },
+                                )
                             } else {
                                 AppBottomNavigationBar(
                                     navController = navController,

@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlin.reflect.KClass
@@ -16,6 +17,9 @@ actual fun LiquidGlassAppBottomNavigationBar(
     showAnalyticsTab: Boolean,
     showMixForYouTab: Boolean,
     onOpenNowPlaying: () -> Unit,
-    reloadDestinationIfNeeded: (KClass<*>) -> Unit
+    reloadDestinationIfNeeded: (KClass<*>) -> Unit,
+    selectedSource: MusicSource,
+    neteaseLoggedIn: Boolean,
+    onSourceSelected: (MusicSource) -> Unit,
 ) {
 }

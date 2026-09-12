@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.ui.component
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavController
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.ui.icon.AutoGraph
 import com.maxrave.simpmusic.ui.icon.Home
@@ -36,6 +37,9 @@ expect fun LiquidGlassAppBottomNavigationBar(
     showMixForYouTab: Boolean = false,
     onOpenNowPlaying: () -> Unit = {},
     reloadDestinationIfNeeded: (KClass<*>) -> Unit = { _ -> },
+    selectedSource: MusicSource = MusicSource.YOUTUBE_MUSIC,
+    neteaseLoggedIn: Boolean = false,
+    onSourceSelected: (MusicSource) -> Unit = { _ -> },
 )
 
 sealed class BottomNavScreen(
