@@ -13,16 +13,21 @@ import com.maxrave.domain.data.type.SearchResultType
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.repository.SearchRepository
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.toQueryList
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
+import com.maxrave.netease.model.NeteaseHotWord
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -92,6 +97,7 @@ class SearchViewModel(
     private val dataStoreManager: DataStoreManager,
     private val searchRepository: SearchRepository,
     private val homeRepository: HomeRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
     private val _searchScreenUIState = MutableStateFlow<SearchScreenUIState>(SearchScreenUIState.Empty)
     val searchScreenUIState: StateFlow<SearchScreenUIState> get() = _searchScreenUIState.asStateFlow()
@@ -112,6 +118,10 @@ class SearchViewModel(
 
     private val requestedArtwork = mutableSetOf<String>()
 
+    /** 网易热搜词(搜索空态页;YT 源恒空) */
+    private val _hotSearch: MutableStateFlow<List<NeteaseHotWord>> = MutableStateFlow(emptyList())
+    val hotSearch: StateFlow<List<NeteaseHotWord>> get() = _hotSearch.asStateFlow()
+
     var regionCode: String? = null
     var language: String? = null
 
@@ -120,6 +130,28 @@ class SearchViewModel(
         language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
         getSearchHistory()
         getMoodAndGenres()
+        loadHotSearch()
+        // 本 VM 是 Koin single,换源后空态数据必须重取(drop(1) 跳过首发射,
+        // 避免与上面的 init 拉取重复):mood 置 null 触发重拉,热搜按新源重载
+        viewModelScope.launch {
+            dataStoreManager.selectedSource.drop(1).distinctUntilChanged().collect {
+                _moodAndGenres.value = null
+                requestedArtwork.clear()
+                _moodArtwork.value = emptyMap()
+                getMoodAndGenres()
+                loadHotSearch()
+            }
+        }
+    }
+
+    private fun loadHotSearch() {
+        viewModelScope.launch {
+            if (dataStoreManager.selectedSource.first() != MusicSource.NETEASE.name) {
+                _hotSearch.value = emptyList()
+                return@launch
+            }
+            neteaseRepository.searchHotWords().onSuccess { _hotSearch.value = it }
+        }
     }
 
     /**

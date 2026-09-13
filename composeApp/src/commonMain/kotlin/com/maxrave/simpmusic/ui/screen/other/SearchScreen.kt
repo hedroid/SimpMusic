@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -97,6 +99,7 @@ import com.maxrave.domain.data.model.searchResult.videos.VideosResult
 import com.maxrave.domain.data.type.SearchResultType
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
@@ -125,6 +128,7 @@ import com.maxrave.simpmusic.ui.icon.History
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.MoodDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.NeteaseTagDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
@@ -152,6 +156,8 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.clear_search_history
 import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.everything_you_need
+import simpmusic.composeapp.generated.resources.artist_page_coming_soon
+import simpmusic.composeapp.generated.resources.hot_search
 import simpmusic.composeapp.generated.resources.in_search
 import simpmusic.composeapp.generated.resources.no_results_found
 import simpmusic.composeapp.generated.resources.playlists
@@ -163,7 +169,7 @@ import simpmusic.composeapp.generated.resources.song
 import simpmusic.composeapp.generated.resources.videos
 import simpmusic.composeapp.generated.resources.what_do_you_want_to_listen_to
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     searchViewModel: SearchViewModel = koinInject(),
@@ -176,6 +182,17 @@ fun SearchScreen(
     val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
     val moodAndGenres by searchViewModel.moodAndGenres.collectAsStateWithLifecycle()
     val moodArtwork by searchViewModel.moodArtwork.collectAsStateWithLifecycle()
+    val hotSearch by searchViewModel.hotSearch.collectAsStateWithLifecycle()
+    val selectedSource by sharedViewModel.selectedSource.collectAsStateWithLifecycle()
+    val isNeteaseSource = selectedSource == MusicSource.NETEASE.name
+
+    // 网易源下只保留有对应能力的 tab;若停在已隐藏的 tab(换源后 VM single 保留旧状态)回落 ALL
+    val visibleSearchTabs = if (isNeteaseSource) NETEASE_SEARCH_TABS else SearchType.entries
+    LaunchedEffect(isNeteaseSource) {
+        if (isNeteaseSource && searchScreenState.searchType !in NETEASE_SEARCH_TABS) {
+            searchViewModel.setSearchType(SearchType.ALL)
+        }
+    }
 
     var searchUIType by rememberSaveable { mutableStateOf(SearchUIType.EMPTY) }
     var searchText by rememberSaveable { mutableStateOf("") }
@@ -228,15 +245,24 @@ fun SearchScreen(
 
     // Animated Placeholder
     val placeholderTexts =
-        remember {
-            listOf(
-                "$searchForString $songString...",
-                "$searchForString $artistString...",
-                "$searchForString $albumString...",
-                "$searchForString $playlistString...",
-                "$searchForString $videoString...",
-                "$searchForString $podcastString...",
-            )
+        remember(isNeteaseSource) {
+            if (isNeteaseSource) {
+                // 网易源无视频/播客/专辑搜索(tab 已隐藏),占位词同步收敛
+                listOf(
+                    "$searchForString $songString...",
+                    "$searchForString $artistString...",
+                    "$searchForString $playlistString...",
+                )
+            } else {
+                listOf(
+                    "$searchForString $songString...",
+                    "$searchForString $artistString...",
+                    "$searchForString $albumString...",
+                    "$searchForString $playlistString...",
+                    "$searchForString $videoString...",
+                    "$searchForString $podcastString...",
+                )
+            }
         }
 
     var currentPlaceholderIndex by remember { mutableIntStateOf(0) }
@@ -267,6 +293,24 @@ fun SearchScreen(
     val onMoreClick: (SongEntity) -> Unit = { song ->
         sheetSong = song
         showBottomSheet = true
+    }
+
+    /** 按当前 tab 提交一次搜索(热搜词/建议词点击入口共用) */
+    val submitSearch: (String) -> Unit = { query ->
+        searchText = query
+        focusManager.clearFocus()
+        isSearchSubmitted = true
+        searchViewModel.insertSearchHistory(query)
+        when (searchScreenState.searchType) {
+            SearchType.ALL -> searchViewModel.searchAll(query)
+            SearchType.SONGS -> searchViewModel.searchSongs(query)
+            SearchType.VIDEOS -> searchViewModel.searchVideos(query)
+            SearchType.ALBUMS -> searchViewModel.searchAlbums(query)
+            SearchType.ARTISTS -> searchViewModel.searchArtists(query)
+            SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(query)
+            SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(query)
+            SearchType.PODCASTS -> searchViewModel.searchPodcast(query)
+        }
     }
 
     LaunchedEffect(searchText) {
@@ -399,9 +443,16 @@ fun SearchScreen(
                                         }
 
                                         is ArtistsResult -> {
-                                            navController.navigate(
-                                                ArtistDestination(item.browseId),
-                                            )
+                                            if (isNeteaseSource) {
+                                                // M6 艺人页未通:先提示,页面就绪后换成 ArtistDestination
+                                                searchViewModel.makeToast(
+                                                    getStringBlocking(Res.string.artist_page_coming_soon),
+                                                )
+                                            } else {
+                                                navController.navigate(
+                                                    ArtistDestination(item.browseId),
+                                                )
+                                            }
                                         }
 
                                         is AlbumsResult -> {
@@ -620,6 +671,36 @@ fun SearchScreen(
                                     )
                                 }
                             }
+                            // 网易源空态特有:热搜词榜(点词即搜),置顶在分类网格前
+                            if (isNeteaseSource && hotSearch.isNotEmpty()) {
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Column(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 12.dp),
+                                    ) {
+                                        Text(
+                                            text = stringResource(Res.string.hot_search),
+                                            style = typo().titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            hotSearch.take(10).forEachIndexed { index, hot ->
+                                                Chip(
+                                                    text = "${index + 1}  ${hot.word}",
+                                                    onClick = { submitSearch(hot.word) },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             mood.sections.forEachIndexed { index, section ->
                                 // First section runs straight on from the header block above it,
                                 // so its own heading would just be a second title in a row.
@@ -650,7 +731,13 @@ fun SearchScreen(
                                         title = item.title,
                                         artworkUrl = moodArtwork[item.params],
                                     ) {
-                                        navController.navigate(MoodDestination(item.params))
+                                        if (isNeteaseSource) {
+                                            // 分类卡点击与主页同源同页:进 NeteaseTagScreen(两列网格),
+                                            // 不走 YT 的 MoodScreen
+                                            navController.navigate(NeteaseTagDestination(item.params))
+                                        } else {
+                                            navController.navigate(MoodDestination(item.params))
+                                        }
                                     }
                                 }
                             }
@@ -842,18 +929,25 @@ fun SearchScreen(
                                                                     )
                                                                 }
 
-                                                                is ArtistsResult -> {
-                                                                    ArtistFullWidthItems(
-                                                                        data = result,
-                                                                        onClickListener = {
-                                                                            navController.navigate(
-                                                                                ArtistDestination(
-                                                                                    result.browseId,
-                                                                                ),
-                                                                            )
-                                                                        },
-                                                                    )
-                                                                }
+                                                is ArtistsResult -> {
+                                                    ArtistFullWidthItems(
+                                                        data = result,
+                                                        onClickListener = {
+                                                            if (isNeteaseSource) {
+                                                                // M6 艺人页未通:先提示,页面就绪后换成 ArtistDestination
+                                                                searchViewModel.makeToast(
+                                                                    getStringBlocking(Res.string.artist_page_coming_soon),
+                                                                )
+                                                            } else {
+                                                                navController.navigate(
+                                                                    ArtistDestination(
+                                                                        result.browseId,
+                                                                    ),
+                                                                )
+                                                            }
+                                                        },
+                                                    )
+                                                }
 
                                                                 is PlaylistsResult -> {
                                                                     PlaylistFullWidthItems(
@@ -1046,7 +1140,8 @@ fun SearchScreen(
                             label = "placeholder_animation",
                         ) { index ->
                             Text(
-                                text = placeholderTexts[index],
+                                // 取模兜底:换源后列表 6→3,rememberSaveable 的 index 可能短暂越界
+                                text = placeholderTexts[index % placeholderTexts.size],
                                 style = typo().labelMedium,
                             )
                         }
@@ -1101,7 +1196,7 @@ fun SearchScreen(
                                 .padding(top = 10.dp)
                                 .padding(horizontal = 12.dp),
                     ) {
-                        SearchType.entries.forEach { id ->
+                        visibleSearchTabs.forEach { id ->
                             val isSelected = id == searchScreenState.searchType
                             Spacer(modifier = Modifier.width(4.dp))
                             Chip(
@@ -1259,3 +1354,12 @@ enum class SearchUIType {
     SEARCH_SUGGESTIONS,
     SEARCH_RESULTS,
 }
+
+/** 网易源下可见的搜索 tab:其余类型(视频/专辑/精选/播客)无对应能力或点击链路未通 */
+private val NETEASE_SEARCH_TABS =
+    listOf(
+        SearchType.ALL,
+        SearchType.SONGS,
+        SearchType.ARTISTS,
+        SearchType.PLAYLISTS,
+    )

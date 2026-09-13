@@ -73,6 +73,10 @@
     <string name="option">选项</string>
     <string name="no_description">无描述</string>
     <string name="in_search">在搜索</string>
+    <string name="artist_page_coming_soon">艺人页即将支持</string>
+    <string name="hot_search">热搜</string>
+    <string name="sort_hot">热门</string>
+    <string name="sort_highquality">精品</string>
     <string name="clear_player_cache">清除播放器缓存</string>
     <string name="cancel">取消</string>
     <string name="clear">清除</string>

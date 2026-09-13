@@ -73,6 +73,10 @@
     <string name="option">Option</string>
     <string name="no_description">No description</string>
     <string name="in_search">in Search</string>
+    <string name="artist_page_coming_soon">Artist page is coming soon</string>
+    <string name="hot_search">Hot search</string>
+    <string name="sort_hot">Hot</string>
+    <string name="sort_highquality">High quality</string>
     <string name="clear_player_cache">Clear Player Cache</string>
     <string name="cancel">Cancel</string>
     <string name="clear">Clear</string>
