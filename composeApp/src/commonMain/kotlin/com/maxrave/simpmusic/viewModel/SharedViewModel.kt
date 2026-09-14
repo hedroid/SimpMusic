@@ -242,9 +242,6 @@ class SharedViewModel(
         )
     val nowPlayingScreenData: StateFlow<NowPlayingScreenData> = _nowPlayingScreenData
 
-    private var _likeStatus = MutableStateFlow<Boolean>(false)
-    val likeStatus: StateFlow<Boolean> = _likeStatus
-
     /**
      * Which body of the Apple Music player was open last — held by ENUM NAME so this class stays
      * ignorant of the UI enum, which is internal to the player package.
@@ -445,10 +442,8 @@ class SharedViewModel(
                                     neteaseSongData = null,
                                 )
                             }
-                            getNeteaseLikedStatus(now.mediaId)
                         } else {
                             _nowPlayingScreenData.update { it.copy(neteaseSongData = null) }
-                            getLikeStatus(now.mediaId)
                             getSongInfo(now.mediaId)
                         }
                         getFormat(now.mediaId)
@@ -645,27 +640,6 @@ class SharedViewModel(
         }
     }
 
-    private fun getLikeStatus(videoId: String?) {
-        viewModelScope.launch {
-            if (videoId != null) {
-                _likeStatus.value = false
-                songRepository.getLikeStatus(videoId).collectLatest { status ->
-                    _likeStatus.value = status
-                }
-            }
-        }
-    }
-
-    /** 云村红心状态:复用 likeStatus 字段(网易歌下 YT 点赞按钮已被云心按钮替换,语义随源切换) */
-    private fun getNeteaseLikedStatus(mediaId: String) {
-        _likeStatus.value = false
-        viewModelScope.launch {
-            neteaseRepository.isSongLiked(mediaId)?.let { liked ->
-                _likeStatus.value = liked
-            }
-        }
-    }
-
     /** 网易歌详情卡:艺人(头像/粉丝)+专辑(发行/简介)+评论(总数/热评),各路独立降级 */
     private var neteaseSongInfoJob: Job? = null
 
@@ -684,22 +658,6 @@ class SharedViewModel(
                     _nowPlayingScreenData.update { it.copy(neteaseSongData = meta) }
                 }
             }
-    }
-
-    /** 云心按钮:乐观翻转,服务端拒绝再回滚 */
-    fun toggleNeteaseLiked() {
-        viewModelScope.launch {
-            val mediaId = mediaPlayerHandler.nowPlaying.first()?.mediaId ?: return@launch
-            if (mediaId.toLongOrNull() == null) return@launch
-            val target = !_likeStatus.value
-            _likeStatus.value = target
-            neteaseRepository
-                .setSongLiked(mediaId, target)
-                .onFailure {
-                    _likeStatus.value = !target
-                    makeToast(getString(Res.string.error_occurred))
-                }
-        }
     }
 
     private fun getCanvas(
@@ -2013,39 +1971,6 @@ class SharedViewModel(
         }
     }
 
-    fun addToYouTubeLiked() {
-        viewModelScope.launch {
-            val videoId = mediaPlayerHandler.nowPlaying.first()?.mediaId
-            if (videoId != null) {
-                val like = likeStatus.value
-                if (!like) {
-                    songRepository
-                        .addToYouTubeLiked(
-                            mediaPlayerHandler.nowPlaying.first()?.mediaId,
-                        ).collect { response ->
-                            if (response == 200) {
-                                makeToast(getString(Res.string.added_to_youtube_liked))
-                                getLikeStatus(videoId)
-                            } else {
-                                makeToast(getString(Res.string.error))
-                            }
-                        }
-                } else {
-                    songRepository
-                        .removeFromYouTubeLiked(
-                            mediaPlayerHandler.nowPlaying.first()?.mediaId,
-                        ).collect {
-                            if (it == 200) {
-                                makeToast(getString(Res.string.removed_from_youtube_liked))
-                                getLikeStatus(videoId)
-                            } else {
-                                makeToast(getString(Res.string.error))
-                            }
-                        }
-                }
-            }
-        }
-    }
 
     fun getTranslucentBottomBar() = dataStoreManager.translucentBottomBar
 
@@ -2304,7 +2229,6 @@ class SharedViewModel(
     // instead of calling runBlocking inside composition (used by NowPlayingScreenContent).
     fun isUserLoggedInFlow(): Flow<Boolean> = dataStoreManager.cookie.map { it.isNotEmpty() }
 
-    fun isCombineFavoriteAndYTLiked(): Boolean = runBlocking { dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE }
 }
 
 sealed class UIEvent {

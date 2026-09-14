@@ -2042,74 +2042,8 @@ private fun NowPlayingTrackInfoRow(
                 }
             }
         }
-        // 云端喜欢按钮按歌的源分流:网易歌=云村红心,但红心同步开着时本地红心已自动
-        // 跟进云端,按钮只在同步关闭时作为手动云端通道出现;YT 歌=加入 YT 已喜欢
-        if (state.isNeteaseSong && state.isNeteaseLoggedIn && !state.neteaseLikeSync) {
-            Spacer(modifier = Modifier.size(16.dp))
-            Crossfade(
-                targetState = state.likeStatus,
-            ) {
-                IconButton(
-                    modifier =
-                        Modifier
-                            .size(24.dp)
-                            .aspectRatio(1f)
-                            .clip(
-                                CircleShape,
-                            ),
-                    onClick = {
-                        actions.onToggleNeteaseLiked()
-                    },
-                ) {
-                    Icon(
-                        imageVector = if (it) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
-                        tint = Color.White,
-                        contentDescription = "",
-                    )
-                }
-            }
-        } else if (!state.isNeteaseSong && state.isUserLoggedIn) {
-            Spacer(modifier = Modifier.size(16.dp))
-            Crossfade(
-                targetState = state.likeStatus,
-            ) {
-                if (it) {
-                    IconButton(
-                        modifier =
-                            Modifier
-                                .size(24.dp)
-                                .aspectRatio(1f)
-                                .clip(
-                                    CircleShape,
-                                ),
-                        onClick = {
-                            actions.onAddToYouTubeLiked()
-                        },
-                    ) {
-                        Icon(imageVector = SimpIcons.CheckCircle, tint = Color.White, contentDescription = "")
-                    }
-                } else {
-                    IconButton(
-                        modifier =
-                            Modifier
-                                .size(24.dp)
-                                .aspectRatio(1f)
-                                .clip(
-                                    CircleShape,
-                                ),
-                        onClick = {
-                            actions.onAddToYouTubeLiked()
-                        },
-                    ) {
-                        Icon(
-                            imageVector = SimpIcons.AddCircleOutline,
-                            tint = Color.White,
-                            contentDescription = "",
-                        )
-                    }
-                }
-            }
-        }
+        // 单一红心:云端跟进由同步开关在 updateLikeStatus 里承接(YT=合并喜欢开关,
+        // 网易=红心同步开关),播放页不再放第二个云端喜欢按钮
         Spacer(modifier = Modifier.size(12.dp))
         HeartCheckBox(checked = state.controllerState.isLiked, size = 32) {
             actions.onUIEvent(UIEvent.ToggleLike)

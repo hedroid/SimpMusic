@@ -145,7 +145,6 @@ fun NowPlayingScreenContent(
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
-    val likeStatus by sharedViewModel.likeStatus.collectAsStateWithLifecycle()
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
     // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
@@ -156,8 +155,6 @@ fun NowPlayingScreenContent(
     val isUserLoggedIn by sharedViewModel
         .isUserLoggedInFlow()
         .collectAsStateWithLifecycle(initialValue = false)
-    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
-    val neteaseLikeSync by sharedViewModel.neteaseLikeSync.collectAsStateWithLifecycle()
 
     // Which Now Playing style renders the content layer (Settings → Now Playing style).
     val nowPlayingStyle by sharedViewModel
@@ -650,7 +647,6 @@ fun NowPlayingScreenContent(
             controllerState = controllerState,
             timelineState = timelineState,
             timelineFlow = sharedViewModel.timeline,
-            likeStatus = likeStatus,
             castState = castState,
             shouldShowVideo = shouldShowVideo,
             isUserLoggedIn = isUserLoggedIn,
@@ -677,10 +673,6 @@ fun NowPlayingScreenContent(
             // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for
             // the codec therefore never matched anything and the badge never rendered, on any track.
             audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
-            // 网易歌:云端喜欢按钮换成云村红心(见 NowPlayingContentState.isNeteaseSong 注释)
-            isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
-            isNeteaseLoggedIn = neteaseLoggedIn,
-            neteaseLikeSync = neteaseLikeSync,
         )
     val actions =
         NowPlayingContentActions(
@@ -722,8 +714,6 @@ fun NowPlayingScreenContent(
                     )
                 }
             },
-            onAddToYouTubeLiked = { sharedViewModel.addToYouTubeLiked() },
-            onToggleNeteaseLiked = { sharedViewModel.toggleNeteaseLiked() },
             onShowMoreSheet = { showSheet = true },
             onShowQueue = { showQueueBottomSheet = true },
             onShowInfo = { showInfoBottomSheet = true },

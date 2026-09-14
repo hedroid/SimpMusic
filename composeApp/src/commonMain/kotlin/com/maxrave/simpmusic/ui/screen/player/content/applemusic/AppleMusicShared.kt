@@ -281,49 +281,8 @@ internal fun AppleMusicHeaderActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 云端喜欢按钮按歌的源分流:网易歌=云村红心,但红心同步开着时本地红心已自动
-        // 跟进云端,按钮只在同步关闭时作为手动云端通道出现;YT 歌=加入 YT 已喜欢
-        if (state.isNeteaseSong && state.isNeteaseLoggedIn && !state.neteaseLikeSync) {
-            // 40dp target around a 22dp glyph: a bare 22dp clickable is under half the Material
-            // minimum, on the row that gets tapped most.
-            Box(
-                modifier =
-                    Modifier
-                        .appleMusicPressInflate()
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .clickable { actions.onToggleNeteaseLiked() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Crossfade(targetState = state.likeStatus, label = "appleMusicNeteaseLiked") { liked ->
-                    Icon(
-                        imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
-                        contentDescription = "",
-                        tint = Color.White,
-                    )
-                }
-            }
-        } else if (!state.isNeteaseSong && state.isUserLoggedIn) {
-            // 40dp target around a 22dp glyph: a bare 22dp clickable is under half the Material
-            // minimum, on the row that gets tapped most.
-            Box(
-                modifier =
-                    Modifier
-                        .appleMusicPressInflate()
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .clickable { actions.onAddToYouTubeLiked() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Crossfade(targetState = state.likeStatus, label = "appleMusicYtLiked") { liked ->
-                    Icon(
-                        imageVector = if (liked) SimpIcons.CheckCircle else SimpIcons.AddCircleOutline,
-                        contentDescription = "",
-                        tint = Color.White,
-                    )
-                }
-            }
-        }
+        // 单一红心:云端跟进由同步开关在 updateLikeStatus 里承接(YT=合并喜欢开关,
+        // 网易=红心同步开关),播放页不再放第二个云端喜欢按钮
         val likeBurst = rememberHeartBurstState()
         Box(
             modifier =
