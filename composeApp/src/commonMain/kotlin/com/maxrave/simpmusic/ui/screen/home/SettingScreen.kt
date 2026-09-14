@@ -3720,9 +3720,13 @@ fun SettingScreen(
                             // The house recipe from AlbumScreen's bars, thinned: ultraThin's built-in
                             // tint stacked on this page's dark ground read as a solid lid. 0.3 keeps
                             // the blur doing the work and the tint only settling legibility.
+                            // blurRadius 12, NOT the 24 the recipe shipped with: a 24dp blur bleeds
+                            // ~50px past the bar's 64dp bounds, and the frost read as a band twice
+                            // as tall as every other page's ultraThin bar. 12 keeps the veil inside
+                            // the bar like the rest of the app.
                             Modifier.hazeEffect(hazeState) {
                                 blurEnabled = true
-                                blurRadius = 24.dp
+                                blurRadius = 12.dp
                                 backgroundColor = settingBarTint
                                 tints = listOf(HazeTint(settingBarTint.copy(alpha = 0.3f)))
                             }
