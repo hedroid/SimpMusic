@@ -49,3 +49,4 @@ sentry.properties
 # Local AI-agent project memory (contains the signing password, not for the repo)
 /AGENTS.md
 .video_agent/
+.zcode/
