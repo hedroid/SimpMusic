@@ -133,7 +133,9 @@ class NeteaseHomeViewModel(
         }
     }
 
-    /** 新碟上架切地区:行回占位,命中分区缓存即时换,miss 才网络。 */
+    /** 新碟上架切地区:行回占位即止——Loading 槽位重组会让 ensureRowLoaded 接管加载
+     *  (loadRow 的 NEW_ALBUMS 分支读的是 state.newAlbumsArea,已切到新地区)。
+     *  别在这里再手动 launch 拉一次,否则和槽位触发并发成双请求(回归时实测过)。 */
     fun loadNewAlbumsArea(area: String) {
         val current = _state.value
         if (area == current.newAlbumsArea) return
@@ -142,15 +144,6 @@ class NeteaseHomeViewModel(
                 rows = current.rows + (Row.NEW_ALBUMS to RowUi.Loading),
                 newAlbumsArea = area,
             )
-        // 手动驱动一次(不经 ensureRowLoaded 的 force 语义)
-        viewModelScope.launch {
-            val ui =
-                neteaseRepository.getNewAlbums(area = area).getOrNull()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { RowUi.Ready(RowContent.AlbumsRow(it)) } ?: RowUi.Failed
-            _state.value =
-                _state.value.copy(rows = _state.value.rows + (Row.NEW_ALBUMS to ui))
-        }
     }
 
     /** 失败行点重试:回 Loading 再走正常加载 */
