@@ -144,6 +144,9 @@
     <string name="album">Album</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
+    <string name="fans_count">%1$s fans</string>
+    <string name="comments_count">%1$s comments</string>
+    <string name="comments">Comments</string>
     <string name="download_url">Download URL</string>
     <string name="now_playing">Now Playing</string>
     <string name="queue">Queue</string>
@@ -904,6 +907,8 @@
     <string name="netease_download_quality">NetEase download quality</string>
     <string name="netease_follow_sync">Sync follows with NetEase</string>
     <string name="netease_follow_sync_description">Following or unfollowing an artist also applies to your NetEase account</string>
+    <string name="netease_like_sync">Like sync to NetEase</string>
+    <string name="netease_like_sync_description">Heart a song in the app also hearts it in your NetEase account</string>
     <string name="netease_auto_switch">Auto-switch source for unavailable songs</string>
     <string name="netease_auto_switch_description">Fall back to YouTube Music when a NetEase song has no license or is VIP-only</string>
     <string name="netease_login_qr">QR code</string>

@@ -202,6 +202,8 @@ import simpmusic.composeapp.generated.resources.can_not_be_empty
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
+import simpmusic.composeapp.generated.resources.comments
+import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
@@ -802,83 +804,159 @@ fun InfoPlayerBottomSheet(
                     textAlign = TextAlign.Center,
                 )
 
-                Text(
-                    text = stringResource(Res.string.plays),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(Res.string.like),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text =
-                        stringResource(
-                            Res.string.like_and_dislike,
-                            screenDataState.songInfoData?.like ?: 0,
-                            screenDataState.songInfoData?.dislike ?: 0,
-                        ),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(Res.string.description),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-                // 网易歌的来源链接是 music.163.com(YT 链接对数字 ID 无效);
-                // "下载视频文件"是 YT 视频专属能力,网易纯音频源没有可下的视频
+                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);"下载视频文件"是 YT
+                // 视频专属能力,网易纯音频源没有可下的视频;播放量/赞踩/简介换网易数据
                 val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
+                val neteaseMeta = screenDataState.neteaseSongData
+                if (isNeteaseSong && neteaseMeta != null) {
+                    if (neteaseMeta.commentCount > 0) {
+                        Text(
+                            text = stringResource(Res.string.comments),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = stringResource(Res.string.comments_count, "%,d".format(neteaseMeta.commentCount)),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                        neteaseMeta.hotComments.forEach { comment ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text =
+                                    listOfNotNull(
+                                        comment.nickname,
+                                        comment.location,
+                                    ).joinToString(" · "),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp),
+                                style = typo().labelSmall,
+                                color = rememberSurfaceDarkColors().subtitle,
+                                textAlign = TextAlign.Center,
+                            )
+                            Text(
+                                text = comment.content,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight(align = Alignment.CenterVertically)
+                                        .padding(horizontal = 10.dp),
+                                style = typo().bodyMedium,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    val albumDesc = neteaseMeta.albumDescription
+                    if (!albumDesc.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(Res.string.description),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = albumDesc,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(Res.string.plays),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable()
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = stringResource(Res.string.like),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                Res.string.like_and_dislike,
+                                screenDataState.songInfoData?.like ?: 0,
+                                screenDataState.songInfoData?.dislike ?: 0,
+                            ),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable()
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = stringResource(Res.string.description),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 val sourceUrl =
                     if (isNeteaseSong) {
                         "https://music.163.com/song?id=${songEntity?.videoId}"

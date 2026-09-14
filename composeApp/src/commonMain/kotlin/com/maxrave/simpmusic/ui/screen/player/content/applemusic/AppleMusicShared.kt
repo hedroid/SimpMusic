@@ -86,6 +86,8 @@ import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
 import com.maxrave.simpmusic.ui.icon.FastForward
 import com.maxrave.simpmusic.ui.icon.FastRewind
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.Lyrics
 import com.maxrave.simpmusic.ui.icon.MoreVert
@@ -279,7 +281,28 @@ internal fun AppleMusicHeaderActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (state.isUserLoggedIn) {
+        // 云端喜欢按钮按歌的源分流:网易歌=云村红心(未登录网易则不显示),YT 歌=加入 YT 已喜欢
+        if (state.isNeteaseSong && state.isNeteaseLoggedIn) {
+            // 40dp target around a 22dp glyph: a bare 22dp clickable is under half the Material
+            // minimum, on the row that gets tapped most.
+            Box(
+                modifier =
+                    Modifier
+                        .appleMusicPressInflate()
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .clickable { actions.onToggleNeteaseLiked() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Crossfade(targetState = state.likeStatus, label = "appleMusicNeteaseLiked") { liked ->
+                    Icon(
+                        imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                        contentDescription = "",
+                        tint = Color.White,
+                    )
+                }
+            }
+        } else if (!state.isNeteaseSong && state.isUserLoggedIn) {
             // 40dp target around a 22dp glyph: a bare 22dp clickable is under half the Material
             // minimum, on the row that gets tapped most.
             Box(

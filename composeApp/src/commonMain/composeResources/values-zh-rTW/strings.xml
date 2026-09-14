@@ -148,6 +148,11 @@
     <string name="album">專輯</string>
     <string name="youtube_url">YouTube網址</string>
     <string name="netease_url">網易雲音樂連結</string>
+    <string name="netease_like_sync">紅心同步到網易雲</string>
+    <string name="netease_like_sync_description">在應用裡紅心一首歌時，同步到你的網易雲帳號</string>
+    <string name="fans_count">%1$s 粉絲</string>
+    <string name="comments_count">%1$s 則留言</string>
+    <string name="comments">留言</string>
     <string name="download_url">下載網址</string>
     <string name="now_playing">現正播放</string>
     <string name="queue">佇列</string>

@@ -18,6 +18,7 @@ import com.maxrave.domain.data.entities.LyricsEntity
 import com.maxrave.domain.data.entities.NewFormatEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.entities.NeteaseSongInfoEntity
 import com.maxrave.domain.data.entities.SongInfoEntity
 import com.maxrave.domain.data.entities.TranslatedLyricsEntity
 import com.maxrave.domain.data.model.browse.album.Track
@@ -102,6 +103,7 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.added_to_youtube_liked
 import simpmusic.composeapp.generated.resources.error
+import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.lastfm_login_failed
 import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.play_next
@@ -427,8 +429,22 @@ class SharedViewModel(
                     }
                     state.mediaItem.let { now ->
                         _canvas.value = null
-                        getLikeStatus(now.mediaId)
-                        getSongInfo(now.mediaId)
+                        if (now.mediaId.toLongOrNull() != null) {
+                            // 网易歌:YT songInfo(含 RYD 踩数)/YT 点赞状态对数字 ID 必失败,
+                            // 白打两个请求还刷 logcat;songInfoData 必须显式清空,否则
+                            // copy(...) 会把上一首的详情卡一直带着走。点赞状态换成云村红心。
+                            _nowPlayingScreenData.update {
+                                it.copy(
+                                    songInfoData = null,
+                                    neteaseSongData = null,
+                                )
+                            }
+                            getNeteaseLikedStatus(now.mediaId)
+                        } else {
+                            _nowPlayingScreenData.update { it.copy(neteaseSongData = null) }
+                            getLikeStatus(now.mediaId)
+                            getSongInfo(now.mediaId)
+                        }
                         getFormat(now.mediaId)
                         _nowPlayingScreenData.update {
                             it.copy(
@@ -443,6 +459,10 @@ class SharedViewModel(
                             it.copy(
                                 isExplicit = song.isExplicit,
                             )
+                        }
+                        // 网易详情卡要 song 行的 artistId/albumId,在 songEntity 到位后拉
+                        if (song.videoId.toLongOrNull() != null) {
+                            getNeteaseSongInfo(song)
                         }
                     }
                 }
@@ -627,6 +647,52 @@ class SharedViewModel(
                     _likeStatus.value = status
                 }
             }
+        }
+    }
+
+    /** 云村红心状态:复用 likeStatus 字段(网易歌下 YT 点赞按钮已被云心按钮替换,语义随源切换) */
+    private fun getNeteaseLikedStatus(mediaId: String) {
+        _likeStatus.value = false
+        viewModelScope.launch {
+            neteaseRepository.isSongLiked(mediaId)?.let { liked ->
+                _likeStatus.value = liked
+            }
+        }
+    }
+
+    /** 网易歌详情卡:艺人(头像/粉丝)+专辑(发行/简介)+评论(总数/热评),各路独立降级 */
+    private var neteaseSongInfoJob: Job? = null
+
+    private fun getNeteaseSongInfo(song: SongEntity) {
+        neteaseSongInfoJob?.cancel()
+        neteaseSongInfoJob =
+            viewModelScope.launch {
+                val meta =
+                    neteaseRepository.getSongInfo(
+                        songId = song.videoId,
+                        artistId = song.artistId?.firstOrNull()?.takeIf { it.isNotEmpty() },
+                        albumId = song.albumId,
+                    )
+                // 切歌竞态:发布前确认还是这首歌,别把上一首的卡盖到新歌上
+                if (mediaPlayerHandler.nowPlayingState.value.songEntity?.videoId == song.videoId) {
+                    _nowPlayingScreenData.update { it.copy(neteaseSongData = meta) }
+                }
+            }
+    }
+
+    /** 云心按钮:乐观翻转,服务端拒绝再回滚 */
+    fun toggleNeteaseLiked() {
+        viewModelScope.launch {
+            val mediaId = mediaPlayerHandler.nowPlaying.first()?.mediaId ?: return@launch
+            if (mediaId.toLongOrNull() == null) return@launch
+            val target = !_likeStatus.value
+            _likeStatus.value = target
+            neteaseRepository
+                .setSongLiked(mediaId, target)
+                .onFailure {
+                    _likeStatus.value = !target
+                    makeToast(getString(Res.string.error_occurred))
+                }
         }
     }
 
@@ -2291,6 +2357,8 @@ data class NowPlayingScreenData(
     val canvasData: CanvasData? = null,
     val lyricsData: LyricsData? = null,
     val songInfoData: SongInfoEntity? = null,
+    /** 网易歌详情卡数据(艺人/专辑/热评),与 songInfoData 按源互斥 */
+    val neteaseSongData: NeteaseSongInfoEntity? = null,
     val bitmap: ImageBitmap? = null,
 ) {
     data class CanvasData(

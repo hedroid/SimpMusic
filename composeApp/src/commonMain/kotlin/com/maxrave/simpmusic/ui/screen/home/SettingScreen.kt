@@ -317,6 +317,8 @@ import simpmusic.composeapp.generated.resources.netease_quality
 import simpmusic.composeapp.generated.resources.netease_download_quality
 import simpmusic.composeapp.generated.resources.netease_follow_sync
 import simpmusic.composeapp.generated.resources.netease_follow_sync_description
+import simpmusic.composeapp.generated.resources.netease_like_sync
+import simpmusic.composeapp.generated.resources.netease_like_sync_description
 import simpmusic.composeapp.generated.resources.netease_auto_switch
 import simpmusic.composeapp.generated.resources.netease_auto_switch_description
 import simpmusic.composeapp.generated.resources.netease_quality_standard
@@ -579,6 +581,7 @@ fun SettingScreen(
     val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
+    val neteaseLikeSync by viewModel.neteaseLikeSync.collectAsStateWithLifecycle()
     val neteaseAutoSwitch by viewModel.neteaseAutoSwitch.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
@@ -1462,6 +1465,12 @@ fun SettingScreen(
                     title = stringResource(Res.string.netease_follow_sync),
                     subtitle = stringResource(Res.string.netease_follow_sync_description),
                     switch = (neteaseFollowSync to { viewModel.setNeteaseFollowSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_like_sync),
+                    subtitle = stringResource(Res.string.netease_like_sync_description),
+                    switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
                     isEnable = neteaseLoggedIn,
                 )
                 SettingItem(

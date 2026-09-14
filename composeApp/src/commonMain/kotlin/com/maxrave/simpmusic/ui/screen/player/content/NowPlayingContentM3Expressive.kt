@@ -809,25 +809,58 @@ private fun ExpressiveTrackInfoRow(
                 )
             }
         }
-        if (state.isUserLoggedIn) {
-            Spacer(modifier = Modifier.size(12.dp))
-            IconButton(
-                onClick = { actions.onAddToYouTubeLiked() },
-                shape = CircleShape,
-                colors =
-                    IconButtonDefaults.iconButtonColors(
-                        containerColor = colorScheme.surfaceContainerHigh,
-                        contentColor = colorScheme.onSurface,
-                    ),
-                modifier = Modifier.size(48.dp),
-            ) {
-                Crossfade(targetState = state.likeStatus) { liked ->
-                    Icon(
-                        imageVector = if (liked) SimpIcons.CheckCircle else SimpIcons.AddCircleOutline,
-                        contentDescription = "",
-                    )
+        // 云端喜欢按钮按歌的源分流:网易歌=云村红心(未登录网易则不显示),YT 歌=加入 YT 已喜欢
+        val cloudLikeButton: (@Composable () -> Unit)? =
+            when {
+                state.isNeteaseSong && state.isNeteaseLoggedIn -> {
+                    {
+                        IconButton(
+                            onClick = { actions.onToggleNeteaseLiked() },
+                            shape = CircleShape,
+                            colors =
+                                IconButtonDefaults.iconButtonColors(
+                                    containerColor = colorScheme.surfaceContainerHigh,
+                                    contentColor = colorScheme.onSurface,
+                                ),
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Crossfade(targetState = state.likeStatus) { liked ->
+                                Icon(
+                                    imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                                    contentDescription = "",
+                                )
+                            }
+                        }
+                    }
                 }
+
+                !state.isNeteaseSong && state.isUserLoggedIn -> {
+                    {
+                        IconButton(
+                            onClick = { actions.onAddToYouTubeLiked() },
+                            shape = CircleShape,
+                            colors =
+                                IconButtonDefaults.iconButtonColors(
+                                    containerColor = colorScheme.surfaceContainerHigh,
+                                    contentColor = colorScheme.onSurface,
+                                ),
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Crossfade(targetState = state.likeStatus) { liked ->
+                                Icon(
+                                    imageVector = if (liked) SimpIcons.CheckCircle else SimpIcons.AddCircleOutline,
+                                    contentDescription = "",
+                                )
+                            }
+                        }
+                    }
+                }
+
+                else -> null
             }
+        if (cloudLikeButton != null) {
+            Spacer(modifier = Modifier.size(12.dp))
+            cloudLikeButton()
         }
         Spacer(modifier = Modifier.size(8.dp))
         val likeBurst = rememberHeartBurstState()

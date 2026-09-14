@@ -66,10 +66,13 @@ internal fun String?.toAudioCodecLabel(): String? {
     // Fed NewFormatEntity.codecs — "opus", or "mp4a.40.2" for AAC. The regex that fills that
     // column falls back to the WHOLE mimeType when it fails to match, so both shapes have to be
     // recognised here; "aac" covers the Piped path, which reports the codec by name.
+    // 网易流按 mimeType 归一成 "flac"/"mp3" 存进同一列(见 StreamRepositoryImpl 网易分支)。
     val codec = this ?: return null
     return when {
         codec.contains("opus", ignoreCase = true) -> "OPUS"
         codec.contains("mp4a", ignoreCase = true) || codec.contains("aac", ignoreCase = true) -> "AAC"
+        codec.contains("flac", ignoreCase = true) -> "FLAC"
+        codec.contains("mp3", ignoreCase = true) || codec.contains("mpeg", ignoreCase = true) -> "MP3"
         else -> null
     }
 }
@@ -109,6 +112,13 @@ class NowPlayingContentState(
     val dismissIcon: ImageVector,
     /** Current track's audio codec ("OPUS"/"AAC"), or null while unknown — see [toAudioCodecLabel]. */
     val audioCodecLabel: String? = null,
+    /**
+     * 网易歌(videoId 纯数字)时,三主题的"加入 YouTube 已喜欢"按钮整体换成云村红心:
+     * 未登录网易则直接隐藏。likeStatus 字段随源切换语义——YT 歌=YT 账号点赞,
+     * 网易歌=云村红心,按钮渲染处据此分流。
+     */
+    val isNeteaseSong: Boolean = false,
+    val isNeteaseLoggedIn: Boolean = false,
 )
 
 /**
@@ -125,6 +135,8 @@ class NowPlayingContentActions(
     val onToggleControls: () -> Unit,
     val onNavigateToArtist: () -> Unit,
     val onAddToYouTubeLiked: () -> Unit,
+    /** 云村红心(网易歌专属,替换 onAddToYouTubeLiked 的语义) */
+    val onToggleNeteaseLiked: () -> Unit = {},
     val onShowMoreSheet: () -> Unit,
     val onShowQueue: () -> Unit,
     val onShowInfo: () -> Unit,

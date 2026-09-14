@@ -156,6 +156,7 @@ fun NowPlayingScreenContent(
     val isUserLoggedIn by sharedViewModel
         .isUserLoggedInFlow()
         .collectAsStateWithLifecycle(initialValue = false)
+    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
 
     // Which Now Playing style renders the content layer (Settings → Now Playing style).
     val nowPlayingStyle by sharedViewModel
@@ -672,9 +673,12 @@ fun NowPlayingScreenContent(
             dismissIcon = dismissIcon,
             // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
             // `audio/webm; codecs="opus"` with a regex and stores the two halves in SEPARATE
-            // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for the
-            // codec therefore never matched anything and the badge never rendered, on any track.
+            // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for
+            // the codec therefore never matched anything and the badge never rendered, on any track.
             audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
+            // 网易歌:云端喜欢按钮换成云村红心(见 NowPlayingContentState.isNeteaseSong 注释)
+            isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
+            isNeteaseLoggedIn = neteaseLoggedIn,
         )
     val actions =
         NowPlayingContentActions(
@@ -717,6 +721,7 @@ fun NowPlayingScreenContent(
                 }
             },
             onAddToYouTubeLiked = { sharedViewModel.addToYouTubeLiked() },
+            onToggleNeteaseLiked = { sharedViewModel.toggleNeteaseLiked() },
             onShowMoreSheet = { showSheet = true },
             onShowQueue = { showQueueBottomSheet = true },
             onShowInfo = { showInfoBottomSheet = true },

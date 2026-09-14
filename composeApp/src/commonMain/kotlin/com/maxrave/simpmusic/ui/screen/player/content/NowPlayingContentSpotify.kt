@@ -132,6 +132,8 @@ import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.Forward5
 import com.maxrave.simpmusic.ui.icon.Fullscreen
 import com.maxrave.simpmusic.ui.icon.Info
@@ -160,6 +162,8 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.crossfading
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
+import simpmusic.composeapp.generated.resources.comments_count
+import simpmusic.composeapp.generated.resources.fans_count
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
 import simpmusic.composeapp.generated.resources.lyrics_provider_betterlyrics
@@ -1558,7 +1562,9 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+                        // 艺人卡按源取数:网易歌来自 neteaseSongData(头像/粉丝数),YT 歌来自 songInfoData
+                        val neteaseMeta = state.screenData.neteaseSongData
+                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
                             ElevatedCard(
                                 onClick = {
                                     actions.onNavigateToArtist()
@@ -1580,7 +1586,9 @@ fun NowPlayingContentSpotify(
                                                 .fillMaxWidth()
                                                 .height(250.dp),
                                     ) {
-                                        val thumb = state.screenData.songInfoData?.authorThumbnail
+                                        val thumb =
+                                            neteaseMeta?.artistAvatar
+                                                ?: state.screenData.songInfoData?.authorThumbnail
                                         AsyncImage(
                                             model =
                                                 ImageRequest
@@ -1630,13 +1638,16 @@ fun NowPlayingContentSpotify(
                                                 .padding(horizontal = 15.dp, vertical = 12.dp),
                                     ) {
                                         Text(
-                                            text = state.screenData.songInfoData?.author ?: "",
+                                            text = neteaseMeta?.artistName ?: state.screenData.songInfoData?.author ?: "",
                                             style = typo().titleMedium,
                                             color = Color.White,
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = state.screenData.songInfoData?.subscribers ?: "",
+                                            text =
+                                                neteaseMeta?.artistFans?.let {
+                                                    stringResource(Res.string.fans_count, "%,d".format(it))
+                                                } ?: state.screenData.songInfoData?.subscribers ?: "",
                                             style = typo().bodySmall,
                                             color = Color.White.copy(alpha = 0.7f),
                                         )
@@ -1645,7 +1656,7 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
                             ElevatedCard(
                                 onClick = {},
                                 shape = RoundedCornerShape(8.dp),
@@ -1660,56 +1671,114 @@ fun NowPlayingContentSpotify(
                                         .fillMaxWidth(),
                                 ) {
                                     Spacer(modifier = Modifier.height(5.dp))
-                                    Text(
-                                        text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
-                                        style = typo().labelSmall,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                Res.string.view_count,
-                                                "%,d".format(state.screenData.songInfoData?.viewCount),
-                                            ),
-                                        style = typo().labelMedium,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                Res.string.like_and_dislike,
-                                                state.screenData.songInfoData?.like ?: 0,
-                                                state.screenData.songInfoData?.dislike ?: 0,
-                                            ),
-                                        style = typo().bodyMedium,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = stringResource(Res.string.description),
-                                        style = typo().labelSmall,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    DescriptionView(
-                                        text = state.screenData.songInfoData?.description ?: "",
-                                        onTimeClicked = { raw ->
-                                            val timestamp = parseTimestampToMilliseconds(raw)
-                                            if (timestamp != 0.0 && timestamp < state.timelineState.total) {
-                                                actions.onUIEvent(
-                                                    UIEvent.UpdateProgress(
-                                                        ((timestamp * 100) / state.timelineState.total).toFloat(),
-                                                    ),
-                                                )
-                                            }
-                                        },
-                                        onURLClicked = { url ->
-                                            uriHandler.openUri(
-                                                url,
+                                    if (neteaseMeta != null) {
+                                        // 网易版说明卡:发行日 + 评论数/热评(云村特色,顶替 YT 播放量/赞踩) + 专辑简介
+                                        neteaseMeta.albumPublishDate?.let {
+                                            Text(
+                                                text = stringResource(Res.string.published_at, it),
+                                                style = typo().labelSmall,
+                                                color = Color.White,
                                             )
-                                        },
-                                    )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+                                        if (neteaseMeta.commentCount > 0) {
+                                            Text(
+                                                text =
+                                                    stringResource(
+                                                        Res.string.comments_count,
+                                                        "%,d".format(neteaseMeta.commentCount),
+                                                    ),
+                                                style = typo().labelMedium,
+                                                color = Color.White,
+                                            )
+                                            neteaseMeta.hotComments.forEach { comment ->
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text =
+                                                            listOfNotNull(
+                                                                comment.nickname,
+                                                                comment.location,
+                                                            ).joinToString(" · "),
+                                                        style = typo().labelSmall,
+                                                        color = Color.White.copy(alpha = 0.7f),
+                                                    )
+                                                    Text(
+                                                        text = comment.content,
+                                                        style = typo().bodyMedium,
+                                                        color = Color.White,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        neteaseMeta.albumDescription?.let { desc ->
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Text(
+                                                text = stringResource(Res.string.description),
+                                                style = typo().labelSmall,
+                                                color = Color.White,
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            DescriptionView(
+                                                text = desc,
+                                                onTimeClicked = { },
+                                                onURLClicked = { url ->
+                                                    uriHandler.openUri(url)
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
+                                            style = typo().labelSmall,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    Res.string.view_count,
+                                                    "%,d".format(state.screenData.songInfoData?.viewCount),
+                                                ),
+                                            style = typo().labelMedium,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    Res.string.like_and_dislike,
+                                                    state.screenData.songInfoData?.like ?: 0,
+                                                    state.screenData.songInfoData?.dislike ?: 0,
+                                                ),
+                                            style = typo().bodyMedium,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = stringResource(Res.string.description),
+                                            style = typo().labelSmall,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        DescriptionView(
+                                            text = state.screenData.songInfoData?.description ?: "",
+                                            onTimeClicked = { raw ->
+                                                val timestamp = parseTimestampToMilliseconds(raw)
+                                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                                    actions.onUIEvent(
+                                                        UIEvent.UpdateProgress(
+                                                            ((timestamp * 100) / state.timelineState.total).toFloat(),
+                                                        ),
+                                                    )
+                                                }
+                                            },
+                                            onURLClicked = { url ->
+                                                uriHandler.openUri(
+                                                    url,
+                                                )
+                                            },
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(5.dp))
@@ -1973,7 +2042,32 @@ private fun NowPlayingTrackInfoRow(
                 }
             }
         }
-        if (state.isUserLoggedIn) {
+        // 云端喜欢按钮按歌的源分流:网易歌=云村红心(未登录网易则不显示),YT 歌=加入 YT 已喜欢
+        if (state.isNeteaseSong && state.isNeteaseLoggedIn) {
+            Spacer(modifier = Modifier.size(16.dp))
+            Crossfade(
+                targetState = state.likeStatus,
+            ) {
+                IconButton(
+                    modifier =
+                        Modifier
+                            .size(24.dp)
+                            .aspectRatio(1f)
+                            .clip(
+                                CircleShape,
+                            ),
+                    onClick = {
+                        actions.onToggleNeteaseLiked()
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (it) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                        tint = Color.White,
+                        contentDescription = "",
+                    )
+                }
+            }
+        } else if (!state.isNeteaseSong && state.isUserLoggedIn) {
             Spacer(modifier = Modifier.size(16.dp))
             Crossfade(
                 targetState = state.likeStatus,
