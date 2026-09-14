@@ -77,6 +77,10 @@
     <string name="hot_search">熱搜</string>
     <string name="sort_hot">熱門</string>
     <string name="sort_highquality">精品</string>
+    <string name="netease_lyrics">網易官方歌詞</string>
+    <string name="personal_fm">私人FM</string>
+    <string name="personal_fm_subtitle">根據你的口味不斷生成</string>
+    <string name="personal_fm_start">開始收聽</string>
     <string name="clear_player_cache">清除播放器快取</string>
     <string name="cancel">取消</string>
     <string name="clear">清除</string>

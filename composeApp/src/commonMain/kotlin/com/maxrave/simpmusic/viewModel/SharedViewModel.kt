@@ -124,6 +124,7 @@ class SharedViewModel(
     private val playlistRepository: PlaylistRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val cacheRepository: CacheRepository,
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl,
 ) : BaseViewModel() {
 
     // ---------------------------------------------------------------- 音源切换(feat/netease-source)
@@ -1433,6 +1434,11 @@ class SharedViewModel(
                         ?: ""
                 }
             resetLyricsVoteState()
+            // 网易歌(纯数字 id):走 NETEASE 官方专线(官方原文/官方翻译),现有供应商退居兜底
+            if (videoId.toLongOrNull() != null) {
+                getNeteaseLyrics(videoId, song, (artist ?: ""), duration)
+                return@launch
+            }
             val lyricsProvider = dataStoreManager.lyricsProvider.first()
             when (lyricsProvider) {
                 DataStoreManager.SIMPMUSIC -> {
@@ -1469,6 +1475,50 @@ class SharedViewModel(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * 网易官方歌词专线:主选恒为 NETEASE(与歌曲同源,逐字 yrc+官方翻译,第三方库不可能更准),
+     * 设置项(网易模式下已隐藏不可用项)不影响主选,仅决定兜底顺位;NETEASE 失败 →
+     * LRCLIB(按名搜) → 本地已保存。官方翻译直接喂 translatedLyrics,缺失才走 AI。
+     */
+    private fun getNeteaseLyrics(
+        videoId: String,
+        song: SongEntity,
+        artist: String,
+        duration: Int,
+    ) {
+        viewModelScope.launch {
+            neteaseRepository.getNeteaseLyricsData(videoId)
+                .fold(
+                    onSuccess = { (lyrics, officialTranslation) ->
+                        updateLyrics(
+                            videoId,
+                            duration,
+                            lyrics,
+                            false,
+                            LyricsProvider.NETEASE,
+                        )
+                        insertLyrics(lyrics.toLyricsEntity(videoId))
+                        if (officialTranslation != null) {
+                            // 官方翻译与原文同源,时间轴天然对齐
+                            updateLyrics(
+                                videoId,
+                                0,
+                                officialTranslation,
+                                true,
+                                LyricsProvider.NETEASE,
+                            )
+                        } else {
+                            getAITranslationLyrics(videoId, lyrics)
+                        }
+                    },
+                    onFailure = {
+                        log("Netease lyrics miss: ${it.message}")
+                        getLrclibLyrics(song, artist, duration)
+                    },
+                )
         }
     }
 
@@ -2226,6 +2276,7 @@ enum class LyricsProvider {
     SPOTIFY,
     LRCLIB,
     BETTER_LYRICS,
+    NETEASE,
     AI,
     OFFLINE,
 }

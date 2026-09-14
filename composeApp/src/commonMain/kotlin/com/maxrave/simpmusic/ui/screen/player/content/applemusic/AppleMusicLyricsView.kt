@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.netease_lyrics
 import simpmusic.composeapp.generated.resources.ai_translated
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics_provider_betterlyrics
@@ -345,5 +346,6 @@ private fun appleMusicLyricsProviderText(lyricsData: NowPlayingScreenData.Lyrics
         LyricsProvider.SPOTIFY -> stringResource(Res.string.spotify_lyrics_provider)
         LyricsProvider.OFFLINE -> stringResource(Res.string.offline_mode)
         LyricsProvider.BETTER_LYRICS -> stringResource(Res.string.lyrics_provider_betterlyrics)
+        LyricsProvider.NETEASE -> stringResource(Res.string.netease_lyrics)
         LyricsProvider.AI -> ""
     }

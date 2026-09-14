@@ -891,6 +891,10 @@
     <string name="netease">NetEase Music</string>
     <string name="netease_home_error">Couldn't load NetEase recommendations. Check your connection and retry.</string>
     <string name="netease_home_logged_out">Logged out of NetEase — browsing public feeds only, playback unavailable.</string>
+    <string name="netease_lyrics">NetEase official lyrics</string>
+    <string name="personal_fm">Personal FM</string>
+    <string name="personal_fm_subtitle">An endless stream tuned to your taste</string>
+    <string name="personal_fm_start">Start listening</string>
     <string name="log_in_to_netease">Log in to NetEase</string>
     <string name="log_out_from_netease">Log out of NetEase</string>
     <string name="intro_login_to_netease">NetEase as a second music source</string>
