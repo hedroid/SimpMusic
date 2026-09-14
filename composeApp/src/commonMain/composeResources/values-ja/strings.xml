@@ -441,6 +441,7 @@
     <string name="processing">処理中</string>
     <string name="website">サイト</string>
     <string name="download_this_song_video_file_to_your_device">この曲/動画ファイルを端末にダウンロード</string>
+    <string name="download_this_song_file_to_your_device">この曲のファイルをデバイスにダウンロード</string>
     <string name="kill_service_on_exit">終了時にサービスを強制終了</string>
     <string name="kill_service_on_exit_description">アプリ終了時にバックグラウンドの音楽プレイヤーを停止</string>
     <string name="crossfade">クロスフェード (BETA)</string>

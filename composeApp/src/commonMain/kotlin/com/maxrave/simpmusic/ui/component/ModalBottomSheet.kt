@@ -212,6 +212,7 @@ import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
+import simpmusic.composeapp.generated.resources.download_this_song_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
@@ -804,8 +805,8 @@ fun InfoPlayerBottomSheet(
                     textAlign = TextAlign.Center,
                 )
 
-                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);"下载视频文件"是 YT
-                // 视频专属能力,网易纯音频源没有可下的视频;播放量/赞踩/简介换网易数据
+                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);播放量/赞踩换
+                // 评论数(只报数量,热评内容在 Spotify 主题详情卡里看,信息面板保持紧凑)。
                 val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
                 val neteaseMeta = screenDataState.neteaseSongData
                 if (isNeteaseSong && neteaseMeta != null) {
@@ -830,33 +831,6 @@ fun InfoPlayerBottomSheet(
                             style = typo().bodyMedium,
                             textAlign = TextAlign.Center,
                         )
-                        neteaseMeta.hotComments.forEach { comment ->
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text =
-                                    listOfNotNull(
-                                        comment.nickname,
-                                        comment.location,
-                                    ).joinToString(" · "),
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 10.dp),
-                                style = typo().labelSmall,
-                                color = rememberSurfaceDarkColors().subtitle,
-                                textAlign = TextAlign.Center,
-                            )
-                            Text(
-                                text = comment.content,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight(align = Alignment.CenterVertically)
-                                        .padding(horizontal = 10.dp),
-                                style = typo().bodyMedium,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
                     }
                     val albumDesc = neteaseMeta.albumDescription
                     if (!albumDesc.isNullOrBlank()) {
@@ -999,22 +973,31 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
-                if (!isNeteaseSong) {
-                    OutlinedButton(
-                        enabled = screenDataState.bitmap != null,
-                        onClick = {
-                            sharedViewModel.downloadFile(
-                                bitmap = screenDataState.bitmap ?: return@OutlinedButton,
-                            )
-                        },
-                        modifier =
-                            Modifier
-                                .wrapContentSize()
-                                .align(Alignment.CenterHorizontally)
-                                .padding(vertical = 10.dp),
-                    ) {
-                        Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device))
-                    }
+                // 底部"下载到设备"按钮:与 YT 同款位置同款样式;YT 歌下视频,网易歌下
+                // 音频文件(downloadFile 内部按源分流),封面 jpg 两侧共用
+                OutlinedButton(
+                    enabled = screenDataState.bitmap != null,
+                    onClick = {
+                        sharedViewModel.downloadFile(
+                            bitmap = screenDataState.bitmap ?: return@OutlinedButton,
+                        )
+                    },
+                    modifier =
+                        Modifier
+                            .wrapContentSize()
+                            .align(Alignment.CenterHorizontally)
+                            .padding(vertical = 10.dp),
+                ) {
+                    Text(
+                        text =
+                            stringResource(
+                                if (isNeteaseSong) {
+                                    Res.string.download_this_song_file_to_your_device
+                                } else {
+                                    Res.string.download_this_song_video_file_to_your_device
+                                },
+                            ),
+                    )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 

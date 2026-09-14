@@ -475,6 +475,7 @@
     <string name="processing">正在处理</string>
     <string name="website">网站</string>
     <string name="download_this_song_video_file_to_your_device">将此歌曲/视频文件下载到您的设备</string>
+    <string name="download_this_song_file_to_your_device">下载此歌曲文件到您的设备</string>
     <string name="kill_service_on_exit">退出时关闭服务</string>
     <string name="kill_service_on_exit_description">退出应用时停止后台音乐播放器</string>
     <string name="desktop_player">桌面播放器</string>

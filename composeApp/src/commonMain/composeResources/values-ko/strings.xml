@@ -470,6 +470,7 @@
     <string name="processing">처리 중</string>
     <string name="website">웹사이트</string>
     <string name="download_this_song_video_file_to_your_device">이 음악/동영상 파일을 기기로 다운로드</string>
+    <string name="download_this_song_file_to_your_device">이 곡 파일을 기기에 다운로드</string>
     <string name="kill_service_on_exit">나갈 때 서비스 종료</string>
     <string name="kill_service_on_exit_description">앱을 종료할 때 백그라운드 음악 플레이어 멈춤</string>
     <string name="desktop_player">데스크톱 플레이어</string>

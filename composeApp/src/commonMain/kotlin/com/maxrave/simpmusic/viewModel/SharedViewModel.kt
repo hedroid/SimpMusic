@@ -66,6 +66,11 @@ import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.getDownloadFolderPath
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.readAvailable
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.utils.VersionManager
@@ -2066,6 +2071,12 @@ class SharedViewModel(
                 } catch (e: Exception) {
                     throw RuntimeException(e)
                 }
+                // 网易歌:CDN 直链音频(mpeg/flac),youTube.download 的 itag 合并管线不适用,
+                // 直接取流下载写文件;进度喂同一个 DownloadProgress 弹窗
+                if (track.videoId.toLongOrNull() != null) {
+                    downloadNeteaseFile(track.videoId, path)
+                    return@let
+                }
                 songRepository
                     .downloadToFile(
                         track = track,
@@ -2076,6 +2087,53 @@ class SharedViewModel(
                         _downloadFileProgress.value = it
                     }
             }
+        }
+    }
+
+    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载 → 覆盖写 + 进度 */
+    private suspend fun downloadNeteaseFile(
+        videoId: String,
+        path: String,
+    ) {
+        _downloadFileProgress.value = DownloadProgress()
+        val stream =
+            neteaseRepository.getStreamInfo(videoId, isDownload = true).getOrNull()
+        if (stream == null) {
+            _downloadFileProgress.value = DownloadProgress.failed("netease stream unavailable")
+            return
+        }
+        val ext = if (stream.mimeType?.contains("flac", ignoreCase = true) == true) "flac" else "mp3"
+        try {
+            HttpClient(CIO).use { client ->
+                val response = client.get(stream.url)
+                // ktor2 的 ByteReadChannel 没有总长属性,Content-Length 头兜底(缺头则只报速度不报百分比)
+                val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
+                val channel = response.bodyAsChannel()
+                val output = FileOutputStream("$path.$ext")
+                val buffer = ByteArray(64 * 1024)
+                var read = 0L
+                val startedAt = System.currentTimeMillis()
+                while (true) {
+                    val n = channel.readAvailable(buffer, 0, buffer.size)
+                    if (n <= 0) break
+                    output.write(buffer, 0, n)
+                    read += n
+                    if (total > 0) {
+                        val elapsedS = (System.currentTimeMillis() - startedAt).coerceAtLeast(1) / 1000f
+                        _downloadFileProgress.value =
+                            DownloadProgress(
+                                audioDownloadProgress = (read.toFloat() / total).coerceIn(0f, 1f),
+                                downloadSpeed = (read / 1024f / elapsedS).toInt(),
+                            )
+                    }
+                }
+                output.close()
+                _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
+            }
+            Logger.d(tag, "Netease file saved to $path.$ext")
+        } catch (e: Exception) {
+            Logger.e(tag, "netease download failed: ${e.message}")
+            _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "download failed")
         }
     }
 
