@@ -141,6 +141,12 @@ class SharedViewModel(
             .map { it.isNotEmpty() }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /** 红心同步开关:开着时播放条红心自动跟进云村,云心按钮随之隐藏 */
+    val neteaseLikeSync: StateFlow<Boolean> =
+        dataStoreManager.neteaseLikeSync
+            .map { it == DataStoreManager.TRUE }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
         viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
     }

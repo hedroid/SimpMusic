@@ -113,12 +113,14 @@ class NowPlayingContentState(
     /** Current track's audio codec ("OPUS"/"AAC"), or null while unknown — see [toAudioCodecLabel]. */
     val audioCodecLabel: String? = null,
     /**
-     * 网易歌(videoId 纯数字)时,三主题的"加入 YouTube 已喜欢"按钮整体换成云村红心:
-     * 未登录网易则直接隐藏。likeStatus 字段随源切换语义——YT 歌=YT 账号点赞,
-     * 网易歌=云村红心,按钮渲染处据此分流。
+     * 网易歌(videoId 纯数字)时,三主题的"加入 YouTube 已喜欢"按钮整体换成云村红心;
+     * likeStatus 字段随源切换语义——YT 歌=YT 账号点赞,网易歌=云村红心,按钮渲染处据此分流。
+     * 红心同步开着时本地红心已覆盖云端(自动跟进),云心按钮不显示——它只在同步
+     * 关闭时作为唯一的手动云端通道出现。
      */
     val isNeteaseSong: Boolean = false,
     val isNeteaseLoggedIn: Boolean = false,
+    val neteaseLikeSync: Boolean = true,
 )
 
 /**

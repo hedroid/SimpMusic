@@ -809,10 +809,11 @@ private fun ExpressiveTrackInfoRow(
                 )
             }
         }
-        // 云端喜欢按钮按歌的源分流:网易歌=云村红心(未登录网易则不显示),YT 歌=加入 YT 已喜欢
+        // 云端喜欢按钮按歌的源分流:网易歌=云村红心,但红心同步开着时本地红心已自动
+        // 跟进云端,按钮只在同步关闭时作为手动云端通道出现;YT 歌=加入 YT 已喜欢
         val cloudLikeButton: (@Composable () -> Unit)? =
             when {
-                state.isNeteaseSong && state.isNeteaseLoggedIn -> {
+                state.isNeteaseSong && state.isNeteaseLoggedIn && !state.neteaseLikeSync -> {
                     {
                         IconButton(
                             onClick = { actions.onToggleNeteaseLiked() },

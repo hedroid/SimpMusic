@@ -157,6 +157,7 @@ fun NowPlayingScreenContent(
         .isUserLoggedInFlow()
         .collectAsStateWithLifecycle(initialValue = false)
     val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
+    val neteaseLikeSync by sharedViewModel.neteaseLikeSync.collectAsStateWithLifecycle()
 
     // Which Now Playing style renders the content layer (Settings → Now Playing style).
     val nowPlayingStyle by sharedViewModel
@@ -679,6 +680,7 @@ fun NowPlayingScreenContent(
             // 网易歌:云端喜欢按钮换成云村红心(见 NowPlayingContentState.isNeteaseSong 注释)
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
             isNeteaseLoggedIn = neteaseLoggedIn,
+            neteaseLikeSync = neteaseLikeSync,
         )
     val actions =
         NowPlayingContentActions(
