@@ -132,6 +132,15 @@ UI 实现：chips 按 selectedSource 过滤，不动 `SearchType` 枚举。
   新方法共享缓存；顺手删了 `categoryFeedRows` 里同样注定为空的"最新"行。
 - 专辑 tab：✅ 已放开（2026-09-14，type=10 端点+解析探针验证，范特西/魔杰座字段全通）。
 - 艺人卡跳转：✅ 已解锁（2026-09-14，toast 换成 `ArtistDestination`，两处：建议区+结果区）。
+- **跨源歌词供应商（YT 歌选用第三方歌词库，2026-09-14 确认要做）**：
+  统一模式 = 按名搜目标库 + 时长 ±3s 校验 + 版本词黑名单（Live/DJ/cover/翻自）+ id 直连歌词，
+  设置页可选、匹配失败回退 LRCLIB；核心价值 = tlyric 官方翻译 > AI 翻译且免 AI 配额。
+  优先级：① 网易（探针已验证：アイドル/Shape of You 命中带官方翻译；已知风险：错版本配到
+  DJ 版、热门歌"晴天"漏配需双序搜索、yrc 逐字外语歌基本只有行级——详见项目 AGENTS.md
+  跨源歌词 TODO）；② QQ 音乐（社区接口稳定、qrc 解密成熟、华语覆盖最全）；③ 酷狗（与 QQ
+  重叠，做一家即可）；④ 酷我（最低）；⑤ Apple Music **不做**（MusicKit 合规拿不到完整时间轴）。
+  接入点全部现成：`getLyricsFromFormat` 分支 + `LyricsProvider` 枚举 + SettingScreen
+  YT 模式列表（渲染零改动，映射参考 `toRichSyncWords`）。
 
 ## M6 专辑/歌手页适配方案（2026-09-14 落地）
 
