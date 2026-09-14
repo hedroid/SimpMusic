@@ -11,12 +11,15 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +74,8 @@ import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeItemSong
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
 import com.maxrave.simpmusic.ui.component.HomeShimmer
+import com.maxrave.simpmusic.ui.icon.Delete
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.NeteaseTagDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
@@ -123,11 +128,11 @@ fun NeteaseHomeScreen(
         PullToRefreshBox(
             state = pullToRefreshState,
             onRefresh = viewModel::refresh,
-            isRefreshing = state is NeteaseHomeViewModel.State.Loading,
+            isRefreshing = false, // 行级懒加载:刷新是同步重置到占位,各行自行转圈
             indicator = {
                 PullToRefreshDefaults.Indicator(
                     state = pullToRefreshState,
-                    isRefreshing = state is NeteaseHomeViewModel.State.Loading,
+                    isRefreshing = false,
                     modifier =
                         Modifier
                             .align(Alignment.TopCenter)
@@ -143,118 +148,43 @@ fun NeteaseHomeScreen(
                 )
             },
         ) {
-            Crossfade(state) { current ->
-                when (current) {
-                    is NeteaseHomeViewModel.State.Loading ->
-                        Column {
-                            Spacer(
-                                Modifier.height(
-                                    with(LocalDensity.current) {
-                                        topAppBarHeightPx.toDp()
-                                    },
-                                ),
+            LazyColumn(
+                state = scrollState,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                item(key = "top-space") {
+                    Spacer(
+                        Modifier.height(
+                            with(LocalDensity.current) {
+                                topAppBarHeightPx.toDp()
+                            },
+                        ),
+                    )
+                }
+                // 账户卡(登录时)
+                accountInfo?.let { info ->
+                    item(key = "account") {
+                        Box(Modifier.padding(horizontal = 15.dp)) {
+                            AccountLayout(
+                                accountName = info.first ?: "",
+                                url = info.second ?: "",
                             )
-                            HomeShimmer()
-                        }
-
-                    is NeteaseHomeViewModel.State.Error ->
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = stringResource(Res.string.netease_home_error),
-                                style = typo().bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Button(onClick = viewModel::refresh) {
-                                Text(stringResource(Res.string.retry))
-                            }
-                        }
-
-                    is NeteaseHomeViewModel.State.Ready -> {
-                        val ready = current.data
-                        LazyColumn(
-                            state = scrollState,
-                            verticalArrangement = Arrangement.spacedBy(20.dp),
-                        ) {
-                            item(key = "top-space") {
-                                Spacer(
-                                    Modifier.height(
-                                        with(LocalDensity.current) {
-                                            topAppBarHeightPx.toDp()
-                                        },
-                                    ),
-                                )
-                            }
-                            // 账户卡(登录时)
-                            accountInfo?.let { info ->
-                                item(key = "account") {
-                                    Box(Modifier.padding(horizontal = 15.dp)) {
-                                        AccountLayout(
-                                            accountName = info.first ?: "",
-                                            url = info.second ?: "",
-                                        )
-                                    }
-                                }
-                            }
-                            // feed 行:歌单行 + 歌曲行
-                            items(ready.rows, key = { "row_${it.title}" }) { row ->
-                                NeteaseHomeRow(
-                                    title = row.title,
-                                    contents = row.contents,
-                                    navController = navController,
-                                    onSongClick = viewModel::playSong,
-                                )
-                            }
-                            // 榜单区块
-                            ready.chart?.let { chart ->
-                                item(key = "chart") {
-                                    Column(Modifier.padding(horizontal = 15.dp)) {
-                                        Text(
-                                            text = chart.listChartItem.firstOrNull()?.title ?: "排行榜",
-                                            style = typo().headlineMedium,
-                                            color = MaterialTheme.colorScheme.onBackground,
-                                        )
-                                        LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.padding(top = 8.dp),
-                                        ) {
-                                            items(
-                                                chart.listChartItem.firstOrNull()?.playlists ?: emptyList(),
-                                                key = { it.id },
-                                            ) { pl ->
-                                                HomeItemContentPlaylist(
-                                                    onClick = {
-                                                        navController.navigate(
-                                                            PlaylistDestination(playlistId = pl.id),
-                                                        )
-                                                    },
-                                                    data = pl,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // 五组分类区块:YT 同款 —— 每组 3 行横向网格(210dp),卡片带色条
-                            ready.sections?.let { mood ->
-                                item(key = "sections") {
-                                    NeteaseCategorySections(
-                                        sections = mood.sections,
-                                        navController = navController,
-                                    )
-                                }
-                            }
-                            item(key = "end") { EndOfPage() }
                         }
                     }
                 }
+                // 行级懒加载:固定行序,每行独立槽位(Loading 占位→滚到才拉→Ready/Failed)
+                NeteaseHomeViewModel.Row.entries.forEach { row ->
+                    item(key = row.name) {
+                        NeteaseHomeRowSlot(
+                            row = row,
+                            ui = state.rows[row] ?: NeteaseHomeViewModel.RowUi.Loading,
+                            viewModel = viewModel,
+                            navController = navController,
+                            newAlbumsArea = state.newAlbumsArea,
+                        )
+                    }
+                }
+                item(key = "end") { EndOfPage() }
             }
         }
         // 悬浮顶栏 + chips(对照上游骨架)
@@ -303,13 +233,13 @@ fun NeteaseHomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Chip(
-                        isAnimated = state is NeteaseHomeViewModel.State.Loading,
+                        isAnimated = false,
                         isSelected = false,
                         text = stringResource(Res.string.all),
                     ) { }
                     viewModel.chips.forEach { tag ->
                         Chip(
-                            isAnimated = state is NeteaseHomeViewModel.State.Loading,
+                            isAnimated = false,
                             isSelected = false,
                             text = tag,
                         ) {
@@ -425,30 +355,60 @@ private fun NeteaseCategorySections(
 
 
 
-/** 网格专用紧凑歌曲卡:120dp 方图 + 标题/艺人两行小字(总高约 145dp,3 行网格用) */
+/** 网格/单行通用紧凑歌曲卡:方图 + 标题/艺人两行小字。cardWidth 默认 96dp(3 行网格用),
+ *  FM 单行(主页歌单行样式)传 120dp。NeteaseMixScreen(私人FM)同包复用,勿改回 private。
+ *  onTrash 非空时图上叠垃圾桶角标(仅 FM 卡用;主页/每日推荐不传,视觉零变化)。 */
 @Composable
-private fun NeteaseSongCard(
+internal fun NeteaseSongCard(
     content: com.maxrave.domain.data.model.home.Content,
     onClick: () -> Unit,
+    onTrash: (() -> Unit)? = null,
+    cardWidth: androidx.compose.ui.unit.Dp = 96.dp,
 ) {
     Column(
         modifier =
             Modifier
-                .width(96.dp)
+                .width(cardWidth)
                 .padding(4.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick),
     ) {
-        AsyncImage(
-            model = content.thumbnails.lastOrNull()?.url,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(8.dp)),
-        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+        ) {
+            AsyncImage(
+                model = content.thumbnails.lastOrNull()?.url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(8.dp)),
+            )
+            if (onTrash != null) {
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .clickable(onClick = onTrash),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = SimpIcons.Delete,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+            }
+        }
         Text(
             text = content.title,
             style = typo().titleSmall,
@@ -458,11 +418,274 @@ private fun NeteaseSongCard(
             modifier = Modifier.padding(top = 4.dp),
         )
         Text(
-            text = content.artists?.joinToString(", ") { it.name ?: "" }.orEmpty(),
+            text = content.artists?.joinToString(", ") { it.name }.orEmpty(),
             style = typo().bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** 热门歌手行:100dp 圆形头像卡,点击进艺人页(M6 数字 ID 同页路由) */
+@Composable
+private fun NeteaseArtistRow(
+    title: String,
+    artists: List<com.maxrave.domain.data.model.searchResult.artists.ArtistsResult>,
+    navController: NavController,
+) {
+    Column(Modifier.padding(horizontal = 15.dp)) {
+        Text(
+            text = title,
+            style = typo().headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            items(artists, key = { it.browseId }) { artist ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier =
+                        Modifier
+                            .width(100.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                navController.navigate(
+                                    com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination(artist.browseId),
+                                )
+                            }.padding(vertical = 4.dp),
+                ) {
+                    AsyncImage(
+                        model = artist.thumbnails.lastOrNull()?.url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                            Modifier
+                                .size(84.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape),
+                    )
+                    Text(
+                        text = artist.artist,
+                        style = typo().titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 新碟上架行:YT 主页同款 HomeItemContentPlaylist(160dp 方卡,一屏两列),
+ *  点击进专辑页(M6 数字 ID 同页路由)。area 非空时显示地区 chips(分区缓存即时切换)。 */
+@Composable
+private fun NeteaseAlbumRow(
+    title: String,
+    albums: List<com.maxrave.domain.data.model.searchResult.albums.AlbumsResult>,
+    navController: NavController,
+    area: String? = null,
+    onAreaSelect: ((String) -> Unit)? = null,
+) {
+    Column(Modifier.padding(horizontal = 15.dp)) {
+        Text(
+            text = title,
+            style = typo().headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        if (area != null && onAreaSelect != null) {
+            NewAlbumAreaChips(selected = area) { onAreaSelect(it) }
+        }
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            items(albums, key = { it.browseId }) { album ->
+                HomeItemContentPlaylist(
+                    onClick = {
+                        navController.navigate(
+                            com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination(album.browseId),
+                        )
+                    },
+                    data = album,
+                )
+            }
+        }
+    }
+}
+
+/** 行槽位:按行状态渲染占位或内容。Loading 占位被组合即触发拉取(滚到才加载)。
+ *  占位高度对齐真实行高,内容落地不跳滚动位置。 */
+@Composable
+private fun NeteaseHomeRowSlot(
+    row: NeteaseHomeViewModel.Row,
+    ui: NeteaseHomeViewModel.RowUi,
+    viewModel: NeteaseHomeViewModel,
+    navController: NavController,
+    newAlbumsArea: String,
+) {
+    when (ui) {
+        is NeteaseHomeViewModel.RowUi.Loading -> {
+            // 进入组合即触发本行拉取(下拉刷新重置后重新进入 Loading 也会再触发)
+            LaunchedEffect(Unit) { viewModel.ensureRowLoaded(row) }
+            RowPlaceholder(
+                title = row.title,
+                height = row.placeholderHeight(),
+                retry = false,
+            )
+        }
+
+        is NeteaseHomeViewModel.RowUi.Failed -> {
+            RowPlaceholder(
+                title = row.title,
+                height = 120.dp,
+                retry = true,
+                onRetry = { viewModel.retryRow(row) },
+            )
+        }
+
+        is NeteaseHomeViewModel.RowUi.Ready -> {
+            when (val content = ui.content) {
+                is NeteaseHomeViewModel.RowContent.Feed ->
+                    NeteaseHomeRow(
+                        title = content.item.title,
+                        contents = content.item.contents,
+                        navController = navController,
+                        onSongClick = viewModel::playSong,
+                    )
+
+                is NeteaseHomeViewModel.RowContent.ChartRow ->
+                    Column(Modifier.padding(horizontal = 15.dp)) {
+                        Text(
+                            text = content.chart.listChartItem.firstOrNull()?.title ?: "排行榜",
+                            style = typo().headlineMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            items(
+                                content.chart.listChartItem.firstOrNull()?.playlists ?: emptyList(),
+                                key = { it.id },
+                            ) { pl ->
+                                HomeItemContentPlaylist(
+                                    onClick = {
+                                        navController.navigate(
+                                            PlaylistDestination(playlistId = pl.id),
+                                        )
+                                    },
+                                    data = pl,
+                                )
+                            }
+                        }
+                    }
+
+                is NeteaseHomeViewModel.RowContent.ArtistsRow ->
+                    NeteaseArtistRow(
+                        title = row.title,
+                        artists = content.list,
+                        navController = navController,
+                    )
+
+                is NeteaseHomeViewModel.RowContent.AlbumsRow ->
+                    if (row == NeteaseHomeViewModel.Row.NEW_ALBUMS) {
+                        NeteaseAlbumRow(
+                            title = row.title,
+                            albums = content.list,
+                            navController = navController,
+                            area = newAlbumsArea,
+                            onAreaSelect = viewModel::loadNewAlbumsArea,
+                        )
+                    } else {
+                        NeteaseAlbumRow(
+                            title = row.title,
+                            albums = content.list,
+                            navController = navController,
+                        )
+                    }
+
+                is NeteaseHomeViewModel.RowContent.SectionsRow ->
+                    NeteaseCategorySections(
+                        sections = content.mood.sections,
+                        navController = navController,
+                    )
+            }
+        }
+    }
+}
+
+/** 行占位:标题 + 居中转圈(失败态换成重试按钮) */
+@Composable
+private fun RowPlaceholder(
+    title: String,
+    height: androidx.compose.ui.unit.Dp,
+    retry: Boolean,
+    onRetry: () -> Unit = {},
+) {
+    Column(Modifier.padding(horizontal = 15.dp)) {
+        Text(
+            text = title,
+            style = typo().headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .height(height)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (retry) {
+                Button(onClick = onRetry) {
+                    Text(stringResource(Res.string.retry))
+                }
+            } else {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.5.dp,
+                )
+            }
+        }
+    }
+}
+
+/** 占位高度对齐真实行高:歌单/榜单/歌手/专辑行 ~250dp,歌曲三行网格 460dp,分类区块更高 */
+private fun NeteaseHomeViewModel.Row.placeholderHeight(): androidx.compose.ui.unit.Dp =
+    when (this) {
+        NeteaseHomeViewModel.Row.RADAR_SONGS,
+        NeteaseHomeViewModel.Row.NEW_SONGS,
+        -> 460.dp
+        NeteaseHomeViewModel.Row.SECTIONS -> 640.dp
+        else -> 250.dp
+    }
+
+/** 新碟上架地区 chips(ALL/华语/欧美/韩语/日语),命中分区缓存即时切换 */
+@Composable
+private fun NewAlbumAreaChips(
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    val areas = listOf("ALL" to "全部", "ZH" to "华语", "EA" to "欧美", "KR" to "韩语", "JP" to "日语")
+    Row(
+        modifier =
+            Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        areas.forEach { (code, label) ->
+            Chip(
+                isAnimated = false,
+                isSelected = code == selected,
+                text = label,
+            ) { onSelect(code) }
+        }
     }
 }

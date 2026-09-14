@@ -443,16 +443,9 @@ fun SearchScreen(
                                         }
 
                                         is ArtistsResult -> {
-                                            if (isNeteaseSource) {
-                                                // M6 艺人页未通:先提示,页面就绪后换成 ArtistDestination
-                                                searchViewModel.makeToast(
-                                                    getStringBlocking(Res.string.artist_page_coming_soon),
-                                                )
-                                            } else {
-                                                navController.navigate(
-                                                    ArtistDestination(item.browseId),
-                                                )
-                                            }
+                                            navController.navigate(
+                                                ArtistDestination(item.browseId),
+                                            )
                                         }
 
                                         is AlbumsResult -> {
@@ -933,18 +926,11 @@ fun SearchScreen(
                                                     ArtistFullWidthItems(
                                                         data = result,
                                                         onClickListener = {
-                                                            if (isNeteaseSource) {
-                                                                // M6 艺人页未通:先提示,页面就绪后换成 ArtistDestination
-                                                                searchViewModel.makeToast(
-                                                                    getStringBlocking(Res.string.artist_page_coming_soon),
-                                                                )
-                                                            } else {
-                                                                navController.navigate(
-                                                                    ArtistDestination(
-                                                                        result.browseId,
-                                                                    ),
-                                                                )
-                                                            }
+                                                            navController.navigate(
+                                                                ArtistDestination(
+                                                                    result.browseId,
+                                                                ),
+                                                            )
                                                         },
                                                     )
                                                 }
@@ -1361,5 +1347,6 @@ private val NETEASE_SEARCH_TABS =
         SearchType.ALL,
         SearchType.SONGS,
         SearchType.ARTISTS,
+        SearchType.ALBUMS, // M6 专辑页已通,放开
         SearchType.PLAYLISTS,
     )

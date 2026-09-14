@@ -14,6 +14,7 @@ import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LogInViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
+import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseTagViewModel
 import com.maxrave.simpmusic.viewModel.MoodViewModel
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
@@ -35,6 +36,7 @@ val viewModelModule =
     module {
         single {
             SharedViewModel(
+                get(),
                 get(),
                 get(),
                 get(),
@@ -153,6 +155,11 @@ val viewModelModule =
         }
         viewModel {
             NeteaseTagViewModel(
+                get(),
+            )
+        }
+        viewModel {
+            NeteaseMixViewModel(
                 get(),
             )
         }

@@ -200,9 +200,9 @@ class LibraryViewModel(
     fun getYouTubePlaylist() {
 
         // TODO(NETEASE_NEXT): 登录网易云后,LibraryChipType 增加 NETEASE_PLAYLIST 分区,
-        // 数据走 NeteaseRepositoryImpl.getLibraryPlaylists()(红心歌单固定首位);
-        // "混合"tab 收敛跨源个性化内容:YTM mixes 之外追加 getRadarPlaylists()(私人/粉丝雷达)
-        // 与 getDailyPicks()(每日推荐 30 首)分区,tab 可见条件改为「YT 或网易任一登录」。
+        // 数据走 NeteaseRepositoryImpl.getLibraryPlaylists()(红心歌单固定首位)。
+        // ("混合"tab 的跨源合并设想已作废:按架构定稿改为按源切换独立屏,网易源下是
+        //  私人FM 页 NeteaseMixScreen——见 NETEASE_UI_PLAN.md M5。)
         _youTubePlaylist.value = LocalResource.Loading()
         viewModelScope.launch {
             playlistRepository.getLibraryPlaylist().collect { data ->
