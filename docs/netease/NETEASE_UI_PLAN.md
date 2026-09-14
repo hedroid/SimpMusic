@@ -141,6 +141,12 @@ UI 实现：chips 按 selectedSource 过滤，不动 `SearchType` 枚举。
   重叠，做一家即可）；④ 酷我（最低）；⑤ Apple Music **不做**（MusicKit 合规拿不到完整时间轴）。
   接入点全部现成：`getLyricsFromFormat` 分支 + `LyricsProvider` 枚举 + SettingScreen
   YT 模式列表（渲染零改动，映射参考 `toRichSyncWords`）。
+  **参考实现**：[Replica0110/Lyrico](https://github.com/Replica0110/Lyrico)（Kotlin，929★，
+  歌词搜索/匹配/逐字全链路）。重点借鉴其 `utils/MusicMatchUtils.kt` 的匹配算法（比"时长±3s+
+  黑名单"精细一个量级）：版本噪声正则清洗（~30 词）、smartSimilarity 四算法混合（短串偏
+  Levenshtein）、片段双向匹配 + coverage 压虚高、时长分档只占 12% 权重、搜索位次小加分、
+  多 query 组合搜索（片段拼接/双序/单独 title）。其 SearchSource 插件化架构不需要照搬，
+  只抄纯函数部分。详见项目 AGENTS.md 跨源歌词 TODO。
 
 ## M6 专辑/歌手页适配方案（2026-09-14 落地）
 
