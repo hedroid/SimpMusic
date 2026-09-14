@@ -137,6 +137,7 @@
     <string name="custom_order">カスタム順</string>
     <string name="album">アルバム</string>
     <string name="youtube_url">YouTube URL</string>
+    <string name="netease_url">NetEase URL</string>
     <string name="download_url">ダウンロードURL</string>
     <string name="now_playing">再生中</string>
     <string name="queue">キュー</string>

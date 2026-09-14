@@ -143,6 +143,7 @@
     <string name="custom_order">自定义顺序</string>
     <string name="album">专辑</string>
     <string name="youtube_url">YouTube 链接</string>
+    <string name="netease_url">网易云音乐链接</string>
     <string name="download_url">下载链接</string>
     <string name="now_playing">正在播放</string>
     <string name="queue">队列</string>

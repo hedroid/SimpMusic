@@ -139,6 +139,7 @@
     <string name="custom_order">사용자 지정 순서</string>
     <string name="album">앨범</string>
     <string name="youtube_url">YouTube URL</string>
+    <string name="netease_url">NetEase URL</string>
     <string name="download_url">다운로드 URL</string>
     <string name="now_playing">지금 재생 중</string>
     <string name="queue">대기열</string>

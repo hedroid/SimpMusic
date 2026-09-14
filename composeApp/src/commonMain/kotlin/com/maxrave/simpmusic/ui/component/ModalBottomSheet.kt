@@ -226,6 +226,7 @@ import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.liked
 import simpmusic.composeapp.generated.resources.list_all_cookies_of_this_page
 import simpmusic.composeapp.generated.resources.netease_dev_login_title
+import simpmusic.composeapp.generated.resources.netease_url
 import simpmusic.composeapp.generated.resources.lrclib
 import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.merging_audio_and_video
@@ -875,8 +876,20 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
+                // 网易歌的来源链接是 music.163.com(YT 链接对数字 ID 无效);
+                // "下载视频文件"是 YT 视频专属能力,网易纯音频源没有可下的视频
+                val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
+                val sourceUrl =
+                    if (isNeteaseSong) {
+                        "https://music.163.com/song?id=${songEntity?.videoId}"
+                    } else {
+                        "https://music.youtube.com/watch?v=${songEntity?.videoId}"
+                    }
                 Text(
-                    text = stringResource(Res.string.youtube_url),
+                    text =
+                        stringResource(
+                            if (isNeteaseSong) Res.string.netease_url else Res.string.youtube_url,
+                        ),
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -890,11 +903,11 @@ fun InfoPlayerBottomSheet(
                         buildAnnotatedString {
                             withLink(
                                 LinkAnnotation.Url(
-                                    "https://music.youtube.com/watch?v=${songEntity?.videoId}",
+                                    sourceUrl,
                                     TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline)),
                                 ),
                             ) {
-                                append("https://music.youtube.com/watch?v=${songEntity?.videoId}")
+                                append(sourceUrl)
                             }
                         },
                     modifier =
@@ -908,20 +921,22 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
-                OutlinedButton(
-                    enabled = screenDataState.bitmap != null,
-                    onClick = {
-                        sharedViewModel.downloadFile(
-                            bitmap = screenDataState.bitmap ?: return@OutlinedButton,
-                        )
-                    },
-                    modifier =
-                        Modifier
-                            .wrapContentSize()
-                            .align(Alignment.CenterHorizontally)
-                            .padding(vertical = 10.dp),
-                ) {
-                    Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device))
+                if (!isNeteaseSong) {
+                    OutlinedButton(
+                        enabled = screenDataState.bitmap != null,
+                        onClick = {
+                            sharedViewModel.downloadFile(
+                                bitmap = screenDataState.bitmap ?: return@OutlinedButton,
+                            )
+                        },
+                        modifier =
+                            Modifier
+                                .wrapContentSize()
+                                .align(Alignment.CenterHorizontally)
+                                .padding(vertical = 10.dp),
+                    ) {
+                        Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device))
+                    }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -2645,7 +2660,10 @@ fun AddToPlaylistModalBottomSheet(
 
                     val chipRowState = rememberScrollState()
                     var isYouTubePlaylistClicked by remember { mutableStateOf(false) }
-                    if (listYouTubePlaylist.isNotEmpty()) {
+                    // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败),YT 分区整段不亮
+                    val visibleYouTubePlaylists =
+                        if (videoId?.toLongOrNull() != null) emptyList() else listYouTubePlaylist
+                    if (visibleYouTubePlaylists.isNotEmpty()) {
                         Row(
                             modifier =
                                 Modifier
@@ -2671,7 +2689,7 @@ fun AddToPlaylistModalBottomSheet(
                     }
 
                     if ((listLocalPlaylist.isEmpty() && !isYouTubePlaylistClicked) ||
-                        (listYouTubePlaylist.isEmpty() && isYouTubePlaylistClicked)
+                        (visibleYouTubePlaylists.isEmpty() && isYouTubePlaylistClicked)
                     ) {
                         Text(
                             text = stringResource(Res.string.no_playlist_found),
@@ -2683,7 +2701,7 @@ fun AddToPlaylistModalBottomSheet(
                         Crossfade(isYouTubePlaylistClicked) { clicked ->
                             if (clicked) {
                                 LazyColumn {
-                                    items(listYouTubePlaylist) { playlist ->
+                                    items(visibleYouTubePlaylists) { playlist ->
                                         Box(
                                             modifier =
                                                 Modifier

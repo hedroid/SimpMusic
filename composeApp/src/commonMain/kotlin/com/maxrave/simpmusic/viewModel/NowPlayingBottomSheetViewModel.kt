@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
+import com.maxrave.common.songRadioPlaylistId
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
@@ -380,7 +381,13 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.Share -> {
-                    val url = "https://music.youtube.com/watch?v=${songUIState.videoId}"
+                    // 网易数字 ID 拼进 YT 链接是无效地址;按 ID 形状分源拼分享链接
+                    val url =
+                        if (songUIState.videoId.toLongOrNull() != null) {
+                            "https://music.163.com/song?id=${songUIState.videoId}"
+                        } else {
+                            "https://music.youtube.com/watch?v=${songUIState.videoId}"
+                        }
                     shareUrl(
                         title = getString(Res.string.share_url),
                         url,
@@ -392,7 +399,7 @@ class NowPlayingBottomSheetViewModel(
                         .getRadioFromEndpoint(
                             YouTubeWatchEndpoint(
                                 videoId = ev.videoId,
-                                playlistId = "RDAMVM${ev.videoId}",
+                                playlistId = songRadioPlaylistId(ev.videoId),
                             ),
                         ).collectLatest { res ->
                             val data = res.data
@@ -402,7 +409,7 @@ class NowPlayingBottomSheetViewModel(
                                         QueueData.Data(
                                             listTracks = data.first,
                                             firstPlayedTrack = data.first.first(),
-                                            playlistId = "RDAMVM${ev.videoId}",
+                                            playlistId = songRadioPlaylistId(ev.videoId),
                                             playlistName = ev.name,
                                             playlistType = PlaylistType.RADIO,
                                             continuation = data.second,

@@ -143,6 +143,7 @@
     <string name="custom_order">Custom order</string>
     <string name="album">Album</string>
     <string name="youtube_url">YouTube URL</string>
+    <string name="netease_url">NetEase URL</string>
     <string name="download_url">Download URL</string>
     <string name="now_playing">Now Playing</string>
     <string name="queue">Queue</string>

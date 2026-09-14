@@ -147,6 +147,7 @@
     <string name="custom_order">客製訂單</string>
     <string name="album">專輯</string>
     <string name="youtube_url">YouTube網址</string>
+    <string name="netease_url">網易雲音樂連結</string>
     <string name="download_url">下載網址</string>
     <string name="now_playing">現正播放</string>
     <string name="queue">佇列</string>
