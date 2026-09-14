@@ -72,7 +72,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -122,7 +121,6 @@ import com.maxrave.simpmusic.extension.isLanguageCode
 import com.maxrave.simpmusic.extension.isValidProxyHost
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.ActionButton
-import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LoadingDialog
@@ -131,7 +129,6 @@ import com.maxrave.simpmusic.ui.component.ModelIdDropdownField
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SettingItem
 import com.maxrave.simpmusic.ui.component.languageDisplayName
-import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.Error
@@ -686,28 +683,14 @@ fun SettingScreen(
 
     val settingListState = rememberLazyListState()
     // Home's rule: transparent only while pixel-0 is on screen. The frost itself is kept LIGHT
-    // (below) so frosting over the glow reads as a veil, not a lid.
+    // (below) so the title stays readable while rows scroll under the bar.
     val isAtTop by remember {
         derivedStateOf { settingListState.firstVisibleItemIndex == 0 && settingListState.firstVisibleItemScrollOffset == 0 }
     }
-    // Home-family ambient ground, and like Home's it SCROLLS AWAY with the content instead of
-    // hanging off the ceiling. Still a sibling (so it sits behind the floating bar), but its draw
-    // rides the list: exact tracking while item 0 is on screen, parked off-screen after. Item 0 is
-    // taller than the glow, so the glow has fully left before the branch ever switches — no jump.
-    // graphicsLayer reads the state in the DRAW phase, so scrolling redraws without recomposing.
-    val glowNowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
-    AmbientThemeGlow(
-        tint = rememberNowPlayingGlowTint(glowNowPlaying?.songEntity?.thumbnails),
-        modifier =
-            Modifier.graphicsLayer {
-                translationY =
-                    if (settingListState.firstVisibleItemIndex == 0) {
-                        -settingListState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        -size.height
-                    }
-            },
-    )
+    // No AmbientThemeGlow here (unlike Home/Notification/Mix): the now-playing tint, darkened
+    // for dark theme or hushed for light, read as a grayish veil dulling the settings header —
+    // a tool page earns its clarity back by skipping the mood lighting. The floating bar's
+    // haze frost below stays: it is what keeps the title readable while rows scroll under it.
     LazyColumn(
         state = settingListState,
         contentPadding = innerPadding,
