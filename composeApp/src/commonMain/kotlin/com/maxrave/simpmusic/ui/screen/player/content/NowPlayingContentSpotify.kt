@@ -177,6 +177,8 @@ import simpmusic.composeapp.generated.resources.published_at
 import simpmusic.composeapp.generated.resources.rate_lyrics
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
+import simpmusic.composeapp.generated.resources.similar_songs
+import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
 import simpmusic.composeapp.generated.resources.unsynced
@@ -1672,55 +1674,58 @@ fun NowPlayingContentSpotify(
                                 ) {
                                     Spacer(modifier = Modifier.height(5.dp))
                                     if (neteaseMeta != null) {
-                                        // 网易版说明卡:发行日 + 评论数/热评(云村特色,顶替 YT 播放量/赞踩) + 专辑简介
-                                        neteaseMeta.albumPublishDate?.let {
+                                        // 网易版说明卡三层:发行信息(日期·曲目数·唱片公司) →
+                                        // 数据行(评论数可点开列表 · 相似歌曲入口) → 简介(艺人优先,专辑兜底)
+                                        val releaseInfo =
+                                            listOfNotNull(
+                                                neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
+                                                neteaseMeta.albumTrackCount?.let {
+                                                    stringResource(Res.string.track_count_short, it.toString())
+                                                },
+                                                neteaseMeta.albumCompany,
+                                            ).joinToString(" · ")
+                                        if (releaseInfo.isNotEmpty()) {
                                             Text(
-                                                text = stringResource(Res.string.published_at, it),
+                                                text = releaseInfo,
                                                 style = typo().labelSmall,
                                                 color = Color.White,
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
-                                        if (neteaseMeta.commentCount > 0) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (neteaseMeta.commentCount > 0) {
+                                                Text(
+                                                    text =
+                                                        stringResource(
+                                                            Res.string.comments_count,
+                                                            "%,d".format(neteaseMeta.commentCount),
+                                                        ),
+                                                    style = typo().labelMedium,
+                                                    color = Color.White,
+                                                    modifier =
+                                                        Modifier.clickable {
+                                                            actions.onShowNeteaseComments()
+                                                        },
+                                                )
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                            }
                                             Text(
-                                                text =
-                                                    stringResource(
-                                                        Res.string.comments_count,
-                                                        "%,d".format(neteaseMeta.commentCount),
-                                                    ),
+                                                text = stringResource(Res.string.similar_songs),
                                                 style = typo().labelMedium,
                                                 color = Color.White,
+                                                modifier =
+                                                    Modifier.clickable {
+                                                        actions.onStartNeteaseRadio()
+                                                    },
                                             )
-                                            neteaseMeta.hotComments.forEach { comment ->
-                                                Spacer(modifier = Modifier.height(10.dp))
-                                                Column {
-                                                    Text(
-                                                        text =
-                                                            listOfNotNull(
-                                                                comment.nickname,
-                                                                comment.location,
-                                                            ).joinToString(" · "),
-                                                        style = typo().labelSmall,
-                                                        color = Color.White.copy(alpha = 0.7f),
-                                                    )
-                                                    Text(
-                                                        text = comment.content,
-                                                        style = typo().bodyMedium,
-                                                        color = Color.White,
-                                                    )
-                                                }
-                                            }
                                         }
-                                        neteaseMeta.albumDescription?.let { desc ->
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            Text(
-                                                text = stringResource(Res.string.description),
-                                                style = typo().labelSmall,
-                                                color = Color.White,
-                                            )
+                                        val bio =
+                                            neteaseMeta.artistBriefDesc
+                                                ?: neteaseMeta.albumDescription
+                                        if (!bio.isNullOrBlank()) {
                                             Spacer(modifier = Modifier.height(10.dp))
                                             DescriptionView(
-                                                text = desc,
+                                                text = bio,
                                                 onTimeClicked = { },
                                                 onURLClicked = { url ->
                                                     uriHandler.openUri(url)

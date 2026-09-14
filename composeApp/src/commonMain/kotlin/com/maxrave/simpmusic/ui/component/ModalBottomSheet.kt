@@ -203,6 +203,8 @@ import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
 import simpmusic.composeapp.generated.resources.comments
+import simpmusic.composeapp.generated.resources.comments_title
+import simpmusic.composeapp.generated.resources.end_of_list
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
 import simpmusic.composeapp.generated.resources.delete
@@ -234,6 +236,7 @@ import simpmusic.composeapp.generated.resources.lrclib
 import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.merging_audio_and_video
 import simpmusic.composeapp.generated.resources.mime_type
+import simpmusic.composeapp.generated.resources.more
 import simpmusic.composeapp.generated.resources.move_down
 import simpmusic.composeapp.generated.resources.move_up
 import simpmusic.composeapp.generated.resources.no_album
@@ -3529,4 +3532,147 @@ sealed class DevLogInType {
             is Discord -> getString(Res.string.your_discord_token)
             is NetEase -> getString(Res.string.netease_dev_login_title)
         }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NeteaseCommentsSheet(
+    onDismiss: () -> Unit,
+    songId: String,
+    totalCount: Int,
+    neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var comments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
+    // 初始必须 false:loadMore 的重入守卫读它,初始 true 会把首载拦死成永久转圈
+    var loading by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+
+    fun loadMore() {
+        if (loading || !hasMore) return
+        loading = true
+        coroutineScope.launch {
+            val page = neteaseRepository.getSongCommentsPage(songId, limit = 20, offset = comments.size)
+            if (page == null) {
+                hasMore = false
+            } else {
+                // 热评与最新评可能重叠(同一条既在热评也在最新),按内容去重
+                comments = (comments + page.first).distinctBy { it.content + (it.nickname ?: "") }
+                hasMore = page.second
+            }
+            loading = false
+        }
+    }
+
+    LaunchedEffect(songId) {
+        comments = emptyList()
+        hasMore = true
+        loadMore()
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.Transparent,
+        contentColor = Color.Transparent,
+        dragHandle = null,
+        scrimColor = Color.Black.copy(alpha = .5f),
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+    ) {
+        Card(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier.width(60.dp).height(4.dp),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
+                    shape = RoundedCornerShape(50),
+                ) {}
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.comments_title,
+                            "%,d".format(totalCount),
+                        ),
+                    style = typo().titleMedium,
+                    color = rememberSurfaceDarkColors().content,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                )
+                HorizontalDivider(color = rememberSurfaceDarkColors().handle, thickness = 0.5.dp)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                ) {
+                    items(comments) { comment ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                        ) {
+                            AsyncImage(
+                                model = comment.avatarUrl,
+                                contentDescription = null,
+                                modifier =
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(50)),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text =
+                                        listOfNotNull(comment.nickname, comment.location).joinToString(" · "),
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                                Text(
+                                    text = comment.content,
+                                    style = typo().bodyMedium,
+                                    color = rememberSurfaceDarkColors().content,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Icon(
+                                    imageVector = SimpIcons.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = rememberSurfaceDarkColors().subtitle,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Text(
+                                    text = comment.likedCount?.let { "%,d".format(it) } ?: "",
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            when {
+                                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                hasMore -> TextButton(onClick = { loadMore() }) {
+                                    Text(text = stringResource(Res.string.more), style = typo().labelMedium)
+                                }
+                                else -> Text(
+                                    text = stringResource(Res.string.end_of_list),
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

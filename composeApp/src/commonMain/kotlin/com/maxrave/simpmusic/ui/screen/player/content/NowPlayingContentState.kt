@@ -126,6 +126,10 @@ class NowPlayingContentActions(
     val onSliderChangeFinished: () -> Unit,
     val onToggleControls: () -> Unit,
     val onNavigateToArtist: () -> Unit,
+    /** 网易歌:打开评论列表弹窗(详情卡评论数点击) */
+    val onShowNeteaseComments: () -> Unit = {},
+    /** 网易歌:相似歌曲入口(详情卡,复用 simiSong 电台) */
+    val onStartNeteaseRadio: () -> Unit = {},
     val onShowMoreSheet: () -> Unit,
     val onShowQueue: () -> Unit,
     val onShowInfo: () -> Unit,

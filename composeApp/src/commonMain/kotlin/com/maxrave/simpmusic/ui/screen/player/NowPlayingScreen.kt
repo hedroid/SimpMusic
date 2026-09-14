@@ -52,6 +52,7 @@ import com.maxrave.simpmusic.extension.rememberIsInPipMode
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsSheet
 import com.maxrave.simpmusic.ui.component.InfoPlayerBottomSheet
+import com.maxrave.simpmusic.ui.component.NeteaseCommentsSheet
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.VoteLyricsDialog
@@ -334,6 +335,9 @@ fun NowPlayingScreenContent(
     var showInfoBottomSheet by rememberSaveable {
         mutableStateOf(false)
     }
+    var showNeteaseComments by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     var showVoteDialog by rememberSaveable {
         mutableStateOf(false)
@@ -580,6 +584,20 @@ fun NowPlayingScreenContent(
         )
     }
 
+    // 网易歌评论列表(详情卡评论数入口);songId 取自当前曲目,面板自身负责分页。
+    // 用 songEntity.videoId 而非 track.videoId:后者在部分转场时机为 null,
+    // 空串进去分页直接"已经到底了"
+    if (showNeteaseComments) {
+        NeteaseCommentsSheet(
+            onDismiss = { showNeteaseComments = false },
+            songId =
+                mediaPlayerHandler.nowPlayingState.value.songEntity?.videoId
+                    ?: nowPlayingVideoId
+                    ?: "",
+            totalCount = screenDataState.neteaseSongData?.commentCount ?: 0,
+        )
+    }
+
     // NEW: Add to Playlist Bottom Sheet
     if (showAddToPlaylistDirectly) {
         val viewModel: NowPlayingBottomSheetViewModel = koinViewModel()
@@ -695,6 +713,8 @@ fun NowPlayingScreenContent(
                 showHideJob = true
                 showHideControlLayout = !showHideControlLayout
             },
+            onShowNeteaseComments = { showNeteaseComments = true },
+            onStartNeteaseRadio = { mediaPlayerHandler.toggleRadio() },
             onNavigateToArtist = {
             // TODO(NETEASE_NEXT): 播放页数据适配 ——
             // 1) 歌词:source==NETEASE 时走 NeteaseRepositoryImpl.getLyrics()(yrc 逐字/

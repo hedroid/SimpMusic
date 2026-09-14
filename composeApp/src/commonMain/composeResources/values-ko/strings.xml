@@ -144,6 +144,10 @@
     <string name="netease_like_sync_description">앱에서 좋아요한 곡을 NetEase 계정에도 동기화</string>
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
+    <string name="similar_songs">비슷한 곡</string>
+    <string name="track_count_short">%1$s곡</string>
+    <string name="comments_title">댓글 · %1$s</string>
+    <string name="end_of_list">마지막 댓글입니다</string>
     <string name="comments">댓글</string>
     <string name="download_url">다운로드 URL</string>
     <string name="now_playing">지금 재생 중</string>
