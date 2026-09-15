@@ -45,8 +45,8 @@ import simpmusic.composeapp.generated.resources.starred_albums
 
 /**
  * "您的网易云"tab(M2 库融合 + 原主页两行迁入):三分区单页——
- * 歌单(红心置顶)132dp tile 网格 / 关注的歌手(主页热门歌手行同款 3 行横滑) /
- * 收藏的专辑(主页新碟上架行同款横滑)。三分区并行拉取、独立降级(失败的分区
+ * 歌单(红心置顶)132dp tile 网格 / 收藏的专辑(主页新碟上架行同款横滑) /
+ * 关注的歌手(主页热门歌手行同款 3 行横滑,沉底)。三分区并行拉取、独立降级(失败的分区
  * 直接隐藏,不拖垮整页);全部分区空才显示空态。下拉刷新 force 绕过行缓存,
  * 且不清空已显示分区(原地替换)。
  */
@@ -144,22 +144,23 @@ internal fun LibraryNeteaseTab(
                         }
                     }
 
+                    if (albumList.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_albums_row") {
+                            NeteaseAlbumRow(
+                                title = stringResource(Res.string.starred_albums),
+                                albums = albumList,
+                                navController = navController,
+                            )
+                        }
+                    }
+
+                    // 关注的歌手沉底(用户偏好):歌单 → 收藏的专辑 → 关注的歌手
                     if (artistList.isNotEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "netease_artists_row") {
                             NeteaseArtistRow(
                                 title = stringResource(Res.string.followed),
                                 artists = artistList,
                                 showRank = false,
-                                navController = navController,
-                            )
-                        }
-                    }
-
-                    if (albumList.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_albums_row") {
-                            NeteaseAlbumRow(
-                                title = stringResource(Res.string.starred_albums),
-                                albums = albumList,
                                 navController = navController,
                             )
                         }
