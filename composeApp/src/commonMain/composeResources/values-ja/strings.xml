@@ -140,7 +140,7 @@
     <string name="netease_url">NetEase URL</string>
     <string name="netease_like_sync">ローカルとNetEaseのいいねを統合</string>
     <string name="netease_like_sync_description">アプリ内でいいねした曲をNetEaseアカウントにも同期</string>
-    <string name="netease_play_report">NetEaseに再生を報告</string>
+    <string name="netease_play_report">再生データをNetEaseに送信</string>
     <string name="netease_play_report_description">再生記録をNetEaseアカウントに報告し、おすすめや年間レポートに反映します</string>
     <string name="fans_count">%1$s フォロワー</string>
     <string name="comments_count">%1$s 件のコメント</string>
