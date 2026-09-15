@@ -927,7 +927,7 @@
     <string name="netease_quality">NetEase streaming quality</string>
     <string name="netease_download_quality">NetEase download quality</string>
     <string name="netease_follow_sync">Sync follows with NetEase</string>
-    <string name="netease_follow_sync_description">Following or unfollowing an artist also applies to your NetEase account</string>
+    <string name="netease_follow_sync_description">Following or unfollowing an artist, and favoriting or unfavoriting a NetEase playlist, also applies to your NetEase account</string>
     <string name="netease_like_sync">Combine local and NetEase liked songs</string>
     <string name="netease_like_sync_description">Heart a song in the app also hearts it in your NetEase account</string>
     <string name="netease_play_report">Send playback data to NetEase</string>

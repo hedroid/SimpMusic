@@ -898,7 +898,7 @@
     <string name="netease_quality">网易云在线音质</string>
     <string name="netease_download_quality">网易云下载音质</string>
     <string name="netease_follow_sync">关注与网易云同步</string>
-    <string name="netease_follow_sync_description">关注或取消关注艺人时，同步到你的网易云账号</string>
+    <string name="netease_follow_sync_description">关注或取消关注艺人、收藏或取消收藏网易歌单时，同步到你的网易云账号</string>
     <string name="netease_like_sync">合并本地与网易云喜欢的歌曲</string>
     <string name="netease_like_sync_description">在应用里红心一首歌时，同步到你的网易云账号</string>
     <string name="netease_play_report">发送播放数据到网易云</string>

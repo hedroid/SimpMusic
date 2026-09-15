@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
 import com.maxrave.data.repository.NeteaseRepositoryImpl
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
 import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
@@ -73,6 +75,7 @@ class PlaylistViewModel(
     private val localPlaylistRepository: LocalPlaylistRepository,
     private val playlistRepository: PlaylistRepository,
     private val neteaseRepository: NeteaseRepositoryImpl,
+    private val dataStoreManager: DataStoreManager,
 ) : BaseViewModel() {
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val albumRepository: AlbumRepository by inject<AlbumRepository>()
@@ -490,6 +493,18 @@ class PlaylistViewModel(
                 it?.copy(
                     liked = tempLiked == 1,
                 )
+            }
+            // 网易歌单:收藏/取消收藏同步云村(/playlist/subscribe),任何入口进来的数字 ID
+            // 歌单都走这里;与艺人关注共用"关注与网易云同步"开关(用户定案:收藏歌单=订阅,
+            // 和关注艺人同属 subscribe 语义,不单设开关)。自建歌单云端会拒绝收藏(自己的
+            // 歌单无此概念),静默跳过不回滚——本地标记仍然生效(app 内"收藏的歌单"tab)。
+            if (id.toLongOrNull() != null &&
+                dataStoreManager.neteaseFollowSync.first() == DataStoreManager.TRUE &&
+                !neteaseRepository.isOwnNeteasePlaylist(id)
+            ) {
+                neteaseRepository
+                    .subscribeNeteasePlaylist(id, tempLiked == 1)
+                    .onFailure { Logger.w(tag, "netease playlist subscribe sync failed: ${it.message}") }
             }
             getFullTracks { }
         }
