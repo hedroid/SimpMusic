@@ -88,6 +88,8 @@ internal inline fun <reified T> GridLibraryPlaylist(
     // Long-pressing a tile, wired only by the downloaded-playlists tab to offer removing that
     // playlist's download without opening it.
     noinline onRemoveDownload: ((PlaylistType) -> Unit)? = null,
+    // 混源 tab(收藏/下载)传 true:网易来源的 tile 右上角渲染品牌角标;纯源 tab 不传。
+    showSourceBadge: Boolean = false,
     noinline onReload: () -> Unit,
 ) {
     Logger.w("GridLibraryPlaylist", "Generic Type: ${T::class.simpleName}")
@@ -274,6 +276,7 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             },
                             data = item,
                             thumbSize = 132.dp,
+                            showNeteaseBadge = showSourceBadge,
                             onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
                         )
                     }

@@ -315,6 +315,8 @@ fun HomeItemContentPlaylist(
     // Null keeps the plain tap behaviour; set only where a long-press action exists (the
     // Library's downloaded-playlist grid uses it to offer removing the download).
     onLongClick: (() -> Unit)? = null,
+    // 混源网格(收藏/下载)里标记网易来源的品牌角标;纯源页面(网易主页/您的网易云)不传。
+    showNeteaseBadge: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     Box(
@@ -356,91 +358,101 @@ fun HomeItemContentPlaylist(
                     is MonthlyRecapItem -> null
                     else -> null
                 }
-            AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(thumb)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .diskCacheKey(thumb)
-                        .crossfade(550)
-                        .build(),
-                placeholder =
-                    when (data) {
-                        is LocalPlaylistEntity -> {
-                            painterPlaylistThumbnail(
-                                data.title,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+            Box(modifier = Modifier.size(thumbSize)) {
+                AsyncImage(
+                    model =
+                        ImageRequest
+                            .Builder(LocalPlatformContext.current)
+                            .data(thumb)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .diskCacheKey(thumb)
+                            .crossfade(550)
+                            .build(),
+                    placeholder =
+                        when (data) {
+                            is LocalPlaylistEntity -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        is ChartItem -> {
-                            painterPlaylistThumbnail(
-                                data.name,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+                            is ChartItem -> {
+                                painterPlaylistThumbnail(
+                                    data.name,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        // A month whose top song has no artwork still has a name, and the
-                        // deterministic title tile reads as a playlist where the grey holder
-                        // reads as a failed load.
-                        is MonthlyRecapItem -> {
-                            painterPlaylistThumbnail(
-                                data.title,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+                            // A month whose top song has no artwork still has a name, and the
+                            // deterministic title tile reads as a playlist where the grey holder
+                            // reads as a failed load.
+                            is MonthlyRecapItem -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        else -> {
-                            rememberHolderPainter()
-                        }
-                    },
-                error =
-                    when (data) {
-                        is LocalPlaylistEntity -> {
-                            painterPlaylistThumbnail(
-                                data.title,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+                            else -> {
+                                rememberHolderPainter()
+                            }
+                        },
+                    error =
+                        when (data) {
+                            is LocalPlaylistEntity -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        is ChartItem -> {
-                            painterPlaylistThumbnail(
-                                data.name,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+                            is ChartItem -> {
+                                painterPlaylistThumbnail(
+                                    data.name,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        // A month whose top song has no artwork still has a name, and the
-                        // deterministic title tile reads as a playlist where the grey holder
-                        // reads as a failed load.
-                        is MonthlyRecapItem -> {
-                            painterPlaylistThumbnail(
-                                data.title,
-                                style = typo().bodySmall,
-                                thumbSize * 0.9f to thumbSize * 0.9f,
-                            )
-                        }
+                            // A month whose top song has no artwork still has a name, and the
+                            // deterministic title tile reads as a playlist where the grey holder
+                            // reads as a failed load.
+                            is MonthlyRecapItem -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
 
-                        else -> {
-                            rememberHolderPainter()
-                        }
-                    },
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .size(thumbSize)
-                        .aspectRatio(1f)
-                        .clip(
-                            RoundedCornerShape(10.dp),
-                        ),
-            )
+                            else -> {
+                                rememberHolderPainter()
+                            }
+                        },
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .size(thumbSize)
+                            .aspectRatio(1f)
+                            .clip(
+                                RoundedCornerShape(10.dp),
+                            ),
+                )
+                if (showNeteaseBadge && isNeteaseContent(data)) {
+                    NeteaseSourceBadge(
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp),
+                    )
+                }
+            }
             Text(
                 text =
                     when (data) {

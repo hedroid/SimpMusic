@@ -231,6 +231,8 @@ fun LibraryItem(
                                                         }
                                                     }
                                                 },
+                                                // 最近添加是混源列表:网易来源的歌单/专辑带品牌角标
+                                                showNeteaseBadge = true,
                                             )
                                         }
                                     }

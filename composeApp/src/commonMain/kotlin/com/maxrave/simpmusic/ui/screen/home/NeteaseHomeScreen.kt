@@ -430,9 +430,9 @@ internal fun NeteaseSongCard(
     }
 }
 
-/** 热门歌手行:100dp 圆形头像卡,点击进艺人页(M6 数字 ID 同页路由) */
+/** 热门歌手行:100dp 圆形头像卡,点击进艺人页(M6 数字 ID 同页路由);库页"您的网易云"关注的歌手分区复用(showRank=false) */
 @Composable
-private fun NeteaseArtistRow(
+internal fun NeteaseArtistRow(
     title: String,
     artists: List<com.maxrave.domain.data.model.searchResult.artists.ArtistsResult>,
     showRank: Boolean,
@@ -492,9 +492,10 @@ private fun NeteaseArtistRow(
 }
 
 /** 新碟上架行:YT 主页同款 HomeItemContentPlaylist(160dp 方卡,一屏两列),
- *  点击进专辑页(M6 数字 ID 同页路由)。area 非空时显示地区 chips(分区缓存即时切换)。 */
+ *  点击进专辑页(M6 数字 ID 同页路由)。area 非空时显示地区 chips(分区缓存即时切换);
+ *  库页"您的网易云"收藏的专辑分区复用(不带地区 chips)。 */
 @Composable
-private fun NeteaseAlbumRow(
+internal fun NeteaseAlbumRow(
     title: String,
     albums: List<com.maxrave.domain.data.model.searchResult.albums.AlbumsResult>,
     navController: NavController,

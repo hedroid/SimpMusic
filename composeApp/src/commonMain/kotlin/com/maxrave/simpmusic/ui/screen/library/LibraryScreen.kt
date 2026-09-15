@@ -123,6 +123,7 @@ import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
+import simpmusic.composeapp.generated.resources.your_netease
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_playlists
 
@@ -150,6 +151,11 @@ fun LibraryScreen(
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
     val chartPlaylists by viewModel.chartPlaylists.collectAsStateWithLifecycle()
     val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
+    val neteaseLoggedIn by viewModel.neteaseLoggedIn.collectAsStateWithLifecycle(initialValue = false)
+    val neteasePlaylist by viewModel.neteasePlaylist.collectAsStateWithLifecycle()
+    val subscribedArtists by viewModel.subscribedArtists.collectAsStateWithLifecycle()
+    val starredAlbums by viewModel.starredAlbums.collectAsStateWithLifecycle()
+    val neteaseRefreshing by viewModel.neteaseRefreshing.collectAsStateWithLifecycle()
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
@@ -187,6 +193,14 @@ fun LibraryScreen(
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
                 if (youTubePlaylist.data.isNullOrEmpty()) {
                     viewModel.getYouTubePlaylist()
+                }
+            }
+
+            // "您的网易云"三分区(歌单/关注的歌手/收藏的专辑):空数据才拉,下拉刷新走 force。
+            // 登出回落由 VM 的 neteaseCookie collect 负责,这里不会停在无数据的分区上。
+            LibraryChipType.NETEASE_PLAYLIST -> {
+                if (neteasePlaylist !is LocalResource.Success) {
+                    viewModel.getNeteaseLibrary()
                 }
             }
 
@@ -306,6 +320,19 @@ fun LibraryScreen(
                 }
             }
 
+            LibraryChipType.NETEASE_PLAYLIST -> {
+                LibraryNeteaseTab(
+                    navController = navController,
+                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    playlists = neteasePlaylist,
+                    artists = subscribedArtists,
+                    albums = starredAlbums,
+                    isRefreshing = neteaseRefreshing,
+                    onRefresh = { viewModel.getNeteaseLibrary(force = true) },
+                    onScrolling = onScrolling,
+                )
+            }
+
             // Nothing to draw: MixForYouScreen owns this content now, and the effect above bounces
             // the filter back to YOUR_LIBRARY the moment it lands here.
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> Unit
@@ -331,6 +358,8 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     favoritePlaylist,
                     emptyText = Res.string.no_favorite_playlists,
+                    // 混源网格:网易来源的收藏条目带品牌角标
+                    showSourceBadge = true,
                     onScrolling = onScrolling,
                 ) {
                     viewModel.getPlaylistFavorite()
@@ -343,6 +372,7 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
+                    showSourceBadge = true,
                     onScrolling = onScrolling,
                     onRemoveDownload = { item ->
                         removeDownloadTarget = item
@@ -555,6 +585,10 @@ fun LibraryScreen(
                 if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
                     return@forEach
                 }
+                // "您的网易云"分区只在网易登录时出现(与 YT 分区对 YT 登录的门控对称)
+                if (type == LibraryChipType.NETEASE_PLAYLIST && !neteaseLoggedIn) {
+                    return@forEach
+                }
                 // Nothing to recap without the plays — gated exactly as the YouTube chip above
                 // is gated on being logged in.
                 if (type == LibraryChipType.WRAPPED && !localTrackingEnabled) {
@@ -567,6 +601,7 @@ fun LibraryScreen(
                         when (type) {
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
                             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_playlists)
+                            LibraryChipType.NETEASE_PLAYLIST -> stringResource(Res.string.your_netease)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
                             LibraryChipType.FAVORITE_PLAYLIST -> stringResource(Res.string.favorite_playlists)

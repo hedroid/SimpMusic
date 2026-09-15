@@ -78,6 +78,10 @@
     <string name="sort_hot">熱門</string>
     <string name="sort_highquality">精品</string>
     <string name="netease_lyrics">網易官方歌詞</string>
+    <string name="your_netease">您的網易雲</string>
+    <string name="no_netease_content">未找到網易雲內容</string>
+    <string name="netease_playlists">播放清單</string>
+    <string name="starred_albums">收藏的專輯</string>
     <string name="personal_fm">私人FM</string>
     <string name="personal_fm_subtitle">根據你的口味不斷生成</string>
     <string name="personal_fm_start">開始收聽</string>

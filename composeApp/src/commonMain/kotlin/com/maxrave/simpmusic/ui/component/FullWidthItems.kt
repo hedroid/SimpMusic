@@ -533,6 +533,8 @@ fun PlaylistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
+    // 混源列表(库页最近添加行)里标记网易来源的品牌角标;其余调用点不传。
+    showNeteaseBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -628,6 +630,14 @@ fun PlaylistFullWidthItems(
                             .fillMaxSize()
                             .clip(RoundedCornerShape(4.dp)),
                 )
+                if (showNeteaseBadge && isNeteaseContent(data)) {
+                    NeteaseSourceBadge(
+                        size = 16.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd),
+                    )
+                }
             }
             Column(
                 Modifier

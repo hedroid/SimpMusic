@@ -3,11 +3,14 @@ package com.maxrave.simpmusic.viewModel
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
 import com.maxrave.common.LibraryChipType
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.data.entities.AlbumEntity
 import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
+import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.type.ChartItem
 import com.maxrave.domain.data.type.MonthlyRecapItem
@@ -32,6 +35,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +74,7 @@ class LibraryViewModel(
     private val localPlaylistRepository: LocalPlaylistRepository,
     private val albumRepository: AlbumRepository,
     private val podcastRepository: PodcastRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
 
@@ -130,6 +135,34 @@ class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val youtubeLoggedIn = dataStoreManager.loggedIn.mapLatest { it == DataStoreManager.TRUE }
 
+    /** 网易云登录态(MUSIC_U cookie 存在与否),门控"您的网易云"chip 与登出回落 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val neteaseLoggedIn = dataStoreManager.neteaseCookie.mapLatest { it.isNotEmpty() }
+
+    // ------------------------------------------------ "您的网易云"tab(三分区,并行独立降级)
+
+    /** 歌单(红心歌单固定首位,repo 已按 specialType 稳定排序) */
+    private val _neteasePlaylist: MutableStateFlow<LocalResource<List<PlaylistEntity>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val neteasePlaylist: StateFlow<LocalResource<List<PlaylistEntity>>> get() = _neteasePlaylist.asStateFlow()
+
+    /** 关注的歌手(/artist/sublist,repo 自带 10min 行缓存) */
+    private val _subscribedArtists: MutableStateFlow<LocalResource<List<ArtistsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val subscribedArtists: StateFlow<LocalResource<List<ArtistsResult>>> get() = _subscribedArtists.asStateFlow()
+
+    /** 收藏的专辑(/mine/rn/resource/list,repo 自带 10min 行缓存) */
+    private val _starredAlbums: MutableStateFlow<LocalResource<List<AlbumsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val starredAlbums: StateFlow<LocalResource<List<AlbumsResult>>> get() = _starredAlbums.asStateFlow()
+
+    /**
+     * 刷新指示器独立于分区状态:下拉刷新不清空已显示的分区(原地替换),
+     * 只有首拉(无数据)才让分区进 Loading 占整页 spinner。
+     */
+    private val _neteaseRefreshing = MutableStateFlow(false)
+    val neteaseRefreshing: StateFlow<Boolean> get() = _neteaseRefreshing.asStateFlow()
+
     /**
      * Whether the Wrapped chip has anything behind it.
      *
@@ -148,6 +181,12 @@ class LibraryViewModel(
                             _currentScreen.value = it
                         }
                     }
+                    // 持久化值是"您的网易云"但网易已登出 → 弹回默认(同 YOUTUBE_MIX_FOR_YOU 的回落处理)
+                    if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST &&
+                        dataStoreManager.neteaseCookie.first().isEmpty()
+                    ) {
+                        setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                    }
                 }
             val cookieJob =
                 launch {
@@ -155,8 +194,23 @@ class LibraryViewModel(
                         _accountThumbnail.value = dataStoreManager.getString("AccountThumbUrl").first().takeIf { !it.isNullOrEmpty() }
                     }
                 }
+            val neteaseLogoutJob =
+                launch {
+                    // 运行中登出网易:停在"您的网易云"tab 时弹回,并清数据防下次登入闪旧内容
+                    dataStoreManager.neteaseCookie.distinctUntilChanged().collect { cookie ->
+                        if (cookie.isEmpty()) {
+                            if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST) {
+                                setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                            }
+                            _neteasePlaylist.value = LocalResource.Loading()
+                            _subscribedArtists.value = LocalResource.Loading()
+                            _starredAlbums.value = LocalResource.Loading()
+                        }
+                    }
+                }
             currentScreenJob.join()
             cookieJob.join()
+            neteaseLogoutJob.join()
         }
     }
 
@@ -198,16 +252,52 @@ class LibraryViewModel(
     }
 
     fun getYouTubePlaylist() {
-
-        // TODO(NETEASE_NEXT): 登录网易云后,LibraryChipType 增加 NETEASE_PLAYLIST 分区,
-        // 数据走 NeteaseRepositoryImpl.getLibraryPlaylists()(红心歌单固定首位)。
-        // ("混合"tab 的跨源合并设想已作废:按架构定稿改为按源切换独立屏,网易源下是
-        //  私人FM 页 NeteaseMixScreen——见 NETEASE_UI_PLAN.md M5。)
         _youTubePlaylist.value = LocalResource.Loading()
         viewModelScope.launch {
             playlistRepository.getLibraryPlaylist().collect { data ->
                 _youTubePlaylist.value = LocalResource.Success(data ?: emptyList())
             }
+        }
+    }
+
+    /**
+     * "您的网易云"tab 三分区并行拉取:歌单(红心置顶)/关注的歌手/收藏的专辑。
+     * 分区独立降级——一个失败只隐藏该分区,不拖垮整页;[force] 透传给带行缓存的
+     * 艺人/专辑两路(下拉刷新绕过缓存),歌单无缓存每次都拉。
+     */
+    fun getNeteaseLibrary(force: Boolean = false) {
+        val firstLoad =
+            _neteasePlaylist.value.data == null &&
+                _subscribedArtists.value.data == null &&
+                _starredAlbums.value.data == null
+        if (firstLoad) {
+            _neteasePlaylist.value = LocalResource.Loading()
+            _subscribedArtists.value = LocalResource.Loading()
+            _starredAlbums.value = LocalResource.Loading()
+        }
+        _neteaseRefreshing.value = true
+        viewModelScope.launch {
+            coroutineScope {
+                launch {
+                    neteaseRepository.getLibraryPlaylists().fold(
+                        onSuccess = { _neteasePlaylist.value = LocalResource.Success(it) },
+                        onFailure = { _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed") },
+                    )
+                }
+                launch {
+                    neteaseRepository.getSubscribedArtists(force).fold(
+                        onSuccess = { _subscribedArtists.value = LocalResource.Success(it.toList()) },
+                        onFailure = { _subscribedArtists.value = LocalResource.Error(it.message ?: "subscribed artists failed") },
+                    )
+                }
+                launch {
+                    neteaseRepository.getStarredAlbums(force).fold(
+                        onSuccess = { _starredAlbums.value = LocalResource.Success(it.toList()) },
+                        onFailure = { _starredAlbums.value = LocalResource.Error(it.message ?: "starred albums failed") },
+                    )
+                }
+            }
+            _neteaseRefreshing.value = false
         }
     }
 
