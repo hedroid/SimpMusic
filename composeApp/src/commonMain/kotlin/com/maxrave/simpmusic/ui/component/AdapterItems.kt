@@ -1111,17 +1111,20 @@ fun ItemArtistChart(
                     .width(widthDp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = data.rank,
-                style = typo().titleLarge,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .wrapContentSize(Alignment.Center)
-                        .align(Alignment.CenterVertically)
-                        .padding(end = 20.dp),
-            )
+            // 空排名(网易"关注的歌手"行)不占位,卡片整体收窄——与有榜的行共用同一组件
+            if (data.rank.isNotEmpty()) {
+                Text(
+                    text = data.rank,
+                    style = typo().titleLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier =
+                        Modifier
+                            .wrapContentSize(Alignment.Center)
+                            .align(Alignment.CenterVertically)
+                            .padding(end = 20.dp),
+                )
+            }
             val thumb = data.thumbnails.lastOrNull()?.url
             Logger.w("AsyncImage", "HomeItemSong: $thumb")
             AsyncImage(
@@ -1160,19 +1163,21 @@ fun ItemArtistChart(
                         Modifier
                             .wrapContentHeight(align = Alignment.CenterVertically),
                 )
-                Text(
-                    text =
-                        if (data.subscribers.contains(
-                                stringResource(Res.string.subscribers).replace("%1\$s ", ""),
-                            )
-                        ) {
-                            data.subscribers
-                        } else {
-                            stringResource(
-                                Res.string.subscribers,
-                                data.subscribers,
-                            )
-                        },
+                // 无订阅数数据(网易行)时隐藏副标题,YT 恒有值不受影响
+                if (data.subscribers.isNotEmpty()) {
+                    Text(
+                        text =
+                            if (data.subscribers.contains(
+                                    stringResource(Res.string.subscribers).replace("%1\$s ", ""),
+                                )
+                            ) {
+                                data.subscribers
+                            } else {
+                                stringResource(
+                                    Res.string.subscribers,
+                                    data.subscribers,
+                                )
+                            },
                     style = typo().bodySmall,
                     minLines = 1,
                     maxLines = 1,
@@ -1185,7 +1190,8 @@ fun ItemArtistChart(
                                 repeatDelayMillis = 2000,
                                 velocity = 25.dp,
                             ),
-                )
+                    )
+                }
             }
         }
     }

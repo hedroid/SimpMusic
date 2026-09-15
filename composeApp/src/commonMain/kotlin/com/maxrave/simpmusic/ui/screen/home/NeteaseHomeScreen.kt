@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +68,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.maxrave.simpmusic.ui.component.ItemArtistChart
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.Chip
@@ -433,50 +435,55 @@ internal fun NeteaseSongCard(
 private fun NeteaseArtistRow(
     title: String,
     artists: List<com.maxrave.domain.data.model.searchResult.artists.ArtistsResult>,
+    showRank: Boolean,
     navController: NavController,
 ) {
+    // YTM 主页"热门艺人"(排行榜 shelf 艺人榜)同款:3 行 240dp 横滑网格 + ItemArtistChart
+    // (排名+60dp 圆头像+名字+副标题)。网易无订阅数,副标题留空隐藏。
+    var rowWidthDp by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+    val lazyGridState = rememberLazyGridState()
+    val snapperFlingBehavior =
+        rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyGridState))
     Column(Modifier.padding(horizontal = 15.dp)) {
         Text(
             text = title,
             style = typo().headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(top = 8.dp),
+        Column(
+            Modifier
+                .onGloballyPositioned { coordinates ->
+                    with(density) {
+                        rowWidthDp = (coordinates.size.width).toDp()
+                    }
+                },
         ) {
-            items(artists, key = { it.browseId }) { artist ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier =
-                        Modifier
-                            .width(100.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                navController.navigate(
-                                    com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination(artist.browseId),
-                                )
-                            }.padding(vertical = 4.dp),
-                ) {
-                    AsyncImage(
-                        model = artist.thumbnails.lastOrNull()?.url,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        // 无占位时加载失败=纯空白圆,看着像数据丢了;给个 holder 至少能看出"这里是头像"
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
-                        modifier =
-                            Modifier
-                                .size(84.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape),
-                    )
-                    Text(
-                        text = artist.artist,
-                        style = typo().titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 6.dp),
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp),
+                state = lazyGridState,
+                flingBehavior = snapperFlingBehavior,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(artists.size, key = { artists[it].browseId }) { index ->
+                    val artist = artists[index]
+                    ItemArtistChart(
+                        onClick = {
+                            navController.navigate(
+                                com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination(artist.browseId),
+                            )
+                        },
+                        data =
+                            com.maxrave.domain.data.model.home.chart.ItemArtist(
+                                browseId = artist.browseId,
+                                rank = if (showRank) "${index + 1}" else "",
+                                subscribers = "",
+                                thumbnails = artist.thumbnails,
+                                title = artist.artist,
+                                trend = "",
+                            ),
+                        widthDp = rowWidthDp,
                     )
                 }
             }
@@ -592,6 +599,7 @@ private fun NeteaseHomeRowSlot(
                     NeteaseArtistRow(
                         title = row.title,
                         artists = content.list,
+                        showRank = row == NeteaseHomeViewModel.Row.TOP_ARTISTS,
                         navController = navController,
                     )
 
