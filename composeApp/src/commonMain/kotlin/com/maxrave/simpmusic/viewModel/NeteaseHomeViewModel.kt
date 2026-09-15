@@ -38,11 +38,10 @@ class NeteaseHomeViewModel(
         HQ("精品歌单"),
         NEW_SONGS("推荐新歌"),
         CHART("排行榜"),
-        SUB_ARTISTS("关注的歌手"),
-        TOP_ARTISTS("热门歌手"),
         NEW_ALBUMS("新碟上架"),
-        STARRED_ALBUMS("收藏的专辑"),
         SECTIONS("分类"),
+        // 对齐 YTM:热门歌手(艺人榜)是主页最后一行
+        TOP_ARTISTS("热门歌手"),
     }
 
     /** 行内容(Feed=歌单/歌曲行复用 HomeItem 形状) */
@@ -169,16 +168,8 @@ class NeteaseHomeViewModel(
                 neteaseRepository.getTopArtists(force = force).getOrNull()
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { RowUi.Ready(RowContent.ArtistsRow(it)) } ?: RowUi.Failed
-            Row.SUB_ARTISTS ->
-                neteaseRepository.getSubscribedArtists(force = force).getOrNull()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { RowUi.Ready(RowContent.ArtistsRow(it)) } ?: RowUi.Failed
             Row.NEW_ALBUMS ->
                 neteaseRepository.getNewAlbums(area = _state.value.newAlbumsArea, force = force).getOrNull()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { RowUi.Ready(RowContent.AlbumsRow(it)) } ?: RowUi.Failed
-            Row.STARRED_ALBUMS ->
-                neteaseRepository.getStarredAlbums(force = force).getOrNull()
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { RowUi.Ready(RowContent.AlbumsRow(it)) } ?: RowUi.Failed
             Row.SECTIONS ->
