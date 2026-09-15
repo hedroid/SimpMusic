@@ -656,8 +656,8 @@
     <string name="keep_service_alive_description">Keep music player service alive to avoid being killed by system</string>
     <string name="keep_your_youtube_playlist_offline">Keep showing your YouTube playlist when offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Save your YT playlist to local and keep to show when offline</string>
-    <string name="combine_local_and_youtube_liked_songs">Replace Favorite by YouTube Liked when logged in</string>
-    <string name="combine_local_and_youtube_liked_songs_description">Using only YouTube Liked (not support like a song when offline)</string>
+    <string name="combine_local_and_youtube_liked_songs">Combine local and YouTube liked songs</string>
+    <string name="combine_local_and_youtube_liked_songs_description">Heart a song in the app also likes it in your YouTube account</string>
     <string name="this_year">This year</string>
     <string name="last_90_days">Last 90 days</string>
     <string name="last_30_days">Last 30 days</string>
@@ -912,7 +912,7 @@
     <string name="netease_download_quality">NetEase download quality</string>
     <string name="netease_follow_sync">Sync follows with NetEase</string>
     <string name="netease_follow_sync_description">Following or unfollowing an artist also applies to your NetEase account</string>
-    <string name="netease_like_sync">Heart sync with NetEase</string>
+    <string name="netease_like_sync">Combine local and NetEase liked songs</string>
     <string name="netease_like_sync_description">Heart a song in the app also hearts it in your NetEase account</string>
     <string name="netease_play_report">Playback reporting to NetEase</string>
     <string name="netease_play_report_description">Report plays to your NetEase account so its recommendations and yearly report learn from them</string>

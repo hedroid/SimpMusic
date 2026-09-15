@@ -140,7 +140,7 @@
     <string name="album">앨범</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
-    <string name="netease_like_sync">NetEase 좋아요 동기화</string>
+    <string name="netease_like_sync">로컬과 NetEase 좋아요 통합</string>
     <string name="netease_like_sync_description">앱에서 좋아요한 곡을 NetEase 계정에도 동기화</string>
     <string name="netease_play_report">NetEase 재생 기록 전송</string>
     <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트에 반영합니다</string>
@@ -556,8 +556,8 @@
     <string name="keep_service_alive_description">시스템이 종료하지 않도록 음악 플레이어 서비스를 활성 상태로 유지합니다</string>
     <string name="keep_your_youtube_playlist_offline">오프라인일 때도 YouTube 재생목록 표시</string>
     <string name="keep_your_youtube_playlist_offline_description">YouTube 재생목록을 로컬에 저장한 뒤 오프라인일 때 표시합니다</string>
-    <string name="combine_local_and_youtube_liked_songs">로그인 시 즐겨찾기를 YouTube 좋아요 표시한 재생목록으로 교체</string>
-    <string name="combine_local_and_youtube_liked_songs_description">YouTube 좋아요 시스템만 사용합니다 (오프라인일 때는 곡에 좋아요를 누를 수 없습니다)</string>
+    <string name="combine_local_and_youtube_liked_songs">로컬과 YouTube 좋아요 통합</string>
+    <string name="combine_local_and_youtube_liked_songs_description">앱에서 좋아요한 곡을 YouTube 계정에도 동기화</string>
     <string name="this_year">올해</string>
     <string name="last_90_days">지난 90일</string>
     <string name="last_30_days">지난 30일</string>

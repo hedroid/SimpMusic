@@ -138,7 +138,7 @@
     <string name="album">アルバム</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
-    <string name="netease_like_sync">NetEaseといいねを同期</string>
+    <string name="netease_like_sync">ローカルとNetEaseのいいねを統合</string>
     <string name="netease_like_sync_description">アプリ内でいいねした曲をNetEaseアカウントにも同期</string>
     <string name="netease_play_report">NetEaseに再生を報告</string>
     <string name="netease_play_report_description">再生記録をNetEaseアカウントに報告し、おすすめや年間レポートに反映します</string>
@@ -495,8 +495,8 @@
     <string name="keep_service_alive_description">システムによって終了されるのを避けるために音楽プレイヤーのサービスを有効したままにします</string>
     <string name="keep_your_youtube_playlist_offline">オフライン時にYouTubeプレイリストを表示する</string>
     <string name="keep_your_youtube_playlist_offline_description">オフライン時にYouTubeプレイリストをローカルに保存して表示します</string>
-    <string name="combine_local_and_youtube_liked_songs">ログイン時にお気に入りをYouTubeの高評価に置き換える</string>
-    <string name="combine_local_and_youtube_liked_songs_description">YouTubeの高評価のみを使用する (オフライン時はサポートしていません)</string>
+    <string name="combine_local_and_youtube_liked_songs">ローカルとYouTubeの高評価を統合</string>
+    <string name="combine_local_and_youtube_liked_songs_description">アプリ内でいいねした曲をYouTubeアカウントにも同期</string>
     <string name="local_tracking_title">再生履歴をローカルに保存</string>
     <string name="local_tracking_description">再生履歴をローカルデータベースに記録しま す</string>
     <string name="simpmusic_charts">SimpMusic チャート</string>

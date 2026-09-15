@@ -148,7 +148,7 @@
     <string name="album">專輯</string>
     <string name="youtube_url">YouTube網址</string>
     <string name="netease_url">網易雲音樂連結</string>
-    <string name="netease_like_sync">紅心與網易雲同步</string>
+    <string name="netease_like_sync">合併本地與網易雲喜歡的歌曲</string>
     <string name="netease_like_sync_description">在應用裡紅心一首歌時，同步到你的網易雲帳號</string>
     <string name="netease_play_report">播放數據上報網易雲</string>
     <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，讓每日推薦和年度報告更懂你</string>
@@ -563,8 +563,8 @@
     <string name="keep_service_alive_description">保持音樂播放器服務運行，避免被系統終止</string>
     <string name="keep_your_youtube_playlist_offline">離線時繼續顯示您的 YouTube 播放清單</string>
     <string name="keep_your_youtube_playlist_offline_description">將您的 YouTube 播放清單儲存到本地，以便在離線時查看</string>
-    <string name="combine_local_and_youtube_liked_songs">登入後，將「收藏」替換為「YouTube 讚」</string>
-    <string name="combine_local_and_youtube_liked_songs_description">僅使用 YouTube 讚功能（不支援離線按讚歌曲）</string>
+    <string name="combine_local_and_youtube_liked_songs">合併本地與 YouTube 喜歡的歌曲</string>
+    <string name="combine_local_and_youtube_liked_songs_description">在應用裡紅心一首歌時，同步到你的 YouTube 帳號</string>
     <string name="this_year">今年</string>
     <string name="last_90_days">最近90天</string>
     <string name="last_30_days">最近30天</string>

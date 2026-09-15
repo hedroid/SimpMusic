@@ -558,8 +558,8 @@
     <string name="keep_service_alive_description">保持音乐播放器服务活跃，以免被系统关闭</string>
     <string name="keep_your_youtube_playlist_offline">离线时继续展示您的 YouTube 播放列表</string>
     <string name="keep_your_youtube_playlist_offline_description">将您的 YT 播放列表保存到本地并在离线时保持显示</string>
-    <string name="combine_local_and_youtube_liked_songs">登录后，将“收藏”替换为“YouTube点赞的内容”</string>
-    <string name="combine_local_and_youtube_liked_songs_description">仅使用 YouTube 点赞赞功能（不支持离线点赞歌曲）</string>
+    <string name="combine_local_and_youtube_liked_songs">合并本地与 YouTube 喜欢的歌曲</string>
+    <string name="combine_local_and_youtube_liked_songs_description">在应用里红心一首歌时，同步到你的 YouTube 账号</string>
     <string name="this_year">今年</string>
     <string name="last_90_days">最近90天</string>
     <string name="last_30_days">最近30天</string>
@@ -883,7 +883,7 @@
     <string name="netease_download_quality">网易云下载音质</string>
     <string name="netease_follow_sync">关注与网易云同步</string>
     <string name="netease_follow_sync_description">关注或取消关注艺人时，同步到你的网易云账号</string>
-    <string name="netease_like_sync">红心与网易云同步</string>
+    <string name="netease_like_sync">合并本地与网易云喜欢的歌曲</string>
     <string name="netease_like_sync_description">在应用里红心一首歌时，同步到你的网易云账号</string>
     <string name="netease_play_report">播放数据上报网易云</string>
     <string name="netease_play_report_description">把播放记录上报到你的网易云账号，让每日推荐和年度报告更懂你</string>
