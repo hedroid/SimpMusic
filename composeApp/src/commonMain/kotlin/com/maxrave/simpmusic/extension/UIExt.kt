@@ -568,12 +568,30 @@ fun smoothScrimBrush(
 /**
  * The common case of [smoothScrimBrush]: a bottom scrim that melts artwork into the page
  * background ([toImmersiveBackground]) by ramping [color] from invisible to opaque.
+ * Must stay a pure fade to [color] — page-level glow layers (home first shelf,
+ * [AmbientThemeGlow], Mix for you, Listen together) end on the page colour, so any
+ * darkening here reads as a gray veil with a hard seam where the layer stops.
+ * White text over the artwork itself wants [artworkTextScrimBrush] instead.
  */
 fun artworkScrimBrush(
     color: Color,
     steps: Int = 24,
 ): Brush =
-    // 渐变向纯黑收拢:浅色封面(网易歌单普遍偏亮)时底部也足够暗,白色标题/作者行保持可读
+    smoothScrimBrush(
+        from = color.copy(alpha = 0f),
+        to = color,
+        steps = steps,
+    )
+
+/**
+ * [artworkScrimBrush] variant for headers overlaying white text on the artwork: the ramp
+ * ends 45% toward black so bright covers (netease playlists skew light) still bottom out
+ * dark enough for the title/author line.
+ */
+fun artworkTextScrimBrush(
+    color: Color,
+    steps: Int = 24,
+): Brush =
     smoothScrimBrush(
         from = color.copy(alpha = 0f),
         to = lerp(color, Color.Black, 0.45f),

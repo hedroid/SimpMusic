@@ -76,7 +76,7 @@ import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.artworkTextScrimBrush
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.toImmersiveBackground
@@ -316,7 +316,7 @@ fun AlbumScreen(
                                                             .fillMaxWidth()
                                                             .height((screenInfo.hDP * 0.35f).dp)
                                                             .align(Alignment.BottomCenter)
-                                                            .background(artworkScrimBrush(mutedPaletteBg)),
+                                                            .background(artworkTextScrimBrush(mutedPaletteBg)),
                                                 )
                                                 // Title/artist/year overlay (centered horizontally like Apple Music)
                                                 Column(

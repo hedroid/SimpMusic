@@ -119,7 +119,7 @@ import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.artworkTextScrimBrush
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
@@ -582,14 +582,14 @@ fun LocalPlaylistScreen(
                                     )
                                     // Scrim spans 70% of the artwork (not a fixed 200dp): the shorter the
                                     // ramp, the steeper the alpha, and a steep ramp is what makes the fade
-                                    // read as an edge. See artworkScrimBrush for the curve itself.
+                                    // read as an edge. See artworkTextScrimBrush for the curve itself.
                                     Box(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
                                                 .height((screenInfo.hDP * 0.35f).dp)
                                                 .align(Alignment.BottomCenter)
-                                                .background(artworkScrimBrush(mutedPaletteBg)),
+                                                .background(artworkTextScrimBrush(mutedPaletteBg)),
                                     )
                                     Column(
                                         modifier =

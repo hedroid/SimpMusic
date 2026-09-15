@@ -283,11 +283,8 @@ fun HomeScreen(
     LaunchedEffect(dominantColorState, isLightTheme) {
         snapshotFlow { dominantColorState.color }.collect {
             // Light theme: pull the artwork color toward white for a soft pastel header;
-            // dark theme keeps the original darkened tone. 0.92, not 0.85: a low-saturation
-            // artwork (grayish covers) left 15% of itself visible as the same gray veil the
-            // settings glow was removed for — 8% keeps colored covers readable while letting
-            // dull ones fade into the page.
-            topHeaderColor = if (isLightTheme) lerp(it, Color.White, 0.92f) else it.rgbFactor(0.3f)
+            // dark theme keeps the original darkened tone.
+            topHeaderColor = if (isLightTheme) lerp(it, Color.White, 0.85f) else it.rgbFactor(0.3f)
         }
     }
 

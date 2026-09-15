@@ -85,7 +85,7 @@ import com.maxrave.simpmusic.expect.ui.MediaPlayerView
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.artworkTextScrimBrush
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.getStringBlocking
@@ -385,7 +385,7 @@ fun ArtistScreen(
                                                         },
                                                     )
                                                     .align(Alignment.BottomCenter)
-                                                    .background(artworkScrimBrush(mutedPaletteBg)),
+                                                    .background(artworkTextScrimBrush(mutedPaletteBg)),
                                         )
                                         // Artist name (TEXT for now — logo image is roadmap) + subscriber · view
                                         Column(
