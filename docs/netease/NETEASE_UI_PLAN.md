@@ -301,8 +301,20 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
   纯 YT 用户永不出现（网易实体只有经网易使用才进本地库）。判源：playlist 表
   source 列；album 表无 source 列，按 browseId 纯数字形状（项目惯用法）。
   歌曲行/艺人行不加（跨源播放有设计容忍，加了纯噪音）。
+- **歌单曲目滚动分页**（2026-09-15 二轮，core e63c6b1）：`/playlist/track/all` 已 404 死透
+  （weapi 全歌单），原"track/all limit=500"路径实际是把大歌单**截断在 500 首**。新管线 =
+  `/v6/playlist/detail`(n=0) 拿全量 trackIds → `/v3/song/detail` 按页分片（500/批，
+  `NETEASE_PLAYLIST_PAGE_SIZE`）。分页令牌 `NETEASE_PL_PAGE_{offset}` 走共享
+  PlaylistViewModel 的 continuation 契约（`getPlaylistData` 返回令牌 → 滚动近底触发
+  `getContinueTrack` → SongRepositoryImpl 前缀路由分支 → `getPlaylistTracksPage` 续拉），
+  页面/UI 零改动；雷达类 trackIds 不可用时仍走带 n 的 detail 一次全量（无令牌）。
+  **顺带修了潜伏解析 bug**：trackIds 条目是 `{"id":<歌曲id>,"v":<版本号>}`，旧代码读 `v`
+  拿的是版本号（雷达"-10000 占位"的老结论混有此 bug 成分）——已改 id 优先。
+  实测（页大小临时 100 + 490 首红心歌单）：100×4+90 五页全量、顺序稳定、表头计数一致、
+  末页令牌归 null 正常收尾。坑已记 core PITFALLS（track/all 死亡 + trackIds 形状）。
 - **原主页两行迁入**：关注的歌手/收藏的专辑从网易主页移除后在此复活（TODO #6 收口），
-  数据链路 `getSubscribedArtists`/`getStarredAlbums`（10min 行缓存）原样复用。
+  数据链路 `getSubscribedArtists`/`getStarredAlbums`（10min 行缓存）原样复用；
+  分区顺序（2026-09-15 用户定案）：歌单 → 收藏的专辑 → **关注的歌手（沉底）**。
 - 字符串：`your_netease`（您的网易云）/`no_netease_content`/`netease_playlists`（歌单）/
   `starred_albums`（收藏的专辑）/复用 `followed`（已关注，对齐 YT 库页概念），3 locale。
 
