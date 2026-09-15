@@ -111,6 +111,8 @@ class NowPlayingContentState(
     val dismissIcon: ImageVector,
     /** Current track's audio codec ("OPUS"/"AAC"), or null while unknown — see [toAudioCodecLabel]. */
     val audioCodecLabel: String? = null,
+    /** 当前队列是否为网易相似歌电台(详情卡"相似歌曲"入口的激活态) */
+    val isNeteaseRadioQueue: Boolean = false,
 )
 
 /**

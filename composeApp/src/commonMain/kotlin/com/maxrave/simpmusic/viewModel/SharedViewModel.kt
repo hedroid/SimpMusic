@@ -105,6 +105,7 @@ import org.jetbrains.compose.resources.getString
 import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.similar_radio_started
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.added_to_youtube_liked
 import simpmusic.composeapp.generated.resources.error
@@ -663,6 +664,13 @@ class SharedViewModel(
                     _nowPlayingScreenData.update { it.copy(neteaseSongData = meta) }
                 }
             }
+    }
+
+    /** 详情卡"相似歌曲"入口:起 simiSong 电台并给出可见反馈——种子歌继续播,
+     *  队列尾部悄悄换血,不弹提示的话用户完全感知不到点过了什么 */
+    fun startNeteaseSimilarRadio() {
+        mediaPlayerHandler.toggleRadio()
+        makeToast(getString(Res.string.similar_radio_started))
     }
 
     private fun getCanvas(

@@ -147,6 +147,8 @@
     <string name="fans_count">%1$s fans</string>
     <string name="comments_count">%1$s comments</string>
     <string name="similar_songs">Similar songs</string>
+    <string name="similar_radio_started">Similar songs radio started</string>
+    <string name="radio_playing_suffix"> · playing</string>
     <string name="track_count_short">%1$s tracks</string>
     <string name="comments_title">Comments · %1$s</string>
     <string name="end_of_list">End of the list</string>

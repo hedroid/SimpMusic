@@ -178,6 +178,7 @@ import simpmusic.composeapp.generated.resources.rate_lyrics
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
 import simpmusic.composeapp.generated.resources.similar_songs
+import simpmusic.composeapp.generated.resources.radio_playing_suffix
 import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
@@ -1709,8 +1710,16 @@ fun NowPlayingContentSpotify(
                                                 )
                                                 Spacer(modifier = Modifier.width(16.dp))
                                             }
+                                            // 电台已生效时缀上"播放中"——入口点了之后队列悄悄换血,
+                                            // 没有激活态的话看起来像什么都没发生
                                             Text(
-                                                text = stringResource(Res.string.similar_songs),
+                                                text =
+                                                    stringResource(Res.string.similar_songs) +
+                                                        if (state.isNeteaseRadioQueue) {
+                                                            stringResource(Res.string.radio_playing_suffix)
+                                                        } else {
+                                                            ""
+                                                        },
                                                 style = typo().labelMedium,
                                                 color = Color.White,
                                                 modifier =
