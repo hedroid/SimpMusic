@@ -312,6 +312,22 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
   拿的是版本号（雷达"-10000 占位"的老结论混有此 bug 成分）——已改 id 优先。
   实测（页大小临时 100 + 490 首红心歌单）：100×4+90 五页全量、顺序稳定、表头计数一致、
   末页令牌归 null 正常收尾。坑已记 core PITFALLS（track/all 死亡 + trackIds 形状）。
+- **状态同步 + 收藏管理二轮（2026-09-15，159c3491 + core adb78fd）**：
+  - **红心 OR 合并**：开关开时播放页红心 = 本地 || 云村（`/song/like/get` 全量 ids，
+    会话缓存升级为 10min TTL + Mutex 单飞，替代旧"红心歌单→playlistDetail"链路且不再
+    永不回刷）；云端有本地无 → 回填本地行。与 YT `combineLocalAndYouTubeLiked` 完全对称。
+  - **艺人关注态同步**：浏览艺人页把 `/artist/detail/dynamic` 的 subscribed 落库
+    （`setFollowedLocal`——insertArtist 是 INSERT IGNORE，必须显式 UPDATE）并校正按钮；
+    此前浏览时丢弃服务端态，从库页点进已关注歌手总显示未关注。YT 侧镜像语义不变。
+  - **关注 toast 按源分流**：网易歌手 → "已在网易云关注/已取消"，不再说 YouTube。
+  - **库页管理入口**：收藏歌单 tile / 收藏专辑卡**长按 → 确认弹窗 → 取消收藏**（仅
+    收藏的露出；自建歌单判定 = creatorId==uid，repo 记上次 userPlaylists 的 creator 映射，
+    未知 fail-closed）；歌单 tile 副标题改为显示创建者昵称。
+  - **歌单内移除歌曲**：自建网易歌单的歌曲三点菜单加"从歌单中移除"（manipulate op=del，
+    内存列表剔除 + 表头计数减一；复用既有 remove_from_playlist 字符串）。
+  - 模拟器实测：关注态落库/按钮、红心 false→true 合并、两类取消收藏弹窗、移除歌曲
+    全通；toast 文案与艺人页关注按钮无法用 adb tap 驱动（input 注入 vs Compose 的
+    模拟器噪声，账号状态经探针确认无损），留日常使用确认。
 - **原主页两行迁入**：关注的歌手/收藏的专辑从网易主页移除后在此复活（TODO #6 收口），
   数据链路 `getSubscribedArtists`/`getStarredAlbums`（10min 行缓存）原样复用；
   分区顺序（2026-09-15 用户定案）：歌单 → 收藏的专辑 → **关注的歌手（沉底）**。
