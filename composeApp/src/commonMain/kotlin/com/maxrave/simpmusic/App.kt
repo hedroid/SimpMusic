@@ -162,8 +162,11 @@ fun App(
     // Mix for you comes from the signed-in YouTube account, so its tab follows the session — the
     // same condition that used to hide the chip inside Library.
     val isYouTubeLoggedIn by viewModel.getYouTubeLoggedIn().collectAsStateWithLifecycle(DataStoreManager.FALSE)
-    // 混合 tab:YT 或网易云任一账户登录即显示;内容按源分流(网易=私人FM 独立屏,YT=mixes)
-    val showMixForYouTab = isYouTubeLoggedIn == TRUE || neteaseLoggedInValue
+    // 混合 tab:内容按源分流(网易=私人FM 独立屏,YT=mixes),可见性跟"当前源"的登录态走
+    // ——否则 YT 未登录+选 YT 时会露出一个拉不到数据的 YT mixes 页
+    val showMixForYouTab =
+        (neteaseLoggedInValue && selectedSourceValue == com.maxrave.domain.source.MusicSource.NETEASE.name) ||
+            (isYouTubeLoggedIn == TRUE && selectedSourceValue != com.maxrave.domain.source.MusicSource.NETEASE.name)
 
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_SYSTEM)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
@@ -518,10 +521,8 @@ fun App(
                                     neteaseLoggedIn = neteaseLoggedInValue,
                                     onSourceSelected = { source ->
                                         if (selectedSourceValue != source.name) {
-                                            viewModel.setSelectedSource(source)
-                                            // 播放队列/正在播放与音源绑定:切源即停播清队列,回主页
-                                            viewModel.stopPlayer()
-                                            viewModel.isServiceRunning = false
+                                            // 统一入口:停播清队列(含持久化恢复源)都在 switchSource 里
+                                            viewModel.switchSource(source)
                                             navController.navigate(HomeDestination) {
                                                 popUpTo(navController.graph.startDestinationId) { saveState = false }
                                                 launchSingleTop = true
@@ -542,10 +543,8 @@ fun App(
                                     neteaseLoggedIn = neteaseLoggedInValue,
                                     onSourceSelected = { source ->
                                         if (selectedSourceValue != source.name) {
-                                            viewModel.setSelectedSource(source)
-                                            // 播放队列/正在播放与音源绑定:切源即停播清队列,回主页
-                                            viewModel.stopPlayer()
-                                            viewModel.isServiceRunning = false
+                                            // 统一入口:停播清队列(含持久化恢复源)都在 switchSource 里
+                                            viewModel.switchSource(source)
                                             navController.navigate(HomeDestination) {
                                                 popUpTo(navController.graph.startDestinationId) { saveState = false }
                                                 launchSingleTop = true

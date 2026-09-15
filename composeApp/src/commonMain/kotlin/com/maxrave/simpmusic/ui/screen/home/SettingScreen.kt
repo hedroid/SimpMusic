@@ -1457,11 +1457,9 @@ fun SettingScreen(
                     switch = (neteasePlayReport to { viewModel.setNeteasePlayReport(it) }),
                     isEnable = neteaseLoggedIn,
                 )
-                SettingItem(
-                    title = stringResource(Res.string.netease_auto_switch),
-                    subtitle = stringResource(Res.string.netease_auto_switch_description),
-                    switch = (neteaseAutoSwitch to { viewModel.setNeteaseAutoSwitch(it) }),
-                )
+                // TODO(NETEASE_M9): "无版权音乐自动切换音源"当前无任何运行时逻辑消费
+                // (StreamRepositoryImpl 的灰歌回退还是 TODO),开关先隐藏以免误导;
+                // M9 实现后恢复此 SettingItem(neteaseAutoSwitch 状态与 setter 均保留)。
             }
         }
         if (getPlatform() == Platform.Android) {

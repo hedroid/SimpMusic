@@ -87,6 +87,7 @@ class SettingsViewModel(
     private val cacheRepository: CacheRepository,
     private val artistRepository: ArtistRepository,
     private val lyricsRomanizerRepository: LyricsRomanizerRepository,
+    private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
     private val databasePath: String? = commonRepository.getDatabasePath()
     private val downloadUtils: DownloadHandler by inject()
@@ -1964,26 +1965,22 @@ class SettingsViewModel(
         }
     }
 
-    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM */
+    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM(统一入口,停播清队列;已是 YT 源则无操作) */
     fun useGuestNetease() {
         viewModelScope.launch {
             neteaseRepository.useGuest()
-            if (dataStoreManager.selectedSource.first() == MusicSource.NETEASE.name) {
-                dataStoreManager.setSelectedSource(MusicSource.YOUTUBE_MUSIC.name)
-            }
+            sharedViewModel.switchSource(MusicSource.YOUTUBE_MUSIC)
             delay(200)
             getAllNeteaseAccounts()
             _neteaseLogIn.value = false
         }
     }
 
-    /** 退出全部网易云账户;若当前选中源是网易云则回落 YTM */
+    /** 退出全部网易云账户;若当前选中源是网易云则回落 YTM(同上,统一入口) */
     fun logOutAllNetease() {
         viewModelScope.launch {
             neteaseRepository.logout()
-            if (dataStoreManager.selectedSource.first() == MusicSource.NETEASE.name) {
-                dataStoreManager.setSelectedSource(MusicSource.YOUTUBE_MUSIC.name)
-            }
+            sharedViewModel.switchSource(MusicSource.YOUTUBE_MUSIC)
             _neteaseAccounts.value = emptyList()
             _neteaseLogIn.value = false
         }

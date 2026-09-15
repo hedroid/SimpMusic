@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import com.maxrave.logger.Logger
 import androidx.lifecycle.viewModelScope
 import com.maxrave.data.repository.NeteaseRepositoryImpl
-import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.netease.NeteaseQrLoginSession
 import com.maxrave.netease.model.NeteaseQrStatus
 import kotlinx.coroutines.Job
@@ -24,7 +23,7 @@ import kotlinx.serialization.json.jsonObject
  */
 class NeteaseLoginViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
-    private val dataStoreManager: DataStoreManager,
+    private val sharedViewModel: SharedViewModel,
 ) : ViewModel() {
     enum class Method { QR, WEB }
 
@@ -202,7 +201,9 @@ class NeteaseLoginViewModel(
             .onSuccess { account ->
                 Logger.d(TAG, "finishLogin: success account=${account?.nickname}")
                 _qrUi.value = QrUi.LOGGED_IN
-                dataStoreManager.setSelectedSource(com.maxrave.domain.source.MusicSource.NETEASE.name)
+                // 登录成功自动切到网易源;统一入口会停播并清掉另一源的播放状态
+                // (此前只改 setting 不停播,会出现"选网易、播 YT 歌"的错配)
+                sharedViewModel.switchSource(com.maxrave.domain.source.MusicSource.NETEASE)
                 _loginSuccess.emit(account?.nickname)
             }.onFailure {
                 Logger.e(TAG, "finishLogin failed", it)
