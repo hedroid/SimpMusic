@@ -34,9 +34,9 @@
 | # | 工作包 | 状态 |
 |---|---|---|
 | M1 | 播放链路 | ✅ 全部完成（取流：数字ID路由/https升级/Mp3Extractor/音质降级链；歌词：2026-09-14 NETEASE 官方专线接入，yrc逐字/官方翻译，见下文） |
-| M2 | 歌单详情 + 库融合 | ✅ 歌单详情（同页路由，作者/年份/曲目/点歌播放全通）；❌ 库融合+品牌角标未做 |
+| M2 | 歌单详情 + 库融合 | ✅ 全部完成（歌单详情同页路由；2026-09-15 库页"您的网易云"三分区 tab + 品牌角标，见下文） |
 | M3 | 搜索切源 | ✅ 完成（切换器 + 搜索页全链路：建议/热搜/四 tab/点歌播放/歌单同页路由/艺人 toast；2026-09 模拟器双源冒烟通过） |
-| M4 | 网易主页 | ✅ 独立屏：账户卡/每日推荐(滤雷达)/私人雷达(曲目三行网格)/雷达歌单(5卡)/精品歌单/推荐新歌(96dp紧凑卡三行)/榜单区块/五组分类(网页catalog目录,3行网格)。2026-09-15 变更：关注的歌手/收藏的专辑两行移出主页（待迁库页，数据链路现成见项目 AGENTS.md TODO）；热门歌手行采 YTM chart 布局并沉底 |
+| M4 | 网易主页 | ✅ 独立屏：账户卡/每日推荐(滤雷达)/私人雷达(曲目三行网格)/雷达歌单(5卡)/精品歌单/推荐新歌(96dp紧凑卡三行)/榜单区块/五组分类(网页catalog目录,3行网格)。2026-09-15 变更：关注的歌手/收藏的专辑两行移出主页（已迁库页"您的网易云"tab，M2 收口）；热门歌手行采 YTM chart 布局并沉底 |
 | M5 | 分类页 + 混合 | ✅ 分类页（NeteaseTagScreen 两列网格 + 热门/精品排序 chip + 会话缓存/下拉刷新，网页歌单广场同源）；✅ 混合页私人FM（2026-09-13，独立屏 + 无限续播，见下文方案）。2026-09-15：tab 可见性从"任一源登录"改为**按当前源的登录态**（YT登录+选YT 或 网易登录+选网易），消除 YT 未登录+选 YT 露出空 mixes 页 |
 | M6 | 专辑/歌手页路由 | ✅ 完成（2026-09-14：两页数字 ID 同页路由 + 关注/取关 + 搜索专辑 tab/艺人卡跳转解锁 + 主页热门歌手/新碟上架两行） |
 | M7 | 歌曲评论区 | ❌ UI 未开始（core 端点+repo 方法已验证；播放页 Spotify 主题详情卡已展示前 2 热评，缺独立评论页） |
@@ -279,22 +279,47 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
   （weapi，songId+time 毫秒）标记不感兴趣 → 响应 `data[0]` 是补位歌就用它，
   拿不到补拉一批 FM 取未见过的歌插回原位。
 
+## M2 库融合（2026-09-15 落地，347404be + core 14e4408）
+
+- **"您的网易云"chip**（`LibraryChipType.NETEASE_PLAYLIST`，持久化值 `netease_playlist`，
+  旧值照常解析）：仅网易登录时显示（与 YT chip 对 YT 登录的门控对称）；登出时
+  持久化选中会被 init 弹回 YOUR_LIBRARY，运行中登出由 VM collect neteaseCookie
+  实时弹回并清三分区数据。
+- **三分区单页**（`LibraryNeteaseTab`，LazyVerticalGrid FixedSize 132dp）：
+  歌单（`getLibraryPlaylists`，红心歌单按 specialType=FAVORITE 稳定排序置顶，
+  core 侧兜底服务端乱序）→ 关注的歌手（复用主页 `NeteaseArtistRow`，internal 化，
+  showRank=false）→ 收藏的专辑（复用 `NeteaseAlbumRow`）。三分区并行拉取、
+  独立降级（失败分区直接隐藏不拖垮整页，网易主页"失败只隐藏行"同款）；
+  全空才显示空态。下拉刷新 force 绕过艺人/专辑行缓存且不清空已显示分区
+  （`neteaseRefreshing` 独立指示器，只有首拉才进 Loading 整页 spinner）。
+  点击路由：歌单 tile→PlaylistDestination / 艺人→ArtistDestination / 专辑→
+  AlbumDestination，数字 ID 同页路由全通（实测三跳均正常）。
+- **品牌角标**（`SourceBadge.kt` 的 `NeteaseSourceBadge` + `isNeteaseContent`）：
+  半透明黑圆底 + 白色 Netease 图标叠缩略图右上角，**只在混源上下文 opt-in 渲染**——
+  收藏网格/下载网格（`GridLibraryPlaylist.showSourceBadge`）与最近添加行
+  （`PlaylistFullWidthItems.showNeteaseBadge`）；纯源页面（网易主页/您的网易云）不传。
+  纯 YT 用户永不出现（网易实体只有经网易使用才进本地库）。判源：playlist 表
+  source 列；album 表无 source 列，按 browseId 纯数字形状（项目惯用法）。
+  歌曲行/艺人行不加（跨源播放有设计容忍，加了纯噪音）。
+- **原主页两行迁入**：关注的歌手/收藏的专辑从网易主页移除后在此复活（TODO #6 收口），
+  数据链路 `getSubscribedArtists`/`getStarredAlbums`（10min 行缓存）原样复用。
+- 字符串：`your_netease`（您的网易云）/`no_netease_content`/`netease_playlists`（歌单）/
+  `starred_albums`（收藏的专辑）/复用 `followed`（已关注，对齐 YT 库页概念），3 locale。
+
 ## 剩余工作盘点（2026-09-15）
 
 > 详细结论/链路资产见项目 AGENTS.md 各 TODO 小节；本节是全局视图。
 
 ### 未做（计划内）
 
-1. **M2 余项**：库页网易分区（LibraryChipType + NETEASE_PLAYLIST，`getLibraryPlaylists` 红心歌单置顶）+ 品牌角标。
-2. **M7 评论页**：独立歌曲评论区（复用歌单页布局；`songComments` 分页端点 + repo 方法现成）。
-3. **M8 云盘页**：cloudDisk（端点已封装，repo 映射 + UI 未接；云盘歌曲可播不可缓存下载）。
-4. **M9**：关注同步（YT↔网易镜像）+ 灰歌自动切源（`getNeteaseStream` 返回 null → title+artist 搜 YT 回退播放；恢复被隐藏的设置开关）。
-5. **M10 下载管线**：SimpleCache→文件式存储改造（离线播放网易歌；公共 Download 导出路径已通，见 AGENTS.md 调研）。
-6. **关注的歌手/收藏的专辑迁库页**（2026-09-15 从主页移除；`getSubscribedArtists`/`getStarredAlbums` 链路现成）。
-7. **相似歌曲独立功能**（simiSong 端点/电台队列/`NETEASE_RADIO_` 哨兵全现成，缺独立列表页）。
-8. **跨源歌词供应商**（YT 歌选第三方库：网易→QQ→酷狗；Lyrico 匹配算法，见 AGENTS.md TODO）。
-9. **Listen Together 混源过滤**（房间只传 videoId，host 混源队列会把数字 ID 发给 Metrolist 客户端；需协议层设计）。
-10. **AI 三件**（罗马音兜底/歌单智能命名/元数据整理）与**歌曲导出改造**（自定义目录+文件式存储，大改造单独评估）。
+1. **M7 评论页**：独立歌曲评论区（复用歌单页布局；`songComments` 分页端点 + repo 方法现成）。
+2. **M8 云盘页**：cloudDisk（端点已封装，repo 映射 + UI 未接；云盘歌曲可播不可缓存下载）。
+3. **M9**：关注同步（YT↔网易镜像）+ 灰歌自动切源（`getNeteaseStream` 返回 null → title+artist 搜 YT 回退播放；恢复被隐藏的设置开关）。
+4. **M10 下载管线**：SimpleCache→文件式存储改造（离线播放网易歌；公共 Download 导出路径已通，见 AGENTS.md 调研）。
+5. **相似歌曲独立功能**（simiSong 端点/电台队列/`NETEASE_RADIO_` 哨兵全现成，缺独立列表页）。
+6. **跨源歌词供应商**（YT 歌选第三方库：网易→QQ→酷狗；Lyrico 匹配算法，见 AGENTS.md TODO）。
+7. **Listen Together 混源过滤**（房间只传 videoId，host 混源队列会把数字 ID 发给 Metrolist 客户端；需协议层设计）。
+8. **AI 三件**（罗马音兜底/歌单智能命名/元数据整理）与**歌曲导出改造**（自定义目录+文件式存储，大改造单独评估）。
 
 ### 可做（小成本快赢）
 
