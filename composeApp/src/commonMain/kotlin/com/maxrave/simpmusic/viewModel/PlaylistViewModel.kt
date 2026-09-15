@@ -5,6 +5,7 @@ package com.maxrave.simpmusic.viewModel
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
 import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
@@ -52,6 +53,8 @@ import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
 import simpmusic.composeapp.generated.resources.downloading
+import simpmusic.composeapp.generated.resources.removed_from_playlist
+import simpmusic.composeapp.generated.resources.remove_from_playlist_failed
 import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.playlist
@@ -69,6 +72,7 @@ class PlaylistViewModel(
     private val songRepository: SongRepository,
     private val localPlaylistRepository: LocalPlaylistRepository,
     private val playlistRepository: PlaylistRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val albumRepository: AlbumRepository by inject<AlbumRepository>()
@@ -89,6 +93,44 @@ class PlaylistViewModel(
 
     private var _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks
+
+    /** 当前歌单是否网易自建(歌曲菜单露"从歌单移除"的判定;收藏歌单/雷达/YT 恒 false) */
+    suspend fun isNeteaseOwnPlaylist(): Boolean {
+        val id = (uiState.value as? Success)?.data?.id ?: return false
+        return id.toLongOrNull() != null && neteaseRepository.isOwnNeteasePlaylist(id)
+    }
+
+    /**
+     * 从网易自建歌单移除一首歌(manipulate op=del):云端删成功后从内存列表剔掉,
+     * Room 缓存行随下次整单拉取/EXHAUST 回写自然收敛,不在这里重复维护。
+     */
+    fun removeTrackFromNeteasePlaylist(videoId: String) {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() == null) return
+        viewModelScope.launch {
+            neteaseRepository
+                .removeTracksFromNeteasePlaylist(id, listOf(videoId))
+                .fold(
+                    onSuccess = { ok ->
+                        if (ok) {
+                            _tracks.update { list -> list.filterNot { it.videoId == videoId } }
+                            // 表头计数跟着减(PlaylistState.trackCount 是服务端元数据快照,
+                            // 不改会一直显示删除前的数字;Room 缓存行随下次整单拉取收敛)
+                            (uiState.value as? Success)?.data?.let { state ->
+                                _uiState.value =
+                                    Success(
+                                        state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)),
+                                    )
+                            }
+                            makeToast(getString(Res.string.removed_from_playlist))
+                        } else {
+                            makeToast(getString(Res.string.remove_from_playlist_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.remove_from_playlist_failed)) },
+                )
+        }
+    }
 
     private var _tracksListState = MutableStateFlow<ListState>(ListState.IDLE)
     val tracksListState: StateFlow<ListState> = _tracksListState

@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -19,6 +21,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,13 +37,20 @@ import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
+import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.screen.home.NeteaseAlbumRow
 import com.maxrave.simpmusic.ui.screen.home.NeteaseArtistRow
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.followed
+import simpmusic.composeapp.generated.resources.unsubscribe_album_message
+import simpmusic.composeapp.generated.resources.unsubscribe_album_title
+import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
+import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
 import simpmusic.composeapp.generated.resources.netease_playlists
 import simpmusic.composeapp.generated.resources.no_netease_content
 import simpmusic.composeapp.generated.resources.starred_albums
@@ -60,8 +72,15 @@ internal fun LibraryNeteaseTab(
     albums: LocalResource<List<AlbumsResult>>,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    // 自建歌单 ID 集:长按"取消收藏"只对收藏歌单露出(自建的不能从这里误删)
+    ownPlaylistIds: Set<String> = emptySet(),
+    onUnsubscribePlaylist: (playlistId: String) -> Unit = {},
+    onUnsubscribeAlbum: (albumId: String) -> Unit = {},
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
+    // 长按目标:待确认取消收藏的歌单/专辑(取消收藏是写操作,弹窗确认)
+    var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var unsubscribeAlbumTarget by remember { mutableStateOf<AlbumsResult?>(null) }
     val state = rememberLazyGridState()
     val isScrollingUp by state.isScrollingUp()
     LaunchedEffect(state) {
@@ -140,6 +159,13 @@ internal fun LibraryNeteaseTab(
                                 },
                                 data = playlist,
                                 thumbSize = 132.dp,
+                                // 收藏歌单长按取消收藏;自建歌单不露(删自建歌单是更高危操作,另行设计)
+                                onLongClick =
+                                    if (playlist.id !in ownPlaylistIds) {
+                                        { unsubscribePlaylistTarget = playlist }
+                                    } else {
+                                        null
+                                    },
                             )
                         }
                     }
@@ -150,6 +176,7 @@ internal fun LibraryNeteaseTab(
                                 title = stringResource(Res.string.starred_albums),
                                 albums = albumList,
                                 navController = navController,
+                                onAlbumLongClick = { album -> unsubscribeAlbumTarget = album },
                             )
                         }
                     }
@@ -172,6 +199,57 @@ internal fun LibraryNeteaseTab(
                 }
         }
     }
+
+    // 取消收藏确认(写操作):与库页"移除下载"弹窗同款结构
+    unsubscribePlaylistTarget?.let { target ->
+        NeteaseUnsubscribeDialog(
+            title = stringResource(Res.string.unsubscribe_playlist_title),
+            message = stringResource(Res.string.unsubscribe_playlist_message, target.title),
+            onConfirm = {
+                onUnsubscribePlaylist(target.id)
+                unsubscribePlaylistTarget = null
+            },
+            onDismiss = { unsubscribePlaylistTarget = null },
+        )
+    }
+    unsubscribeAlbumTarget?.let { target ->
+        NeteaseUnsubscribeDialog(
+            title = stringResource(Res.string.unsubscribe_album_title),
+            message = stringResource(Res.string.unsubscribe_album_message, target.title),
+            onConfirm = {
+                onUnsubscribeAlbum(target.browseId)
+                unsubscribeAlbumTarget = null
+            },
+            onDismiss = { unsubscribeAlbumTarget = null },
+        )
+    }
+}
+
+@Composable
+private fun NeteaseUnsubscribeDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        containerColor = rememberSurfaceDarkColors().container,
+        titleContentColor = rememberSurfaceDarkColors().content,
+        textContentColor = rememberSurfaceDarkColors().content,
+        title = { Text(text = title) },
+        text = { Text(text = message) },
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(Res.string.delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(Res.string.cancel))
+            }
+        },
+    )
 }
 
 /** 分区标题:对齐网易主页行标题(headlineMedium + 15dp 水平缩进) */

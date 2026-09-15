@@ -60,6 +60,9 @@ import kotlinx.datetime.plus
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
+import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
+import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
 import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
@@ -162,6 +165,10 @@ class LibraryViewModel(
      */
     private val _neteaseRefreshing = MutableStateFlow(false)
     val neteaseRefreshing: StateFlow<Boolean> get() = _neteaseRefreshing.asStateFlow()
+
+    /** 自建网易歌单 ID 集(creatorId==账号 uid);长按"取消收藏"只对收藏歌单露出,自建的不能误删 */
+    private val _ownNeteasePlaylistIds = MutableStateFlow<Set<String>>(emptySet())
+    val ownNeteasePlaylistIds: StateFlow<Set<String>> get() = _ownNeteasePlaylistIds.asStateFlow()
 
     /**
      * Whether the Wrapped chip has anything behind it.
@@ -280,7 +287,10 @@ class LibraryViewModel(
             coroutineScope {
                 launch {
                     neteaseRepository.getLibraryPlaylists().fold(
-                        onSuccess = { _neteasePlaylist.value = LocalResource.Success(it) },
+                        onSuccess = {
+                            _neteasePlaylist.value = LocalResource.Success(it)
+                            _ownNeteasePlaylistIds.value = neteaseRepository.getOwnNeteasePlaylistIds()
+                        },
                         onFailure = { _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed") },
                     )
                 }
@@ -298,6 +308,44 @@ class LibraryViewModel(
                 }
             }
             _neteaseRefreshing.value = false
+        }
+    }
+
+    /** 取消收藏网易歌单(/playlist/subscribe t=0),成功后 force 刷新"您的网易云"三分区 */
+    fun unsubscribeNeteasePlaylist(playlistId: String) {
+        viewModelScope.launch {
+            neteaseRepository
+                .subscribeNeteasePlaylist(playlistId, subscribe = false)
+                .fold(
+                    onSuccess = {
+                        if (it) {
+                            makeToast(getString(Res.string.unsubscribed_netease_playlist))
+                            getNeteaseLibrary(force = true)
+                        } else {
+                            makeToast(getString(Res.string.netease_action_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
+        }
+    }
+
+    /** 取消收藏网易专辑(/album/sub t=0),成功后 force 刷新"您的网易云"三分区 */
+    fun unsubscribeNeteaseAlbum(albumId: String) {
+        viewModelScope.launch {
+            neteaseRepository
+                .subscribeNeteaseAlbum(albumId, subscribe = false)
+                .fold(
+                    onSuccess = {
+                        if (it) {
+                            makeToast(getString(Res.string.unsubscribed_netease_album))
+                            getNeteaseLibrary(force = true)
+                        } else {
+                            makeToast(getString(Res.string.netease_action_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
         }
     }
 

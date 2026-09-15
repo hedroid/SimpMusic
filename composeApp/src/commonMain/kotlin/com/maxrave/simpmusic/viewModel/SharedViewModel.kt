@@ -488,6 +488,7 @@ class SharedViewModel(
                         // 网易详情卡要 song 行的 artistId/albumId,在 songEntity 到位后拉
                         if (song.videoId.toLongOrNull() != null) {
                             getNeteaseSongInfo(song)
+                            maybeMergeNeteaseLiked(song)
                         }
                     }
                 }
@@ -666,6 +667,25 @@ class SharedViewModel(
 
     /** 网易歌详情卡:艺人(头像/粉丝)+专辑(发行/简介)+评论(总数/热评),各路独立降级 */
     private var neteaseSongInfoJob: Job? = null
+
+    /**
+     * 网易歌红心的"或合并"(与 YT 侧 combineLocalAndYouTubeLiked 对称):
+     * 本地已红 || 云村已红 → 点亮。云端有而本地无时回填本地行(一首一行,随播放发生,
+     * 库页"喜欢"动态歌单等本地视图随之可见);开关关闭/未登录/拉取失败只看本地。
+     * 取消方向不受影响:点灭时 [SongRepositoryImpl.updateLikeStatus] 会同时清两边。
+     */
+    private fun maybeMergeNeteaseLiked(song: SongEntity) {
+        if (song.videoId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            if (!neteaseLikeSync.first()) return@launch
+            val cloudLiked = neteaseRepository.isSongLiked(song.videoId) ?: return@launch
+            val localLiked = song.liked == true
+            if (cloudLiked && !localLiked) {
+                songRepository.setLikedLocal(song.videoId, 1)
+                _liked.value = true
+            }
+        }
+    }
 
     private fun getNeteaseSongInfo(song: SongEntity) {
         neteaseSongInfoJob?.cancel()

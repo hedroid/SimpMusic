@@ -185,6 +185,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.remove_from_playlist
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
 import simpmusic.composeapp.generated.resources.cancel_download_confirm
@@ -1505,6 +1506,8 @@ fun NowPlayingBottomSheet(
     onNavigateToOtherScreen: () -> Unit = {},
     onDelete: (() -> Unit)? = null,
     onLibraryDelete: (() -> Unit)? = null,
+    // 歌单页内打开且该歌单可移除歌曲(网易自建歌单)时传入;播放页等其它场景不传不显示
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -1901,6 +1904,17 @@ fun NowPlayingBottomSheet(
                             ) {
                                 hideModalBottomSheet()
                                 onLibraryDelete?.invoke()
+                            }
+                        }
+                    }
+                    Crossfade(targetState = onRemoveFromPlaylist != null) {
+                        if (it) {
+                            ActionButton(
+                                icon = SimpIcons.Delete,
+                                text = Res.string.remove_from_playlist,
+                            ) {
+                                hideModalBottomSheet()
+                                onRemoveFromPlaylist?.invoke()
                             }
                         }
                     }

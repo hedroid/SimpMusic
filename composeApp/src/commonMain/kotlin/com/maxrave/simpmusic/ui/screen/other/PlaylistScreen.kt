@@ -133,6 +133,7 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.PlaylistUIEvent
 import com.maxrave.simpmusic.viewModel.PlaylistUIState
+import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.PlaylistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
@@ -197,6 +198,12 @@ fun PlaylistScreen(
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 网易自建歌单:歌曲菜单露"从歌单移除"(数据到齐后判定一次;收藏歌单/YT 歌单恒 false)
+    var neteaseOwnPlaylist by remember { mutableStateOf(false) }
+    val loadedPlaylistId = (uiState as? Success)?.data?.id
+    LaunchedEffect(loadedPlaylistId) {
+        neteaseOwnPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseOwnPlaylist() } ?: false
+    }
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
@@ -1341,6 +1348,12 @@ fun PlaylistScreen(
                         },
                         navController = navController,
                         song = track,
+                        onRemoveFromPlaylist =
+                            if (neteaseOwnPlaylist) {
+                                { viewModel.removeTrackFromNeteasePlaylist(track.videoId) }
+                            } else {
+                                null
+                            },
                     )
                 }
                 if (playlistBottomSheetShow) {

@@ -493,7 +493,7 @@ internal fun NeteaseArtistRow(
 
 /** 新碟上架行:YT 主页同款 HomeItemContentPlaylist(160dp 方卡,一屏两列),
  *  点击进专辑页(M6 数字 ID 同页路由)。area 非空时显示地区 chips(分区缓存即时切换);
- *  库页"您的网易云"收藏的专辑分区复用(不带地区 chips)。 */
+ *  库页"您的网易云"收藏的专辑分区复用(不带地区 chips,长按取消收藏)。 */
 @Composable
 internal fun NeteaseAlbumRow(
     title: String,
@@ -501,6 +501,7 @@ internal fun NeteaseAlbumRow(
     navController: NavController,
     area: String? = null,
     onAreaSelect: ((String) -> Unit)? = null,
+    onAlbumLongClick: ((com.maxrave.domain.data.model.searchResult.albums.AlbumsResult) -> Unit)? = null,
 ) {
     Column(Modifier.padding(horizontal = 15.dp)) {
         Text(
@@ -523,6 +524,7 @@ internal fun NeteaseAlbumRow(
                         )
                     },
                     data = album,
+                    onLongClick = onAlbumLongClick?.let { callback -> { callback(album) } },
                 )
             }
         }

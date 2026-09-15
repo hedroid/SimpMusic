@@ -35,7 +35,10 @@ import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.sync_follow_failed
 import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import simpmusic.composeapp.generated.resources.subscribed_on_netease
 import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
+import simpmusic.composeapp.generated.resources.unsubscribed_on_netease
+import simpmusic.composeapp.generated.resources.sync_follow_failed_netease
 import org.jetbrains.compose.resources.getString
 
 class ArtistViewModel(
@@ -77,6 +80,15 @@ class ArtistViewModel(
                                         ?.url,
                                 ),
                             )
+                            // 网易歌手:服务端关注态(/artist/detail/dynamic)落库并校正显示。
+                            // insertArtist 是 INSERT IGNORE,已存在行不会被新实体覆盖,
+                            // 必须显式 UPDATE;此前浏览时丢弃 subscribed,从库页点进
+                            // 已关注的歌手总显示未关注。YT 侧维持"本地为准"镜像语义不变。
+                            val neteaseSubscribed = data.subscribed
+                            if (channelId.toLongOrNull() != null && neteaseSubscribed != null) {
+                                artistRepository.setFollowedLocal(channelId, neteaseSubscribed)
+                                _followed.value = neteaseSubscribed
+                            }
                         }
                         _artistScreenState.value =
                             Success(data.toArtistScreenData())
@@ -159,17 +171,23 @@ class ArtistViewModel(
             val synced = artistRepository.updateFollowedStatus(channelId, followed)
             when (synced) {
                 true ->
+                    // 提示按源分流:网易歌手说网易,别把"已同步到 YouTube"说给网易用户
                     makeToast(
                         getString(
                             if (followed == 1) {
-                                Res.string.subscribed_on_youtube
+                                if (channelId.toLongOrNull() != null) Res.string.subscribed_on_netease else Res.string.subscribed_on_youtube
                             } else {
-                                Res.string.unsubscribed_on_youtube
+                                if (channelId.toLongOrNull() != null) Res.string.unsubscribed_on_netease else Res.string.unsubscribed_on_youtube
                             },
                         ),
                     )
 
-                false -> makeToast(getString(Res.string.sync_follow_failed))
+                false ->
+                    makeToast(
+                        getString(
+                            if (channelId.toLongOrNull() != null) Res.string.sync_follow_failed_netease else Res.string.sync_follow_failed,
+                        ),
+                    )
                 null -> Unit
             }
             log("updateFollowed: ${_followed.value}, synced: $synced")
