@@ -575,7 +575,6 @@ fun SettingScreen(
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
     val neteaseLikeSync by viewModel.neteaseLikeSync.collectAsStateWithLifecycle()
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
-    val neteaseAutoSwitch by viewModel.neteaseAutoSwitch.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
