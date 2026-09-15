@@ -145,8 +145,6 @@
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
     <string name="similar_songs">비슷한 곡</string>
-    <string name="similar_radio_started">비슷한 곡 재생 시작</string>
-    <string name="radio_playing_suffix"> · 재생 중</string>
     <string name="track_count_short">%1$s곡</string>
     <string name="comments_title">댓글 · %1$s</string>
     <string name="end_of_list">마지막 댓글입니다</string>

@@ -143,8 +143,6 @@
     <string name="fans_count">%1$s フォロワー</string>
     <string name="comments_count">%1$s 件のコメント</string>
     <string name="similar_songs">似た楽曲</string>
-    <string name="similar_radio_started">似た楽曲の再生を開始</string>
-    <string name="radio_playing_suffix"> · 再生中</string>
     <string name="track_count_short">%1$s曲</string>
     <string name="comments_title">コメント · %1$s</string>
     <string name="end_of_list">最後まで読み込みました</string>

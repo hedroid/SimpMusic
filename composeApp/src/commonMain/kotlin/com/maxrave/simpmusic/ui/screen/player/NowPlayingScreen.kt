@@ -691,9 +691,6 @@ fun NowPlayingScreenContent(
             // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for
             // the codec therefore never matched anything and the badge never rendered, on any track.
             audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
-            isNeteaseRadioQueue =
-                queueDataState?.data?.playlistId
-                    ?.startsWith(com.maxrave.common.NETEASE_RADIO_PLAYLIST_ID_PREFIX) == true,
         )
     val actions =
         NowPlayingContentActions(
@@ -717,7 +714,6 @@ fun NowPlayingScreenContent(
                 showHideControlLayout = !showHideControlLayout
             },
             onShowNeteaseComments = { showNeteaseComments = true },
-            onStartNeteaseRadio = { sharedViewModel.startNeteaseSimilarRadio() },
             onNavigateToArtist = {
             // TODO(NETEASE_NEXT): 播放页数据适配 ——
             // 1) 歌词:source==NETEASE 时走 NeteaseRepositoryImpl.getLyrics()(yrc 逐字/

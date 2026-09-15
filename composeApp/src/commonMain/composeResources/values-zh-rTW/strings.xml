@@ -153,8 +153,6 @@
     <string name="fans_count">%1$s 粉絲</string>
     <string name="comments_count">%1$s 則留言</string>
     <string name="similar_songs">相似歌曲</string>
-    <string name="similar_radio_started">已開始播放相似歌曲</string>
-    <string name="radio_playing_suffix"> · 播放中</string>
     <string name="track_count_short">%1$s 首</string>
     <string name="comments_title">留言 · %1$s</string>
     <string name="end_of_list">已經到底了</string>

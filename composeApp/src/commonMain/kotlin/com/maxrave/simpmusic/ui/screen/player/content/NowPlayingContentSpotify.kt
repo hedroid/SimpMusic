@@ -177,8 +177,6 @@ import simpmusic.composeapp.generated.resources.published_at
 import simpmusic.composeapp.generated.resources.rate_lyrics
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
-import simpmusic.composeapp.generated.resources.similar_songs
-import simpmusic.composeapp.generated.resources.radio_playing_suffix
 import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
@@ -1693,38 +1691,18 @@ fun NowPlayingContentSpotify(
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (neteaseMeta.commentCount > 0) {
-                                                Text(
-                                                    text =
-                                                        stringResource(
-                                                            Res.string.comments_count,
-                                                            "%,d".format(neteaseMeta.commentCount),
-                                                        ),
-                                                    style = typo().labelMedium,
-                                                    color = Color.White,
-                                                    modifier =
-                                                        Modifier.clickable {
-                                                            actions.onShowNeteaseComments()
-                                                        },
-                                                )
-                                                Spacer(modifier = Modifier.width(16.dp))
-                                            }
-                                            // 电台已生效时缀上"播放中"——入口点了之后队列悄悄换血,
-                                            // 没有激活态的话看起来像什么都没发生
+                                        if (neteaseMeta.commentCount > 0) {
                                             Text(
                                                 text =
-                                                    stringResource(Res.string.similar_songs) +
-                                                        if (state.isNeteaseRadioQueue) {
-                                                            stringResource(Res.string.radio_playing_suffix)
-                                                        } else {
-                                                            ""
-                                                        },
+                                                    stringResource(
+                                                        Res.string.comments_count,
+                                                        "%,d".format(neteaseMeta.commentCount),
+                                                    ),
                                                 style = typo().labelMedium,
                                                 color = Color.White,
                                                 modifier =
                                                     Modifier.clickable {
-                                                        actions.onStartNeteaseRadio()
+                                                        actions.onShowNeteaseComments()
                                                     },
                                             )
                                         }
