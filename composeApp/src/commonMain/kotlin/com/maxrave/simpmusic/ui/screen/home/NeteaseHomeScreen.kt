@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.EndOfPage
@@ -461,6 +462,9 @@ private fun NeteaseArtistRow(
                         model = artist.thumbnails.lastOrNull()?.url,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        // 无占位时加载失败=纯空白圆,看着像数据丢了;给个 holder 至少能看出"这里是头像"
+                        placeholder = rememberHolderPainter(),
+                        error = rememberHolderPainter(),
                         modifier =
                             Modifier
                                 .size(84.dp)
