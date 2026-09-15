@@ -158,6 +158,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
+import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
 import simpmusic.composeapp.generated.resources.cancel_download_confirm
@@ -200,6 +202,7 @@ fun PlaylistScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // 网易自建歌单:歌曲菜单露"从歌单移除"(数据到齐后判定一次;收藏歌单/YT 歌单恒 false)
     var neteaseOwnPlaylist by remember { mutableStateOf(false) }
+    var showUnsubscribeDialog by remember { mutableStateOf(false) }
     val loadedPlaylistId = (uiState as? Success)?.data?.id
     LaunchedEffect(loadedPlaylistId) {
         neteaseOwnPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseOwnPlaylist() } ?: false
@@ -1339,6 +1342,29 @@ fun PlaylistScreen(
                         onYTPlaylistClick = {},
                     )
                 }
+                if (showUnsubscribeDialog) {
+                    AlertDialog(
+                        containerColor = rememberSurfaceDarkColors().container,
+                        titleContentColor = rememberSurfaceDarkColors().content,
+                        textContentColor = rememberSurfaceDarkColors().content,
+                        title = { Text(text = stringResource(Res.string.unsubscribe_playlist_title)) },
+                        text = { Text(text = stringResource(Res.string.unsubscribe_playlist_message, data.title)) },
+                        onDismissRequest = { showUnsubscribeDialog = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.unsubscribeNeteasePlaylist()
+                                showUnsubscribeDialog = false
+                            }) {
+                                Text(text = stringResource(Res.string.delete))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showUnsubscribeDialog = false }) {
+                                Text(text = stringResource(Res.string.cancel))
+                            }
+                        },
+                    )
+                }
                 if (itemBottomSheetShow && currentItem != null) {
                     val track = currentItem?.toSongEntity() ?: return@Crossfade
                     NowPlayingBottomSheet(
@@ -1370,6 +1396,13 @@ fun PlaylistScreen(
                         playlistId = data.id,
                         playlistName = data.title,
                         isYourYouTubePlaylist = isYourYouTubePlaylist && !data.isRadio,
+                        // 网易收藏歌单:更多菜单露出"取消收藏"(自建歌单不露)
+                        onUnsubscribe =
+                            if (data.id.toLongOrNull() != null && !neteaseOwnPlaylist) {
+                                { showUnsubscribeDialog = true }
+                            } else {
+                                null
+                            },
                         onSaveToLocal = {
                             viewModel.getFullTracks { track ->
                                 viewModel.saveToLocal(track)

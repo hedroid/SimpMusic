@@ -320,9 +320,11 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
     （`setFollowedLocal`——insertArtist 是 INSERT IGNORE，必须显式 UPDATE）并校正按钮；
     此前浏览时丢弃服务端态，从库页点进已关注歌手总显示未关注。YT 侧镜像语义不变。
   - **关注 toast 按源分流**：网易歌手 → "已在网易云关注/已取消"，不再说 YouTube。
-  - **库页管理入口**：收藏歌单 tile / 收藏专辑卡**长按 → 确认弹窗 → 取消收藏**（仅
-    收藏的露出；自建歌单判定 = creatorId==uid，repo 记上次 userPlaylists 的 creator 映射，
-    未知 fail-closed）；歌单 tile 副标题改为显示创建者昵称。
+  - **库页管理入口（内外双入口）**：收藏歌单 tile / 收藏专辑卡**长按 → 确认弹窗 → 取消收藏**
+    （仅收藏的露出；自建歌单判定 = creatorId==uid，repo 记上次 userPlaylists 的 creator 映射，
+    未知 fail-closed）；歌单 tile 副标题改为显示创建者昵称。**详情页"更多"菜单同样露出**
+    （歌单页仅收藏歌单、专辑页仅网易专辑 → "取消收藏"行 → 二次确认；歌单路径同时熄灭本地
+    红心）。两入口共用 PlaylistBottomSheet 的可选 onUnsubscribe 行。
   - **歌单内移除歌曲**：自建网易歌单的歌曲三点菜单加"从歌单中移除"（manipulate op=del，
     内存列表剔除 + 表头计数减一；复用既有 remove_from_playlist 字符串）。
   - 模拟器实测：关注态落库/按钮、红心 false→true 合并、两类取消收藏弹窗、移除歌曲

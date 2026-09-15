@@ -385,6 +385,7 @@
     <string name="unsubscribe_album_title">Unsubscribe album?</string>
     <string name="unsubscribe_album_message">The album %1$s will be removed from your NetEase starred albums.</string>
     <string name="unsubscribed_netease_playlist">Unsubscribed from the NetEase playlist</string>
+    <string name="unsubscribe_from_library">Remove from favorites</string>
     <string name="netease_action_failed">Action failed. Please try again.</string>
     <string name="unsubscribed_netease_album">Removed from starred albums</string>
     <string name="removed_from_playlist">Removed from the playlist</string>

@@ -56,6 +56,8 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
+import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
 import simpmusic.composeapp.generated.resources.remove_from_playlist_failed
 import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
@@ -101,6 +103,31 @@ class PlaylistViewModel(
     suspend fun isNeteaseOwnPlaylist(): Boolean {
         val id = (uiState.value as? Success)?.data?.id ?: return false
         return id.toLongOrNull() != null && neteaseRepository.isOwnNeteasePlaylist(id)
+    }
+
+    /**
+     * 歌单页"更多"菜单取消收藏网易歌单:云端 subscribe t=0 + 本地 liked 清零(红心熄灭),
+     * 与库页长按路径行为一致(那边不持有页面状态,只清云端)。
+     */
+    fun unsubscribeNeteasePlaylist() {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() == null) return
+        viewModelScope.launch {
+            neteaseRepository
+                .subscribeNeteasePlaylist(id, subscribe = false)
+                .fold(
+                    onSuccess = { ok ->
+                        if (ok) {
+                            playlistRepository.updatePlaylistLiked(id, 0)
+                            _playlistEntity.update { it?.copy(liked = false) }
+                            makeToast(getString(Res.string.unsubscribed_netease_playlist))
+                        } else {
+                            makeToast(getString(Res.string.netease_action_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
+        }
     }
 
     /**

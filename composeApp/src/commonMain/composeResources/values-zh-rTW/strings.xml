@@ -29,6 +29,7 @@
     <string name="unsubscribe_album_title">取消收藏該專輯？</string>
     <string name="unsubscribe_album_message">專輯「%1$s」將從你的網易雲收藏中移除。</string>
     <string name="unsubscribed_netease_playlist">已取消收藏網易雲播放清單</string>
+    <string name="unsubscribe_from_library">取消收藏</string>
     <string name="netease_action_failed">操作失敗，請重試</string>
     <string name="unsubscribed_netease_album">已取消收藏專輯</string>
     <string name="removed_from_playlist">已從播放清單移除</string>

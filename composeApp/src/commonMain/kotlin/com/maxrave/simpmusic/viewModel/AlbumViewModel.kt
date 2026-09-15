@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.download_cancelled
@@ -45,6 +47,26 @@ class AlbumViewModel(
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
+
+    /** 专辑页"更多"菜单取消收藏网易专辑(/album/sub t=0),云端成功后 toast;本地 liked 同步熄灭 */
+    fun unsubscribeNeteaseAlbum(albumId: String) {
+        if (albumId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            neteaseRepository
+                .subscribeNeteaseAlbum(albumId, subscribe = false)
+                .fold(
+                    onSuccess = { ok ->
+                        makeToast(
+                            getString(
+                                if (ok) Res.string.unsubscribed_netease_album else Res.string.netease_action_failed,
+                            ),
+                        )
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
+        }
+    }
     private val localPlaylistRepository: LocalPlaylistRepository by inject<LocalPlaylistRepository>()
     private val _uiState: MutableStateFlow<AlbumUIState> = MutableStateFlow(AlbumUIState.initial())
     val uiState: StateFlow<AlbumUIState> = _uiState

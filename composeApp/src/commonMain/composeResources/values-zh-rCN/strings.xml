@@ -662,6 +662,7 @@
     <string name="unsubscribe_album_title">取消收藏该专辑？</string>
     <string name="unsubscribe_album_message">专辑"%1$s"将从你的网易云收藏中移除。</string>
     <string name="unsubscribed_netease_playlist">已取消收藏网易云歌单</string>
+    <string name="unsubscribe_from_library">取消收藏</string>
     <string name="netease_action_failed">操作失败，请重试</string>
     <string name="unsubscribed_netease_album">已取消收藏专辑</string>
     <string name="removed_from_playlist">已从歌单移除</string>

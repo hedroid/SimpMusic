@@ -130,6 +130,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.unsubscribe_album_message
+import simpmusic.composeapp.generated.resources.unsubscribe_album_title
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
 import simpmusic.composeapp.generated.resources.cancel_download_confirm
@@ -169,6 +171,7 @@ fun AlbumScreen(
 
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
     var albumBottomSheetShow by rememberSaveable { mutableStateOf(false) }
+    var showUnsubscribeAlbumDialog by rememberSaveable { mutableStateOf(false) }
     var chosenSong: Track? by remember { mutableStateOf(null) }
 
     val selectionState = rememberSongSelectionState()
@@ -1073,12 +1076,42 @@ fun AlbumScreen(
                         song = chosenSong?.toSongEntity(),
                     )
                 }
+                if (showUnsubscribeAlbumDialog) {
+                    AlertDialog(
+                        containerColor = rememberSurfaceDarkColors().container,
+                        titleContentColor = rememberSurfaceDarkColors().content,
+                        textContentColor = rememberSurfaceDarkColors().content,
+                        title = { Text(text = stringResource(Res.string.unsubscribe_album_title)) },
+                        text = { Text(text = stringResource(Res.string.unsubscribe_album_message, uiState.title)) },
+                        onDismissRequest = { showUnsubscribeAlbumDialog = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.unsubscribeNeteaseAlbum(browseId)
+                                showUnsubscribeAlbumDialog = false
+                            }) {
+                                Text(text = stringResource(Res.string.delete))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showUnsubscribeAlbumDialog = false }) {
+                                Text(text = stringResource(Res.string.cancel))
+                            }
+                        },
+                    )
+                }
                 if (albumBottomSheetShow) {
                     PlaylistBottomSheet(
                         onDismiss = { albumBottomSheetShow = false },
                         playlistId = browseId,
                         playlistName = uiState.title,
                         isYourYouTubePlaylist = false,
+                        // 网易专辑:更多菜单露出"取消收藏"
+                        onUnsubscribe =
+                            if (browseId.toLongOrNull() != null) {
+                                { showUnsubscribeAlbumDialog = true }
+                            } else {
+                                null
+                            },
                         onSaveToLocal = {},
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
