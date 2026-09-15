@@ -1733,6 +1733,13 @@ fun NowPlayingContentSpotify(
                                                 ?: neteaseMeta.albumDescription
                                         if (!bio.isNullOrBlank()) {
                                             Spacer(modifier = Modifier.height(10.dp))
+                                            // 与 YT 分支同款:简介块前带"描述"标签行
+                                            Text(
+                                                text = stringResource(Res.string.description),
+                                                style = typo().labelSmall,
+                                                color = Color.White,
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
                                             DescriptionView(
                                                 text = bio,
                                                 onTimeClicked = { },
