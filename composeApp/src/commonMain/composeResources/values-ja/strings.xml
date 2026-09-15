@@ -138,7 +138,7 @@
     <string name="album">アルバム</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
-    <string name="netease_like_sync">NetEaseにいいね同期</string>
+    <string name="netease_like_sync">NetEaseといいねを同期</string>
     <string name="netease_like_sync_description">アプリ内でいいねした曲をNetEaseアカウントにも同期</string>
     <string name="fans_count">%1$s フォロワー</string>
     <string name="comments_count">%1$s 件のコメント</string>
