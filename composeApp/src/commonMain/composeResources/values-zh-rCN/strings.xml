@@ -885,6 +885,8 @@
     <string name="netease_follow_sync_description">关注或取消关注艺人时，同步到你的网易云账号</string>
     <string name="netease_like_sync">红心与网易云同步</string>
     <string name="netease_like_sync_description">在应用里红心一首歌时，同步到你的网易云账号</string>
+    <string name="netease_play_report">播放数据上报网易云</string>
+    <string name="netease_play_report_description">把播放记录上报到你的网易云账号，让每日推荐和年度报告更懂你</string>
     <string name="netease_auto_switch">无版权音乐自动切换音源</string>
     <string name="netease_auto_switch_description">网易云歌曲无版权或仅 VIP 试听时，自动切换到 YouTube Music 播放</string>
     <string name="netease_login_qr">扫码</string>

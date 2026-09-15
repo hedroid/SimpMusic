@@ -142,6 +142,8 @@
     <string name="netease_url">NetEase URL</string>
     <string name="netease_like_sync">NetEase 좋아요 동기화</string>
     <string name="netease_like_sync_description">앱에서 좋아요한 곡을 NetEase 계정에도 동기화</string>
+    <string name="netease_play_report">NetEase 재생 기록 전송</string>
+    <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트에 반영합니다</string>
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
     <string name="similar_songs">비슷한 곡</string>

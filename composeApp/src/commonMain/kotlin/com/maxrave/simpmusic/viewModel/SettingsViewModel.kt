@@ -1870,6 +1870,9 @@ class SettingsViewModel(
     private var _neteaseLikeSync: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val neteaseLikeSync: StateFlow<Boolean> = _neteaseLikeSync
 
+    private var _neteasePlayReport: MutableStateFlow<Boolean> = MutableStateFlow(true)
+    val neteasePlayReport: StateFlow<Boolean> = _neteasePlayReport
+
     private var _neteaseAutoSwitch: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val neteaseAutoSwitch: StateFlow<Boolean> = _neteaseAutoSwitch
 
@@ -1885,12 +1888,13 @@ class SettingsViewModel(
                 dataStoreManager.neteaseDownloadQuality,
                 dataStoreManager.neteaseFollowSync,
                 dataStoreManager.neteaseLikeSync,
+                dataStoreManager.neteasePlayReport,
                 dataStoreManager.neteaseAutoSwitch,
             )
         }
     }
 
-    /** DataStore → StateFlow 的一次性搬运,避免七个独立 collect */
+    /** DataStore → StateFlow 的一次性搬运,避免八个独立 collect */
     private suspend fun combineStates(
         cookie: kotlinx.coroutines.flow.Flow<String>,
         name: kotlinx.coroutines.flow.Flow<String>,
@@ -1898,6 +1902,7 @@ class SettingsViewModel(
         downloadQuality: kotlinx.coroutines.flow.Flow<String>,
         followSync: kotlinx.coroutines.flow.Flow<String>,
         likeSync: kotlinx.coroutines.flow.Flow<String>,
+        playReport: kotlinx.coroutines.flow.Flow<String>,
         autoSwitch: kotlinx.coroutines.flow.Flow<String>,
     ) {
         kotlinx.coroutines.flow.combine(
@@ -1907,6 +1912,7 @@ class SettingsViewModel(
             downloadQuality,
             followSync,
             likeSync,
+            playReport,
             autoSwitch,
         ) { values -> values }.collect { state ->
             _neteaseLogIn.value = (state[0] as String).isNotEmpty()
@@ -1915,7 +1921,8 @@ class SettingsViewModel(
             _neteaseDownloadQuality.value = state[3] as String
             _neteaseFollowSync.value = (state[4] as String) == DataStoreManager.TRUE
             _neteaseLikeSync.value = (state[5] as String) == DataStoreManager.TRUE
-            _neteaseAutoSwitch.value = (state[6] as String) == DataStoreManager.TRUE
+            _neteasePlayReport.value = (state[6] as String) == DataStoreManager.TRUE
+            _neteaseAutoSwitch.value = (state[7] as String) == DataStoreManager.TRUE
         }
     }
 
@@ -1933,6 +1940,10 @@ class SettingsViewModel(
 
     fun setNeteaseLikeSync(enabled: Boolean) {
         viewModelScope.launch { dataStoreManager.setNeteaseLikeSync(enabled) }
+    }
+
+    fun setNeteasePlayReport(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setNeteasePlayReport(enabled) }
     }
 
     fun setNeteaseAutoSwitch(enabled: Boolean) {

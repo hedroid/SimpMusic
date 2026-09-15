@@ -215,6 +215,8 @@ import simpmusic.composeapp.generated.resources.better_lyrics
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.animated_artwork_info
 import simpmusic.composeapp.generated.resources.canvas_info
+import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs
+import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs_description
 import simpmusic.composeapp.generated.resources.categories_sponsor_block
 import simpmusic.composeapp.generated.resources.change
 import simpmusic.composeapp.generated.resources.change_language_warning
@@ -315,6 +317,8 @@ import simpmusic.composeapp.generated.resources.netease_download_quality
 import simpmusic.composeapp.generated.resources.netease_follow_sync
 import simpmusic.composeapp.generated.resources.netease_follow_sync_description
 import simpmusic.composeapp.generated.resources.netease_like_sync
+import simpmusic.composeapp.generated.resources.netease_play_report
+import simpmusic.composeapp.generated.resources.netease_play_report_description
 import simpmusic.composeapp.generated.resources.netease_like_sync_description
 import simpmusic.composeapp.generated.resources.netease_auto_switch
 import simpmusic.composeapp.generated.resources.netease_auto_switch_description
@@ -579,6 +583,7 @@ fun SettingScreen(
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
     val neteaseLikeSync by viewModel.neteaseLikeSync.collectAsStateWithLifecycle()
+    val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
     val neteaseAutoSwitch by viewModel.neteaseAutoSwitch.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
@@ -1180,13 +1185,12 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
                     switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
                 )
-                /*
+                // 单一红心模型:开关开=本地红心自动跟进 YT 已喜欢( YT 登录时生效)
                 SettingItem(
                     title = stringResource(Res.string.combine_local_and_youtube_liked_songs),
                     subtitle = stringResource(Res.string.combine_local_and_youtube_liked_songs_description),
                     switch = (combineLocalAndYouTubeLiked to { viewModel.setCombineLocalAndYouTubeLiked(it) })
                 )
-                 */
                 SettingItem(
                     title = stringResource(Res.string.proxy),
                     subtitle = stringResource(Res.string.proxy_description),
@@ -1454,6 +1458,12 @@ fun SettingScreen(
                     title = stringResource(Res.string.netease_like_sync),
                     subtitle = stringResource(Res.string.netease_like_sync_description),
                     switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_play_report),
+                    subtitle = stringResource(Res.string.netease_play_report_description),
+                    switch = (neteasePlayReport to { viewModel.setNeteasePlayReport(it) }),
                     isEnable = neteaseLoggedIn,
                 )
                 SettingItem(

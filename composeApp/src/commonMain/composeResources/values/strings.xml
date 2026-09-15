@@ -914,6 +914,8 @@
     <string name="netease_follow_sync_description">Following or unfollowing an artist also applies to your NetEase account</string>
     <string name="netease_like_sync">Heart sync with NetEase</string>
     <string name="netease_like_sync_description">Heart a song in the app also hearts it in your NetEase account</string>
+    <string name="netease_play_report">Playback reporting to NetEase</string>
+    <string name="netease_play_report_description">Report plays to your NetEase account so its recommendations and yearly report learn from them</string>
     <string name="netease_auto_switch">Auto-switch source for unavailable songs</string>
     <string name="netease_auto_switch_description">Fall back to YouTube Music when a NetEase song has no license or is VIP-only</string>
     <string name="netease_login_qr">QR code</string>
