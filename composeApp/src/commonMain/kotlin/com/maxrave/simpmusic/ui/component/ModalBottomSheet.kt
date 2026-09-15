@@ -2010,7 +2010,14 @@ fun NowPlayingBottomSheet(
                         )
                         hideModalBottomSheet()
                     }
-                    Crossfade(targetState = changeMainLyricsProviderEnable) {
+                    // 网易歌歌词恒走 NETEASE 官方专线,供应商选择对其无效 → 入口隐藏;
+                    // 仅 YT 歌可选(设置页入口已隐藏,这里是唯一选择处)
+                    Crossfade(
+                        targetState =
+                            changeMainLyricsProviderEnable &&
+                                uiState.songUIState.videoId.isNotEmpty() &&
+                                uiState.songUIState.videoId.toLongOrNull() == null,
+                    ) {
                         if (it) {
                             ActionButton(
                                 icon = SimpIcons.Lyrics,

@@ -1509,6 +1509,17 @@ class SharedViewModel(
                         duration,
                     )
                 }
+
+                // NETEASE 只对网易歌有意义(上方数字 ID 分支);设置页入口隐藏前可能存下该值,
+                // YT 歌遇到时回落默认供应商,否则 when 落空导致一首词都不取
+                else -> {
+                    getSimpMusicLyrics(
+                        videoId,
+                        song,
+                        (artist ?: ""),
+                        duration,
+                    )
+                }
             }
         }
     }

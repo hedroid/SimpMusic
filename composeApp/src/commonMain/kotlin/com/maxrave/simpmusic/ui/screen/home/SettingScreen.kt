@@ -358,7 +358,6 @@ import simpmusic.composeapp.generated.resources.romanization_serbian
 import simpmusic.composeapp.generated.resources.romanization_ukrainian
 import simpmusic.composeapp.generated.resources.lyrics_style_apple_music
 import simpmusic.composeapp.generated.resources.lyrics_style_classic
-import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.manage_your_youtube_accounts
 import simpmusic.composeapp.generated.resources.maxrave_dev
 import simpmusic.composeapp.generated.resources.monthly
@@ -562,14 +561,6 @@ fun SettingScreen(
     val savePlaybackState by remember { viewModel.savedPlaybackState.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val saveLastPlayed by remember { viewModel.saveRecentSongAndQueue.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val killServiceOnExit by remember { viewModel.killServiceOnExit.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = true)
-    val mainLyricsProvider by viewModel.mainLyricsProvider.collectAsStateWithLifecycle()
-    // 歌词供应商过滤:网易源下 SIMPMUSIC(按 YT videoId 索引)与 YOUTUBE(无视频实体)
-    // 不可用,选项只剩 NETEASE/LRCLIB/BETTER_LYRICS;隐藏项被选中时按 NETEASE 显示生效
-    val settingDataStoreManager: com.maxrave.domain.manager.DataStoreManager = org.koin.compose.koinInject()
-    val isNeteaseSource by
-        settingDataStoreManager.selectedSource
-            .collectAsStateWithLifecycle(initialValue = com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC.name)
-    val neteaseLyricsMode = isNeteaseSource == com.maxrave.domain.source.MusicSource.NETEASE.name
     val youtubeSubtitleLanguage by viewModel.youtubeSubtitleLanguage.collectAsStateWithLifecycle()
     val spotifyLoggedIn by viewModel.spotifyLogIn.collectAsStateWithLifecycle()
     val spotifyLyrics by viewModel.spotifyLyrics.collectAsStateWithLifecycle()
@@ -1720,69 +1711,8 @@ fun SettingScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.main_lyrics_provider),
-                    subtitle =
-                        when {
-                            neteaseLyricsMode &&
-                                (mainLyricsProvider == DataStoreManager.SIMPMUSIC ||
-                                    mainLyricsProvider == DataStoreManager.YOUTUBE ||
-                                    mainLyricsProvider == DataStoreManager.NETEASE) ->
-                                stringResource(Res.string.netease_lyrics)
-                            mainLyricsProvider == DataStoreManager.SIMPMUSIC -> stringResource(Res.string.simpmusic_lyrics)
-                            mainLyricsProvider == DataStoreManager.YOUTUBE -> stringResource(Res.string.youtube_transcript)
-                            mainLyricsProvider == DataStoreManager.LRCLIB -> stringResource(Res.string.lrclib)
-                            mainLyricsProvider == DataStoreManager.BETTER_LYRICS -> stringResource(Res.string.better_lyrics)
-                            else -> stringResource(Res.string.unknown)
-                        },
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.main_lyrics_provider) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            if (neteaseLyricsMode) {
-                                                // 网易模式:SIMPUSIC/YOUTUBE 不可用(索引/实体不匹配),隐藏
-                                                listOf(
-                                                    true to runBlocking { getString(Res.string.netease_lyrics) },
-                                                    (mainLyricsProvider == DataStoreManager.LRCLIB) to
-                                                        runBlocking { getString(Res.string.lrclib) },
-                                                    (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
-                                                        runBlocking { getString(Res.string.better_lyrics) },
-                                                )
-                                            } else {
-                                                listOf(
-                                                    (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to
-                                                        runBlocking { getString(Res.string.simpmusic_lyrics) },
-                                                    (mainLyricsProvider == DataStoreManager.YOUTUBE) to
-                                                        runBlocking { getString(Res.string.youtube_transcript) },
-                                                    (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
-                                                    (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
-                                                        runBlocking { getString(Res.string.better_lyrics) },
-                                                )
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        viewModel.setLyricsProvider(
-                                            when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.netease_lyrics) } -> DataStoreManager.NETEASE
-                                                runBlocking { getString(Res.string.simpmusic_lyrics) } -> DataStoreManager.SIMPMUSIC
-                                                runBlocking { getString(Res.string.youtube_transcript) } -> DataStoreManager.YOUTUBE
-                                                runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
-                                                runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS
-                                                else ->
-                                                    if (neteaseLyricsMode) DataStoreManager.NETEASE else DataStoreManager.SIMPMUSIC
-                                            },
-                                        )
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-
+                // 主歌词提供商入口已隐藏(2026-09-15):网易歌恒走 NETEASE 官方专线,
+                // YT 歌改在播放页三点菜单选;跨源供应商(netease 歌词 for YT)按 TODO 另做
                 SettingItem(
                     title = stringResource(Res.string.translation_language),
                     // "" (or the not-yet-loaded null) means no explicit choice: follow the app language.
