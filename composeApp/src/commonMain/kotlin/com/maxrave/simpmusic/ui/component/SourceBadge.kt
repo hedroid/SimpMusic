@@ -2,11 +2,7 @@ package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -27,6 +23,12 @@ import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 
+/** 网易云音乐品牌红(官方视觉主色) */
+val NeteaseBrandRed = Color(0xFFC20C0C)
+
+/** YouTube 品牌红 */
+val YouTubeBrandRed = Color(0xFFFF0000)
+
 /**
  * 混源上下文里的**双品牌来源角标**（网易=音符标 / YT=播放标），半透明黑圆底 + 白色品牌
  * 图标叠缩略图右上角。只在混源上下文 opt-in 渲染（您的库最近添加、收藏/下载网格等）；
@@ -40,43 +42,28 @@ fun SourceBadge(
     modifier: Modifier = Modifier,
     size: Dp = 22.dp,
 ) {
-    // 双品牌同一款黑透明圆底;内部图标区分——网易=白色音符(实心),
-    // YT=YouTube 标志本体:红色圆角矩形+白色实心三角(纯色块,任何尺寸可读;
-    // 曾用红圆底白三角被读成"播放按钮"、YT Music 圆环标在 16dp 下细线不可见)。
+    // 品牌原始红白配色:圆底用各自品牌红(网易云音乐 #C20C0C / YouTube #FF0000),
+    // 图标白色——音符 vs 播放三角区分品牌(用户定案,与音源选择菜单同款配色)。
     val netease = source == MusicSource.NETEASE
     Box(
         modifier =
             modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.55f)),
+                .background(if (netease) NeteaseBrandRed else YouTubeBrandRed),
         contentAlignment = Alignment.Center,
     ) {
-        if (netease) {
-            Icon(
-                imageVector = SimpIcons.NeteaseCloudMusic,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(size * 0.64f),
-            )
-        } else {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(size * 0.18f)
-                        .clip(RoundedCornerShape(size * 0.12f))
-                        .background(Color(0xFFFF0000)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = SimpIcons.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.fillMaxHeight(0.72f),
-                )
-            }
-        }
+        Icon(
+            imageVector =
+                if (netease) {
+                    SimpIcons.NeteaseCloudMusic
+                } else {
+                    SimpIcons.PlayArrow
+                },
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(size * (if (netease) 0.64f else 0.52f)),
+        )
     }
 }
 

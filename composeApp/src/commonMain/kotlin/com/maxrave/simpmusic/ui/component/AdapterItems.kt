@@ -330,9 +330,11 @@ fun HomeItemContentPlaylist(
             ),
     ) {
         Column(
+            // 无横向 padding:tile 内容宽必须等于封面宽(=网格槽宽),否则 wrapContentSize
+            // 允许溢出放置,角标/封面会被顶出槽外(真机不同屏宽下可见)。文本行的横向
+            // 边距由各自 Text 的 padding 提供,视觉与原 10dp 等价。
             modifier =
                 Modifier
-                    .padding(10.dp)
                     .heightIn(min = thumbSize + 76.dp),
         ) {
             val thumb =
@@ -483,7 +485,7 @@ fun HomeItemContentPlaylist(
                     Modifier
                         .width(thumbSize)
                         .wrapContentHeight(align = Alignment.CenterVertically)
-                        .padding(top = 8.dp),
+                        .padding(start = 10.dp, top = 8.dp),
             )
             Text(
                 text =
@@ -569,6 +571,7 @@ fun HomeItemContentPlaylist(
                     Modifier
                         .width(thumbSize)
                         .wrapContentHeight(align = Alignment.CenterVertically)
+                        .padding(start = 10.dp)
                         .basicMarquee(
                             initialDelayMillis = 2000,
                             repeatDelayMillis = 2000,

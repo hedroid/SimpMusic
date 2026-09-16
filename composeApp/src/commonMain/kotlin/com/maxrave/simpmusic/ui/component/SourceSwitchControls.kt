@@ -94,7 +94,14 @@ fun SourceSwitchMenu(
     ) {
         DropdownMenuItem(
             text = { Text("YouTube Music") },
-            leadingIcon = { Icon(SimpIcons.YouTubeMusic, null, modifier = Modifier.size(24.dp)) },
+            leadingIcon = {
+                Icon(
+                    SimpIcons.YouTubeMusic,
+                    null,
+                    tint = com.maxrave.simpmusic.ui.component.YouTubeBrandRed,
+                    modifier = Modifier.size(24.dp),
+                )
+            },
             trailingIcon = {
                 if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
             },
@@ -105,7 +112,14 @@ fun SourceSwitchMenu(
         )
         DropdownMenuItem(
             text = { Text(stringResource(Res.string.netease)) },
-            leadingIcon = { Icon(SimpIcons.NeteaseCloudMusic, null, modifier = Modifier.size(24.dp)) },
+            leadingIcon = {
+                Icon(
+                    SimpIcons.NeteaseCloudMusic,
+                    null,
+                    tint = com.maxrave.simpmusic.ui.component.NeteaseBrandRed,
+                    modifier = Modifier.size(24.dp),
+                )
+            },
             trailingIcon = {
                 if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
             },
