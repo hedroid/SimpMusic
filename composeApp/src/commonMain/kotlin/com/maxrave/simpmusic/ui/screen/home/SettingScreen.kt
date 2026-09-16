@@ -317,6 +317,8 @@ import simpmusic.composeapp.generated.resources.netease_download_quality
 import simpmusic.composeapp.generated.resources.netease_follow_sync
 import simpmusic.composeapp.generated.resources.netease_follow_sync_description
 import simpmusic.composeapp.generated.resources.netease_like_sync
+import simpmusic.composeapp.generated.resources.netease_favorite_sync
+import simpmusic.composeapp.generated.resources.netease_favorite_sync_description
 import simpmusic.composeapp.generated.resources.netease_play_report
 import simpmusic.composeapp.generated.resources.netease_play_report_description
 import simpmusic.composeapp.generated.resources.netease_like_sync_description
@@ -574,6 +576,7 @@ fun SettingScreen(
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
     val neteaseLikeSync by viewModel.neteaseLikeSync.collectAsStateWithLifecycle()
+    val neteaseFavoriteSync by viewModel.neteaseFavoriteSync.collectAsStateWithLifecycle()
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
@@ -1448,6 +1451,12 @@ fun SettingScreen(
                     title = stringResource(Res.string.netease_like_sync),
                     subtitle = stringResource(Res.string.netease_like_sync_description),
                     switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_favorite_sync),
+                    subtitle = stringResource(Res.string.netease_favorite_sync_description),
+                    switch = (neteaseFavoriteSync to { viewModel.setNeteaseFavoriteSync(it) }),
                     isEnable = neteaseLoggedIn,
                 )
                 SettingItem(

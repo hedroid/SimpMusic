@@ -187,6 +187,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.remove_from_playlist
 import simpmusic.composeapp.generated.resources.unsubscribe_from_library
+import simpmusic.composeapp.generated.resources.netease_delete_playlist
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
 import simpmusic.composeapp.generated.resources.cancel_download_confirm
@@ -2969,6 +2970,8 @@ fun PlaylistBottomSheet(
     onAddToQueue: (() -> Unit)? = null,
     // 网易收藏歌单/专辑详情页"更多"菜单露出:取消收藏(云端 subscribe t=0)。调用方负责二次确认。
     onUnsubscribe: (() -> Unit)? = null,
+    // 网易自建歌单详情页"更多"菜单露出:删除歌单(/playlist/delete,不可逆)。调用方负责强确认。
+    onDeletePlaylist: (() -> Unit)? = null,
     localPlaylistRepository: LocalPlaylistRepository = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -3087,6 +3090,15 @@ fun PlaylistBottomSheet(
                         text = Res.string.unsubscribe_from_library,
                     ) {
                         onUnsubscribe()
+                        hideModalBottomSheet()
+                    }
+                }
+                if (onDeletePlaylist != null) {
+                    ActionButton(
+                        icon = SimpIcons.Delete,
+                        text = Res.string.netease_delete_playlist,
+                    ) {
+                        onDeletePlaylist()
                         hideModalBottomSheet()
                     }
                 }

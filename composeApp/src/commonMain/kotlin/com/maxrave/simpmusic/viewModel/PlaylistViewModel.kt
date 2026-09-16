@@ -57,6 +57,7 @@ import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.deleted_playlist
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
 import simpmusic.composeapp.generated.resources.remove_from_playlist_failed
 import simpmusic.composeapp.generated.resources.download_cancelled
@@ -99,10 +100,59 @@ class PlaylistViewModel(
     private var _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks
 
+    /** 是否红心歌单("我喜欢的音乐"):不可删除/不可取消收藏,详情页两个入口都排除 */
+    suspend fun isNeteaseLikedPlaylist(): Boolean {
+        val id = (uiState.value as? Success)?.data?.id ?: return false
+        return id.toLongOrNull() != null && neteaseRepository.isNeteaseLikedPlaylist(id)
+    }
+
     /** 当前歌单是否网易自建(歌曲菜单露"从歌单移除"的判定;收藏歌单/雷达/YT 恒 false) */
     suspend fun isNeteaseOwnPlaylist(): Boolean {
         val id = (uiState.value as? Success)?.data?.id ?: return false
         return id.toLongOrNull() != null && neteaseRepository.isOwnNeteasePlaylist(id)
+    }
+
+    /**
+     * 浏览网易歌单时回填云端收藏态("收藏与网易云同步"开的读方向):云端已收藏而本地
+     * 未收藏 → 点亮本地红心(纯本地写,不再推云端——云上本来就 true)。adopt-on 单向:
+     * 云端 false 不熄灭本地(防 own 歌单误判/取消收藏语义走显式操作),与红心歌曲 OR 合并同哲。
+     */
+    private fun maybeAdoptNeteaseSubscribed(playlistId: String) {
+        if (playlistId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            if (dataStoreManager.neteaseFavoriteSync.first() != DataStoreManager.TRUE) return@launch
+            val cloud = neteaseRepository.getPlaylistSubscribed(playlistId) ?: return@launch
+            val localLiked = _playlistEntity.value?.liked == true
+            if (cloud && !localLiked) {
+                playlistRepository.updatePlaylistLiked(playlistId, 1)
+                _playlistEntity.update { it?.copy(liked = true) }
+            }
+        }
+    }
+
+    /**
+     * 删除自己的网易歌单(/playlist/delete,不可逆)。成功后清本地 liked(红心熄灭);
+     * Room 缓存行随下次访问自然失效(歌单已不存在)。导航返回由调用方(UI)处理。
+     */
+    fun deleteNeteasePlaylist() {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() == null) return
+        viewModelScope.launch {
+            neteaseRepository
+                .deleteNeteasePlaylist(id)
+                .fold(
+                    onSuccess = { ok ->
+                        if (ok) {
+                            playlistRepository.updatePlaylistLiked(id, 0)
+                            _playlistEntity.update { it?.copy(liked = false) }
+                            makeToast(getString(Res.string.deleted_playlist))
+                        } else {
+                            makeToast(getString(Res.string.netease_action_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
+        }
     }
 
     /**
@@ -351,6 +401,7 @@ class PlaylistViewModel(
                                 _continuation.value = data.second
                                 if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
                                 getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
+                                maybeAdoptNeteaseSubscribed(data.first.id)
                             }
 
                             else -> {
@@ -522,11 +573,11 @@ class PlaylistViewModel(
                 )
             }
             // 网易歌单:收藏/取消收藏同步云村(/playlist/subscribe),任何入口进来的数字 ID
-            // 歌单都走这里;与艺人关注共用"关注与网易云同步"开关(用户定案:收藏歌单=订阅,
-            // 和关注艺人同属 subscribe 语义,不单设开关)。自建歌单云端会拒绝收藏(自己的
-            // 歌单无此概念),静默跳过不回滚——本地标记仍然生效(app 内"收藏的歌单"tab)。
+            // 歌单都走这里;受"收藏与网易云同步"开关门控(开=双向同步,关=仅本地,与 YT 歌单
+            // 行为一致)。自建歌单云端会拒绝收藏(自己的歌单无此概念),静默跳过不回滚
+            // ——本地标记仍然生效(app 内"收藏的歌单"tab)。
             if (id.toLongOrNull() != null &&
-                dataStoreManager.neteaseFollowSync.first() == DataStoreManager.TRUE &&
+                dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE &&
                 !neteaseRepository.isOwnNeteasePlaylist(id)
             ) {
                 neteaseRepository

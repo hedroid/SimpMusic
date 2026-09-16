@@ -45,6 +45,8 @@ import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.delete_playlist_message
+import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.unsubscribe_album_message
@@ -72,14 +74,17 @@ internal fun LibraryNeteaseTab(
     albums: LocalResource<List<AlbumsResult>>,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-    // 自建歌单 ID 集:长按"取消收藏"只对收藏歌单露出(自建的不能从这里误删)
+    // 自建歌单 ID 集 + 红心歌单 id:长按三分支——收藏歌单=取消收藏,自建(非红心)=删除歌单,红心=无操作
     ownPlaylistIds: Set<String> = emptySet(),
+    likedPlaylistId: String? = null,
     onUnsubscribePlaylist: (playlistId: String) -> Unit = {},
+    onDeletePlaylist: (playlistId: String) -> Unit = {},
     onUnsubscribeAlbum: (albumId: String) -> Unit = {},
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
-    // 长按目标:待确认取消收藏的歌单/专辑(取消收藏是写操作,弹窗确认)
+    // 长按目标:待确认取消收藏/删除的歌单/专辑(均为写操作,弹窗确认;删除不可逆,文案更强)
     var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
+    var deletePlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var unsubscribeAlbumTarget by remember { mutableStateOf<AlbumsResult?>(null) }
     val state = rememberLazyGridState()
     val isScrollingUp by state.isScrollingUp()
@@ -159,12 +164,18 @@ internal fun LibraryNeteaseTab(
                                 },
                                 data = playlist,
                                 thumbSize = 132.dp,
-                                // 收藏歌单长按取消收藏;自建歌单不露(删自建歌单是更高危操作,另行设计)
+                                // 长按三分支:收藏歌单=取消收藏;自建非红心=删除歌单(强确认);红心歌单=无
                                 onLongClick =
-                                    if (playlist.id !in ownPlaylistIds) {
-                                        { unsubscribePlaylistTarget = playlist }
-                                    } else {
-                                        null
+                                    when {
+                                        playlist.id !in ownPlaylistIds -> {
+                                            { unsubscribePlaylistTarget = playlist }
+                                        }
+
+                                        playlist.id != likedPlaylistId -> {
+                                            { deletePlaylistTarget = playlist }
+                                        }
+
+                                        else -> null
                                     },
                             )
                         }
@@ -210,6 +221,17 @@ internal fun LibraryNeteaseTab(
                 unsubscribePlaylistTarget = null
             },
             onDismiss = { unsubscribePlaylistTarget = null },
+        )
+    }
+    deletePlaylistTarget?.let { target ->
+        NeteaseUnsubscribeDialog(
+            title = stringResource(Res.string.delete_playlist_title),
+            message = stringResource(Res.string.delete_playlist_message, target.title),
+            onConfirm = {
+                onDeletePlaylist(target.id)
+                deletePlaylistTarget = null
+            },
+            onDismiss = { deletePlaylistTarget = null },
         )
     }
     unsubscribeAlbumTarget?.let { target ->

@@ -63,6 +63,7 @@ import simpmusic.composeapp.generated.resources.added_local_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
+import simpmusic.composeapp.generated.resources.deleted_playlist
 import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
@@ -169,6 +170,10 @@ class LibraryViewModel(
     /** 自建网易歌单 ID 集(creatorId==账号 uid);长按"取消收藏"只对收藏歌单露出,自建的不能误删 */
     private val _ownNeteasePlaylistIds = MutableStateFlow<Set<String>>(emptySet())
     val ownNeteasePlaylistIds: StateFlow<Set<String>> get() = _ownNeteasePlaylistIds.asStateFlow()
+
+    /** 红心歌单 id("我喜欢的音乐",不可删除);长按入口排除 */
+    private val _neteaseLikedPlaylistId = MutableStateFlow<String?>(null)
+    val neteaseLikedPlaylistId: StateFlow<String?> get() = _neteaseLikedPlaylistId.asStateFlow()
 
     /**
      * Whether the Wrapped chip has anything behind it.
@@ -290,6 +295,7 @@ class LibraryViewModel(
                         onSuccess = {
                             _neteasePlaylist.value = LocalResource.Success(it)
                             _ownNeteasePlaylistIds.value = neteaseRepository.getOwnNeteasePlaylistIds()
+                            _neteaseLikedPlaylistId.value = neteaseRepository.getNeteaseLikedPlaylistIdCached()
                         },
                         onFailure = { _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed") },
                     )
@@ -320,6 +326,25 @@ class LibraryViewModel(
                     onSuccess = {
                         if (it) {
                             makeToast(getString(Res.string.unsubscribed_netease_playlist))
+                            getNeteaseLibrary(force = true)
+                        } else {
+                            makeToast(getString(Res.string.netease_action_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                )
+        }
+    }
+
+    /** 删除自己的网易歌单(/playlist/delete,不可逆;UI 层已强确认),成功后 force 刷新三分区 */
+    fun deleteNeteasePlaylist(playlistId: String) {
+        viewModelScope.launch {
+            neteaseRepository
+                .deleteNeteasePlaylist(playlistId)
+                .fold(
+                    onSuccess = { ok ->
+                        if (ok) {
+                            makeToast(getString(Res.string.deleted_playlist))
                             getNeteaseLibrary(force = true)
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))

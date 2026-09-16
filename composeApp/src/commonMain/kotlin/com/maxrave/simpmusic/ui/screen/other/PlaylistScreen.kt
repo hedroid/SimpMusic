@@ -158,6 +158,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.delete_playlist_message
+import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
 import simpmusic.composeapp.generated.resources.cancel_download_title
@@ -202,10 +204,13 @@ fun PlaylistScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // 网易自建歌单:歌曲菜单露"从歌单移除"(数据到齐后判定一次;收藏歌单/YT 歌单恒 false)
     var neteaseOwnPlaylist by remember { mutableStateOf(false) }
+    var neteaseLikedPlaylist by remember { mutableStateOf(false) }
     var showUnsubscribeDialog by remember { mutableStateOf(false) }
+    var showDeletePlaylistDialog by remember { mutableStateOf(false) }
     val loadedPlaylistId = (uiState as? Success)?.data?.id
     LaunchedEffect(loadedPlaylistId) {
         neteaseOwnPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseOwnPlaylist() } ?: false
+        neteaseLikedPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseLikedPlaylist() } ?: false
     }
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
@@ -1342,6 +1347,30 @@ fun PlaylistScreen(
                         onYTPlaylistClick = {},
                     )
                 }
+                if (showDeletePlaylistDialog) {
+                    AlertDialog(
+                        containerColor = rememberSurfaceDarkColors().container,
+                        titleContentColor = rememberSurfaceDarkColors().content,
+                        textContentColor = rememberSurfaceDarkColors().content,
+                        title = { Text(text = stringResource(Res.string.delete_playlist_title)) },
+                        text = { Text(text = stringResource(Res.string.delete_playlist_message, data.title)) },
+                        onDismissRequest = { showDeletePlaylistDialog = false },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.deleteNeteasePlaylist()
+                                showDeletePlaylistDialog = false
+                                navController.navigateUp()
+                            }) {
+                                Text(text = stringResource(Res.string.delete))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeletePlaylistDialog = false }) {
+                                Text(text = stringResource(Res.string.cancel))
+                            }
+                        },
+                    )
+                }
                 if (showUnsubscribeDialog) {
                     AlertDialog(
                         containerColor = rememberSurfaceDarkColors().container,
@@ -1396,10 +1425,16 @@ fun PlaylistScreen(
                         playlistId = data.id,
                         playlistName = data.title,
                         isYourYouTubePlaylist = isYourYouTubePlaylist && !data.isRadio,
-                        // 网易收藏歌单:更多菜单露出"取消收藏"(自建歌单不露)
+                        // 网易歌单:收藏的露"取消收藏",自建的露"删除歌单"(红心歌单两者都不露)
                         onUnsubscribe =
                             if (data.id.toLongOrNull() != null && !neteaseOwnPlaylist) {
                                 { showUnsubscribeDialog = true }
+                            } else {
+                                null
+                            },
+                        onDeletePlaylist =
+                            if (data.id.toLongOrNull() != null && neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                                { showDeletePlaylistDialog = true }
                             } else {
                                 null
                             },

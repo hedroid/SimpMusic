@@ -157,6 +157,7 @@ fun LibraryScreen(
     val starredAlbums by viewModel.starredAlbums.collectAsStateWithLifecycle()
     val neteaseRefreshing by viewModel.neteaseRefreshing.collectAsStateWithLifecycle()
     val ownNeteasePlaylistIds by viewModel.ownNeteasePlaylistIds.collectAsStateWithLifecycle()
+    val neteaseLikedPlaylistId by viewModel.neteaseLikedPlaylistId.collectAsStateWithLifecycle()
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
@@ -331,7 +332,9 @@ fun LibraryScreen(
                     isRefreshing = neteaseRefreshing,
                     onRefresh = { viewModel.getNeteaseLibrary(force = true) },
                     ownPlaylistIds = ownNeteasePlaylistIds,
+                    likedPlaylistId = neteaseLikedPlaylistId,
                     onUnsubscribePlaylist = { viewModel.unsubscribeNeteasePlaylist(it) },
+                    onDeletePlaylist = { viewModel.deleteNeteasePlaylist(it) },
                     onUnsubscribeAlbum = { viewModel.unsubscribeNeteaseAlbum(it) },
                     onScrolling = onScrolling,
                 )

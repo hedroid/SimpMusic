@@ -166,6 +166,12 @@
     <string name="youtube_url">YouTube網址</string>
     <string name="netease_url">網易雲音樂連結</string>
     <string name="netease_like_sync">合併本地與網易雲喜歡的歌曲</string>
+    <string name="netease_favorite_sync">收藏與網易雲同步</string>
+    <string name="netease_favorite_sync_description">開啟後，網易雲播放清單的收藏與你的網易雲帳號雙向同步；關閉後僅修改本地</string>
+    <string name="netease_delete_playlist">刪除播放清單</string>
+    <string name="deleted_playlist">已刪除播放清單</string>
+    <string name="delete_playlist_title">刪除該播放清單？</string>
+    <string name="delete_playlist_message">播放清單「%1$s」將從你的網易雲帳號中永久刪除，且無法復原。</string>
     <string name="netease_like_sync_description">在應用裡紅心一首歌時，同步到你的網易雲帳號</string>
     <string name="netease_play_report">發送播放數據到網易雲</string>
     <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，讓每日推薦和年度報告更懂你</string>
