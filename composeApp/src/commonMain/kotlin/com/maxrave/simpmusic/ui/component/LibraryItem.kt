@@ -173,6 +173,7 @@ fun LibraryItem(
                                                     index = 0,
                                                 )
                                             },
+                                            showSourceBadge = true,
                                             selectionMode = selectionState?.isActive == true,
                                             isSelected = selectionState?.isSelected(item.videoId) == true,
                                             onLongClick =
@@ -190,6 +191,7 @@ fun LibraryItem(
                                     RecentlyType.Type.ARTIST -> {
                                         ArtistFullWidthItems(
                                             data = item as? ArtistEntity ?: return@forEach,
+                                            showSourceBadge = true,
                                             onClickListener = {
                                                 navController.navigate(
                                                     ArtistDestination(
@@ -231,8 +233,8 @@ fun LibraryItem(
                                                         }
                                                     }
                                                 },
-                                                // 最近添加是混源列表:网易来源的歌单/专辑带品牌角标
-                                                showNeteaseBadge = true,
+                                                // 最近添加是混源列表:歌单/专辑/歌曲/艺人都带双品牌角标
+                                                showSourceBadge = true,
                                             )
                                         }
                                     }
@@ -290,6 +292,16 @@ fun LibraryItem(
                                                     RoundedCornerShape(8.dp),
                                                 ),
                                     )
+                                    // 混源列表:最多播放卡片带双品牌角标
+                                    contentSource(song)?.let { src ->
+                                        SourceBadge(
+                                            source = src,
+                                            modifier =
+                                                Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(6.dp),
+                                        )
+                                    }
                                     Column(
                                         Modifier
                                             .fillMaxWidth()

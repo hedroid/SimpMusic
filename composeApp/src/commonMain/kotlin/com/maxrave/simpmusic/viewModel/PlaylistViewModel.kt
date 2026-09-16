@@ -180,13 +180,43 @@ class PlaylistViewModel(
         }
     }
 
+    /** 红心歌单的"移除歌单"=取消红心:云村 unlike + 本地 liked 清零 + 内存列表剔掉 */
+    private fun unlikeNeteaseSong(videoId: String) {
+        viewModelScope.launch {
+            neteaseRepository
+                .setSongLiked(videoId, like = false)
+                .fold(
+                    onSuccess = { ok ->
+                        if (ok) {
+                            songRepository.setLikedLocal(videoId, 0)
+                            _tracks.update { list -> list.filterNot { it.videoId == videoId } }
+                            (uiState.value as? Success)?.data?.let { state ->
+                                _uiState.value =
+                                    Success(state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)))
+                            }
+                            makeToast(getString(Res.string.removed_from_playlist))
+                        } else {
+                            makeToast(getString(Res.string.remove_from_playlist_failed))
+                        }
+                    },
+                    onFailure = { makeToast(getString(Res.string.remove_from_playlist_failed)) },
+                )
+        }
+    }
+
     /**
-     * 从网易自建歌单移除一首歌(manipulate op=del):云端删成功后从内存列表剔掉,
-     * Room 缓存行随下次整单拉取/EXHAUST 回写自然收敛,不在这里重复维护。
+     * 从网易自建歌单移除一首歌。**红心歌单特例:移除=取消红心**(/song/like t=0 + 本地
+     * liked 清零),与播放页红心按钮同一逻辑——歌不在红心歌单里了,红心自然也没了。
+     * 其余自建歌单走 manipulate op=del:云端删成功后从内存列表剔掉,Room 缓存行随下次
+     * 整单拉取/EXHAUST 回写自然收敛。
      */
     fun removeTrackFromNeteasePlaylist(videoId: String) {
         val id = (uiState.value as? Success)?.data?.id ?: return
         if (id.toLongOrNull() == null) return
+        if (neteaseRepository.isNeteaseLikedPlaylist(id)) {
+            unlikeNeteaseSong(videoId)
+            return
+        }
         viewModelScope.launch {
             neteaseRepository
                 .removeTracksFromNeteasePlaylist(id, listOf(videoId))

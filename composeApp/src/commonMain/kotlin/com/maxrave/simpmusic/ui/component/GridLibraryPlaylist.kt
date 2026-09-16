@@ -276,7 +276,7 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             },
                             data = item,
                             thumbSize = 132.dp,
-                            showNeteaseBadge = showSourceBadge,
+                            showSourceBadge = showSourceBadge,
                             onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
                         )
                     }

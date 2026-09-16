@@ -315,8 +315,8 @@ fun HomeItemContentPlaylist(
     // Null keeps the plain tap behaviour; set only where a long-press action exists (the
     // Library's downloaded-playlist grid uses it to offer removing the download).
     onLongClick: (() -> Unit)? = null,
-    // 混源网格(收藏/下载)里标记网易来源的品牌角标;纯源页面(网易主页/您的网易云)不传。
-    showNeteaseBadge: Boolean = false,
+    // 混源网格(收藏/下载)里标记来源的双品牌角标(网易/YT);纯源页面不传。
+    showSourceBadge: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     Box(
@@ -444,13 +444,16 @@ fun HomeItemContentPlaylist(
                                 RoundedCornerShape(10.dp),
                             ),
                 )
-                if (showNeteaseBadge && isNeteaseContent(data)) {
-                    NeteaseSourceBadge(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp),
-                    )
+                if (showSourceBadge) {
+                    contentSource(data)?.let { src ->
+                        SourceBadge(
+                            source = src,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp),
+                        )
+                    }
                 }
             }
             Text(

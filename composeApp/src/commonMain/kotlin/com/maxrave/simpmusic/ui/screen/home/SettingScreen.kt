@@ -1448,15 +1448,15 @@ fun SettingScreen(
                     isEnable = neteaseLoggedIn,
                 )
                 SettingItem(
-                    title = stringResource(Res.string.netease_like_sync),
-                    subtitle = stringResource(Res.string.netease_like_sync_description),
-                    switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
-                    isEnable = neteaseLoggedIn,
-                )
-                SettingItem(
                     title = stringResource(Res.string.netease_favorite_sync),
                     subtitle = stringResource(Res.string.netease_favorite_sync_description),
                     switch = (neteaseFavoriteSync to { viewModel.setNeteaseFavoriteSync(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_like_sync),
+                    subtitle = stringResource(Res.string.netease_like_sync_description),
+                    switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
                     isEnable = neteaseLoggedIn,
                 )
                 SettingItem(

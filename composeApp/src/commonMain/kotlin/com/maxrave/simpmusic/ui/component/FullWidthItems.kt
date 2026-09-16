@@ -68,6 +68,7 @@ import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.PodcastsEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
@@ -132,6 +133,8 @@ fun SongFullWidthItems(
     modifier: Modifier,
     rightView: @Composable (() -> Unit)? = null,
     forceDark: Boolean = LocalForceDarkText.current,
+    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
+    showSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -273,6 +276,23 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
+                    if (showSourceBadge) {
+                        // songEntity 有 source 列优先;track 形状按 videoId 数字判源
+                        val src =
+                            contentSource(songEntity)
+                                ?: track?.videoId?.let {
+                                    if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
+                                }
+                        src?.let {
+                            SourceBadge(
+                                source = it,
+                                size = 16.dp,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.TopEnd),
+                            )
+                        }
+                    }
                     Crossfade(isPlaying) {
                         if (it) {
                             Image(
@@ -533,8 +553,8 @@ fun PlaylistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
-    // 混源列表(库页最近添加行)里标记网易来源的品牌角标;其余调用点不传。
-    showNeteaseBadge: Boolean = false,
+    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
+    showSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -630,13 +650,16 @@ fun PlaylistFullWidthItems(
                             .fillMaxSize()
                             .clip(RoundedCornerShape(4.dp)),
                 )
-                if (showNeteaseBadge && isNeteaseContent(data)) {
-                    NeteaseSourceBadge(
-                        size = 16.dp,
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd),
-                    )
+                if (showSourceBadge) {
+                    contentSource(data)?.let { src ->
+                        SourceBadge(
+                            source = src,
+                            size = 16.dp,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd),
+                        )
+                    }
                 }
             }
             Column(
@@ -719,6 +742,8 @@ fun ArtistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
+    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
+    showSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -760,6 +785,17 @@ fun ArtistFullWidthItems(
                             .fillMaxSize()
                             .clip(CircleShape),
                 )
+                if (showSourceBadge) {
+                    contentSource(data)?.let { src ->
+                        SourceBadge(
+                            source = src,
+                            size = 16.dp,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd),
+                        )
+                    }
+                }
             }
             Column(
                 Modifier
