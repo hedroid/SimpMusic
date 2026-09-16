@@ -146,6 +146,7 @@
     <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트에 반영합니다</string>
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
+    <string name="likes_count">좋아요 %1$s개</string>
     <string name="similar_songs">비슷한 곡</string>
     <string name="track_count_short">%1$s곡</string>
     <string name="comments_title">댓글 · %1$s</string>

@@ -177,6 +177,7 @@
     <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，讓每日推薦和年度報告更懂你</string>
     <string name="fans_count">%1$s 粉絲</string>
     <string name="comments_count">%1$s 則留言</string>
+    <string name="likes_count">%1$s 個讚</string>
     <string name="similar_songs">相似歌曲</string>
     <string name="track_count_short">%1$s 首</string>
     <string name="comments_title">留言 · %1$s</string>

@@ -112,7 +112,7 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.fans_count
-import simpmusic.composeapp.generated.resources.like
+import simpmusic.composeapp.generated.resources.likes_count
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
@@ -760,7 +760,7 @@ internal fun ExpressiveBelowTheFold(
                         Text(
                             text =
                                 neteaseMeta?.artistFans?.let {
-                                    stringResource(Res.string.fans_count, "%,d".format(it))
+                                    stringResource(Res.string.fans_count, it.toPlaybackCompactCount())
                                 } ?: state.screenData.songInfoData?.subscribers ?: "",
                             style = typo().bodySmall,
                             color = Color.White.copy(alpha = 0.7f),
@@ -795,26 +795,19 @@ internal fun ExpressiveBelowTheFold(
                             Text(text = releaseInfo, style = typo().labelSmall, color = Color.White)
                             Spacer(modifier = Modifier.height(10.dp))
                         }
-                        val engagement =
-                            listOfNotNull(
-                                neteaseMeta.likeCount?.let {
-                                    "${stringResource(Res.string.like)} ${"%,d".format(it)}"
-                                },
-                                neteaseMeta.commentCount.takeIf { it > 0 }?.let {
-                                    stringResource(Res.string.comments_count, "%,d".format(it))
-                                },
-                            ).joinToString(" · ")
-                        if (engagement.isNotEmpty()) {
+                        neteaseMeta.likeCount?.let { likeCount ->
                             Text(
-                                text = engagement,
+                                text = stringResource(Res.string.likes_count, "%,d".format(likeCount)),
                                 style = typo().labelMedium,
                                 color = Color.White,
-                                modifier =
-                                    if (neteaseMeta.commentCount > 0) {
-                                        Modifier.clickable { actions.onShowNeteaseComments() }
-                                    } else {
-                                        Modifier
-                                    },
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        if (neteaseMeta.commentCount > 0) {
+                            Text(
+                                text = stringResource(Res.string.comments_count, "%,d".format(neteaseMeta.commentCount)),
+                                style = typo().bodyMedium,
+                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
                             )
                         }
                         val bio = neteaseMeta.artistBriefDesc ?: neteaseMeta.albumDescription
