@@ -35,6 +35,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Error
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Loading
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
+import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +80,34 @@ class PlaylistViewModel(
     private val playlistRepository: PlaylistRepository,
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val dataStoreManager: DataStoreManager,
+    private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
+
+    init {
+        // B1:红心下降沿(已赞→取消)时,若正停在网易红心歌单页,立即把该歌从列表剔掉——
+        // 否则取消红心后返回歌单看到的还是旧列表(页面只在进入时拉数据)。
+        // 上升沿不管(点赞不加列表:云村红心歌单内容以服务端为准,下次进入自然带上)。
+        viewModelScope.launch {
+            var prev: Boolean? = null
+            sharedViewModel.liked.collect { likedNow ->
+                if (prev == true && !likedNow) removeNowPlayingFromLikedPlaylist()
+                prev = likedNow
+            }
+        }
+    }
+
+    private fun removeNowPlayingFromLikedPlaylist() {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() == null || !neteaseRepository.isNeteaseLikedPlaylist(id)) return
+        val videoId = nowPlayingVideoId.value
+        if (videoId.isEmpty()) return
+        val removed = _tracks.value.any { it.videoId == videoId }
+        if (!removed) return
+        _tracks.update { list -> list.filterNot { it.videoId == videoId } }
+        (uiState.value as? Success)?.data?.let { state ->
+            _uiState.value = Success(state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)))
+        }
+    }
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val albumRepository: AlbumRepository by inject<AlbumRepository>()
     private var _uiState = MutableStateFlow<PlaylistUIState>(Loading)

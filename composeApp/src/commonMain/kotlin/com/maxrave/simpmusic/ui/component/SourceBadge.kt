@@ -21,7 +21,7 @@ import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.YouTubeMusic
+import com.maxrave.simpmusic.ui.icon.PlayArrow
 
 /**
  * 混源上下文里的**双品牌来源角标**（网易=音符标 / YT=播放标），半透明黑圆底 + 白色品牌
@@ -36,24 +36,29 @@ fun SourceBadge(
     modifier: Modifier = Modifier,
     size: Dp = 22.dp,
 ) {
+    // 网易=黑底+白色音符(实心,小尺寸可读);YT=YouTube红底+白色实心播放三角。
+    // (曾用 YT Music 圆环标:细圆环在 16dp 角标里线宽不足 2px,视觉上"没有角标"。)
+    val netease = source == MusicSource.NETEASE
     Box(
         modifier =
             modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.55f)),
+                .background(
+                    if (netease) Color.Black.copy(alpha = 0.55f) else Color(0xE6FF0000),
+                ),
         contentAlignment = Alignment.Center,
     ) {
-        val icon: ImageVector =
-            when (source) {
-                MusicSource.NETEASE -> SimpIcons.NeteaseCloudMusic
-                else -> SimpIcons.YouTubeMusic
-            }
         Icon(
-            imageVector = icon,
+            imageVector =
+                if (netease) {
+                    SimpIcons.NeteaseCloudMusic
+                } else {
+                    SimpIcons.PlayArrow
+                },
             contentDescription = null,
             tint = Color.White,
-            modifier = Modifier.size(size * 0.64f),
+            modifier = Modifier.size(size * (if (netease) 0.64f else 0.52f)),
         )
     }
 }

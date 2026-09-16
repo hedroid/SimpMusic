@@ -276,23 +276,6 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (showSourceBadge) {
-                        // songEntity 有 source 列优先;track 形状按 videoId 数字判源
-                        val src =
-                            contentSource(songEntity)
-                                ?: track?.videoId?.let {
-                                    if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
-                                }
-                        src?.let {
-                            SourceBadge(
-                                source = it,
-                                size = 16.dp,
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.TopEnd),
-                            )
-                        }
-                    }
                     Crossfade(isPlaying) {
                         if (it) {
                             Image(
@@ -329,6 +312,24 @@ fun SongFullWidthItems(
                                 color = contentColor,
                                 style = typo().titleMedium,
                                 modifier = Modifier.align(Alignment.Center),
+                            )
+                        }
+                    }
+                    // 必须画在 Crossfade 之后:后组合的子项在上层,放前面会被封面盖住
+                    if (showSourceBadge) {
+                        // songEntity 有 source 列优先;track 形状按 videoId 数字判源
+                        val src =
+                            contentSource(songEntity)
+                                ?: track?.videoId?.let {
+                                    if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
+                                }
+                        src?.let {
+                            SourceBadge(
+                                source = it,
+                                size = 16.dp,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.TopEnd),
                             )
                         }
                     }
