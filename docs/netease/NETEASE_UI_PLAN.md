@@ -362,56 +362,58 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
 - 字符串：`your_netease`（您的网易云）/`no_netease_content`/`netease_playlists`（歌单）/
   `starred_albums`（收藏的专辑）/复用 `followed`（已关注，对齐 YT 库页概念），3 locale。
 
-## 剩余工作盘点（2026-09-16 刷新）
+## 剩余工作盘点（2026-09-16 重整）
 
 > 详细结论/链路资产见项目 AGENTS.md 各 TODO 小节；本节是全局视图。
+> M2 已全部收口（库页三分区/双品牌角标/收藏同步/删除入口/红心逻辑/曲目分页），不再列入。
 
-### 未做（计划内）
+### 未做（计划内，按建议优先级）
 
-> 建议推进顺序（2026-09-16 定）：**M9 灰歌回退**（体验痛点最大，被隐藏的设置开关也等着
-> 恢复）→ **相似歌曲独立页 / M7 评论页**（资产全现成，纯 UI 活）→ M8 云盘 → 其余按需。
-> （库页分区+迁库页原属此序首项，已随 M2 全部完成。）
-
-1. **M7 评论页**：独立歌曲评论区（复用歌单页布局；`songComments` 分页端点 + repo 方法现成）。
-2. **M8 云盘页**：cloudDisk（端点已封装，repo 映射 + UI 未接；云盘歌曲可播不可缓存下载）。
-3. **M9**：关注同步（YT↔网易镜像）+ 灰歌自动切源（`getNeteaseStream` 返回 null → title+artist 搜 YT 回退播放；恢复被隐藏的设置开关）。
-4. **M10 下载管线**：SimpleCache→文件式存储改造（离线播放网易歌；公共 Download 导出路径已通，见 AGENTS.md 调研）。
-5. **网易播客**（网易云播客/电台生态：dj 分类、订阅、节目列表、搜索 type=1004 之外还有电台
-   type=1009。需先调研端点与播放链路——节目音频是否走同一取流、时长/封面元数据形状，
-   再定 UI 形态：候选是复用库页 FAVORITE_PODCAST 分区 + 播客详情页，或并入"您的网易云"）。
-6. **网易 MV**（搜索 type=1004 现隐藏。需视频层适配——`isVideo 恒 false` 是播放管线全局假设
-   （取流/追踪/watchtime/详情卡），MV 要走 `/mv/detail` + `/mv/url` 独立取流并打通视频渲染；
-   入口候选：搜索 tab 解禁 + 歌曲菜单"观看 MV"。体量中等偏大，单独立项）。
-7. **相似歌曲独立功能**（simiSong 端点/电台队列/`NETEASE_RADIO_` 哨兵全现成，缺独立列表页）。
-8. **跨源歌词供应商**（YT 歌选第三方库：网易→QQ→酷狗；Lyrico 匹配算法，见 AGENTS.md TODO）。
-9. **Listen Together 混源过滤**（房间只传 videoId，host 混源队列会把数字 ID 发给 Metrolist 客户端；需协议层设计）。
-10. **AI 三件**（罗马音兜底/歌单智能命名/元数据整理）与**歌曲导出改造**（自定义目录+文件式存储，大改造单独评估）。
+| 项 | 现状资产 | 规模 |
+|---|---|---|
+| M9 灰歌自动切源 | `getNeteaseStream` 降级链现成，缺 title+artist 搜 YT 回退；设置开关已藏待恢复 | 中 |
+| 相似歌曲独立页 | simiSong 端点/电台队列/`NETEASE_RADIO_` 哨兵全现成，缺列表页 UI | 小（纯 UI） |
+| M7 评论页 | songComments 分页端点+repo 方法现成，详情卡已在用前 2 热评 | 中 |
+| M8 云盘页 | cloudDisk 端点已封装，repo 映射+UI 未接；云盘歌可播不可缓存下载 | 中 |
+| 网易播客 | 搜索 type=1004/1009 通道已知；dj 生态端点与播放链路待调研（节目音频是否同走取流）；UI 候选复用库页播客分区或并入"您的网易云" | 中（含调研） |
+| 跨源歌词供应商（YT 歌用网易/QQ 词库） | 接入点全现成（getLyricsFromFormat/LyricsProvider），Lyrico 匹配算法待移植 | 中偏大 |
+| 网易 MV | 搜索 type=1004 现隐藏；需打破 isVideo 恒 false 的管线假设（取流/追踪/watchtime/详情卡），走 /mv/detail + /mv/url | 中偏大 |
+| M9 关注同步（YT↔网易镜像） | 未开始 | 中 |
+| M10 离线下载管线 | SimpleCache→文件式改造；公共 Download 导出路径已通（AGENTS.md 调研） | 大 |
+| Listen Together 混源过滤 | 需协议层设计（数字 ID 会发给 Metrolist 客户端） | 待设计 |
+| AI 三件 / 歌曲导出改造 | 调研结论在 AGENTS.md | 大 / 另评估 |
 
 ### 可做（小成本快赢）
 
-- **专辑收藏同步云村**：歌单收藏已双向（`收藏与网易云同步`开关），专辑页红心还是纯本地——
-  复用 `subscribeNeteaseAlbum`(/album/sub) 接到 `updatePlaylistLiked` 同款位置即可（2026-09-16 差异盘点发现）。
-- **写端点 405 频控的用户可见反馈**：订阅/取消收藏/红心同步失败目前静默（logcat 而已），
-  405 触发时 toast 提示"操作过于频繁，请稍后再试"（`netease_action_failed` 已有，区分文案更佳）。
-- **haze 顶栏闪烁修复推广**：库页四宫格页已修（底色兜底 + fade 转场，065f3ca1），同款玻璃顶栏
-  的其它高频页（歌单/专辑详情等）可照搬两步修法。
-- 官方罗马音 romalrc 接入（M1 增强项，渲染端本地罗马音引擎现成）。
-- 搜索 offset 分页/加载更多（网易侧 limit=30 已对齐 YT 行为，翻页留做）。
-- RYD/SponsorBlock 对数字 ID 短路（去 logcat 噪音，同 songInfo 短路同款）。
-- 无限队列网易尾曲：`getRelated` 静默失败 → 改走 simiSong 续批（电台续批链路现成，反向打通"播完自动续"）。
-- 播放页艺人卡粉丝数未渲染排查（artistDynamic 独立降级，不阻塞）。
-- 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"架构定稿相悖）、MusicSourceProvider C_TIER
-  （评论/艺人详情已实现，只剩云盘与播客）。
+- **专辑收藏同步云村**：歌单收藏已双向（"收藏与网易云同步"开关），专辑页红心还是纯本地——
+  `subscribeNeteaseAlbum`(/album/sub) 现成，接到 updatePlaylistLiked 同款位置即可（本周差异盘点发现）。
+- **写端点 405 频控的用户可见反馈**：订阅/取消收藏/红心同步失败目前静默（只刷 logcat），
+  405 时 toast"操作过于频繁，请稍后再试"。
+- **haze 顶栏闪烁修复推广**：库页四宫格页已修（底色兜底+fade 转场，065f3ca1），同款玻璃顶栏
+  的高频页（歌单/专辑详情等）可照搬两步修法。
+- 无限队列网易尾曲续播：混源队列播到网易歌结尾 getRelated 静默失败不自动续——改走 simiSong
+  续批，链路全现成，反向打通后体验对齐 YT。
+- RYD/SponsorBlock 对数字 ID 短路：去 logcat 噪音，和 songInfo 短路同款改法。
+- 官方罗马音 romalrc：M1 遗留增强项，渲染端本地引擎现成。
+- 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"定稿相悖已过时）；MusicSourceProvider
+  C_TIER（评论/艺人详情已实现，只剩云盘与播客）。
+- 搜索 offset 翻页、播放页艺人卡粉丝数渲染排查。
 
 ### 可优化
 
-- 红心 OR-merge 的取消方向：云端取消后本地红心要等下一次点赞才熄灭（adopt-on 单向是防误判
-  的保守选择）；likedIds 已有 10min TTL，可在缓存刷新发现 cloud=false 且本地亮时同样回写熄灭。
-- 分类卡封面每张一次 DataStore 写 → 批量落盘（量小可接受，顺手优化）。
-- 三套同构会话缓存（RowCache/TagCache/dailySongsCache/likedIdsCache：Mutex 单飞 + TTL + force
-  绕过——已第四套）抽公共组件。
-- 独立屏 VM 对 selectedSource 变化的重取模式统一（Search/Home 各自 collect，可抽公共 helper）。
-- 角标判源对 PlaylistsResult（YT 远端形状）依赖调用上下文；如出现在混源场景需补 contentSource 分支。
+- **四套同构会话缓存**（RowCache/TagCache/dailySongsCache/likedIdsCache：Mutex 单飞+TTL+force
+  绕过——红心缓存后已到第四套）抽公共组件。
+- 红心 OR-merge 的取消方向：云端取消后本地要等下次点赞才熄灭（adopt-on 单向防误判）；
+  likedIds 10min TTL 刷新发现 cloud=false 且本地亮时可回写熄灭。
+- 独立屏 VM 对 selectedSource 变化的重取模式统一（Search/Home 各自 collect）。
+- 分类卡封面逐张 DataStore 写改批量落盘。
+- 角标判源 contentSource 对 PlaylistsResult（YT 远端形状）依赖调用上下文，混源场景如出现需补分支。
+
+### 下一步建议顺序
+
+**M9 灰歌回退**（体验痛点最大，被隐藏的开关也等着恢复）→ **相似歌曲独立页 / M7 评论页**
+（资产全现成，纯 UI 活）→ M8 云盘 → 其余按需。
+（原序首项"库页分区+迁库页"已随 M2 完成，移出。）
 
 ## 调试备忘（环境）
 
