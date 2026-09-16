@@ -255,7 +255,7 @@ internal fun AppleMusicLyricsView(
                         // Lyrics — the sole provider that accepts a vote. Classic and M3E have
                         // always gated theirs; this one did not, so it invited a rating on
                         // YouTube/LRCLIB/Spotify lyrics that had nowhere to go.
-                        if (lyricsData.canVote()) {
+                        if (!state.isNeteaseSong && lyricsData.canVote()) {
                             AppleMusicFloatingCircleButton(icon = SimpIcons.ThumbsUpDown, onClick = { actions.onShowVoteDialog() })
                         }
                         AppleMusicFloatingCircleButton(icon = SimpIcons.Share, onClick = { showShareSheet = true })

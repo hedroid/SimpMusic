@@ -667,6 +667,7 @@ fun NowPlayingScreenContent(
             timelineFlow = sharedViewModel.timeline,
             castState = castState,
             shouldShowVideo = shouldShowVideo,
+            isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
             isUserLoggedIn = isUserLoggedIn,
             artworkQueue = artworkQueue,
             currentOrderIndex = currentOrderIndex,

@@ -164,6 +164,7 @@ import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.fans_count
+import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
 import simpmusic.composeapp.generated.resources.lyrics_provider_betterlyrics
@@ -1442,7 +1443,7 @@ fun NowPlayingContentSpotify(
                                         // SimpMusic Lyrics. The rule itself lives on the shared contract
                                         // (canVote), so a style cannot ship without it the way the Apple
                                         // Music tab did.
-                                        if (state.screenData.lyricsData.canVote()) {
+                                        if (!state.isNeteaseSong && state.screenData.lyricsData.canVote()) {
                                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                                 IconButton(
                                                     onClick = {
@@ -1691,18 +1692,25 @@ fun NowPlayingContentSpotify(
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
-                                        if (neteaseMeta.commentCount > 0) {
+                                        val engagement =
+                                            listOfNotNull(
+                                                neteaseMeta.likeCount?.let {
+                                                    "${stringResource(Res.string.like)} ${"%,d".format(it)}"
+                                                },
+                                                neteaseMeta.commentCount.takeIf { it > 0 }?.let {
+                                                    stringResource(Res.string.comments_count, "%,d".format(it))
+                                                },
+                                            ).joinToString(" · ")
+                                        if (engagement.isNotEmpty()) {
                                             Text(
-                                                text =
-                                                    stringResource(
-                                                        Res.string.comments_count,
-                                                        "%,d".format(neteaseMeta.commentCount),
-                                                    ),
+                                                text = engagement,
                                                 style = typo().labelMedium,
                                                 color = Color.White,
                                                 modifier =
-                                                    Modifier.clickable {
-                                                        actions.onShowNeteaseComments()
+                                                    if (neteaseMeta.commentCount > 0) {
+                                                        Modifier.clickable { actions.onShowNeteaseComments() }
+                                                    } else {
+                                                        Modifier
                                                     },
                                             )
                                         }

@@ -90,6 +90,8 @@ class NowPlayingContentState(
     val timelineFlow: StateFlow<TimeLine>,
     val castState: GenericCastState,
     val shouldShowVideo: Boolean,
+    /** 当前歌曲是否来自网易；用于元数据加载前也能立即应用源特有 UI 规则。 */
+    val isNeteaseSong: Boolean,
     val isUserLoggedIn: Boolean,
     val artworkQueue: List<Track>,
     val currentOrderIndex: Int,

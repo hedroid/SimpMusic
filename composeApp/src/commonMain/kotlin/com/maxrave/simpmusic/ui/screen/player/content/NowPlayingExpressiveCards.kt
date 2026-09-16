@@ -109,7 +109,10 @@ import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.artists
+import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.description
+import simpmusic.composeapp.generated.resources.fans_count
+import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
@@ -124,6 +127,7 @@ import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
+import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.unsynced
 import simpmusic.composeapp.generated.resources.view_count
 
@@ -561,7 +565,7 @@ internal fun ExpressiveBelowTheFold(
                         // Vote button — only when the lyrics or the translation come from SimpMusic
                         // Lyrics. The rule itself lives on the shared contract (canVote), so a style
                         // cannot ship without it the way the Apple Music tab did.
-                        if (state.screenData.lyricsData.canVote()) {
+                        if (!state.isNeteaseSong && state.screenData.lyricsData.canVote()) {
                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                 IconButton(
                                     onClick = {
@@ -682,8 +686,9 @@ internal fun ExpressiveBelowTheFold(
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
+        val neteaseMeta = state.screenData.neteaseSongData
         // Artist card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
             Surface(
                 onClick = {
                     actions.onNavigateToArtist()
@@ -700,7 +705,7 @@ internal fun ExpressiveBelowTheFold(
                                 .fillMaxWidth()
                                 .height(250.dp),
                     ) {
-                        val thumb = state.screenData.songInfoData?.authorThumbnail
+                        val thumb = neteaseMeta?.artistAvatar ?: state.screenData.songInfoData?.authorThumbnail
                         AsyncImage(
                             model =
                                 ImageRequest
@@ -747,13 +752,16 @@ internal fun ExpressiveBelowTheFold(
                                 .padding(horizontal = 15.dp, vertical = 12.dp),
                     ) {
                         Text(
-                            text = state.screenData.songInfoData?.author ?: "",
+                            text = neteaseMeta?.artistName ?: state.screenData.songInfoData?.author ?: "",
                             style = typo().titleMedium,
                             color = Color.White,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = state.screenData.songInfoData?.subscribers ?: "",
+                            text =
+                                neteaseMeta?.artistFans?.let {
+                                    stringResource(Res.string.fans_count, "%,d".format(it))
+                                } ?: state.screenData.songInfoData?.subscribers ?: "",
                             style = typo().bodySmall,
                             color = Color.White.copy(alpha = 0.7f),
                         )
@@ -763,7 +771,7 @@ internal fun ExpressiveBelowTheFold(
         }
         Spacer(modifier = Modifier.height(10.dp))
         // Description card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
             Surface(
                 shape = ExpressiveCardShape,
                 color = colorScheme.surfaceContainer,
@@ -774,56 +782,94 @@ internal fun ExpressiveBelowTheFold(
                         .fillMaxWidth(),
                 ) {
                     Spacer(modifier = Modifier.height(5.dp))
-                    Text(
-                        text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
-                        style = typo().labelSmall,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text =
-                            stringResource(
-                                Res.string.view_count,
-                                "%,d".format(state.screenData.songInfoData?.viewCount),
-                            ),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text =
-                            stringResource(
-                                Res.string.like_and_dislike,
-                                state.screenData.songInfoData?.like ?: 0,
-                                state.screenData.songInfoData?.dislike ?: 0,
-                            ),
-                        style = typo().bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(Res.string.description),
-                        style = typo().labelSmall,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    DescriptionView(
-                        text = state.screenData.songInfoData?.description ?: "",
-                        onTimeClicked = { raw ->
-                            val timestamp = parseTimestampToMilliseconds(raw)
-                            if (timestamp != 0.0 && timestamp < state.timelineState.total) {
-                                actions.onUIEvent(
-                                    UIEvent.UpdateProgress(
-                                        ((timestamp * 100) / state.timelineState.total).toFloat(),
-                                    ),
-                                )
-                            }
-                        },
-                        onURLClicked = { url ->
-                            uriHandler.openUri(
-                                url,
+                    if (neteaseMeta != null) {
+                        val releaseInfo =
+                            listOfNotNull(
+                                neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
+                                neteaseMeta.albumTrackCount?.let {
+                                    stringResource(Res.string.track_count_short, it.toString())
+                                },
+                                neteaseMeta.albumCompany,
+                            ).joinToString(" · ")
+                        if (releaseInfo.isNotEmpty()) {
+                            Text(text = releaseInfo, style = typo().labelSmall, color = Color.White)
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        val engagement =
+                            listOfNotNull(
+                                neteaseMeta.likeCount?.let {
+                                    "${stringResource(Res.string.like)} ${"%,d".format(it)}"
+                                },
+                                neteaseMeta.commentCount.takeIf { it > 0 }?.let {
+                                    stringResource(Res.string.comments_count, "%,d".format(it))
+                                },
+                            ).joinToString(" · ")
+                        if (engagement.isNotEmpty()) {
+                            Text(
+                                text = engagement,
+                                style = typo().labelMedium,
+                                color = Color.White,
+                                modifier =
+                                    if (neteaseMeta.commentCount > 0) {
+                                        Modifier.clickable { actions.onShowNeteaseComments() }
+                                    } else {
+                                        Modifier
+                                    },
                             )
-                        },
-                    )
+                        }
+                        val bio = neteaseMeta.artistBriefDesc ?: neteaseMeta.albumDescription
+                        if (!bio.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DescriptionView(
+                                text = bio,
+                                onTimeClicked = {},
+                                onURLClicked = { url -> uriHandler.openUri(url) },
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
+                            style = typo().labelSmall,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text =
+                                stringResource(
+                                    Res.string.view_count,
+                                    "%,d".format(state.screenData.songInfoData?.viewCount),
+                                ),
+                            style = typo().labelMedium,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text =
+                                stringResource(
+                                    Res.string.like_and_dislike,
+                                    state.screenData.songInfoData?.like ?: 0,
+                                    state.screenData.songInfoData?.dislike ?: 0,
+                                ),
+                            style = typo().bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        DescriptionView(
+                            text = state.screenData.songInfoData?.description ?: "",
+                            onTimeClicked = { raw ->
+                                val timestamp = parseTimestampToMilliseconds(raw)
+                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                    actions.onUIEvent(
+                                        UIEvent.UpdateProgress(((timestamp * 100) / state.timelineState.total).toFloat()),
+                                    )
+                                }
+                            },
+                            onURLClicked = { url -> uriHandler.openUri(url) },
+                        )
+                    }
                 }
             }
         }

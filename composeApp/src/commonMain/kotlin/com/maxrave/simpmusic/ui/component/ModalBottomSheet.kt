@@ -812,10 +812,29 @@ fun InfoPlayerBottomSheet(
                 )
 
                 // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);播放量/赞踩换
-                // 评论数(只报数量,热评内容在 Spotify 主题详情卡里看,信息面板保持紧凑)。
+                // 红心总数+评论数(热评内容从播放页详情卡进入评论列表看)。
                 val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
                 val neteaseMeta = screenDataState.neteaseSongData
                 if (isNeteaseSong && neteaseMeta != null) {
+                    neteaseMeta.likeCount?.let { likeCount ->
+                        Text(
+                            text = stringResource(Res.string.like),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = "%,d".format(likeCount),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     if (neteaseMeta.commentCount > 0) {
                         Text(
                             text = stringResource(Res.string.comments),
