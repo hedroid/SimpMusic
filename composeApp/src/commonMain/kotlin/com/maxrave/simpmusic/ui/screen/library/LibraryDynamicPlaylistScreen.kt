@@ -619,7 +619,8 @@ fun LibraryDynamicPlaylistScreen(
                 },
                 modifier =
                     Modifier
-                        .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
+                        // 同 LibraryScreen:底色兜底,进入本页的首帧玻璃不透明闪
+                        .hazeEffect(hazeState, style = HazeMaterials.ultraThin(MaterialTheme.colorScheme.surface)) {
                             blurEnabled = true
                         },
                 colors =
