@@ -158,6 +158,7 @@ import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Sort
 import com.maxrave.simpmusic.ui.icon.TipsAndUpdates
+import com.maxrave.simpmusic.ui.icon.Remove
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
@@ -1513,7 +1514,8 @@ fun LocalPlaylistScreen(
             extraActions =
                 listOf(
                     SongSelectionAction(
-                        icon = SimpIcons.Delete,
+                        // 减号=从歌单移除;垃圾桶只留给"删除"
+                        icon = SimpIcons.Remove,
                         label = removeLabel,
                         tint = Color.Red,
                     ) {

@@ -1404,7 +1404,8 @@ fun PlaylistScreen(
                         navController = navController,
                         song = track,
                         onRemoveFromPlaylist =
-                            if (neteaseOwnPlaylist) {
+                            // 红心歌单不露(与红心按钮功能重复,红心即入口);其余自建歌单露出
+                            if (neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                 { viewModel.removeTrackFromNeteasePlaylist(track.videoId) }
                             } else {
                                 null

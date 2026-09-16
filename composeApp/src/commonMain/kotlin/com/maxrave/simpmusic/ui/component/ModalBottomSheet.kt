@@ -1912,7 +1912,8 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = onRemoveFromPlaylist != null) {
                         if (it) {
                             ActionButton(
-                                icon = SimpIcons.Delete,
+                                // 减号=从歌单移除(与"从队列移除"同惯例);垃圾桶只留给"删除"
+                                icon = SimpIcons.Remove,
                                 text = Res.string.remove_from_playlist,
                             ) {
                                 hideModalBottomSheet()
