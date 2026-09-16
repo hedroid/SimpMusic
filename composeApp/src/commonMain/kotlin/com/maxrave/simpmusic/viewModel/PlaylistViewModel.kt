@@ -97,10 +97,22 @@ class PlaylistViewModel(
     }
 
     private fun removeNowPlayingFromLikedPlaylist() {
-        val id = (uiState.value as? Success)?.data?.id ?: return
-        if (id.toLongOrNull() == null || !neteaseRepository.isNeteaseLikedPlaylist(id)) return
         val videoId = nowPlayingVideoId.value
         if (videoId.isEmpty()) return
+        removeTrackFromLikedPlaylist(videoId)
+    }
+
+    /** 红心歌单内任意入口取消红心后，立即让当前页面列表与新的点赞状态保持一致。 */
+    fun onTrackLikeChanged(
+        videoId: String,
+        liked: Boolean,
+    ) {
+        if (!liked) removeTrackFromLikedPlaylist(videoId)
+    }
+
+    private fun removeTrackFromLikedPlaylist(videoId: String) {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() == null || !neteaseRepository.isNeteaseLikedPlaylist(id)) return
         val removed = _tracks.value.any { it.videoId == videoId }
         if (!removed) return
         _tracks.update { list -> list.filterNot { it.videoId == videoId } }

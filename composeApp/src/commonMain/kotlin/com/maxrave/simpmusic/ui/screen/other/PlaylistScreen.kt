@@ -1410,6 +1410,12 @@ fun PlaylistScreen(
                             } else {
                                 null
                             },
+                        onLikeChanged =
+                            if (neteaseLikedPlaylist) {
+                                { liked -> viewModel.onTrackLikeChanged(track.videoId, liked) }
+                            } else {
+                                null
+                            },
                     )
                 }
                 if (playlistBottomSheetShow) {

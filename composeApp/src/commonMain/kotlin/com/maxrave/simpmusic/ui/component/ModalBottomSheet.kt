@@ -1510,6 +1510,8 @@ fun NowPlayingBottomSheet(
     onLibraryDelete: (() -> Unit)? = null,
     // 歌单页内打开且该歌单可移除歌曲(网易自建歌单)时传入;播放页等其它场景不传不显示
     onRemoveFromPlaylist: (() -> Unit)? = null,
+    // 需要让宿主页面立即响应点赞状态变化时传入(例如红心歌单取消红心后剔除歌曲)
+    onLikeChanged: ((Boolean) -> Unit)? = null,
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -1924,8 +1926,9 @@ fun NowPlayingBottomSheet(
                     CheckBoxActionButton(
                         defaultChecked = uiState.songUIState.liked,
                         isHeartIcon = true,
-                        onChangeListener = {
+                        onChangeListener = { liked ->
                             viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.ToggleLike)
+                            onLikeChanged?.invoke(liked)
                         },
                     )
                     ActionButton(
