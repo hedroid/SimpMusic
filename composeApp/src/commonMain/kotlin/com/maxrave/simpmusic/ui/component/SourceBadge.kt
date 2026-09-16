@@ -2,7 +2,11 @@ package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -36,30 +40,43 @@ fun SourceBadge(
     modifier: Modifier = Modifier,
     size: Dp = 22.dp,
 ) {
-    // 网易=黑底+白色音符(实心,小尺寸可读);YT=YouTube红底+白色实心播放三角。
-    // (曾用 YT Music 圆环标:细圆环在 16dp 角标里线宽不足 2px,视觉上"没有角标"。)
+    // 双品牌同一款黑透明圆底;内部图标区分——网易=白色音符(实心),
+    // YT=YouTube 标志本体:红色圆角矩形+白色实心三角(纯色块,任何尺寸可读;
+    // 曾用红圆底白三角被读成"播放按钮"、YT Music 圆环标在 16dp 下细线不可见)。
     val netease = source == MusicSource.NETEASE
     Box(
         modifier =
             modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(
-                    if (netease) Color.Black.copy(alpha = 0.55f) else Color(0xE6FF0000),
-                ),
+                .background(Color.Black.copy(alpha = 0.55f)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector =
-                if (netease) {
-                    SimpIcons.NeteaseCloudMusic
-                } else {
-                    SimpIcons.PlayArrow
-                },
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(size * (if (netease) 0.64f else 0.52f)),
-        )
+        if (netease) {
+            Icon(
+                imageVector = SimpIcons.NeteaseCloudMusic,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.64f),
+            )
+        } else {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(size * 0.18f)
+                        .clip(RoundedCornerShape(size * 0.12f))
+                        .background(Color(0xFFFF0000)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = SimpIcons.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.fillMaxHeight(0.72f),
+                )
+            }
+        }
     }
 }
 

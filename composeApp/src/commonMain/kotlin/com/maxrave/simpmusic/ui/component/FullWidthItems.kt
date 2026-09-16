@@ -329,7 +329,8 @@ fun SongFullWidthItems(
                                 size = 16.dp,
                                 modifier =
                                     Modifier
-                                        .align(Alignment.TopEnd),
+                                        .align(Alignment.TopEnd)
+                                            .padding(2.dp),
                             )
                         }
                     }
@@ -658,7 +659,8 @@ fun PlaylistFullWidthItems(
                             size = 16.dp,
                             modifier =
                                 Modifier
-                                    .align(Alignment.TopEnd),
+                                    .align(Alignment.TopEnd)
+                                            .padding(2.dp),
                         )
                     }
                 }
@@ -793,7 +795,8 @@ fun ArtistFullWidthItems(
                             size = 16.dp,
                             modifier =
                                 Modifier
-                                    .align(Alignment.TopEnd),
+                                    .align(Alignment.TopEnd)
+                                            .padding(2.dp),
                         )
                     }
                 }
