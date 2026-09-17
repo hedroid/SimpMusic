@@ -91,6 +91,7 @@ import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
+import com.maxrave.simpmusic.ui.component.SourceCollectionBadge
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -404,6 +405,14 @@ fun AlbumScreen(
                                                             viewModel.setAlbumLike()
                                                         },
                                                     )
+                                                    SourceCollectionBadge(
+                                                        isNetease = browseId.toLongOrNull() != null,
+                                                        saved = uiState.remoteSaved,
+                                                        pending = uiState.remoteSavePending,
+                                                        onToggle = viewModel::setRemoteSaved,
+                                                        inactiveTint = Color.White,
+                                                        modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
+                                                    )
                                                 }
                                                 IconButton(
                                                     onClick = { albumBottomSheetShow = true },
@@ -683,6 +692,14 @@ fun AlbumScreen(
                                                         onStateChange = {
                                                             viewModel.setAlbumLike()
                                                         },
+                                                    )
+                                                    SourceCollectionBadge(
+                                                        isNetease = browseId.toLongOrNull() != null,
+                                                        saved = uiState.remoteSaved,
+                                                        pending = uiState.remoteSavePending,
+                                                        onToggle = viewModel::setRemoteSaved,
+                                                        inactiveTint = Color.White,
+                                                        modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                     )
                                                 }
                                                 IconButton(
@@ -1112,7 +1129,7 @@ fun AlbumScreen(
                             } else {
                                 null
                             },
-                        onSaveToLocal = {},
+                        onSaveToLocal = null,
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 uiState.listTrack.toCollection(arrayListOf()),

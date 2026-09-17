@@ -15,6 +15,7 @@ import com.maxrave.domain.data.model.streams.YouTubeWatchEndpoint
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.domain.repository.SongRepository
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.radio
@@ -45,6 +47,7 @@ class ArtistViewModel(
     private val artistRepository: ArtistRepository,
     private val songRepository: SongRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
+    private val dataStoreManager: DataStoreManager,
 ) : BaseViewModel() {
     // It is dynamic and can be changed by the user, so separate it from the ArtistScreenData
     private var _canvasUrl: MutableStateFlow<Pair<String, SongEntity>?> = MutableStateFlow(null)
@@ -57,6 +60,12 @@ class ArtistViewModel(
     private var _followed: MutableStateFlow<Boolean> = MutableStateFlow(false)
     var followed: StateFlow<Boolean> = _followed
 
+    private val _remoteFollowed = MutableStateFlow<Boolean?>(null)
+    val remoteFollowed: StateFlow<Boolean?> = _remoteFollowed
+
+    private val _remoteFollowPending = MutableStateFlow(false)
+    val remoteFollowPending: StateFlow<Boolean> = _remoteFollowPending
+
     private val _artistScreenState: MutableStateFlow<ArtistScreenState> = MutableStateFlow(Loading)
     val artistScreenState: StateFlow<ArtistScreenState> = _artistScreenState
 
@@ -65,6 +74,8 @@ class ArtistViewModel(
         _canvasUrl.value = null
         _artistLogo.value = null
         _followed.value = false
+        _remoteFollowed.value = null
+        _remoteFollowPending.value = false
         viewModelScope.launch {
             artistRepository.getArtistData(channelId).collect { browse ->
                 val data = browse.data
@@ -80,14 +91,20 @@ class ArtistViewModel(
                                         ?.url,
                                 ),
                             )
-                            // 网易歌手:服务端关注态(/artist/detail/dynamic)落库并校正显示。
-                            // insertArtist 是 INSERT IGNORE,已存在行不会被新实体覆盖,
-                            // 必须显式 UPDATE;此前浏览时丢弃 subscribed,从库页点进
-                            // 已关注的歌手总显示未关注。YT 侧维持"本地为准"镜像语义不变。
-                            val neteaseSubscribed = data.subscribed
-                            if (channelId.toLongOrNull() != null && neteaseSubscribed != null) {
-                                artistRepository.setFollowedLocal(channelId, neteaseSubscribed)
-                                _followed.value = neteaseSubscribed
+                            // 本地关注与来源账号关注是两个状态。同步开启时只采用远端的
+                            // positive state，避免首次启用同步把既有本地收藏误删掉。
+                            _remoteFollowed.value = data.subscribed
+                            if (data.subscribed == true) {
+                                val syncEnabled =
+                                    if (channelId.toLongOrNull() != null) {
+                                        dataStoreManager.neteaseFollowSync.first() == DataStoreManager.TRUE
+                                    } else {
+                                        dataStoreManager.syncFollowToYouTube.first() == DataStoreManager.TRUE
+                                    }
+                                if (syncEnabled) {
+                                    artistRepository.setFollowedLocal(channelId, true)
+                                    _followed.value = true
+                                }
                             }
                         }
                         _artistScreenState.value =
@@ -191,6 +208,27 @@ class ArtistViewModel(
                 null -> Unit
             }
             log("updateFollowed: ${_followed.value}, synced: $synced")
+        }
+    }
+
+    /** Explicit source-account action; never mutates the SimpMusic-local follow flag. */
+    fun setRemoteFollowed(
+        followed: Boolean,
+        channelId: String,
+    ) {
+        if (_remoteFollowPending.value) return
+        viewModelScope.launch {
+            _remoteFollowPending.value = true
+            if (artistRepository.setRemoteFollowedStatus(channelId, followed)) {
+                _remoteFollowed.value = followed
+            } else {
+                makeToast(
+                    getString(
+                        if (channelId.toLongOrNull() != null) Res.string.sync_follow_failed_netease else Res.string.sync_follow_failed,
+                    ),
+                )
+            }
+            _remoteFollowPending.value = false
         }
     }
 

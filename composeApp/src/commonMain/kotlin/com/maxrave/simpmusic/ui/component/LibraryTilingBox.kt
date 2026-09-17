@@ -1,6 +1,8 @@
 package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,9 +21,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
+import com.maxrave.simpmusic.ui.icon.Album
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Insights
+import com.maxrave.simpmusic.ui.icon.LibraryMusic
+import com.maxrave.simpmusic.ui.icon.RssFeed
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.TrendingUp
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
@@ -31,22 +36,35 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.downloaded_songs_tab
 import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.followed
+import simpmusic.composeapp.generated.resources.library_podcasts
+import simpmusic.composeapp.generated.resources.liked_songs
 import simpmusic.composeapp.generated.resources.most_played
+import simpmusic.composeapp.generated.resources.playlists
 
 @Composable
-fun LibraryTilingBox(navController: NavController) {
+fun LibraryTilingBox(
+    navController: NavController,
+    onOpenPlaylists: () -> Unit,
+    onOpenCollections: () -> Unit,
+    onOpenPodcasts: () -> Unit,
+    onOpenDownloads: () -> Unit,
+) {
     val listItem =
         listOf(
             LibraryTilingState.Favorite,
             LibraryTilingState.Followed,
+            LibraryTilingState.Playlists,
+            LibraryTilingState.Collections,
             LibraryTilingState.MostPlayed,
             LibraryTilingState.Downloaded,
+            LibraryTilingState.Podcasts,
         )
     NonLazyGrid(
         columns = 2,
-        itemCount = 4,
+        itemCount = listItem.size,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -84,12 +102,14 @@ fun LibraryTilingBox(navController: NavController) {
                         }
 
                         LibraryTilingState.Downloaded -> {
-                            navController.navigate(
-                                LibraryDynamicPlaylistDestination(
-                                    type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
-                                ),
-                            )
+                            onOpenDownloads()
                         }
+
+                        LibraryTilingState.Playlists -> onOpenPlaylists()
+
+                        LibraryTilingState.Collections -> onOpenCollections()
+
+                        LibraryTilingState.Podcasts -> onOpenPodcasts()
                     }
                 },
             )
@@ -100,14 +120,23 @@ fun LibraryTilingBox(navController: NavController) {
 @Composable
 fun LibraryTilingItem(
     state: LibraryTilingState,
+    selected: Boolean = false,
     onClick: () -> Unit = {},
 ) {
     val title = stringResource(state.title)
     ElevatedCard(
         modifier =
-            Modifier.fillMaxWidth().clickable {
-                onClick.invoke()
-            },
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (selected) {
+                        Modifier.border(BorderStroke(3.dp, state.iconColor), RoundedCornerShape(8.dp))
+                    } else {
+                        Modifier
+                    },
+                ).clickable {
+                    onClick.invoke()
+                },
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.elevatedCardElevation(),
         colors =
@@ -146,7 +175,7 @@ data class LibraryTilingState(
     companion object {
         val Favorite =
             LibraryTilingState(
-                title = Res.string.favorite,
+                title = Res.string.liked_songs,
                 containerColor = Color(0xffff99ae),
                 icon = SimpIcons.Favorite,
                 iconColor = Color(0xffD10000),
@@ -171,6 +200,41 @@ data class LibraryTilingState(
                 containerColor = Color(0xff4CAF50),
                 icon = SimpIcons.Downloading,
                 iconColor = Color.Black,
+            )
+        val Playlists =
+            LibraryTilingState(
+                title = Res.string.playlists,
+                containerColor = Color(0xffD5B8FF),
+                icon = SimpIcons.LibraryMusic,
+                iconColor = Color(0xff4A148C),
+            )
+        val Collections =
+            LibraryTilingState(
+                title = Res.string.favorite,
+                containerColor = Color(0xffffcc80),
+                icon = SimpIcons.Album,
+                iconColor = Color(0xff9A4D00),
+            )
+        val Podcasts =
+            LibraryTilingState(
+                title = Res.string.library_podcasts,
+                containerColor = Color(0xffB3E5FC),
+                icon = SimpIcons.RssFeed,
+                iconColor = Color(0xff01579B),
+            )
+        val DownloadedSongs =
+            LibraryTilingState(
+                title = Res.string.downloaded_songs_tab,
+                containerColor = Color(0xffC8E6C9),
+                icon = SimpIcons.Downloading,
+                iconColor = Color(0xff1B5E20),
+            )
+        val DownloadedPlaylists =
+            LibraryTilingState(
+                title = Res.string.playlists,
+                containerColor = Color(0xffD5B8FF),
+                icon = SimpIcons.LibraryMusic,
+                iconColor = Color(0xff4A148C),
             )
     }
 }

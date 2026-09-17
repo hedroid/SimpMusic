@@ -46,6 +46,8 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
@@ -64,11 +66,13 @@ class NowPlayingBottomSheetViewModel(
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject()
     private val albumRepository: AlbumRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
     private val _uiState: MutableStateFlow<NowPlayingBottomSheetUIState> =
         MutableStateFlow(
             NowPlayingBottomSheetUIState(
                 listLocalPlaylist = emptyList(),
                 listYouTubePlaylist = emptyList(),
+                listNeteasePlaylist = emptyList(),
                 mainLyricsProvider = SIMPMUSIC,
                 sleepTimer =
                     SleepTimerState(
@@ -164,6 +168,12 @@ class NowPlayingBottomSheetViewModel(
     fun setSongEntity(songEntity: SongEntity?) {
         val songOrNowPlaying = songEntity ?: (mediaPlayerHandler.nowPlayingState.value.songEntity ?: return)
         viewModelScope.launch {
+            _uiState.update { it.copy(listNeteasePlaylist = emptyList()) }
+            if (songOrNowPlaying.videoId.toLongOrNull() != null) {
+                _uiState.update {
+                    it.copy(listNeteasePlaylist = neteaseRepository.getOwnNeteasePlaylists())
+                }
+            }
             songOrNowPlaying.videoId.let {
                 _uiState.update { state ->
                     state.copy(
@@ -271,6 +281,16 @@ class NowPlayingBottomSheetViewModel(
                                 makeToast(it)
                             },
                         )
+                }
+
+                is NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist -> {
+                    val ok =
+                        neteaseRepository
+                            .addTracksToNeteasePlaylist(ev.playlistId, listOf(songUIState.videoId))
+                            .getOrDefault(false)
+                    makeToast(
+                        getString(if (ok) Res.string.added_to_netease_playlist else Res.string.netease_action_failed),
+                    )
                 }
 
                 is NowPlayingBottomSheetUIEvent.ToggleLike -> {
@@ -437,6 +457,7 @@ data class NowPlayingBottomSheetUIState(
     val songUIState: SongUIState = SongUIState(),
     val listLocalPlaylist: List<LocalPlaylistEntity>,
     val listYouTubePlaylist: List<PlaylistsResult>,
+    val listNeteasePlaylist: List<PlaylistsResult>,
     val mainLyricsProvider: String,
     val sleepTimer: SleepTimerState,
 ) {
@@ -468,6 +489,10 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     data class AddToYouTubePlaylist(
         val browseId: String,
+    ) : NowPlayingBottomSheetUIEvent()
+
+    data class AddToNeteasePlaylist(
+        val playlistId: String,
     ) : NowPlayingBottomSheetUIEvent()
 
     data object PlayNext : NowPlayingBottomSheetUIEvent()

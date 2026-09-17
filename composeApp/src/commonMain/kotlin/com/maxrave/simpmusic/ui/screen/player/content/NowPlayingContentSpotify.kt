@@ -2042,11 +2042,16 @@ private fun NowPlayingTrackInfoRow(
                 }
             }
         }
-        // 单一红心:云端跟进由同步开关在 updateLikeStatus 里承接(YT=合并喜欢开关,
-        // 网易=红心同步开关),播放页不再放第二个云端喜欢按钮
         Spacer(modifier = Modifier.size(12.dp))
-        HeartCheckBox(checked = state.controllerState.isLiked, size = 32) {
-            actions.onUIEvent(UIEvent.ToggleLike)
+        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            HeartCheckBox(checked = state.controllerState.isLiked, size = 32) {
+                actions.onUIEvent(UIEvent.ToggleLike)
+            }
+            SourceAccountLikeBadge(
+                state = state,
+                actions = actions,
+                modifier = Modifier.align(Alignment.BottomEnd).size(17.dp),
+            )
         }
     }
 }

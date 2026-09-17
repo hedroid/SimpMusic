@@ -76,6 +76,8 @@ import com.maxrave.simpmusic.ui.component.LibraryItem
 import com.maxrave.simpmusic.ui.component.LibraryItemState
 import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
+import com.maxrave.simpmusic.ui.component.LibraryTilingItem
+import com.maxrave.simpmusic.ui.component.LibraryTilingState
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -86,6 +88,8 @@ import com.maxrave.simpmusic.ui.icon.Groups
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryCollectionDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
@@ -105,10 +109,13 @@ import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
 import simpmusic.composeapp.generated.resources.delete
+import simpmusic.composeapp.generated.resources.downloaded_collections
 import simpmusic.composeapp.generated.resources.downloaded_playlists
+import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
 import simpmusic.composeapp.generated.resources.library
+import simpmusic.composeapp.generated.resources.library_podcasts
 import simpmusic.composeapp.generated.resources.mix_for_you
 import simpmusic.composeapp.generated.resources.no_YouTube_playlists
 import simpmusic.composeapp.generated.resources.no_charts_found
@@ -118,6 +125,7 @@ import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
+import simpmusic.composeapp.generated.resources.playlists
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.simpmusic_charts
@@ -125,7 +133,7 @@ import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
 import simpmusic.composeapp.generated.resources.your_netease
 import simpmusic.composeapp.generated.resources.your_playlists
-import simpmusic.composeapp.generated.resources.your_youtube_playlists
+import simpmusic.composeapp.generated.resources.your_youtube_music
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -189,6 +197,18 @@ fun LibraryScreen(
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val openLibraryPlaylists = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
+    }
+    val openLibraryCollections = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.FAVORITE_PLAYLIST.name))
+    }
+    val openLibraryPodcasts = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.FAVORITE_PODCAST.name))
+    }
+    val openLibraryDownloads = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.DOWNLOADED_PLAYLIST.name))
+    }
 
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
@@ -218,21 +238,11 @@ fun LibraryScreen(
                 viewModel.getRecentlyAdded()
             }
 
-            LibraryChipType.LOCAL_PLAYLIST -> {
-                viewModel.getLocalPlaylist()
-            }
-
-            LibraryChipType.FAVORITE_PLAYLIST -> {
-                viewModel.getPlaylistFavorite()
-            }
-
-            LibraryChipType.DOWNLOADED_PLAYLIST -> {
-                viewModel.getDownloadedPlaylist()
-            }
-
-            LibraryChipType.FAVORITE_PODCAST -> {
-                viewModel.getFavoritePodcasts()
-            }
+            LibraryChipType.LOCAL_PLAYLIST,
+            LibraryChipType.FAVORITE_PLAYLIST,
+            LibraryChipType.DOWNLOADED_PLAYLIST,
+            LibraryChipType.FAVORITE_PODCAST,
+            -> viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -272,7 +282,13 @@ fun LibraryScreen(
                     state = state,
                 ) {
                     item {
-                        LibraryTilingBox(navController)
+                        LibraryTilingBox(
+                            navController = navController,
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
                     }
 
                     if (!listCanvasSong.data.isNullOrEmpty()) {
@@ -351,6 +367,16 @@ fun LibraryScreen(
                     yourLocalPlaylist,
                     onScrolling = onScrolling,
                     emptyText = Res.string.no_playlists_added,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.playlists),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                     createNewPlaylist = {
                         showAddSheet = true
                     },
@@ -368,6 +394,16 @@ fun LibraryScreen(
                     // 混源网格:网易来源的收藏条目带品牌角标
                     showSourceBadge = true,
                     onScrolling = onScrolling,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.favorite),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                 ) {
                     viewModel.getPlaylistFavorite()
                 }
@@ -381,6 +417,39 @@ fun LibraryScreen(
                     emptyText = Res.string.no_playlists_downloaded,
                     showSourceBadge = true,
                     onScrolling = onScrolling,
+                    header = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            LibraryTilingBox(
+                                navController = navController,
+                                onOpenPlaylists = openLibraryPlaylists,
+                                onOpenCollections = openLibraryCollections,
+                                onOpenPodcasts = openLibraryPodcasts,
+                                onOpenDownloads = openLibraryDownloads,
+                            )
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                            ) {
+                                LibraryTilingItem(
+                                    state = LibraryTilingState.DownloadedSongs,
+                                    onClick = {
+                                        navController.navigate(
+                                            LibraryDynamicPlaylistDestination(
+                                                type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
+                                            ),
+                                        )
+                                    },
+                                )
+                                Text(
+                                    text = stringResource(Res.string.downloaded_collections),
+                                    style = typo().titleMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+                                )
+                            }
+                        }
+                    },
                     onRemoveDownload = { item ->
                         removeDownloadTarget = item
                     },
@@ -396,6 +465,16 @@ fun LibraryScreen(
                     favoritePodcasts,
                     emptyText = Res.string.no_favorite_podcasts,
                     onScrolling = onScrolling,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.library_podcasts),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                 ) {
                     viewModel.getFavoritePodcasts()
                 }
@@ -586,11 +665,22 @@ fun LibraryScreen(
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            LibraryChipType.entries.forEach { type ->
-                // Mix for you left this row for a tab of its own.
-                if (type == LibraryChipType.YOUTUBE_MIX_FOR_YOU) {
-                    return@forEach
-                }
+            val localLibraryPages =
+                setOf(
+                    LibraryChipType.LOCAL_PLAYLIST,
+                    LibraryChipType.FAVORITE_PLAYLIST,
+                    LibraryChipType.DOWNLOADED_PLAYLIST,
+                    LibraryChipType.FAVORITE_PODCAST,
+                )
+            val topLevelLibraryChips =
+                listOf(
+                    LibraryChipType.YOUR_LIBRARY,
+                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
+                    LibraryChipType.NETEASE_PLAYLIST,
+                    LibraryChipType.CHART,
+                    LibraryChipType.WRAPPED,
+                )
+            topLevelLibraryChips.forEach { type ->
                 if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
                     return@forEach
                 }
@@ -605,11 +695,13 @@ fun LibraryScreen(
                 }
                 Chip(
                     isAnimated = false,
-                    isSelected = type == currentFilter,
+                    isSelected =
+                        type == currentFilter ||
+                            (type == LibraryChipType.YOUR_LIBRARY && currentFilter in localLibraryPages),
                     text =
                         when (type) {
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
-                            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_playlists)
+                            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_music)
                             LibraryChipType.NETEASE_PLAYLIST -> stringResource(Res.string.your_netease)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
@@ -691,5 +783,31 @@ fun LibraryScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun LibrarySectionHeader(
+    navController: NavController,
+    title: String,
+    onOpenPlaylists: () -> Unit,
+    onOpenCollections: () -> Unit,
+    onOpenPodcasts: () -> Unit,
+    onOpenDownloads: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LibraryTilingBox(
+            navController = navController,
+            onOpenPlaylists = onOpenPlaylists,
+            onOpenCollections = onOpenCollections,
+            onOpenPodcasts = onOpenPodcasts,
+            onOpenDownloads = onOpenDownloads,
+        )
+        Text(
+            text = title,
+            style = typo().titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 10.dp, bottom = 4.dp),
+        )
     }
 }

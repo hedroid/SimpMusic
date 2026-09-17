@@ -217,6 +217,9 @@ import simpmusic.composeapp.generated.resources.animated_artwork_info
 import simpmusic.composeapp.generated.resources.canvas_info
 import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs
 import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs_description
+import simpmusic.composeapp.generated.resources.youtube_collection_sync
+import simpmusic.composeapp.generated.resources.youtube_collection_sync_description
+import simpmusic.composeapp.generated.resources.youtube_sync_settings
 import simpmusic.composeapp.generated.resources.categories_sponsor_block
 import simpmusic.composeapp.generated.resources.change
 import simpmusic.composeapp.generated.resources.change_language_warning
@@ -322,6 +325,7 @@ import simpmusic.composeapp.generated.resources.netease_favorite_sync_descriptio
 import simpmusic.composeapp.generated.resources.netease_play_report
 import simpmusic.composeapp.generated.resources.netease_play_report_description
 import simpmusic.composeapp.generated.resources.netease_like_sync_description
+import simpmusic.composeapp.generated.resources.netease_sync_settings
 import simpmusic.composeapp.generated.resources.netease_auto_switch
 import simpmusic.composeapp.generated.resources.netease_auto_switch_description
 import simpmusic.composeapp.generated.resources.netease_quality_standard
@@ -423,6 +427,11 @@ import simpmusic.composeapp.generated.resources.storage
 import simpmusic.composeapp.generated.resources.such_as_music_video_lyrics_video_podcasts_and_more
 import simpmusic.composeapp.generated.resources.sync_follow_to_youtube
 import simpmusic.composeapp.generated.resources.sync_follow_to_youtube_description
+import simpmusic.composeapp.generated.resources.sync_followed_artists
+import simpmusic.composeapp.generated.resources.sync_liked_songs
+import simpmusic.composeapp.generated.resources.sync_saved_collections
+import simpmusic.composeapp.generated.resources.sync_settings_none
+import simpmusic.composeapp.generated.resources.sync_settings_selected
 import simpmusic.composeapp.generated.resources.theme
 import simpmusic.composeapp.generated.resources.theme_color
 import simpmusic.composeapp.generated.resources.theme_color_custom
@@ -554,6 +563,7 @@ fun SettingScreen(
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
+    val youtubeCollectionSync by viewModel.youtubeCollectionSync.collectAsStateWithLifecycle()
     val playVideo by remember { viewModel.playVideoInsteadOfAudio.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val radioAudioOnly by remember { viewModel.radioAudioOnly.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
@@ -1148,15 +1158,51 @@ fun SettingScreen(
                     switch = (radioAudioOnly to { viewModel.setRadioAudioOnly(it) }),
                 )
                 SettingItem(
-                    title = stringResource(Res.string.sync_follow_to_youtube),
-                    subtitle = stringResource(Res.string.sync_follow_to_youtube_description),
+                    title = stringResource(Res.string.play_explicit_content),
+                    subtitle = stringResource(Res.string.play_explicit_content_description),
+                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.keep_your_youtube_playlist_offline),
+                    subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
+                    switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
+                )
+                val ytLikedLabel = stringResource(Res.string.sync_liked_songs)
+                val ytFollowLabel = stringResource(Res.string.sync_followed_artists)
+                val ytCollectionLabel = stringResource(Res.string.sync_saved_collections)
+                val ytSyncOptions =
+                    listOf(
+                        combineLocalAndYouTubeLiked to ytLikedLabel,
+                        syncFollowToYouTube to ytFollowLabel,
+                        youtubeCollectionSync to ytCollectionLabel,
+                    )
+                val ytSelected = ytSyncOptions.filter { it.first }.joinToString("、") { it.second }
+                SettingItem(
+                    title = stringResource(Res.string.youtube_sync_settings),
+                    subtitle =
+                        if (ytSelected.isEmpty()) {
+                            stringResource(Res.string.sync_settings_none)
+                        } else {
+                            stringResource(Res.string.sync_settings_selected, ytSelected)
+                        },
                     smallSubtitle = true,
-                    switch = (syncFollowToYouTube to { viewModel.setSyncFollowToYouTube(it) }),
-                    // Writing to someone's YouTube account needs a session, so the row is dead
-                    // while signed out. Clearing the stored flag is NOT done from here: the reset
-                    // belongs to the logout itself (SettingsViewModel.setUsedAccount /
-                    // logOutAllYouTube), which runs whether or not Settings is ever opened.
                     isEnable = loggedIn == DataStoreManager.TRUE,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.youtube_sync_settings) },
+                                multipleSelect = SettingAlertState.SelectData(ytSyncOptions),
+                                confirm =
+                                    runBlocking { getString(Res.string.save) } to { state ->
+                                        val selected = state.multipleSelect?.getListSelected().orEmpty().toSet()
+                                        viewModel.setCombineLocalAndYouTubeLiked(ytLikedLabel in selected)
+                                        viewModel.setSyncFollowToYouTube(ytFollowLabel in selected)
+                                        viewModel.setYouTubeCollectionSync(ytCollectionLabel in selected)
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
                 )
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
@@ -1167,22 +1213,6 @@ fun SettingScreen(
                         ),
                     smallSubtitle = true,
                     switch = (sendData to { viewModel.setSendBackToGoogle(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.play_explicit_content),
-                    subtitle = stringResource(Res.string.play_explicit_content_description),
-                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.keep_your_youtube_playlist_offline),
-                    subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
-                    switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
-                )
-                // 单一红心模型:开关开=本地红心自动跟进 YT 已喜欢( YT 登录时生效)
-                SettingItem(
-                    title = stringResource(Res.string.combine_local_and_youtube_liked_songs),
-                    subtitle = stringResource(Res.string.combine_local_and_youtube_liked_songs_description),
-                    switch = (combineLocalAndYouTubeLiked to { viewModel.setCombineLocalAndYouTubeLiked(it) })
                 )
                 SettingItem(
                     title = stringResource(Res.string.proxy),
@@ -1441,23 +1471,42 @@ fun SettingScreen(
                         )
                     },
                 )
+                val neteaseLikedLabel = stringResource(Res.string.sync_liked_songs)
+                val neteaseFollowLabel = stringResource(Res.string.sync_followed_artists)
+                val neteaseCollectionLabel = stringResource(Res.string.sync_saved_collections)
+                val neteaseSyncOptions =
+                    listOf(
+                        neteaseLikeSync to neteaseLikedLabel,
+                        neteaseFollowSync to neteaseFollowLabel,
+                        neteaseFavoriteSync to neteaseCollectionLabel,
+                    )
+                val neteaseSelected = neteaseSyncOptions.filter { it.first }.joinToString("、") { it.second }
                 SettingItem(
-                    title = stringResource(Res.string.netease_follow_sync),
-                    subtitle = stringResource(Res.string.netease_follow_sync_description),
-                    switch = (neteaseFollowSync to { viewModel.setNeteaseFollowSync(it) }),
+                    title = stringResource(Res.string.netease_sync_settings),
+                    subtitle =
+                        if (neteaseSelected.isEmpty()) {
+                            stringResource(Res.string.sync_settings_none)
+                        } else {
+                            stringResource(Res.string.sync_settings_selected, neteaseSelected)
+                        },
+                    smallSubtitle = true,
                     isEnable = neteaseLoggedIn,
-                )
-                SettingItem(
-                    title = stringResource(Res.string.netease_favorite_sync),
-                    subtitle = stringResource(Res.string.netease_favorite_sync_description),
-                    switch = (neteaseFavoriteSync to { viewModel.setNeteaseFavoriteSync(it) }),
-                    isEnable = neteaseLoggedIn,
-                )
-                SettingItem(
-                    title = stringResource(Res.string.netease_like_sync),
-                    subtitle = stringResource(Res.string.netease_like_sync_description),
-                    switch = (neteaseLikeSync to { viewModel.setNeteaseLikeSync(it) }),
-                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_sync_settings) },
+                                multipleSelect = SettingAlertState.SelectData(neteaseSyncOptions),
+                                confirm =
+                                    runBlocking { getString(Res.string.save) } to { state ->
+                                        val selected = state.multipleSelect?.getListSelected().orEmpty().toSet()
+                                        viewModel.setNeteaseLikeSync(neteaseLikedLabel in selected)
+                                        viewModel.setNeteaseFollowSync(neteaseFollowLabel in selected)
+                                        viewModel.setNeteaseFavoriteSync(neteaseCollectionLabel in selected)
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
                 )
                 SettingItem(
                     title = stringResource(Res.string.netease_play_report),
@@ -3780,4 +3829,3 @@ private fun ImportProgressDialog(
 // ----------------------------------------------------------------------------
 // 网易云音质选择(feat/netease-source)
 // ----------------------------------------------------------------------------
-

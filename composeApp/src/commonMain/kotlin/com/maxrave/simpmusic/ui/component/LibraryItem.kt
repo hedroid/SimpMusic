@@ -276,9 +276,9 @@ fun LibraryItem(
                                         model =
                                             ImageRequest
                                                 .Builder(LocalPlatformContext.current)
-                                                .data(item.canvasThumbUrl)
+                                                .data(item.canvasThumbUrl ?: item.thumbnails)
                                                 .diskCachePolicy(CachePolicy.ENABLED)
-                                                .diskCacheKey(item.canvasThumbUrl)
+                                                .diskCacheKey(item.canvasThumbUrl ?: item.thumbnails)
                                                 .crossfade(true)
                                                 .build(),
                                         placeholder = rememberHolderPainter(),

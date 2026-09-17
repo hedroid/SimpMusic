@@ -147,6 +147,7 @@ fun NowPlayingScreenContent(
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
+    val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
     // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
@@ -612,6 +613,7 @@ fun NowPlayingScreenContent(
             isBottomSheetVisible = true,
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
+            listNeteasePlaylist = uiState.listNeteasePlaylist,
             onDismiss = { showAddToPlaylistDirectly = false },
             onClick = { playlist ->
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(playlist.id))
@@ -619,6 +621,10 @@ fun NowPlayingScreenContent(
             },
             onYTPlaylistClick = { playlist ->
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToYouTubePlaylist(playlist.browseId))
+                showAddToPlaylistDirectly = false
+            },
+            onNeteasePlaylistClick = { playlist ->
+                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist(playlist.browseId))
                 showAddToPlaylistDirectly = false
             },
             videoId = uiState.songUIState.videoId,
@@ -668,6 +674,7 @@ fun NowPlayingScreenContent(
             castState = castState,
             shouldShowVideo = shouldShowVideo,
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
+            remoteLikeState = remoteLikeState,
             isUserLoggedIn = isUserLoggedIn,
             artworkQueue = artworkQueue,
             currentOrderIndex = currentOrderIndex,
@@ -738,6 +745,7 @@ fun NowPlayingScreenContent(
             onShowQueue = { showQueueBottomSheet = true },
             onShowInfo = { showInfoBottomSheet = true },
             onShowAddToPlaylist = { showAddToPlaylistDirectly = true },
+            onSetRemoteLiked = sharedViewModel::setRemoteSongLiked,
             onShowFullscreenLyrics = { showFullscreenLyrics = true },
             onShowVoteDialog = { showVoteDialog = true },
             onEnterFullscreenVideo = {

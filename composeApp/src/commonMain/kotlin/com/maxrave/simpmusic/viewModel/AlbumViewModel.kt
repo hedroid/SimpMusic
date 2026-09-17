@@ -11,6 +11,7 @@ import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
@@ -27,12 +28,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.source_account_action_failed
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
@@ -48,6 +51,7 @@ class AlbumViewModel(
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
     private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
+    private val dataStoreManager: DataStoreManager by inject()
 
     /** 专辑页"更多"菜单取消收藏网易专辑(/album/sub t=0),云端成功后 toast;本地 liked 同步熄灭 */
     fun unsubscribeNeteaseAlbum(albumId: String) {
@@ -85,6 +89,7 @@ class AlbumViewModel(
                             _uiState.update {
                                 it.copy(
                                     browseId = browseId,
+                                    audioPlaylistId = data.audioPlaylistId,
                                     title = data.title,
                                     thumbnail = data.thumbnails?.lastOrNull()?.url,
                                     artist =
@@ -127,6 +132,7 @@ class AlbumViewModel(
                                 }
                             }
                             getAlbumFlow(browseId)
+                            refreshRemoteSavedState()
                         } else {
                             makeToast(getString(Res.string.error) + ": Null data")
                             _uiState.update {
@@ -193,13 +199,64 @@ class AlbumViewModel(
 
     fun setAlbumLike() {
         viewModelScope.launch {
-            albumRepository.updateAlbumLiked(uiState.value.browseId, if (!uiState.value.liked) 1 else 0)
+            val target = !uiState.value.liked
+            albumRepository.updateAlbumLiked(uiState.value.browseId, if (target) 1 else 0)
             _uiState.update {
                 it.copy(
-                    liked = !it.liked,
+                    liked = target,
                 )
             }
+            val syncEnabled =
+                if (uiState.value.browseId.toLongOrNull() != null) {
+                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE
+                } else {
+                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
+                }
+            if (syncEnabled) setRemoteSavedInternal(target)
         }
+    }
+
+    private fun refreshRemoteSavedState() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(remoteSaved = null) }
+            val remote =
+                albumRepository.getRemoteSavedState(
+                    uiState.value.browseId,
+                    uiState.value.audioPlaylistId,
+                )
+            _uiState.update { it.copy(remoteSaved = remote) }
+            val syncEnabled =
+                if (uiState.value.browseId.toLongOrNull() != null) {
+                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE
+                } else {
+                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
+                }
+            if (syncEnabled && remote == true && !uiState.value.liked) {
+                albumRepository.updateAlbumLiked(uiState.value.browseId, 1)
+                _uiState.update { it.copy(liked = true) }
+            }
+        }
+    }
+
+    fun setRemoteSaved(saved: Boolean) {
+        viewModelScope.launch { setRemoteSavedInternal(saved) }
+    }
+
+    private suspend fun setRemoteSavedInternal(saved: Boolean) {
+        _uiState.update { it.copy(remoteSavePending = true) }
+        val ok =
+            albumRepository.setRemoteSavedState(
+                uiState.value.browseId,
+                uiState.value.audioPlaylistId,
+                saved,
+            )
+        _uiState.update {
+            it.copy(
+                remoteSaved = if (ok) saved else it.remoteSaved,
+                remoteSavePending = false,
+            )
+        }
+        if (!ok) makeToast(getString(Res.string.source_account_action_failed))
     }
 
     private fun getAlbumFlow(browseId: String) {
@@ -358,6 +415,7 @@ class AlbumViewModel(
 
 data class AlbumUIState(
     val browseId: String = "",
+    val audioPlaylistId: String? = null,
     val title: String = "",
     val thumbnail: String? = null,
     val colors: List<Color> = listOf(Color.Black, Color.Black),
@@ -369,6 +427,8 @@ data class AlbumUIState(
     val year: String = now().year.toString(),
     val downloadState: Int = DownloadState.STATE_NOT_DOWNLOADED,
     val liked: Boolean = false,
+    val remoteSaved: Boolean? = null,
+    val remoteSavePending: Boolean = false,
     val trackCount: Int = 0,
     val description: String? = null,
     val length: String = "",

@@ -809,35 +809,37 @@ private fun ExpressiveTrackInfoRow(
                 )
             }
         }
-        // 单一红心:云端跟进由同步开关在 updateLikeStatus 里承接(YT=合并喜欢开关,
-        // 网易=红心同步开关),播放页不再放第二个云端喜欢按钮
         Spacer(modifier = Modifier.size(8.dp))
         val likeBurst = rememberHeartBurstState()
-        FilledIconToggleButton(
-            checked = state.controllerState.isLiked,
-            onCheckedChange = {
-                // Fire on the TAP that likes, never on the state — see HeartBurstState's doc.
-                if (!state.controllerState.isLiked) likeBurst.fire()
-                actions.onUIEvent(UIEvent.ToggleLike)
-            },
-            shape = CircleShape,
-            colors =
-                IconButtonDefaults.filledIconToggleButtonColors(
-                    containerColor = colorScheme.surfaceContainerHigh,
-                    contentColor = colorScheme.onSurfaceVariant,
-                    checkedContainerColor = colorScheme.primaryContainer,
-                    checkedContentColor = colorScheme.onPrimaryContainer,
-                ),
-            // The burst draws outside the 48dp bounds; the button's own shape clip is internal
-            // (on its Surface), so sparks fired from this outer modifier are not trimmed.
-            modifier = Modifier.size(48.dp).heartBurst(likeBurst),
-        ) {
-            Crossfade(targetState = state.controllerState.isLiked) { liked ->
-                Icon(
-                    imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
-                    contentDescription = "",
-                )
+        Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst)) {
+            FilledIconToggleButton(
+                checked = state.controllerState.isLiked,
+                onCheckedChange = {
+                    if (!state.controllerState.isLiked) likeBurst.fire()
+                    actions.onUIEvent(UIEvent.ToggleLike)
+                },
+                shape = CircleShape,
+                colors =
+                    IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = colorScheme.surfaceContainerHigh,
+                        contentColor = colorScheme.onSurfaceVariant,
+                        checkedContainerColor = colorScheme.primaryContainer,
+                        checkedContentColor = colorScheme.onPrimaryContainer,
+                    ),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Crossfade(targetState = state.controllerState.isLiked) { liked ->
+                    Icon(
+                        imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                        contentDescription = "",
+                    )
+                }
             }
+            SourceAccountLikeBadge(
+                state = state,
+                actions = actions,
+                modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
+            )
         }
     }
 }

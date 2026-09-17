@@ -105,6 +105,7 @@ import com.maxrave.simpmusic.ui.component.HomeItemVideo
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
+import com.maxrave.simpmusic.ui.component.SourceFollowButton
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionState
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
@@ -158,6 +159,8 @@ fun ArtistScreen(
 ) {
     val artistScreenState by viewModel.artistScreenState.collectAsStateWithLifecycle()
     val isFollowed by viewModel.followed.collectAsStateWithLifecycle()
+    val remoteFollowed by viewModel.remoteFollowed.collectAsStateWithLifecycle()
+    val remoteFollowPending by viewModel.remoteFollowPending.collectAsStateWithLifecycle()
     val canvasUrl by viewModel.canvasUrl.collectAsStateWithLifecycle()
     val artistLogo by viewModel.artistLogo.collectAsStateWithLifecycle()
 
@@ -543,6 +546,17 @@ fun ArtistScreen(
                                             modifier = Modifier.size(22.dp),
                                         )
                                     }
+                                    SourceFollowButton(
+                                        isNetease = state.data.channelId?.toLongOrNull() != null,
+                                        followed = remoteFollowed,
+                                        pending = remoteFollowPending,
+                                        onToggle = { followed ->
+                                            viewModel.setRemoteFollowed(
+                                                followed,
+                                                state.data.channelId ?: return@SourceFollowButton,
+                                            )
+                                        },
+                                    )
                                 }
                             }
                         }

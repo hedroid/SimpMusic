@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -197,6 +198,20 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                                 ).focusable(),
                                     )
                                 }
+                            }
+                        }
+                    }
+                    if (data is LocalResource.Success && list.isEmpty() && createNewPlaylist == null) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(emptyText),
+                                    style = typo().bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }

@@ -15,6 +15,7 @@ import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
+import com.maxrave.simpmusic.viewModel.RemoteSongLikeState
 import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.flow.StateFlow
 
@@ -92,6 +93,7 @@ class NowPlayingContentState(
     val shouldShowVideo: Boolean,
     /** 当前歌曲是否来自网易；用于元数据加载前也能立即应用源特有 UI 规则。 */
     val isNeteaseSong: Boolean,
+    val remoteLikeState: RemoteSongLikeState,
     val isUserLoggedIn: Boolean,
     val artworkQueue: List<Track>,
     val currentOrderIndex: Int,
@@ -134,6 +136,7 @@ class NowPlayingContentActions(
     val onShowQueue: () -> Unit,
     val onShowInfo: () -> Unit,
     val onShowAddToPlaylist: () -> Unit,
+    val onSetRemoteLiked: (Boolean) -> Unit,
     val onShowFullscreenLyrics: () -> Unit,
     val onShowVoteDialog: () -> Unit,
     val onEnterFullscreenVideo: () -> Unit,

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +64,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -159,10 +161,10 @@ import com.maxrave.simpmusic.ui.icon.Remove
 import com.maxrave.simpmusic.ui.icon.Sensors
 import com.maxrave.simpmusic.ui.icon.Share
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.Speed
+import com.maxrave.simpmusic.ui.icon.FastForward
+import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.Sync
 import com.maxrave.simpmusic.ui.icon.SyncDisabled
-import com.maxrave.simpmusic.ui.icon.Tune
 import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
@@ -242,6 +244,7 @@ import simpmusic.composeapp.generated.resources.mime_type
 import simpmusic.composeapp.generated.resources.more
 import simpmusic.composeapp.generated.resources.move_down
 import simpmusic.composeapp.generated.resources.move_up
+import simpmusic.composeapp.generated.resources.netease
 import simpmusic.composeapp.generated.resources.no_album
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.no_playlist_found
@@ -260,6 +263,7 @@ import simpmusic.composeapp.generated.resources.queue
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.save
 import simpmusic.composeapp.generated.resources.save_to_local_playlist
+import simpmusic.composeapp.generated.resources.copy_as_local_playlist
 import simpmusic.composeapp.generated.resources.saved_to_local_playlist
 import simpmusic.composeapp.generated.resources.scale
 import simpmusic.composeapp.generated.resources.set
@@ -283,6 +287,7 @@ import simpmusic.composeapp.generated.resources.unknown
 import simpmusic.composeapp.generated.resources.update_playlist
 import simpmusic.composeapp.generated.resources.warning
 import simpmusic.composeapp.generated.resources.yes
+import simpmusic.composeapp.generated.resources.your_netease_playlists
 import simpmusic.composeapp.generated.resources.your_discord_token
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_sp_dc_param_of_spotify_cookie
@@ -1590,12 +1595,16 @@ fun NowPlayingBottomSheet(
             isBottomSheetVisible = true,
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
+            listNeteasePlaylist = uiState.listNeteasePlaylist,
             onDismiss = { addToAPlaylist = false },
             onClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(it.id))
             },
             onYTPlaylistClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToYouTubePlaylist(it.browseId))
+            },
+            onNeteasePlaylistClick = {
+                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist(it.browseId))
             },
             videoId = uiState.songUIState.videoId,
         )
@@ -2007,7 +2016,16 @@ fun NowPlayingBottomSheet(
                         icon = SimpIcons.PeopleAlt,
                         text = Res.string.artists,
                     ) {
-                        artist = true
+                        val artists = uiState.songUIState.listArtists
+                        val onlyArtist = artists.singleOrNull()
+                        val artistId = onlyArtist?.id
+                        if (!artistId.isNullOrBlank()) {
+                            onNavigateToOtherScreen()
+                            navController.navigate(ArtistDestination(artistId))
+                            hideModalBottomSheet()
+                        } else if (artists.size > 1) {
+                            artist = true
+                        }
                     }
                     ActionButton(
                         icon = SimpIcons.Album,
@@ -2102,7 +2120,7 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = setSleepTimerEnable) {
                         if (it) {
                             ActionButton(
-                                icon = SimpIcons.Speed,
+                                icon = SimpIcons.GraphicEq,
                                 text =
                                     if (crossfadeEnabled != DataStoreManager.TRUE) {
                                         Res.string.playback_speed_pitch
@@ -2144,6 +2162,7 @@ fun ActionButton(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .defaultMinSize(minHeight = 56.dp)
                 .wrapContentHeight(Alignment.CenterVertically)
                 .then(
                     if (enable) Modifier.clickable { onClick.invoke() } else Modifier.greyScale(),
@@ -2151,15 +2170,15 @@ fun ActionButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         ) {
             Image(
                 imageVector = icon,
                 contentDescription = if (text != null) stringResource(text) else textString ?: "",
                 modifier =
                     Modifier
-                        .wrapContentSize(Alignment.Center)
-                        .padding(12.dp),
+                        .size(48.dp)
+                        .padding(11.dp),
                 colorFilter =
                     if (enable) {
                         ColorFilter.tint(resolvedIconColor)
@@ -2313,19 +2332,42 @@ fun PlaybackSpeedPitchBottomSheet(
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(16.dp))
-                // Playback Speed row
+                // Keep the label and the three controls on separate rows. On compact screens (or
+                // with larger system text) putting all five elements on one line squeezed the
+                // first decrement button until its outline was visibly clipped.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        imageVector = SimpIcons.Speed,
-                        contentDescription = stringResource(Res.string.playback_speed),
-                        modifier = Modifier.size(24.dp),
-                        colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().subtitle),
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = CircleShape,
+                        color = rememberSurfaceDarkColors().subtitle.copy(alpha = 0.14f),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = SimpIcons.FastForward,
+                                contentDescription = stringResource(Res.string.playback_speed),
+                                modifier = Modifier.size(26.dp),
+                                tint = rememberSurfaceDarkColors().content,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(Res.string.playback_speed),
+                        style = typo().labelSmall,
+                        color = rememberSurfaceDarkColors().content,
                     )
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedIconButton(
+                        modifier = Modifier.size(44.dp),
                         onClick = {
                             val newSpeed = (kotlin.math.floor((playbackSpeed - 0.1f) * 10f) / 10f).coerceIn(0.2f, 2f)
                             onSet(
@@ -2337,6 +2379,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             SimpIcons.Remove,
                             contentDescription = "Decrease speed",
+                            modifier = Modifier.size(24.dp),
                             tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
@@ -2344,10 +2387,11 @@ fun PlaybackSpeedPitchBottomSheet(
                         text = "x${String.format("%.1f", playbackSpeed)}",
                         style = typo().titleMedium,
                         color = rememberSurfaceDarkColors().subtitle,
-                        modifier = Modifier.widthIn(min = 60.dp),
+                        modifier = Modifier.width(88.dp),
                         textAlign = TextAlign.Center,
                     )
-                    IconButton(
+                    OutlinedIconButton(
+                        modifier = Modifier.size(44.dp),
                         onClick = {
                             val newSpeed = (kotlin.math.floor((playbackSpeed + 0.1f) * 10f) / 10f).coerceIn(0.2f, 2f)
                             onSet(
@@ -2359,6 +2403,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             SimpIcons.Add,
                             contentDescription = "Increase speed",
+                            modifier = Modifier.size(24.dp),
                             tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
@@ -2369,19 +2414,40 @@ fun PlaybackSpeedPitchBottomSheet(
                 // handled by the caller: crossfade owns mpv's filter chain and the two would fight
                 // over it.
                 run {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            SimpIcons.Tune,
-                            contentDescription = stringResource(Res.string.pitch),
-                            modifier = Modifier.size(24.dp),
-                            tint = rememberSurfaceDarkColors().subtitle,
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = rememberSurfaceDarkColors().subtitle.copy(alpha = 0.14f),
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = SimpIcons.GraphicEq,
+                                    contentDescription = stringResource(Res.string.pitch),
+                                    modifier = Modifier.size(26.dp),
+                                    tint = rememberSurfaceDarkColors().content,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(Res.string.pitch),
+                            style = typo().labelSmall,
+                            color = rememberSurfaceDarkColors().content,
                         )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedIconButton(
+                            modifier = Modifier.size(44.dp),
                             onClick = {
                                 val newPitch = (pitch - 1).coerceIn(-12, 12)
                                 onSet(playbackSpeed, newPitch)
@@ -2390,6 +2456,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 SimpIcons.Remove,
                                 contentDescription = "Decrease pitch",
+                                modifier = Modifier.size(24.dp),
                                 tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
@@ -2397,10 +2464,11 @@ fun PlaybackSpeedPitchBottomSheet(
                             text = "$pitch",
                             style = typo().titleMedium,
                             color = rememberSurfaceDarkColors().subtitle,
-                            modifier = Modifier.widthIn(min = 60.dp),
+                            modifier = Modifier.width(88.dp),
                             textAlign = TextAlign.Center,
                         )
-                        IconButton(
+                        OutlinedIconButton(
+                            modifier = Modifier.size(44.dp),
                             onClick = {
                                 val newPitch = (pitch + 1).coerceIn(-12, 12)
                                 onSet(playbackSpeed, newPitch)
@@ -2409,6 +2477,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 SimpIcons.Add,
                                 contentDescription = "Increase pitch",
+                                modifier = Modifier.size(24.dp),
                                 tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
@@ -2722,14 +2791,19 @@ fun AddToPlaylistModalBottomSheet(
     isBottomSheetVisible: Boolean,
     listLocalPlaylist: List<LocalPlaylistEntity>,
     listYouTubePlaylist: List<PlaylistsResult>,
+    listNeteasePlaylist: List<PlaylistsResult> = emptyList(),
     videoId: String? = null,
     onClick: (LocalPlaylistEntity) -> Unit,
     onYTPlaylistClick: (PlaylistsResult) -> Unit,
+    onNeteasePlaylistClick: (PlaylistsResult) -> Unit = {},
     onDismiss: () -> Unit,
+    dataStoreManager: DataStoreManager = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val youtubeLoggedIn by dataStoreManager.loggedIn.collectAsState(null)
+    val neteaseCookie by dataStoreManager.neteaseCookie.collectAsState("")
     val hideModalBottomSheet: () -> Unit =
         {
             coroutineScope.launch {
@@ -2769,11 +2843,22 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
 
                     val chipRowState = rememberScrollState()
-                    var isYouTubePlaylistClicked by remember { mutableStateOf(false) }
+                    // 0 = SimpMusic local, 1 = YouTube Music account, 2 = NetEase account.
+                    var selectedLibrary by remember { mutableStateOf(0) }
                     // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败),YT 分区整段不亮
                     val visibleYouTubePlaylists =
-                        if (videoId?.toLongOrNull() != null) emptyList() else listYouTubePlaylist
-                    if (visibleYouTubePlaylists.isNotEmpty()) {
+                        if (videoId?.toLongOrNull() != null || youtubeLoggedIn != DataStoreManager.TRUE) {
+                            emptyList()
+                        } else {
+                            listYouTubePlaylist
+                        }
+                    val visibleNeteasePlaylists =
+                        if (videoId?.toLongOrNull() != null && neteaseCookie.isNotBlank()) {
+                            listNeteasePlaylist
+                        } else {
+                            emptyList()
+                        }
+                    if (visibleYouTubePlaylists.isNotEmpty() || visibleNeteasePlaylists.isNotEmpty()) {
                         Row(
                             modifier =
                                 Modifier
@@ -2785,21 +2870,32 @@ fun AddToPlaylistModalBottomSheet(
                         ) {
                             Chip(
                                 isAnimated = false,
-                                isSelected = !isYouTubePlaylistClicked,
+                                isSelected = selectedLibrary == 0,
                                 text = stringResource(Res.string.your_playlists),
-                                onClick = { isYouTubePlaylistClicked = false },
+                                onClick = { selectedLibrary = 0 },
                             )
-                            Chip(
-                                isAnimated = false,
-                                isSelected = isYouTubePlaylistClicked,
-                                text = stringResource(Res.string.your_youtube_playlists),
-                                onClick = { isYouTubePlaylistClicked = true },
-                            )
+                            if (visibleYouTubePlaylists.isNotEmpty()) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 1,
+                                    text = "YouTube Music",
+                                    onClick = { selectedLibrary = 1 },
+                                )
+                            }
+                            if (visibleNeteasePlaylists.isNotEmpty()) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 2,
+                                    text = stringResource(Res.string.netease),
+                                    onClick = { selectedLibrary = 2 },
+                                )
+                            }
                         }
                     }
 
-                    if ((listLocalPlaylist.isEmpty() && !isYouTubePlaylistClicked) ||
-                        (visibleYouTubePlaylists.isEmpty() && isYouTubePlaylistClicked)
+                    if ((listLocalPlaylist.isEmpty() && selectedLibrary == 0) ||
+                        (visibleYouTubePlaylists.isEmpty() && selectedLibrary == 1) ||
+                        (visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
                     ) {
                         Text(
                             text = stringResource(Res.string.no_playlist_found),
@@ -2808,17 +2904,23 @@ fun AddToPlaylistModalBottomSheet(
                             color = rememberSurfaceDarkColors().disabled,
                         )
                     } else {
-                        Crossfade(isYouTubePlaylistClicked) { clicked ->
-                            if (clicked) {
+                        Crossfade(selectedLibrary) { library ->
+                            if (library == 1 || library == 2) {
+                                val cloudPlaylists =
+                                    if (library == 1) visibleYouTubePlaylists else visibleNeteasePlaylists
                                 LazyColumn {
-                                    items(visibleYouTubePlaylists) { playlist ->
+                                    items(cloudPlaylists) { playlist ->
                                         Box(
                                             modifier =
                                                 Modifier
                                                     .fillMaxWidth()
                                                     .padding(vertical = 3.dp)
                                                     .clickable(onClick = {
-                                                        onYTPlaylistClick(playlist)
+                                                        if (library == 1) {
+                                                            onYTPlaylistClick(playlist)
+                                                        } else {
+                                                            onNeteasePlaylistClick(playlist)
+                                                        }
                                                         hideModalBottomSheet()
                                                     }),
                                         ) {
@@ -2989,7 +3091,7 @@ fun PlaylistBottomSheet(
     playlistName: String,
     isYourYouTubePlaylist: Boolean,
     onEditTitle: (newTitle: String) -> Unit = {},
-    onSaveToLocal: () -> Unit,
+    onSaveToLocal: (() -> Unit)?,
     onAddToQueue: (() -> Unit)? = null,
     // 网易收藏歌单/专辑详情页"更多"菜单露出:取消收藏(云端 subscribe t=0)。调用方负责二次确认。
     onUnsubscribe: (() -> Unit)? = null,
@@ -3129,22 +3231,13 @@ fun PlaylistBottomSheet(
                     ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
                     }
+                }
+                if (onSaveToLocal != null) {
                     ActionButton(
-                        icon =
-                            if (isSavedToLocal) {
-                                SimpIcons.SyncDisabled
-                            } else {
-                                SimpIcons.Sync
-                            },
-                        text =
-                            if (isSavedToLocal) {
-                                Res.string.saved_to_local_playlist
-                            } else {
-                                Res.string.save_to_local_playlist
-                            },
-                        enable = !isSavedToLocal,
+                        icon = SimpIcons.PlaylistAdd,
+                        text = Res.string.copy_as_local_playlist,
                     ) {
-                        onSaveToLocal.invoke()
+                        onSaveToLocal()
                         hideModalBottomSheet()
                     }
                 }

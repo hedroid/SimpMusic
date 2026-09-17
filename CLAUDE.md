@@ -1,11 +1,8 @@
 # CLAUDE.md - SimpMusic Project Guide for AI Agents
 
-## 🌐 Language Rule
+## 🌐 语言规则
 
-**Response language**: Always respond in **English**, and after each sentence, add a **Vietnamese translation in parentheses**.
-Example: "Hello, how are you? (Xin chào, bạn khỏe không?)"
-
-This applies to all conversations in this project. The user is using Max plan so token cost is not a concern.
+**回复语言**：在本项目的所有对话中，只使用**简体中文**回复。不要附加英文、越南语或其他语言的对照翻译，除非用户在当前请求中明确要求。
 
 ## 📋 Project Overview
 
@@ -510,6 +507,28 @@ if (getPlatform() == Platform.Android) {
 
 ## 📜 Changelog Summary (post-1.0.4)
 
+### UI and library refinements (2026-09-17)
+- **Library shortcuts keep their content**: the original Favorites / Followed / Most played /
+  Downloaded entries remain in "Your Library", with Playlists / Collections / Podcasts added as
+  standalone destinations. The Downloaded destination switches songs and downloaded containers
+  inline through the same coloured shortcut-card language used by the library home; it no longer
+  opens a second downloaded-songs screen.
+- **Now Playing action-sheet cleanup**: Add to playlist uses concise Local playlist / YouTube Music /
+  NetEase labels and hides unavailable account destinations when signed out. A single artist opens
+  directly; only multi-artist tracks show the picker. Playback speed and pitch use fixed-size,
+  non-clipping icons and controls that remain complete on compact screens and larger font scales.
+- **Account sync settings are grouped**: YouTube Music and NetEase each expose one settings row
+  opening a multi-select dialog for liked songs, followed artists and saved playlists/albums. The
+  YouTube row remains disabled while signed out and sits directly above Google playback reporting.
+
+### New Features (2026-09-16)
+- **Dual local/source-account collection state**: songs, playlists, albums and artists now expose
+  SimpMusic-local state separately from YouTube Music/NetEase account state. Both sources share
+  the same UI semantics and independent sync switches; mini-player heart remains local-only.
+- **Cross-source playlist actions**: YT and NetEase songs can be added to editable playlists in
+  their own source account. Online playlists can be copied as independent editable local snapshots;
+  this is distinct from the existing linked local-playlist-to-YT synchronization workflow.
+
 ### Architecture Changes
 - **Desktop: GStreamer → VLCJ**: Completely replaced GStreamer with VLCJ for desktop audio playback
 - **DEB/RPM builds removed**: Desktop Linux now only ships AppImage
@@ -790,6 +809,6 @@ After completing any of the following types of changes, the AI agent **MUST** up
 
 *This document helps AI Agents quickly understand the SimpMusic project. Update regularly when there are major changes to architecture or structure.*
 
-**Last updated**: 2026-09-02
+**Last updated**: 2026-09-17
 **Project version**: Check latest release on GitHub
 **Maintained by**: maxrave-dev and contributors

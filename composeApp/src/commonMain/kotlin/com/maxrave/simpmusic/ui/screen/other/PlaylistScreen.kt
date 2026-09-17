@@ -112,6 +112,7 @@ import com.maxrave.simpmusic.ui.component.LoadingDialog
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.SourceCollectionBadge
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
@@ -216,6 +217,8 @@ fun PlaylistScreen(
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
+    val remoteSaved by viewModel.remoteSaved.collectAsStateWithLifecycle()
+    val remoteSavePending by viewModel.remoteSavePending.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
 
@@ -562,7 +565,7 @@ fun PlaylistScreen(
                                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        if (!data.isRadio) {
+                                                        if (!data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                                             Box(
                                                                 modifier = Modifier.size(48.dp),
                                                                 contentAlignment = Alignment.Center,
@@ -573,6 +576,14 @@ fun PlaylistScreen(
                                                                     onStateChange = {
                                                                         viewModel.onUIEvent(PlaylistUIEvent.Favorite)
                                                                     },
+                                                                )
+                                                                SourceCollectionBadge(
+                                                                    isNetease = data.id.toLongOrNull() != null,
+                                                                    saved = remoteSaved,
+                                                                    pending = remoteSavePending,
+                                                                    onToggle = viewModel::setRemoteSaved,
+                                                                    inactiveTint = Color.White,
+                                                                    modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                                 )
                                                             }
                                                         }
@@ -861,7 +872,7 @@ fun PlaylistScreen(
                                                             .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    if (!data.isRadio) {
+                                                    if (!data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                                         Box(
                                                             modifier = Modifier.size(48.dp),
                                                             contentAlignment = Alignment.Center,
@@ -872,6 +883,14 @@ fun PlaylistScreen(
                                                                 onStateChange = {
                                                                     viewModel.onUIEvent(PlaylistUIEvent.Favorite)
                                                                 },
+                                                            )
+                                                            SourceCollectionBadge(
+                                                                isNetease = data.id.toLongOrNull() != null,
+                                                                saved = remoteSaved,
+                                                                pending = remoteSavePending,
+                                                                onToggle = viewModel::setRemoteSaved,
+                                                                inactiveTint = Color.White,
+                                                                modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                             )
                                                         }
                                                     }
@@ -1445,11 +1464,16 @@ fun PlaylistScreen(
                             } else {
                                 null
                             },
-                        onSaveToLocal = {
-                            viewModel.getFullTracks { track ->
-                                viewModel.saveToLocal(track)
-                            }
-                        },
+                        onSaveToLocal =
+                            if (!data.isRadio) {
+                                {
+                                    viewModel.getFullTracks { track ->
+                                        viewModel.saveToLocal(track)
+                                    }
+                                }
+                            } else {
+                                null
+                            },
                         onEditTitle = { newTitle ->
                             viewModel.updatePlaylistTitle(newTitle, data.id)
                         },

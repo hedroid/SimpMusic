@@ -55,9 +55,12 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
+import simpmusic.composeapp.generated.resources.copied_as_local_playlist
+import simpmusic.composeapp.generated.resources.copying_as_local_playlist
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.source_account_action_failed
 import simpmusic.composeapp.generated.resources.deleted_playlist
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
 import simpmusic.composeapp.generated.resources.remove_from_playlist_failed
@@ -137,6 +140,11 @@ class PlaylistViewModel(
     val downloadState = _playlistEntity.map { it?.downloadState ?: 0 }.stateIn(viewModelScope, WhileSubscribed(1000), 0)
     val liked = _playlistEntity.map { it?.liked == true }.stateIn(viewModelScope, WhileSubscribed(1000), false)
 
+    private val _remoteSaved = MutableStateFlow<Boolean?>(null)
+    val remoteSaved: StateFlow<Boolean?> = _remoteSaved
+    private val _remoteSavePending = MutableStateFlow(false)
+    val remoteSavePending: StateFlow<Boolean> = _remoteSavePending
+
     private var _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks
 
@@ -157,16 +165,42 @@ class PlaylistViewModel(
      * 未收藏 → 点亮本地红心(纯本地写,不再推云端——云上本来就 true)。adopt-on 单向:
      * 云端 false 不熄灭本地(防 own 歌单误判/取消收藏语义走显式操作),与红心歌曲 OR 合并同哲。
      */
-    private fun maybeAdoptNeteaseSubscribed(playlistId: String) {
-        if (playlistId.toLongOrNull() == null) return
+    private fun maybeAdoptRemoteSaved(playlistId: String) {
         viewModelScope.launch {
-            if (dataStoreManager.neteaseFavoriteSync.first() != DataStoreManager.TRUE) return@launch
-            val cloud = neteaseRepository.getPlaylistSubscribed(playlistId) ?: return@launch
+            val syncEnabled =
+                if (playlistId.toLongOrNull() != null) {
+                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE
+                } else {
+                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
+                }
+            if (!syncEnabled) return@launch
+            val cloud = playlistRepository.getRemoteSavedState(playlistId) ?: return@launch
             val localLiked = _playlistEntity.value?.liked == true
             if (cloud && !localLiked) {
                 playlistRepository.updatePlaylistLiked(playlistId, 1)
                 _playlistEntity.update { it?.copy(liked = true) }
             }
+        }
+    }
+
+    private fun refreshRemoteSavedState(playlistId: String) {
+        _remoteSaved.value = null
+        viewModelScope.launch {
+            _remoteSaved.value = playlistRepository.getRemoteSavedState(playlistId)
+        }
+    }
+
+    /** Explicit source-account action; does not turn a foreign playlist into an editable local copy. */
+    fun setRemoteSaved(saved: Boolean) {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        viewModelScope.launch {
+            _remoteSavePending.value = true
+            if (playlistRepository.setRemoteSavedState(id, saved)) {
+                _remoteSaved.value = saved
+            } else {
+                makeToast(getString(Res.string.source_account_action_failed))
+            }
+            _remoteSavePending.value = false
         }
     }
 
@@ -471,7 +505,8 @@ class PlaylistViewModel(
                                 _continuation.value = data.second
                                 if (data.second.isNullOrEmpty()) _tracksListState.value = ListState.PAGINATION_EXHAUST
                                 getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
-                                maybeAdoptNeteaseSubscribed(data.first.id)
+                                maybeAdoptRemoteSaved(data.first.id)
+                                refreshRemoteSavedState(data.first.id)
                             }
 
                             else -> {
@@ -646,13 +681,17 @@ class PlaylistViewModel(
             // 歌单都走这里;受"收藏与网易云同步"开关门控(开=双向同步,关=仅本地,与 YT 歌单
             // 行为一致)。自建歌单云端会拒绝收藏(自己的歌单无此概念),静默跳过不回滚
             // ——本地标记仍然生效(app 内"收藏的歌单"tab)。
-            if (id.toLongOrNull() != null &&
-                dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE &&
-                !neteaseRepository.isOwnNeteasePlaylist(id)
-            ) {
-                neteaseRepository
-                    .subscribeNeteasePlaylist(id, tempLiked == 1)
-                    .onFailure { Logger.w(tag, "netease playlist subscribe sync failed: ${it.message}") }
+            val syncEnabled =
+                if (id.toLongOrNull() != null) {
+                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE &&
+                        !neteaseRepository.isOwnNeteasePlaylist(id)
+                } else {
+                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
+                }
+            if (syncEnabled) {
+                val remoteUpdated = playlistRepository.setRemoteSavedState(id, tempLiked == 1)
+                if (remoteUpdated) _remoteSaved.value = tempLiked == 1
+                else Logger.w(tag, "playlist remote collection sync failed: $id")
             }
             getFullTracks { }
         }
@@ -846,17 +885,16 @@ class PlaylistViewModel(
         viewModelScope.launch {
             val data = uiState.value.data ?: return@launch
             localPlaylistRepository
-                .syncYouTubePlaylistToLocalPlaylist(
+                .copyOnlinePlaylistToLocal(
                     data,
                     tracks,
-                    getString(Res.string.synced),
-                    getString(Res.string.error),
+                    getString(Res.string.copied_as_local_playlist),
                 ).collectLatestResource(
                     onSuccess = {
                         makeToast(it)
                     },
                     onLoading = {
-                        makeToast(getString(Res.string.syncing))
+                        makeToast(getString(Res.string.copying_as_local_playlist))
                     },
                     onError = {
                         makeToast(it)

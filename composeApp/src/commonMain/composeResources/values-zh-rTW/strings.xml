@@ -167,7 +167,7 @@
     <string name="netease_url">網易雲音樂連結</string>
     <string name="netease_like_sync">合併本地與網易雲喜歡的歌曲</string>
     <string name="netease_favorite_sync">收藏與網易雲同步</string>
-    <string name="netease_favorite_sync_description">開啟後，網易雲播放清單的收藏與你的網易雲帳號雙向同步；關閉後僅修改本地</string>
+    <string name="netease_favorite_sync_description">在 SimpMusic 收藏或取消收藏網易雲播放清單、專輯時，同步到網易雲帳號；關閉後僅修改本機</string>
     <string name="netease_delete_playlist">刪除播放清單</string>
     <string name="deleted_playlist">已刪除播放清單</string>
     <string name="delete_playlist_title">刪除該播放清單？</string>
@@ -175,6 +175,25 @@
     <string name="netease_like_sync_description">在應用裡紅心一首歌時，同步到你的網易雲帳號</string>
     <string name="netease_play_report">發送播放數據到網易雲</string>
     <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，讓每日推薦和年度報告更懂你</string>
+    <string name="source_account_favorite">%1$s 帳號收藏</string>
+    <string name="source_account_follow">%1$s 帳號關注</string>
+    <string name="your_netease_playlists">您的網易雲播放清單</string>
+    <string name="added_to_netease_playlist">已加入網易雲播放清單</string>
+    <string name="source_account_action_failed">來源帳號操作失敗</string>
+    <string name="liked_songs">喜歡的歌曲</string>
+    <string name="library_podcasts">播客</string>
+    <string name="downloaded_songs">已下載歌曲</string>
+    <string name="downloaded_collections">已下載的專輯與播放清單</string>
+    <string name="your_youtube_music">您的 YouTube Music</string>
+    <string name="youtube_collection_sync">播放清單與專輯收藏同步到 YouTube Music</string>
+    <string name="youtube_collection_sync_description">在 SimpMusic 收藏或取消收藏播放清單、專輯時，同步到 YouTube Music 帳號；關閉後僅修改本機</string>
+    <string name="youtube_sync_settings">與 YouTube Music 同步</string>
+    <string name="netease_sync_settings">與網易雲同步</string>
+    <string name="sync_settings_none">未開啟自動同步</string>
+    <string name="sync_settings_selected">已開啟：%1$s</string>
+    <string name="sync_liked_songs">喜歡的歌曲</string>
+    <string name="sync_followed_artists">關注的歌手</string>
+    <string name="sync_saved_collections">收藏的播放清單與專輯</string>
     <string name="fans_count">%1$s 粉絲</string>
     <string name="comments_count">%1$s 則留言</string>
     <string name="likes_count">%1$s 個讚</string>
@@ -282,6 +301,9 @@
     <string name="no_YouTube_playlists">目前沒有任何YouTube播放清單</string>
     <string name="track">歌曲</string>
     <string name="save_to_local_playlist">儲存到裝置播放清單</string>
+    <string name="copy_as_local_playlist">複製為本機播放清單</string>
+    <string name="copying_as_local_playlist">正在複製為本機播放清單</string>
+    <string name="copied_as_local_playlist">已複製為本機播放清單</string>
     <string name="added_local_playlist">新增到裝置播放清單</string>
     <string name="sync">同步到YouTube Music</string>
     <string name="synced">已同步到YouTube Music</string>
@@ -499,8 +521,8 @@
     <string name="custom_model_id_messages">留空使用預設模型，也可取得模型列表後選擇。</string>
     <string name="fetch_models_failed">取得模型列表失敗：%1$s</string>
     <string name="no_models_found">未找到模型</string>
-    <string name="favorite_podcasts">我的最愛 Podcast</string>
-    <string name="no_favorite_podcasts">沒有收藏的 Podcast</string>
+    <string name="favorite_podcasts">收藏的播客</string>
+    <string name="no_favorite_podcasts">還沒有收藏的播客</string>
     <string name="your_sp_dc_param_of_spotify_cookie">您的 Spotify Cookie 的 sp_dc 參數</string>
     <string name="your_youtube_cookie">您的 YouTube Cookie</string>
     <string name="your_discord_token">你的 Discord token</string>
@@ -641,4 +663,6 @@
     <string name="import_failed">匯入失敗</string>
     <string name="import_invalid_file">該文件不是有效的 SimpMusic 匯入文件。請先在 simpmusic.org 轉換您的媒體庫。</string>
     <!-- Listen Together -->
+    <string name="downloaded_songs_tab">歌曲</string>
+    <string name="no_downloaded_songs">暫無已下載歌曲</string>
 </resources>

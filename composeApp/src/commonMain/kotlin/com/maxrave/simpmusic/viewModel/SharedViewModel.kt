@@ -186,6 +186,9 @@ class SharedViewModel(
     private var _liked: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val liked: SharedFlow<Boolean> = _liked.asSharedFlow()
 
+    private val _remoteSongLikeState = MutableStateFlow(RemoteSongLikeState())
+    val remoteSongLikeState: StateFlow<RemoteSongLikeState> = _remoteSongLikeState
+
     var isServiceRunning: Boolean = false
 
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
@@ -485,10 +488,10 @@ class SharedViewModel(
                                 isExplicit = song.isExplicit,
                             )
                         }
+                        refreshRemoteSongLike(song)
                         // 网易详情卡要 song 行的 artistId/albumId,在 songEntity 到位后拉
                         if (song.videoId.toLongOrNull() != null) {
                             getNeteaseSongInfo(song)
-                            maybeMergeNeteaseLiked(song)
                         }
                     }
                 }
@@ -674,16 +677,39 @@ class SharedViewModel(
      * 库页"喜欢"动态歌单等本地视图随之可见);开关关闭/未登录/拉取失败只看本地。
      * 取消方向不受影响:点灭时 [SongRepositoryImpl.updateLikeStatus] 会同时清两边。
      */
-    private fun maybeMergeNeteaseLiked(song: SongEntity) {
-        if (song.videoId.toLongOrNull() == null) return
+    private fun refreshRemoteSongLike(song: SongEntity) {
+        _remoteSongLikeState.value = RemoteSongLikeState()
         viewModelScope.launch {
-            if (!neteaseLikeSync.first()) return@launch
-            val cloudLiked = neteaseRepository.isSongLiked(song.videoId) ?: return@launch
+            val cloudLiked = songRepository.getRemoteLikeStatus(song.videoId)
+            _remoteSongLikeState.value = RemoteSongLikeState(liked = cloudLiked)
+            if (cloudLiked != true) return@launch
+            val syncEnabled =
+                if (song.videoId.toLongOrNull() != null) {
+                    neteaseLikeSync.first()
+                } else {
+                    dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE
+                }
+            if (!syncEnabled) return@launch
             val localLiked = song.liked == true
-            if (cloudLiked && !localLiked) {
+            if (!localLiked) {
                 songRepository.setLikedLocal(song.videoId, 1)
                 _liked.value = true
             }
+        }
+    }
+
+    /** Explicit account action used by the full player. The mini player remains local-only. */
+    fun setRemoteSongLiked(liked: Boolean) {
+        val song = nowPlayingState.value?.songEntity ?: return
+        viewModelScope.launch {
+            _remoteSongLikeState.value = _remoteSongLikeState.value.copy(pending = true, failed = false)
+            val ok = songRepository.setRemoteLikeStatus(song.videoId, liked)
+            _remoteSongLikeState.value =
+                if (ok) {
+                    RemoteSongLikeState(liked = liked)
+                } else {
+                    _remoteSongLikeState.value.copy(pending = false, failed = true)
+                }
         }
     }
 
@@ -2373,6 +2399,13 @@ sealed class UIEvent {
 
     data object ToggleLike : UIEvent()
 }
+
+/** Independent source-account state. `liked == null` means signed out or not yet known. */
+data class RemoteSongLikeState(
+    val liked: Boolean? = null,
+    val pending: Boolean = false,
+    val failed: Boolean = false,
+)
 
 enum class LyricsProvider {
     SIMPMUSIC,

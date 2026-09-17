@@ -101,6 +101,7 @@ import com.maxrave.simpmusic.ui.icon.VolumeDown
 import com.maxrave.simpmusic.ui.icon.VolumeUp
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
+import com.maxrave.simpmusic.ui.screen.player.content.SourceAccountLikeBadge
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.stringResource
@@ -281,8 +282,6 @@ internal fun AppleMusicHeaderActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 单一红心:云端跟进由同步开关在 updateLikeStatus 里承接(YT=合并喜欢开关,
-        // 网易=红心同步开关),播放页不再放第二个云端喜欢按钮
         val likeBurst = rememberHeartBurstState()
         Box(
             modifier =
@@ -305,6 +304,11 @@ internal fun AppleMusicHeaderActions(
                     modifier = Modifier.size(32.dp),
                 )
             }
+            SourceAccountLikeBadge(
+                state = state,
+                actions = actions,
+                modifier = Modifier.align(Alignment.BottomEnd).size(17.dp),
+            )
         }
         AppleMusicGlyphButton(icon = SimpIcons.MoreVert, onClick = { actions.onShowMoreSheet() })
     }

@@ -360,6 +360,7 @@ class SettingsViewModel(
         getKeepServiceAlive()
         getKeepYouTubePlaylistOffline()
         getCombineLocalAndYouTubeLiked()
+        getYouTubeCollectionSync()
         getDownloadQuality()
         getVideoDownloadQuality()
         getLocalTrackingEnabled()
@@ -472,6 +473,21 @@ class SettingsViewModel(
             dataStoreManager.setCombineLocalAndYouTubeLiked(combine)
             getCombineLocalAndYouTubeLiked()
         }
+    }
+
+    private val _youtubeCollectionSync = MutableStateFlow(true)
+    val youtubeCollectionSync: StateFlow<Boolean> = _youtubeCollectionSync
+
+    private fun getYouTubeCollectionSync() {
+        viewModelScope.launch {
+            dataStoreManager.youtubeCollectionSync.collect {
+                _youtubeCollectionSync.value = it == DataStoreManager.TRUE
+            }
+        }
+    }
+
+    fun setYouTubeCollectionSync(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setYouTubeCollectionSync(enabled) }
     }
 
     private fun getKeepServiceAlive() {
