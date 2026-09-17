@@ -403,6 +403,9 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
 - 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"定稿相悖已过时）；MusicSourceProvider
   C_TIER（评论/艺人详情已实现，只剩云盘与播客）。
 - 搜索 offset 翻页、播放页艺人卡粉丝数渲染排查。
+- 网易艺人"全部歌曲"页：人气区「更多」因网易无对应歌单页已隐藏（2026-09-17，原点击报错）；
+  如需恢复，`/v1/artist/songs` 原生支持 order/limit/offset 分页，加一个列表页即可，
+  热门 50 首之外还能带"按时间排序"切换。
 
 ### 可优化
 

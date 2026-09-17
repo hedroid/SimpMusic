@@ -725,23 +725,24 @@ private fun ArtistSections(
                         color = Color.White,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(
-                        onClick = {
-                            val id = state.data.listSongParam
-                            if (id != null) {
-                                navController.navigate(PlaylistDestination(id))
-                            } else {
-                                viewModel.makeToast(runBlocking { getString(Res.string.error) })
-                            }
-                        },
-                        colors =
-                            ButtonDefaults
-                                .textButtonColors()
-                                .copy(
-                                    contentColor = Color.White,
-                                ),
-                    ) {
-                        Text(stringResource(Res.string.more), style = typo().bodySmall)
+                    // 网易艺人热门歌曲一次性给全（songs.browseId=null，无"更多"页），只在有跳转目标时露出按钮
+                    if (state.data.listSongParam != null) {
+                        TextButton(
+                            onClick = {
+                                val id = state.data.listSongParam
+                                if (id != null) {
+                                    navController.navigate(PlaylistDestination(id))
+                                }
+                            },
+                            colors =
+                                ButtonDefaults
+                                    .textButtonColors()
+                                    .copy(
+                                        contentColor = Color.White,
+                                    ),
+                        ) {
+                            Text(stringResource(Res.string.more), style = typo().bodySmall)
+                        }
                     }
                 }
                 state.data.popularSongs.forEach { song ->
