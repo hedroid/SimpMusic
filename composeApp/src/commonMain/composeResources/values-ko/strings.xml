@@ -140,8 +140,6 @@
     <string name="album">앨범</string>
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
-    <string name="netease_like_sync">로컬과 NetEase 좋아요 통합</string>
-    <string name="netease_like_sync_description">앱에서 좋아요한 곡을 NetEase 계정에도 동기화</string>
     <string name="netease_play_report">재생 데이터를 NetEase에 전송</string>
     <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트에 반영합니다</string>
     <string name="fans_count">팬 %1$s명</string>
@@ -261,7 +259,7 @@
     <string name="saved_to_local_playlist">로컬 재생목록에 저장 완료</string>
     <string name="if_you_want_to_unsync_this_playlist_please_go_to_local_playlist">이 재생목록의 동기화를 해제하려면, 로컬 재생목록으로 이동해 주십시오</string>
     <string name="log_in_to_get_YouTube_playlist">로그인하여 YouTube 재생목록 불러오기</string>
-    <string name="sync_playlist_warning">SimpMusic이 YouTube Music 재생목록을 자동으로 생성합니다. 확실하십니까?</string>
+    <string name="sync_playlist_warning">SimpMusic이 YouTube Music과 NetEase에 플레이리스트를 자동 생성·업데이트합니다(각 플랫폼 곡은 각각). 계속할까요?</string>
     <string name="syncing">동기화 중</string>
     <string name="unsync_playlist_warning">"이 재생목록의 동기화를 해제합니까? YouTube Music에서 이 재생목록이 제거되지 않습니다 "</string>
     <string name="unsyncing">동기화 해제 중</string>
@@ -557,8 +555,6 @@
     <string name="keep_service_alive_description">시스템이 종료하지 않도록 음악 플레이어 서비스를 활성 상태로 유지합니다</string>
     <string name="keep_your_youtube_playlist_offline">오프라인일 때도 YouTube 재생목록 표시</string>
     <string name="keep_your_youtube_playlist_offline_description">YouTube 재생목록을 로컬에 저장한 뒤 오프라인일 때 표시합니다</string>
-    <string name="combine_local_and_youtube_liked_songs">로컬과 YouTube 좋아요 통합</string>
-    <string name="combine_local_and_youtube_liked_songs_description">앱에서 좋아요한 곡을 YouTube 계정에도 동기화</string>
     <string name="this_year">올해</string>
     <string name="last_90_days">지난 90일</string>
     <string name="last_30_days">지난 30일</string>
@@ -627,4 +623,16 @@
     <string name="n_selected">선택됨</string>
     <string name="n_songs_selected">곡 선택됨</string>
     <!-- Listen Together -->
+    <string name="download_management">다운로드 관리</string>
+    <string name="song_unavailable">현재 소스에서 재생할 수 없습니다(VIP 또는 저작권 문제일 수 있음)</string>
+    <string name="cloud_action_failed_netease">NetEase 계정을 업데이트하지 못했습니다</string>
+    <string name="need_login_toast">로그인 후 이용할 수 있습니다</string>
+    <string name="liked_toast">좋아요함</string>
+    <string name="unliked_toast">좋아요 취소</string>
+    <string name="saved_toast">저장됨</string>
+    <string name="unsaved_toast">저장 취소</string>
+    <string name="followed_toast">팔로우함</string>
+    <string name="unfollowed_toast">팔로우 취소</string>
+    <string name="synced_n_of_m">%2$d건 중 %1$d건 좋아요</string>
+    <string name="cloud_action_failed_youtube">YouTube Music 계정을 업데이트하지 못했습니다</string>
 </resources>

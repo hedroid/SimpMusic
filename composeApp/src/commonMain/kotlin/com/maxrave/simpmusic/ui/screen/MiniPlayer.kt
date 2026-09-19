@@ -78,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -166,6 +167,12 @@ fun MiniPlayer(
 ) {
     val isLiquidGlassEnabled by sharedViewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
+    // 红心=云端账号状态;未登录源置灰+点击提示登录
+    val miniNeteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
+    val miniYtLoggedIn by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
+    val nowPlayingVideoIdMini = sharedViewModel.nowPlayingState.collectAsStateWithLifecycle(initialValue = null).value?.track?.videoId
+    val likeEnabledMini =
+        if (nowPlayingVideoIdMini?.toLongOrNull() != null) miniNeteaseLoggedIn else miniYtLoggedIn
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
 
     val layer = rememberGraphicsLayer()
@@ -539,7 +546,13 @@ fun MiniPlayer(
                         }
                     }
                     Spacer(modifier = Modifier.width(15.dp))
-                    HeartCheckBox(checked = liked, size = 30, tint = textColor) {
+                    HeartCheckBox(
+                        checked = liked,
+                        size = 30,
+                        tint = textColor,
+                        enabled = likeEnabledMini,
+                        modifier = Modifier.alpha(if (likeEnabledMini) 1f else 0.38f),
+                    ) {
                         sharedViewModel.onUIEvent(UIEvent.ToggleLike)
                     }
                     Spacer(modifier = Modifier.width(15.dp))
@@ -902,7 +915,12 @@ fun MiniPlayer(
                     // glyph the neighbouring icons draw at — 26 left an 18dp heart that read
                     // as extra padding around a smaller icon.
                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                        HeartCheckBox(checked = controllerState.isLiked, size = 32) {
+                        HeartCheckBox(
+                            checked = controllerState.isLiked,
+                            size = 32,
+                            enabled = likeEnabledMini,
+                            modifier = Modifier.alpha(if (likeEnabledMini) 1f else 0.38f),
+                        ) {
                             sharedViewModel.onUIEvent(UIEvent.ToggleLike)
                         }
                     }

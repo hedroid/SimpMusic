@@ -30,11 +30,11 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
-import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
@@ -47,6 +47,8 @@ import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
 import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
@@ -196,9 +198,23 @@ class NowPlayingBottomSheetViewModel(
         }
     }
 
+    /**
+     * 云端账号红心态(三点菜单"喜欢到云端账号"行):登录才拉得到,未登录保持 null=不显示行。
+     * 与本地红心完全独立——显式操作云端,不 adopt 不镜像。
+     */
+    private val _cloudLiked = MutableStateFlow<Boolean?>(null)
+    val cloudLiked: StateFlow<Boolean?> = _cloudLiked
+
+    private fun refreshCloudLiked(videoId: String) {
+        viewModelScope.launch {
+            _cloudLiked.value = songRepository.getRemoteLikeStatus(videoId)
+        }
+    }
+
     private fun getSongEntityFlow(videoId: String) {
         getSongAsFlow?.cancel()
         if (videoId.isEmpty()) return
+        refreshCloudLiked(videoId)
         getSongAsFlow =
             viewModelScope.launch {
                 songRepository.getSongAsFlow(videoId).collectLatest { song ->
@@ -294,11 +310,25 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.ToggleLike -> {
-                    songRepository.updateLikeStatus(
-                        songUIState.videoId,
-                        if (songUIState.liked) 0 else 1,
-                    )
+                    // 点赞=云端账号红心;成功后镜像本地缓存行(库页"喜欢的歌曲"读它)
+                    val target = !(_cloudLiked.value ?: songUIState.liked)
+                    val ok = songRepository.setRemoteLikeStatus(songUIState.videoId, target)
+                    if (ok) {
+                        _cloudLiked.value = target
+                        songRepository.setLikedLocal(songUIState.videoId, if (target) 1 else 0)
+                    } else {
+                        makeToast(
+                            getString(
+                                if (songUIState.videoId.toLongOrNull() != null) {
+                                    Res.string.cloud_action_failed_netease
+                                } else {
+                                    Res.string.cloud_action_failed_youtube
+                                },
+                            ),
+                        )
+                    }
                 }
+
 
                 is NowPlayingBottomSheetUIEvent.Download -> {
                     when (songUIState.downloadState) {
@@ -480,6 +510,7 @@ sealed class NowPlayingBottomSheetUIEvent {
     ) : NowPlayingBottomSheetUIEvent()
 
     data object ToggleLike : NowPlayingBottomSheetUIEvent()
+
 
     data object Download : NowPlayingBottomSheetUIEvent()
 

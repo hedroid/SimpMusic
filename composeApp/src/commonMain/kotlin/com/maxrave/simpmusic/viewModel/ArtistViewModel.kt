@@ -37,7 +37,11 @@ import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.sync_follow_failed
 import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.followed_toast
 import simpmusic.composeapp.generated.resources.subscribed_on_netease
+import simpmusic.composeapp.generated.resources.unfollowed_toast
 import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
 import simpmusic.composeapp.generated.resources.unsubscribed_on_netease
 import simpmusic.composeapp.generated.resources.sync_follow_failed_netease
@@ -91,19 +95,15 @@ class ArtistViewModel(
                                         ?.url,
                                 ),
                             )
-                            // 本地关注与来源账号关注是两个状态。同步开启时只采用远端的
-                            // positive state，避免首次启用同步把既有本地收藏误删掉。
+                            // 关注=云端账号状态:拉到即驱动显示,并镜像本地缓存行
                             _remoteFollowed.value = data.subscribed
-                            if (data.subscribed == true) {
-                                val syncEnabled =
-                                    if (channelId.toLongOrNull() != null) {
-                                        dataStoreManager.neteaseFollowSync.first() == DataStoreManager.TRUE
-                                    } else {
-                                        dataStoreManager.syncFollowToYouTube.first() == DataStoreManager.TRUE
-                                    }
-                                if (syncEnabled) {
-                                    artistRepository.setFollowedLocal(channelId, true)
-                                    _followed.value = true
+                            val cloudFollowed = data.subscribed
+                            if (cloudFollowed != null) {
+                                _followed.value = cloudFollowed
+                                val localFollowed =
+                                    artistRepository.getArtistById(channelId).firstOrNull()?.followed == true
+                                if (localFollowed != cloudFollowed) {
+                                    artistRepository.setFollowedLocal(channelId, cloudFollowed)
                                 }
                             }
                         }
@@ -176,38 +176,31 @@ class ArtistViewModel(
         }
     }
 
+    /**
+     * 关注点击的唯一路径:直接切换云端账号关注。成功后镜像本地缓存(artist.followed,
+     * 供库页关注的歌手分区),失败 toast。
+     */
     fun updateFollowed(
         followed: Int,
         channelId: String,
     ) {
+        val target = followed == 1
+        _followed.value = target
         viewModelScope.launch {
-            _followed.value = (followed == 1)
-            // Both outcomes are reported; only null stays quiet, because that means mirroring
-            // is switched off and nothing was attempted. The local follow above stands either
-            // way — these toasts speak for the account, not for the follow itself.
-            val synced = artistRepository.updateFollowedStatus(channelId, followed)
-            when (synced) {
-                true ->
-                    // 提示按源分流:网易歌手说网易,别把"已同步到 YouTube"说给网易用户
-                    makeToast(
-                        getString(
-                            if (followed == 1) {
-                                if (channelId.toLongOrNull() != null) Res.string.subscribed_on_netease else Res.string.subscribed_on_youtube
-                            } else {
-                                if (channelId.toLongOrNull() != null) Res.string.unsubscribed_on_netease else Res.string.unsubscribed_on_youtube
-                            },
-                        ),
-                    )
-
-                false ->
-                    makeToast(
-                        getString(
-                            if (channelId.toLongOrNull() != null) Res.string.sync_follow_failed_netease else Res.string.sync_follow_failed,
-                        ),
-                    )
-                null -> Unit
+            val ok = artistRepository.setRemoteFollowedStatus(channelId, target)
+            if (ok) {
+                _remoteFollowed.value = target
+                artistRepository.setFollowedLocal(channelId, target)
+                makeToast(getString(if (target) Res.string.followed_toast else Res.string.unfollowed_toast))
+            } else {
+                _followed.value = !target
+                makeToast(
+                    getString(
+                        if (channelId.toLongOrNull() != null) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube,
+                    ),
+                )
             }
-            log("updateFollowed: ${_followed.value}, synced: $synced")
+            log("updateFollowed: ${_followed.value}, ok: $ok")
         }
     }
 

@@ -810,10 +810,13 @@ private fun ExpressiveTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
+        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
+        run {
         val likeBurst = rememberHeartBurstState()
-        Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst)) {
+        Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst).alpha(if (state.likeEnabled) 1f else 0.38f)) {
             FilledIconToggleButton(
                 checked = state.controllerState.isLiked,
+                enabled = state.likeEnabled,
                 onCheckedChange = {
                     if (!state.controllerState.isLiked) likeBurst.fire()
                     actions.onUIEvent(UIEvent.ToggleLike)
@@ -835,11 +838,7 @@ private fun ExpressiveTrackInfoRow(
                     )
                 }
             }
-            SourceAccountLikeBadge(
-                state = state,
-                actions = actions,
-                modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
-            )
+        }
         }
     }
 }
@@ -943,12 +942,13 @@ private fun ExpressiveConnectedGroup(
         }
         ExpressiveConnectedSlot(
             shape = middle,
+            enabled = state.likeEnabled,
             onClick = { actions.onShowAddToPlaylist() },
         ) {
             Icon(
                 imageVector = SimpIcons.PlaylistAdd,
                 contentDescription = "Add to Playlist",
-                tint = colorScheme.onSurfaceVariant,
+                tint = if (state.likeEnabled) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                 modifier = Modifier.size(22.dp),
             )
         }
@@ -971,6 +971,7 @@ private fun RowScope.ExpressiveConnectedSlot(
     shape: Shape,
     onClick: (() -> Unit)?,
     active: Boolean = false,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -978,6 +979,7 @@ private fun RowScope.ExpressiveConnectedSlot(
     if (onClick != null) {
         Surface(
             onClick = onClick,
+            enabled = enabled,
             shape = shape,
             color = container,
             modifier =

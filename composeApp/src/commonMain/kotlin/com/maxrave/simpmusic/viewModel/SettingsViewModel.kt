@@ -242,9 +242,6 @@ class SettingsViewModel(
     private val _keepYouTubePlaylistOffline = MutableStateFlow<Boolean>(false)
     val keepYouTubePlaylistOffline: StateFlow<Boolean> = _keepYouTubePlaylistOffline
 
-    private val _combineLocalAndYouTubeLiked = MutableStateFlow<Boolean>(false)
-    val combineLocalAndYouTubeLiked: StateFlow<Boolean> = _combineLocalAndYouTubeLiked
-
     private val _downloadQuality = MutableStateFlow<String?>(null)
     val downloadQuality: StateFlow<String?> = _downloadQuality
 
@@ -327,7 +324,6 @@ class SettingsViewModel(
         getSpotifyLogIn()
         getNeteaseLogIn()
         getSpotifyLyrics()
-        getSyncFollowToYouTube()
         getEqualizer()
         getAudioEffects()
         getSpotifyCanvas()
@@ -359,8 +355,6 @@ class SettingsViewModel(
         getLastfmScrobbleEnabled()
         getKeepServiceAlive()
         getKeepYouTubePlaylistOffline()
-        getCombineLocalAndYouTubeLiked()
-        getYouTubeCollectionSync()
         getDownloadQuality()
         getVideoDownloadQuality()
         getLocalTrackingEnabled()
@@ -458,36 +452,6 @@ class SettingsViewModel(
             dataStoreManager.setKeepYouTubePlaylistOffline(keep)
             getKeepYouTubePlaylistOffline()
         }
-    }
-
-    private fun getCombineLocalAndYouTubeLiked() {
-        viewModelScope.launch {
-            dataStoreManager.combineLocalAndYouTubeLiked.collect { combine ->
-                _combineLocalAndYouTubeLiked.value = combine == DataStoreManager.TRUE
-            }
-        }
-    }
-
-    fun setCombineLocalAndYouTubeLiked(combine: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setCombineLocalAndYouTubeLiked(combine)
-            getCombineLocalAndYouTubeLiked()
-        }
-    }
-
-    private val _youtubeCollectionSync = MutableStateFlow(true)
-    val youtubeCollectionSync: StateFlow<Boolean> = _youtubeCollectionSync
-
-    private fun getYouTubeCollectionSync() {
-        viewModelScope.launch {
-            dataStoreManager.youtubeCollectionSync.collect {
-                _youtubeCollectionSync.value = it == DataStoreManager.TRUE
-            }
-        }
-    }
-
-    fun setYouTubeCollectionSync(enabled: Boolean) {
-        viewModelScope.launch { dataStoreManager.setYouTubeCollectionSync(enabled) }
     }
 
     private fun getKeepServiceAlive() {
@@ -1881,15 +1845,6 @@ class SettingsViewModel(
     private var _neteaseDownloadQuality: MutableStateFlow<String> = MutableStateFlow("LOSSLESS")
     val neteaseDownloadQuality: StateFlow<String> = _neteaseDownloadQuality
 
-    private var _neteaseFollowSync: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    val neteaseFollowSync: StateFlow<Boolean> = _neteaseFollowSync
-
-    private var _neteaseLikeSync: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    val neteaseLikeSync: StateFlow<Boolean> = _neteaseLikeSync
-
-    private var _neteaseFavoriteSync: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    val neteaseFavoriteSync: StateFlow<Boolean> = _neteaseFavoriteSync
-
     private var _neteasePlayReport: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val neteasePlayReport: StateFlow<Boolean> = _neteasePlayReport
 
@@ -1906,9 +1861,6 @@ class SettingsViewModel(
                 dataStoreManager.neteaseAccountName,
                 dataStoreManager.neteaseQuality,
                 dataStoreManager.neteaseDownloadQuality,
-                dataStoreManager.neteaseFollowSync,
-                dataStoreManager.neteaseLikeSync,
-                dataStoreManager.neteaseFavoriteSync,
                 dataStoreManager.neteasePlayReport,
                 dataStoreManager.neteaseAutoSwitch,
             )
@@ -1921,9 +1873,6 @@ class SettingsViewModel(
         name: kotlinx.coroutines.flow.Flow<String>,
         quality: kotlinx.coroutines.flow.Flow<String>,
         downloadQuality: kotlinx.coroutines.flow.Flow<String>,
-        followSync: kotlinx.coroutines.flow.Flow<String>,
-        likeSync: kotlinx.coroutines.flow.Flow<String>,
-        favoriteSync: kotlinx.coroutines.flow.Flow<String>,
         playReport: kotlinx.coroutines.flow.Flow<String>,
         autoSwitch: kotlinx.coroutines.flow.Flow<String>,
     ) {
@@ -1932,9 +1881,6 @@ class SettingsViewModel(
             name,
             quality,
             downloadQuality,
-            followSync,
-            likeSync,
-            favoriteSync,
             playReport,
             autoSwitch,
         ) { values -> values }.collect { state ->
@@ -1942,11 +1888,8 @@ class SettingsViewModel(
             _neteaseAccountName.value = state[1] as String
             _neteaseQuality.value = state[2] as String
             _neteaseDownloadQuality.value = state[3] as String
-            _neteaseFollowSync.value = (state[4] as String) == DataStoreManager.TRUE
-            _neteaseLikeSync.value = (state[5] as String) == DataStoreManager.TRUE
-            _neteaseFavoriteSync.value = (state[6] as String) == DataStoreManager.TRUE
-            _neteasePlayReport.value = (state[7] as String) == DataStoreManager.TRUE
-            _neteaseAutoSwitch.value = (state[8] as String) == DataStoreManager.TRUE
+            _neteasePlayReport.value = (state[4] as String) == DataStoreManager.TRUE
+            _neteaseAutoSwitch.value = (state[5] as String) == DataStoreManager.TRUE
         }
     }
 
@@ -1956,18 +1899,6 @@ class SettingsViewModel(
 
     fun setNeteaseDownloadQuality(quality: String) {
         viewModelScope.launch { dataStoreManager.setNeteaseDownloadQuality(quality) }
-    }
-
-    fun setNeteaseFollowSync(enabled: Boolean) {
-        viewModelScope.launch { dataStoreManager.setNeteaseFollowSync(enabled) }
-    }
-
-    fun setNeteaseLikeSync(enabled: Boolean) {
-        viewModelScope.launch { dataStoreManager.setNeteaseLikeSync(enabled) }
-    }
-
-    fun setNeteaseFavoriteSync(enabled: Boolean) {
-        viewModelScope.launch { dataStoreManager.setNeteaseFavoriteSync(enabled) }
     }
 
     fun setNeteasePlayReport(enabled: Boolean) {
@@ -1980,6 +1911,8 @@ class SettingsViewModel(
 
     fun getAllNeteaseAccounts() {
         viewModelScope.launch {
+            // 自愈:cookie 有效但账户表空(如清库只清了 Room)先补行,列表不再"无账户"
+            neteaseRepository.repairAccountRowIfMissing()
             neteaseRepository.getNeteaseAccounts().collect { _neteaseAccounts.value = it }
         }
     }
@@ -2218,32 +2151,7 @@ class SettingsViewModel(
         }
     }
 
-    private var _syncFollowToYouTube: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    val syncFollowToYouTube: StateFlow<Boolean> = _syncFollowToYouTube
 
-    fun getSyncFollowToYouTube() {
-        viewModelScope.launch {
-            dataStoreManager.syncFollowToYouTube.collect {
-                _syncFollowToYouTube.emit(it == DataStoreManager.TRUE)
-            }
-        }
-    }
-
-    fun setSyncFollowToYouTube(enabled: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setSyncFollowToYouTube(enabled)
-            // Turning it on is a statement about the whole library: artists followed before the
-            // switch would otherwise never reach the account. Turning it off deliberately does
-            // NOT unsubscribe — stopping the mirroring is not the same as asking us to undo it.
-            if (enabled) {
-                // Runs silently. The only toast in this feature belongs to the Follow button on
-                // the artist screen, where the user performed the action and is waiting to see it
-                // take effect; a switch in Settings is not the place to report on a background
-                // sweep the user is not watching.
-                artistRepository.syncFollowedArtistsToYouTube().collect { }
-            }
-        }
-    }
 
     private var _spotifyLyrics: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val spotifyLyrics: StateFlow<Boolean> = _spotifyLyrics

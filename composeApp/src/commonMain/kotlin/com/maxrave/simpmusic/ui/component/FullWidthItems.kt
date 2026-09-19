@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,12 +80,14 @@ import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.simpmusic.ui.icon.Add
+import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.DragHandle
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PushPin
 import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
@@ -151,6 +154,9 @@ fun SongFullWidthItems(
             Res.readBytes("files/audio_playing_animation.json").decodeToString(),
         )
     }
+    // 当前曲指示符的三态判据之一:播放器真实播放/暂停(isPlaying 参数只表示"这行是当前曲")
+    val sharedViewModel: SharedViewModel = koinInject()
+    val playerIsPlaying = sharedViewModel.controllerState.collectAsStateWithLifecycle().value.isPlaying
     val offsetX = remember { Animatable(initialValue = 0f) }
     var heightDp by remember { mutableStateOf(0.dp) }
 
@@ -276,9 +282,9 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Crossfade(isPlaying) {
-                        if (it) {
-                            Image(
+                    Crossfade(isPlaying to playerIsPlaying) { (isCurrent, isPlayerPlaying) ->
+                        when {
+                            isCurrent && isPlayerPlaying -> Image(
                                 painter =
                                     rememberLottiePainter(
                                         composition = composition,
@@ -286,33 +292,42 @@ fun SongFullWidthItems(
                                     ),
                                 contentDescription = "Lottie animation",
                             )
-                        } else if (index == null) {
-                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(thumb)
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .diskCacheKey(thumb)
-                                        .crossfade(true)
-                                        .build(),
-                                placeholder = rememberHolderPainter(),
-                                error = rememberHolderPainter(),
+                            // 当前曲但已暂停:静态暂停符号,和动画区分播放/暂停状态
+                            isCurrent -> Icon(
+                                imageVector = SimpIcons.Pause,
                                 contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(4.dp)),
+                                tint = contentColor,
+                                modifier = Modifier.size(28.dp),
                             )
-                        } else {
-                            Text(
-                                text = (index + 1).toString(),
-                                color = contentColor,
-                                style = typo().titleMedium,
-                                modifier = Modifier.align(Alignment.Center),
-                            )
+                            index == null -> {
+                                val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+                                AsyncImage(
+                                    model =
+                                        ImageRequest
+                                            .Builder(LocalPlatformContext.current)
+                                            .data(thumb)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .diskCacheKey(thumb)
+                                            .crossfade(true)
+                                            .build(),
+                                    placeholder = rememberHolderPainter(),
+                                    error = rememberHolderPainter(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(4.dp)),
+                                )
+                            }
+
+                            else ->
+                                Text(
+                                    text = (index + 1).toString(),
+                                    color = contentColor,
+                                    style = typo().titleMedium,
+                                    modifier = Modifier.align(Alignment.Center),
+                                )
                         }
                     }
                     // 必须画在 Crossfade 之后:后组合的子项在上层,放前面会被封面盖住
@@ -449,6 +464,8 @@ fun SuggestItems(
             Res.readBytes("files/audio_playing_animation.json").decodeToString(),
         )
     }
+    val sharedViewModel: SharedViewModel = koinInject()
+    val playerIsPlaying = sharedViewModel.controllerState.collectAsStateWithLifecycle().value.isPlaying
     Box(
         modifier =
             Modifier
@@ -465,9 +482,9 @@ fun SuggestItems(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(modifier = Modifier.size(40.dp)) {
-                Crossfade(isPlaying) {
-                    if (it) {
-                        Image(
+                Crossfade(isPlaying to playerIsPlaying) { (isCurrent, isPlayerPlaying) ->
+                    when {
+                        isCurrent && isPlayerPlaying -> Image(
                             painter =
                                 rememberLottiePainter(
                                     composition = composition,
@@ -475,27 +492,35 @@ fun SuggestItems(
                                 ),
                             contentDescription = "Lottie animation",
                         )
-                    } else {
-                        val thumb = track.thumbnails?.lastOrNull()?.url
-                        AsyncImage(
-                            model =
-                                ImageRequest
-                                    .Builder(LocalPlatformContext.current)
-                                    .data(thumb)
-                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                    .diskCacheKey(thumb)
-                                    .crossfade(true)
-                                    .build(),
-                            placeholder = rememberHolderPainter(),
-                            error = rememberHolderPainter(),
+                        // 当前曲但已暂停:静态暂停符号,和动画区分播放/暂停状态
+                        isCurrent -> Icon(
+                            imageVector = SimpIcons.Pause,
                             contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier =
-                                Modifier
-                                    .wrapContentHeight()
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(4.dp)),
+                            tint = contentColor,
+                            modifier = Modifier.size(24.dp),
                         )
+                        else -> {
+                            val thumb = track.thumbnails?.lastOrNull()?.url
+                            AsyncImage(
+                                model =
+                                    ImageRequest
+                                        .Builder(LocalPlatformContext.current)
+                                        .data(thumb)
+                                        .diskCachePolicy(CachePolicy.ENABLED)
+                                        .diskCacheKey(thumb)
+                                        .crossfade(true)
+                                        .build(),
+                                placeholder = rememberHolderPainter(),
+                                error = rememberHolderPainter(),
+                                contentDescription = null,
+                                contentScale = ContentScale.FillWidth,
+                                modifier =
+                                    Modifier
+                                        .wrapContentHeight()
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp)),
+                            )
+                        }
                     }
                 }
             }

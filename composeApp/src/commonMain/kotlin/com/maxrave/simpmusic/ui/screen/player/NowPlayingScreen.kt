@@ -148,6 +148,7 @@ fun NowPlayingScreenContent(
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
     val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
+    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
     val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
@@ -675,6 +676,13 @@ fun NowPlayingScreenContent(
             shouldShowVideo = shouldShowVideo,
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
             remoteLikeState = remoteLikeState,
+            // 红心=云端态;未登录源置灰(点击提示登录)
+            likeEnabled =
+                if (nowPlayingVideoId?.toLongOrNull() != null) {
+                    neteaseLoggedIn
+                } else {
+                    isUserLoggedIn
+                },
             isUserLoggedIn = isUserLoggedIn,
             artworkQueue = artworkQueue,
             currentOrderIndex = currentOrderIndex,
@@ -746,6 +754,7 @@ fun NowPlayingScreenContent(
             onShowInfo = { showInfoBottomSheet = true },
             onShowAddToPlaylist = { showAddToPlaylistDirectly = true },
             onSetRemoteLiked = sharedViewModel::setRemoteSongLiked,
+            onLoginRequired = sharedViewModel::notifyFavoriteNeedsLogin,
             onShowFullscreenLyrics = { showFullscreenLyrics = true },
             onShowVoteDialog = { showVoteDialog = true },
             onEnterFullscreenVideo = {

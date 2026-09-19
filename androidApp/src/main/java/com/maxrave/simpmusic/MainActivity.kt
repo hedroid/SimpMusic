@@ -291,7 +291,13 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     is ToastType.PlayerError -> {
-                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error) }
+                        runBlocking {
+                            if (type.unavailable) {
+                                ComposeResUtils.getResString(ComposeResUtils.StringType.SONG_UNAVAILABLE)
+                            } else {
+                                ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error)
+                            }
+                        }
                     }
                 },
             )

@@ -105,7 +105,6 @@ import com.maxrave.simpmusic.ui.component.HomeItemVideo
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
-import com.maxrave.simpmusic.ui.component.SourceFollowButton
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionState
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
@@ -160,6 +159,11 @@ fun ArtistScreen(
     val artistScreenState by viewModel.artistScreenState.collectAsStateWithLifecycle()
     val isFollowed by viewModel.followed.collectAsStateWithLifecycle()
     val remoteFollowed by viewModel.remoteFollowed.collectAsStateWithLifecycle()
+    // 关注=云端态;显隐按"该源是否登录"判(YT 未登录时 subscribed 常为 false 而非 null)
+    val artistIsNetease = (artistScreenState as? ArtistScreenState.Success)?.data?.channelId?.toLongOrNull() != null
+    val ytLoggedIn by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
+    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
+    val followEnabled = if (artistIsNetease) neteaseLoggedIn else ytLoggedIn
     val remoteFollowPending by viewModel.remoteFollowPending.collectAsStateWithLifecycle()
     val canvasUrl by viewModel.canvasUrl.collectAsStateWithLifecycle()
     val artistLogo by viewModel.artistLogo.collectAsStateWithLifecycle()
@@ -524,7 +528,8 @@ fun ArtistScreen(
                                     // Follow — side button matching Radio: outlined accent (yellow)
                                     // circle when not following; fills with the accent (icon flips to
                                     // the dark page bg) once followed, so the state reads at a glance.
-                                    Box(
+                                    // 关注=云端账号状态;未登录(云端态未知)时隐藏
+                                    if (followEnabled) Box(
                                         modifier =
                                             Modifier
                                                 .size(48.dp)
@@ -545,18 +550,25 @@ fun ArtistScreen(
                                             tint = if (isFollowed) mutedPaletteBg else artistAccent,
                                             modifier = Modifier.size(22.dp),
                                         )
-                                    }
-                                    SourceFollowButton(
-                                        isNetease = state.data.channelId?.toLongOrNull() != null,
-                                        followed = remoteFollowed,
-                                        pending = remoteFollowPending,
-                                        onToggle = { followed ->
-                                            viewModel.setRemoteFollowed(
-                                                followed,
-                                                state.data.channelId ?: return@SourceFollowButton,
+                                    } else {
+                                        // 未登录:占位置灰、不可点击(界面不缺角)
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .size(48.dp)
+                                                    .alpha(0.38f)
+                                                    .clip(CircleShape)
+                                                    .border(1.5.dp, artistAccent, CircleShape),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = SimpIcons.PersonAdd,
+                                                contentDescription = "Follow",
+                                                tint = artistAccent,
+                                                modifier = Modifier.size(22.dp),
                                             )
-                                        },
-                                    )
+                                        }
+                                    }
                                 }
                             }
                         }

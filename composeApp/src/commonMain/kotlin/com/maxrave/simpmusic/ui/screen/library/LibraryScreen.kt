@@ -103,8 +103,12 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.download_management
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
@@ -230,19 +234,18 @@ fun LibraryScreen(
             // while it was selected would land here with no chip to match — send it back to the
             // default. The enum value itself stays so older persisted values still parse.
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
-                viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                viewModel.setCurrentScreen(LibraryChipType.CHART)
             }
 
-            LibraryChipType.YOUR_LIBRARY -> {
-                viewModel.getCanvasSong()
-                viewModel.getRecentlyAdded()
+            LibraryChipType.DOWNLOADED_PLAYLIST -> {
+                viewModel.getDownloadedPlaylist()
             }
 
+            LibraryChipType.YOUR_LIBRARY,
             LibraryChipType.LOCAL_PLAYLIST,
             LibraryChipType.FAVORITE_PLAYLIST,
-            LibraryChipType.DOWNLOADED_PLAYLIST,
             LibraryChipType.FAVORITE_PODCAST,
-            -> viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+            -> viewModel.setCurrentScreen(LibraryChipType.CHART)
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -261,69 +264,18 @@ fun LibraryScreen(
         targetState = currentFilter,
     ) { filter ->
         when (filter) {
-            LibraryChipType.YOUR_LIBRARY -> {
-                val state = rememberLazyListState()
-                val isScrollingUp by state.isScrollingUp()
-                LaunchedEffect(state) {
-                    snapshotFlow { state.firstVisibleItemIndex }
-                        .collect {
-                            if (it <= 1) {
-                                onScrolling.invoke(true)
-                            } else {
-                                onScrolling.invoke(isScrollingUp)
-                            }
-                        }
-                }
-                LazyColumn(
-                    contentPadding =
-                        innerPadding.copy(
-                            top = topAppBarHeight,
-                        ),
-                    state = state,
-                ) {
-                    item {
-                        LibraryTilingBox(
-                            navController = navController,
-                            onOpenPlaylists = openLibraryPlaylists,
-                            onOpenCollections = openLibraryCollections,
-                            onOpenPodcasts = openLibraryPodcasts,
-                            onOpenDownloads = openLibraryDownloads,
-                        )
-                    }
-
-                    if (!listCanvasSong.data.isNullOrEmpty()) {
-                        item {
-                            LibraryItem(
-                                state =
-                                    LibraryItemState(
-                                        type = LibraryItemType.CanvasSong,
-                                        data = listCanvasSong.data ?: emptyList(),
-                                        isLoading = listCanvasSong is LocalResource.Loading,
-                                    ),
-                                navController = navController,
-                            )
-                        }
-                    }
-
-                    item {
-                        LibraryItem(
-                            state =
-                                LibraryItemState(
-                                    type =
-                                        LibraryItemType.RecentlyAdded(
-                                            playingVideoId = nowPlaying,
-                                        ),
-                                    data = recentlyAdded.data ?: emptyList(),
-                                    isLoading = recentlyAdded is LocalResource.Loading,
-                                ),
-                            navController = navController,
-                            selectionState = selectionState,
-                        )
-                    }
-                    item {
-                        EndOfPage()
-                    }
-                }
+            // 下载管理 chip 页:复用独立页的内容体,chip 页无 TopAppBar(库页自带标题区)
+            LibraryChipType.DOWNLOADED_PLAYLIST -> {
+                val dynamicViewModel: LibraryDynamicPlaylistViewModel = koinViewModel()
+                val sharedVm: SharedViewModel = koinInject()
+                DownloadedManagementBody(
+                    topPadding = topAppBarHeight,
+                    bottomPadding = innerPadding.calculateBottomPadding(),
+                    navController = navController,
+                    viewModel = viewModel,
+                    dynamicPlaylistViewModel = dynamicViewModel,
+                    sharedViewModel = sharedVm,
+                )
             }
 
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
@@ -392,7 +344,6 @@ fun LibraryScreen(
                     favoritePlaylist,
                     emptyText = Res.string.no_favorite_playlists,
                     // 混源网格:网易来源的收藏条目带品牌角标
-                    showSourceBadge = true,
                     onScrolling = onScrolling,
                     header = {
                         LibrarySectionHeader(
@@ -415,7 +366,6 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
-                    showSourceBadge = true,
                     onScrolling = onScrolling,
                     header = {
                         Column(
@@ -502,6 +452,7 @@ fun LibraryScreen(
                     viewModel.getMonthlyRecaps()
                 }
             }
+            else -> Unit
         }
     }
     val coroutineScope = rememberCoroutineScope()
@@ -665,20 +616,15 @@ fun LibraryScreen(
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val localLibraryPages =
-                setOf(
-                    LibraryChipType.LOCAL_PLAYLIST,
-                    LibraryChipType.FAVORITE_PLAYLIST,
-                    LibraryChipType.DOWNLOADED_PLAYLIST,
-                    LibraryChipType.FAVORITE_PODCAST,
-                )
+            // "您的库"chip 页已下线;下载管理升为顶层 chip(在 Wrapped 后),本地歌单等
+            // 独立路由保留但不再从 chip 行进入。
             val topLevelLibraryChips =
                 listOf(
-                    LibraryChipType.YOUR_LIBRARY,
                     LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                     LibraryChipType.NETEASE_PLAYLIST,
                     LibraryChipType.CHART,
                     LibraryChipType.WRAPPED,
+                    LibraryChipType.DOWNLOADED_PLAYLIST,
                 )
             topLevelLibraryChips.forEach { type ->
                 if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
@@ -695,9 +641,7 @@ fun LibraryScreen(
                 }
                 Chip(
                     isAnimated = false,
-                    isSelected =
-                        type == currentFilter ||
-                            (type == LibraryChipType.YOUR_LIBRARY && currentFilter in localLibraryPages),
+                    isSelected = type == currentFilter,
                     text =
                         when (type) {
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
@@ -706,7 +650,7 @@ fun LibraryScreen(
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
                             LibraryChipType.FAVORITE_PLAYLIST -> stringResource(Res.string.favorite_playlists)
-                            LibraryChipType.DOWNLOADED_PLAYLIST -> stringResource(Res.string.downloaded_playlists)
+                            LibraryChipType.DOWNLOADED_PLAYLIST -> stringResource(Res.string.download_management)
                             LibraryChipType.FAVORITE_PODCAST -> stringResource(Res.string.favorite_podcasts)
                             LibraryChipType.CHART -> stringResource(Res.string.simpmusic_charts)
                             LibraryChipType.WRAPPED -> stringResource(Res.string.wrapped)

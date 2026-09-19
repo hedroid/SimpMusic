@@ -215,11 +215,7 @@ import simpmusic.composeapp.generated.resources.better_lyrics
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.animated_artwork_info
 import simpmusic.composeapp.generated.resources.canvas_info
-import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs
-import simpmusic.composeapp.generated.resources.combine_local_and_youtube_liked_songs_description
-import simpmusic.composeapp.generated.resources.youtube_collection_sync
 import simpmusic.composeapp.generated.resources.youtube_collection_sync_description
-import simpmusic.composeapp.generated.resources.youtube_sync_settings
 import simpmusic.composeapp.generated.resources.categories_sponsor_block
 import simpmusic.composeapp.generated.resources.change
 import simpmusic.composeapp.generated.resources.change_language_warning
@@ -317,15 +313,8 @@ import simpmusic.composeapp.generated.resources.log_out_from_netease
 import simpmusic.composeapp.generated.resources.intro_login_to_netease
 import simpmusic.composeapp.generated.resources.netease_quality
 import simpmusic.composeapp.generated.resources.netease_download_quality
-import simpmusic.composeapp.generated.resources.netease_follow_sync
-import simpmusic.composeapp.generated.resources.netease_follow_sync_description
-import simpmusic.composeapp.generated.resources.netease_like_sync
-import simpmusic.composeapp.generated.resources.netease_favorite_sync
-import simpmusic.composeapp.generated.resources.netease_favorite_sync_description
 import simpmusic.composeapp.generated.resources.netease_play_report
 import simpmusic.composeapp.generated.resources.netease_play_report_description
-import simpmusic.composeapp.generated.resources.netease_like_sync_description
-import simpmusic.composeapp.generated.resources.netease_sync_settings
 import simpmusic.composeapp.generated.resources.netease_auto_switch
 import simpmusic.composeapp.generated.resources.netease_auto_switch_description
 import simpmusic.composeapp.generated.resources.netease_quality_standard
@@ -425,13 +414,6 @@ import simpmusic.composeapp.generated.resources.spotify_canvas_cache
 import simpmusic.composeapp.generated.resources.spotify_lyrícs_info
 import simpmusic.composeapp.generated.resources.storage
 import simpmusic.composeapp.generated.resources.such_as_music_video_lyrics_video_podcasts_and_more
-import simpmusic.composeapp.generated.resources.sync_follow_to_youtube
-import simpmusic.composeapp.generated.resources.sync_follow_to_youtube_description
-import simpmusic.composeapp.generated.resources.sync_followed_artists
-import simpmusic.composeapp.generated.resources.sync_liked_songs
-import simpmusic.composeapp.generated.resources.sync_saved_collections
-import simpmusic.composeapp.generated.resources.sync_settings_none
-import simpmusic.composeapp.generated.resources.sync_settings_selected
 import simpmusic.composeapp.generated.resources.theme
 import simpmusic.composeapp.generated.resources.theme_color
 import simpmusic.composeapp.generated.resources.theme_color_custom
@@ -562,8 +544,6 @@ fun SettingScreen(
     val videoDownloadQuality by viewModel.videoDownloadQuality.collectAsStateWithLifecycle()
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
-    val youtubeCollectionSync by viewModel.youtubeCollectionSync.collectAsStateWithLifecycle()
     val playVideo by remember { viewModel.playVideoInsteadOfAudio.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val radioAudioOnly by remember { viewModel.radioAudioOnly.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
@@ -584,9 +564,6 @@ fun SettingScreen(
     var showNeteaseAccountDialog by rememberSaveable { mutableStateOf(false) }
     val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
-    val neteaseFollowSync by viewModel.neteaseFollowSync.collectAsStateWithLifecycle()
-    val neteaseLikeSync by viewModel.neteaseLikeSync.collectAsStateWithLifecycle()
-    val neteaseFavoriteSync by viewModel.neteaseFavoriteSync.collectAsStateWithLifecycle()
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
@@ -632,7 +609,6 @@ fun SettingScreen(
     var showColorPickerDialog by rememberSaveable { mutableStateOf(false) }
     val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
     val loggedIn by viewModel.loggedIn.collectAsStateWithLifecycle()
-    val syncFollowToYouTube by viewModel.syncFollowToYouTube.collectAsStateWithLifecycle()
     val equalizerEnabled by viewModel.equalizerEnabled.collectAsStateWithLifecycle()
     val delayEnabled by viewModel.delayEnabled.collectAsStateWithLifecycle()
     val reverbEnabled by viewModel.reverbEnabled.collectAsStateWithLifecycle()
@@ -1167,43 +1143,6 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
                     switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
                 )
-                val ytLikedLabel = stringResource(Res.string.sync_liked_songs)
-                val ytFollowLabel = stringResource(Res.string.sync_followed_artists)
-                val ytCollectionLabel = stringResource(Res.string.sync_saved_collections)
-                val ytSyncOptions =
-                    listOf(
-                        combineLocalAndYouTubeLiked to ytLikedLabel,
-                        syncFollowToYouTube to ytFollowLabel,
-                        youtubeCollectionSync to ytCollectionLabel,
-                    )
-                val ytSelected = ytSyncOptions.filter { it.first }.joinToString("、") { it.second }
-                SettingItem(
-                    title = stringResource(Res.string.youtube_sync_settings),
-                    subtitle =
-                        if (ytSelected.isEmpty()) {
-                            stringResource(Res.string.sync_settings_none)
-                        } else {
-                            stringResource(Res.string.sync_settings_selected, ytSelected)
-                        },
-                    smallSubtitle = true,
-                    isEnable = loggedIn == DataStoreManager.TRUE,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.youtube_sync_settings) },
-                                multipleSelect = SettingAlertState.SelectData(ytSyncOptions),
-                                confirm =
-                                    runBlocking { getString(Res.string.save) } to { state ->
-                                        val selected = state.multipleSelect?.getListSelected().orEmpty().toSet()
-                                        viewModel.setCombineLocalAndYouTubeLiked(ytLikedLabel in selected)
-                                        viewModel.setSyncFollowToYouTube(ytFollowLabel in selected)
-                                        viewModel.setYouTubeCollectionSync(ytCollectionLabel in selected)
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
                     subtitle =
@@ -1465,43 +1404,6 @@ fun SettingScreen(
                                         qualityLabelToKey[state.selectOne?.getSelected()]?.let {
                                             viewModel.setNeteaseDownloadQuality(it)
                                         }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                val neteaseLikedLabel = stringResource(Res.string.sync_liked_songs)
-                val neteaseFollowLabel = stringResource(Res.string.sync_followed_artists)
-                val neteaseCollectionLabel = stringResource(Res.string.sync_saved_collections)
-                val neteaseSyncOptions =
-                    listOf(
-                        neteaseLikeSync to neteaseLikedLabel,
-                        neteaseFollowSync to neteaseFollowLabel,
-                        neteaseFavoriteSync to neteaseCollectionLabel,
-                    )
-                val neteaseSelected = neteaseSyncOptions.filter { it.first }.joinToString("、") { it.second }
-                SettingItem(
-                    title = stringResource(Res.string.netease_sync_settings),
-                    subtitle =
-                        if (neteaseSelected.isEmpty()) {
-                            stringResource(Res.string.sync_settings_none)
-                        } else {
-                            stringResource(Res.string.sync_settings_selected, neteaseSelected)
-                        },
-                    smallSubtitle = true,
-                    isEnable = neteaseLoggedIn,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.netease_sync_settings) },
-                                multipleSelect = SettingAlertState.SelectData(neteaseSyncOptions),
-                                confirm =
-                                    runBlocking { getString(Res.string.save) } to { state ->
-                                        val selected = state.multipleSelect?.getListSelected().orEmpty().toSet()
-                                        viewModel.setNeteaseLikeSync(neteaseLikedLabel in selected)
-                                        viewModel.setNeteaseFollowSync(neteaseFollowLabel in selected)
-                                        viewModel.setNeteaseFavoriteSync(neteaseCollectionLabel in selected)
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
                             ),
@@ -3099,6 +3001,7 @@ fun SettingScreen(
                             ActionButton(
                                 icon = SimpIcons.Close,
                                 text = Res.string.log_out_from_netease,
+                                enable = neteaseLoggedIn,
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(
@@ -3258,6 +3161,7 @@ fun SettingScreen(
                             ActionButton(
                                 icon = SimpIcons.Close,
                                 text = Res.string.log_out,
+                                enable = loggedIn == DataStoreManager.TRUE,
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(

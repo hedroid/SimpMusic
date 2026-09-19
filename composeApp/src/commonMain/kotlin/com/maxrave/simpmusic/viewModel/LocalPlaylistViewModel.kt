@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
@@ -66,6 +67,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
 import org.koin.core.component.inject
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.added_to_playlist
@@ -651,10 +653,34 @@ class LocalPlaylistViewModel(
         }
     }
 
+    /**
+     * 同步到云端(双平台):YT 歌建/更 YT 歌单(沿用原管线),网易歌建/更云村歌单;
+     * 混源歌单各走各的,一次点击双平台。结果按平台分别 toast,loading 全部结束才收。
+     */
     fun syncPlaylistWithYouTubePlaylist(id: Long) {
         makeToast(getString(Res.string.syncing))
         showLoadingDialog(message = getString(Res.string.syncing))
         viewModelScope.launch {
+            val tracks =
+                localPlaylistRepository.getLocalPlaylist(id).firstOrNull()?.data?.tracks.orEmpty()
+            val hasNeteaseTracks = tracks.any { it.toLongOrNull() != null }
+            val hasYouTubeTracks = tracks.any { it.toLongOrNull() == null }
+            // 网易侧(有网易歌才做):失败不打断 YT 侧,toast 按平台说
+            if (hasNeteaseTracks) {
+                localPlaylistRepository
+                    .syncLocalPlaylistToNeteasePlaylist(id)
+                    .onSuccess { (pid, _) ->
+                        _uiState.update { it.copy(neteasePlaylistId = pid) }
+                        makeToast(getString(Res.string.synced))
+                    }.onFailure {
+                        makeToast(getString(Res.string.cloud_action_failed_netease))
+                    }
+            }
+            if (!hasYouTubeTracks) {
+                // 纯网易歌单:不建空 YT 歌单,loading 在这里收
+                hideLoadingDialog()
+                return@launch
+            }
             localPlaylistRepository
                 .syncLocalPlaylistToYouTubePlaylist(id, getString(Res.string.synced), getString(Res.string.error))
                 .collectLatestResource(
@@ -1022,6 +1048,7 @@ class LocalPlaylistViewModel(
                                 downloadState = pl.downloadState,
                                 syncState = pl.syncState,
                                 ytPlaylistId = pl.youtubePlaylistId,
+                                neteasePlaylistId = pl.neteasePlaylistId,
                                 trackCount = pl.tracks?.size ?: 0,
                             )
                         }
@@ -1157,6 +1184,7 @@ data class LocalPlaylistState(
     val downloadState: Int = DownloadState.STATE_NOT_DOWNLOADED,
     val syncState: Int = LocalPlaylistEntity.YouTubeSyncState.NotSynced,
     val ytPlaylistId: String? = null,
+    val neteasePlaylistId: String? = null,
     val trackCount: Int = 0,
     val page: Int = 0,
     val isLoadedFull: Boolean = false,

@@ -93,6 +93,8 @@ class NowPlayingContentState(
     val shouldShowVideo: Boolean,
     /** 当前歌曲是否来自网易；用于元数据加载前也能立即应用源特有 UI 规则。 */
     val isNeteaseSong: Boolean,
+    /** 红心=云端账号状态;该源未登录时置灰(onLoginRequired 提示) */
+    val likeEnabled: Boolean = true,
     val remoteLikeState: RemoteSongLikeState,
     val isUserLoggedIn: Boolean,
     val artworkQueue: List<Track>,
@@ -137,6 +139,8 @@ class NowPlayingContentActions(
     val onShowInfo: () -> Unit,
     val onShowAddToPlaylist: () -> Unit,
     val onSetRemoteLiked: (Boolean) -> Unit,
+    /** 未登录源上的红心点击:给"需要登录"提示而不是打注定失败的请求 */
+    val onLoginRequired: () -> Unit = {},
     val onShowFullscreenLyrics: () -> Unit,
     val onShowVoteDialog: () -> Unit,
     val onEnterFullscreenVideo: () -> Unit,

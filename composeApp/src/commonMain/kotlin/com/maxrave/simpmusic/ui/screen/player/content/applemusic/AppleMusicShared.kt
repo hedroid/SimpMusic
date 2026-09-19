@@ -101,7 +101,6 @@ import com.maxrave.simpmusic.ui.icon.VolumeDown
 import com.maxrave.simpmusic.ui.icon.VolumeUp
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
-import com.maxrave.simpmusic.ui.screen.player.content.SourceAccountLikeBadge
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.stringResource
@@ -283,32 +282,31 @@ internal fun AppleMusicHeaderActions(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val likeBurst = rememberHeartBurstState()
-        Box(
-            modifier =
-                Modifier
-                    .appleMusicPressInflate()
-                    .size(32.dp)
-                    .heartBurst(likeBurst)
-                    .clip(CircleShape)
-                    .clickable {
-                        if (!state.controllerState.isLiked) likeBurst.fire()
-                        actions.onUIEvent(UIEvent.ToggleLike)
-                    },
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(targetState = state.controllerState.isLiked, label = "appleMusicFavorite") { liked ->
-                Icon(
-                    imageVector = if (liked) SimpIcons.Star else SimpIcons.StarBorder,
-                    contentDescription = "",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp),
-                )
+        // 红心(星)=云端账号喜欢态;未登录源置灰,点击提示登录
+        run {
+            Box(
+                modifier =
+                    Modifier
+                        .appleMusicPressInflate()
+                        .size(32.dp)
+                        .heartBurst(likeBurst)
+                        .alpha(if (state.likeEnabled) 1f else 0.38f)
+                        .clip(CircleShape)
+                        .clickable(enabled = state.likeEnabled) {
+                            if (!state.controllerState.isLiked) likeBurst.fire()
+                            actions.onUIEvent(UIEvent.ToggleLike)
+                        },
+                contentAlignment = Alignment.Center,
+            ) {
+                Crossfade(targetState = state.controllerState.isLiked, label = "appleMusicFavorite") { liked ->
+                    Icon(
+                        imageVector = if (liked) SimpIcons.Star else SimpIcons.StarBorder,
+                        contentDescription = "",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
             }
-            SourceAccountLikeBadge(
-                state = state,
-                actions = actions,
-                modifier = Modifier.align(Alignment.BottomEnd).size(17.dp),
-            )
         }
         AppleMusicGlyphButton(icon = SimpIcons.MoreVert, onClick = { actions.onShowMoreSheet() })
     }

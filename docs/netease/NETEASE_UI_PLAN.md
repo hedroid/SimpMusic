@@ -376,6 +376,61 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
 - 字符串：`your_netease`（您的网易云）/`no_netease_content`/`netease_playlists`（歌单）/
   `starred_albums`（收藏的专辑）/复用 `followed`（已关注，对齐 YT 库页概念），3 locale。
 
+
+## 收藏体系云端化 + 库页改组（2026-09-19/20 定案，多轮迭代终稿）
+
+> 迭代路径备忘：单按钮+叹号(pending_sync) → 两端不一致角标(方向弹窗) → 云朵按钮 →
+> **收藏全面云端化（终稿）**。中途三版全部废弃，教训：自动同步语义必然需要无穷的
+> 调和机制（同步债/差异方向/adopt 规则），显式双状态比隐式同步便宜得多；最终用户
+> 选择"干脆只留云端"。pending_sync 表（v29 撞号已清理）与同步开关、云朵组件全删。
+
+**终稿规则（收藏=云端账号状态，本地字段降级为镜像缓存）**：
+- 红心/关注/收藏心的显示源=云端快照（切歌/进页拉取），点击=直接调云端接口；
+  成功后镜像写本地 `liked/followed` 行（库页喜欢的歌曲/关注的歌手分区读本地照常）。
+- 覆盖面一条路径：播放页三主题、迷你条、三点菜单"点赞"、通知栏红心（core handler
+  toggleLike）、批量多选点赞、艺人关注、歌单/专辑收藏心。
+- **未登录置灰（gate 判定源=该源登录态，绝不用云端快照 null 判显隐**——YT 未登录时
+  subscribed/liked 常返回 false 而非 null，必误判）：艺人关注=置灰不可点占位；
+  播放页红心/加歌单、菜单点赞/添加到歌单行=enabled 置灰无涟漪；迷你条红心=置灰+
+  点击提示"登录后才能使用收藏"；歌单/专辑心同迷你条。设置页两个"退出"按钮未登录置灰。
+- toast 文案中性化（已喜欢/已收藏/已关注，无"云端"字样）；失败按平台分流。
+- **同步类设置全部删除**（YT 三项/网易三项多选、立即同步、说明文案），DataStore 键保留无消费。
+
+**库页改组**：chips = [YT 歌单(登录)/您的网易云(登录)/排行榜/Wrapped(开记录)/下载管理]；
+"您的库"chip 下线（TilingBox/Canvas 卡/最近添加随之不可达，**本地歌单/收藏/播客暂无入口**
+——独立路由仍在，等用户定入口形态）；下载管理 chip=原已下载页内容体（歌曲/歌单双段，
+`DownloadedManagementBody` 共用组件，独立路由保留）。启动回落 defaultLibraryChip()：
+网易→YT→排行榜，**读 cookie 带 500ms 超时**（DataStore 首读竞态会拿到空串，曾致回落
+排行榜、"您的网易云"看似刷不出）。
+
+**本地歌单双平台同步上云**：原"同步到 YouTube"入口扩展——YT 曲目走原管线（修了混源
+直发数字 id 的 bug，先按源过滤），网易曲目走新管线（/playlist/create 隐私歌单 +
+playlistDetail 求差集增量 add 500/批）；`local_playlist.netease_playlist_id` 列（Room v29）
+。纯网易歌单不建空 YT 歌单；两平台独立 toast 互不阻断。
+
+**灰歌提示**：网易 403 取不到流（cover/无版权）时 toast"该歌曲在当前音源不可播放
+（可能需 VIP 或无版权）"，不再误报超时（ToastType.PlayerError.unavailable 标志）。
+
+**杂项**：歌曲行当前曲指示符三态（播放=Lottie/暂停=静态暂停符号，行内 koinInject
+SharedViewModel 读 isPlaying）；netease_account 表自愈（repairAccountRowIfMissing：
+cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）；网易云账户管理空表修复同源。
+
+**踩坑记录**：
+- **DB v29 撞号**：开发期两版未发布的 v29（pending_sync 表 vs netease_playlist_id 列）
+  同号不同 schema，Room 不跑迁移直接 schema mismatch（症状：音频在播但 songEntity
+  查空、MiniPlayer 不出现）。教训：**开发期每次改 schema 清 app 数据库或递增版本号**。
+- HeartCheckBox 加 modifier/enabled 参数时，新参数必须放在 trailing-lambda 参数
+  （onStateChange）之前，否则全仓 trailing-lambda 调用集体编译炸。
+- 账户管理"无账户"=清库遗留（cookie 在 DataStore、账号行在 Room），自愈已覆盖。
+
+**新增 TODO（2026-09-20）**：
+- 迷你播放条/歌单详情页/播放页/歌手页 **封面加品牌角标**（库页角标已按用户要求全撤，
+  此四处为用户主动要求恢复）；
+- 主页混源数据偶发（未复现；已知唯一混源路径=本地库栏目天然跨源，待用户复现截图）；
+- 多选模式面板（SelectedSongsBottomSheet）的加入喜欢/添加到歌单未置灰（混源判定复杂，
+  当前逐首失败+汇总 toast）；
+- 本地歌单等"您的库"下线后的入口形态待定。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，

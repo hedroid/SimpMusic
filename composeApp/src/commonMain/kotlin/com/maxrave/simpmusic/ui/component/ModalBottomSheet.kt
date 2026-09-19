@@ -88,6 +88,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -1539,6 +1540,8 @@ fun NowPlayingBottomSheet(
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
+    val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(
@@ -1954,11 +1957,13 @@ fun NowPlayingBottomSheet(
                     CheckBoxActionButton(
                         defaultChecked = uiState.songUIState.liked,
                         isHeartIcon = true,
+                        enable = cloudLikedForGate != null,
                         onChangeListener = { liked ->
                             viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.ToggleLike)
                             onLikeChanged?.invoke(liked)
                         },
                     )
+
                     ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
@@ -1996,6 +2001,7 @@ fun NowPlayingBottomSheet(
                     ActionButton(
                         icon = SimpIcons.PlaylistAdd,
                         text = Res.string.add_to_a_playlist,
+                        enable = cloudLikedForGate != null,
                     ) {
                         viewModel.resetPlaylists()
                         addToAPlaylist = true
@@ -2203,6 +2209,7 @@ fun ActionButton(
 fun CheckBoxActionButton(
     defaultChecked: Boolean,
     isHeartIcon: Boolean,
+    enable: Boolean = true,
     onChangeListener: (checked: Boolean) -> Unit,
 ) {
     var stateChecked by remember { mutableStateOf(defaultChecked) }
@@ -2210,7 +2217,7 @@ fun CheckBoxActionButton(
         modifier =
             Modifier
                 .wrapContentSize(align = Alignment.Center)
-                .clickable {
+                .clickable(enabled = enable) {
                     stateChecked = !stateChecked
                     onChangeListener(stateChecked)
                 },
@@ -2224,13 +2231,17 @@ fun CheckBoxActionButton(
         ) {
             Box(Modifier.padding(10.dp)) {
                 if (isHeartIcon) {
-                    HeartCheckBox(checked = stateChecked, size = 30)
+                    HeartCheckBox(
+                        checked = stateChecked,
+                        size = 30,
+                        modifier = Modifier.alpha(if (enable) 1f else 0.38f),
+                    )
                 } else {
                     Crossfade(stateChecked) {
                         if (it) {
-                            Icon(SimpIcons.CheckCircle, "")
+                            Icon(SimpIcons.CheckCircle, "", tint = if (enable) Color.Unspecified else Color.Gray)
                         } else {
-                            Icon(SimpIcons.AddCircleOutline, "")
+                            Icon(SimpIcons.AddCircleOutline, "", tint = if (enable) Color.Unspecified else Color.Gray)
                         }
                     }
                 }
@@ -2245,7 +2256,7 @@ fun CheckBoxActionButton(
                 style = typo().labelSmall,
                 // Matches [ActionButton], which this sits directly above in every sheet that uses
                 // both — without it the label alone falls back to the colour typo() carries.
-                color = rememberSurfaceDarkColors().content,
+                color = if (enable) rememberSurfaceDarkColors().content else Color.Gray,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2260,18 +2271,20 @@ fun HeartCheckBox(
     size: Int = 24,
     checked: Boolean,
     tint: Color = rememberSurfaceDarkColors().content,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onStateChange: (() -> Unit)? = null,
 ) {
     val burstState = rememberHeartBurstState()
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(size.dp)
                 // Before .clip: the burst draws outside the button bounds and the circle clip
                 // would trim it to the heart's own circle.
                 .heartBurst(burstState)
                 .clip(CircleShape)
-                .clickable {
+                .clickable(enabled = enabled) {
                     // Judged at TAP time: tapping an unchecked heart is a like. Firing from the
                     // tap — not from watching `checked` — is what keeps a track change onto an
                     // already-liked song from celebrating a like nobody gave.

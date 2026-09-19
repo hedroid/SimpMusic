@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
+import simpmusic.composeapp.generated.resources.synced_n_of_m
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
@@ -152,9 +153,21 @@ class SongSelectionViewModel(
 
     fun addToFavorite(videoIds: List<String>) {
         viewModelScope.launch {
+            // 点赞=云端账号红心;本地行随结果镜像,失败计入汇总
+            var succeeded = 0
+            var attempted = 0
             songsOf(videoIds)
                 .filterNot { it.liked }
-                .forEach { songRepository.updateLikeStatus(it.videoId, 1) }
+                .forEach { song ->
+                    attempted++
+                    if (songRepository.setRemoteLikeStatus(song.videoId, true)) {
+                        songRepository.setLikedLocal(song.videoId, 1)
+                        succeeded++
+                    }
+                }
+            if (attempted > 0) {
+                makeToast(org.jetbrains.compose.resources.getString(Res.string.synced_n_of_m, succeeded, attempted))
+            }
         }
     }
 

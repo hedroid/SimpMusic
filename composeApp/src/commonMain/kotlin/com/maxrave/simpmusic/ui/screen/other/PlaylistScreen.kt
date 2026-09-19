@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -112,7 +113,6 @@ import com.maxrave.simpmusic.ui.component.LoadingDialog
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
-import com.maxrave.simpmusic.ui.component.SourceCollectionBadge
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
@@ -217,6 +217,11 @@ fun PlaylistScreen(
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
+    // 收藏心=云端态;显隐按"该源是否登录"判(未登录无云端态可显)
+    val playlistIsNetease = (uiState as? Success)?.data?.id?.toLongOrNull() != null
+    val ytLoggedIn by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
+    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
+    val favoriteEnabled = if (playlistIsNetease) neteaseLoggedIn else ytLoggedIn
     val remoteSaved by viewModel.remoteSaved.collectAsStateWithLifecycle()
     val remoteSavePending by viewModel.remoteSavePending.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
@@ -565,7 +570,8 @@ fun PlaylistScreen(
                                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        if (!data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                                                        // 收藏心=云端账号收藏;own/红心歌单排除;该源未登录隐藏
+                                                        if (favoriteEnabled && !data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                                             Box(
                                                                 modifier = Modifier.size(48.dp),
                                                                 contentAlignment = Alignment.Center,
@@ -573,17 +579,10 @@ fun PlaylistScreen(
                                                                 HeartCheckBox(
                                                                     size = 28,
                                                                     checked = liked,
+                                                                    modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
                                                                     onStateChange = {
-                                                                        viewModel.onUIEvent(PlaylistUIEvent.Favorite)
+                                                                        if (favoriteEnabled) viewModel.setRemoteSaved(!liked) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                                     },
-                                                                )
-                                                                SourceCollectionBadge(
-                                                                    isNetease = data.id.toLongOrNull() != null,
-                                                                    saved = remoteSaved,
-                                                                    pending = remoteSavePending,
-                                                                    onToggle = viewModel::setRemoteSaved,
-                                                                    inactiveTint = Color.White,
-                                                                    modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                                 )
                                                             }
                                                         }
@@ -872,7 +871,7 @@ fun PlaylistScreen(
                                                             .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    if (!data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                                                    if (favoriteEnabled && !data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                                         Box(
                                                             modifier = Modifier.size(48.dp),
                                                             contentAlignment = Alignment.Center,
@@ -880,17 +879,10 @@ fun PlaylistScreen(
                                                             HeartCheckBox(
                                                                 size = 28,
                                                                 checked = liked,
+                                                                modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
                                                                 onStateChange = {
-                                                                    viewModel.onUIEvent(PlaylistUIEvent.Favorite)
+                                                                    if (favoriteEnabled) viewModel.setRemoteSaved(!liked) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                                 },
-                                                            )
-                                                            SourceCollectionBadge(
-                                                                isNetease = data.id.toLongOrNull() != null,
-                                                                saved = remoteSaved,
-                                                                pending = remoteSavePending,
-                                                                onToggle = viewModel::setRemoteSaved,
-                                                                inactiveTint = Color.White,
-                                                                modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                             )
                                                         }
                                                     }

@@ -5,6 +5,7 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.explicit_content_blocked
 import simpmusic.composeapp.generated.resources.new_albums
 import simpmusic.composeapp.generated.resources.new_singles
+import simpmusic.composeapp.generated.resources.song_unavailable
 import simpmusic.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import simpmusic.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
 
@@ -33,6 +34,10 @@ object ComposeResUtils {
             StringType.NEW_ALBUMS -> {
                 getString(Res.string.new_albums)
             }
+
+            StringType.SONG_UNAVAILABLE -> {
+                getString(Res.string.song_unavailable)
+            }
         }
 
     enum class StringType {
@@ -41,5 +46,6 @@ object ComposeResUtils {
         TIME_OUT_ERROR,
         NEW_SINGLES,
         NEW_ALBUMS,
+        SONG_UNAVAILABLE,
     }
 }

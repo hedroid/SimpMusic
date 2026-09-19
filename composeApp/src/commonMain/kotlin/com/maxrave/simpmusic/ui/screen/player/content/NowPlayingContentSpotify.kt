@@ -1261,13 +1261,14 @@ fun NowPlayingContentSpotify(
                                                         .size(24.dp)
                                                         .aspectRatio(1f)
                                                         .clip(CircleShape),
+                                                enabled = state.likeEnabled,
                                                 onClick = {
                                                     actions.onShowAddToPlaylist()
                                                 },
                                             ) {
                                                 Icon(
                                                     imageVector = SimpIcons.PlaylistAdd,
-                                                    tint = Color.White,
+                                                    tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
                                                     contentDescription = "Add to Playlist",
                                                 )
                                             }
@@ -1888,7 +1889,12 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        HeartCheckBox(checked = state.controllerState.isLiked, size = 30) {
+                        HeartCheckBox(
+                            checked = state.controllerState.isLiked,
+                            size = 30,
+                            enabled = state.likeEnabled,
+                            modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+                        ) {
                             actions.onUIEvent(UIEvent.ToggleLike)
                         }
                         Spacer(modifier = Modifier.width(15.dp))
@@ -2043,15 +2049,16 @@ private fun NowPlayingTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(12.dp))
+        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
         Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            HeartCheckBox(checked = state.controllerState.isLiked, size = 32) {
+            HeartCheckBox(
+                checked = state.controllerState.isLiked,
+                size = 32,
+                enabled = state.likeEnabled,
+                modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+            ) {
                 actions.onUIEvent(UIEvent.ToggleLike)
             }
-            SourceAccountLikeBadge(
-                state = state,
-                actions = actions,
-                modifier = Modifier.align(Alignment.BottomEnd).size(17.dp),
-            )
         }
     }
 }

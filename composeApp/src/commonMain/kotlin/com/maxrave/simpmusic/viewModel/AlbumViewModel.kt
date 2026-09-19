@@ -35,7 +35,10 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.netease_action_failed
-import simpmusic.composeapp.generated.resources.source_account_action_failed
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.saved_toast
+import simpmusic.composeapp.generated.resources.unsaved_toast
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
@@ -198,24 +201,11 @@ class AlbumViewModel(
     }
 
     fun setAlbumLike() {
-        viewModelScope.launch {
-            val target = !uiState.value.liked
-            albumRepository.updateAlbumLiked(uiState.value.browseId, if (target) 1 else 0)
-            _uiState.update {
-                it.copy(
-                    liked = target,
-                )
-            }
-            val syncEnabled =
-                if (uiState.value.browseId.toLongOrNull() != null) {
-                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE
-                } else {
-                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
-                }
-            if (syncEnabled) setRemoteSavedInternal(target)
-        }
+        // 收藏心=云端账号状态:直接转发云端切换,本地行随结果镜像
+        setRemoteSaved(!uiState.value.liked)
     }
 
+    /** 收藏心=云端账号状态:拉到即驱动显示,并镜像本地缓存行(库页收藏分区读它)。 */
     private fun refreshRemoteSavedState() {
         viewModelScope.launch {
             _uiState.update { it.copy(remoteSaved = null) }
@@ -224,39 +214,42 @@ class AlbumViewModel(
                     uiState.value.browseId,
                     uiState.value.audioPlaylistId,
                 )
-            _uiState.update { it.copy(remoteSaved = remote) }
-            val syncEnabled =
-                if (uiState.value.browseId.toLongOrNull() != null) {
-                    dataStoreManager.neteaseFavoriteSync.first() == DataStoreManager.TRUE
-                } else {
-                    dataStoreManager.youtubeCollectionSync.first() == DataStoreManager.TRUE
+            if (remote != null) {
+                if (uiState.value.liked != remote) {
+                    albumRepository.updateAlbumLiked(uiState.value.browseId, if (remote) 1 else 0)
                 }
-            if (syncEnabled && remote == true && !uiState.value.liked) {
-                albumRepository.updateAlbumLiked(uiState.value.browseId, 1)
-                _uiState.update { it.copy(liked = true) }
+                _uiState.update { it.copy(remoteSaved = remote, liked = remote) }
+            } else {
+                _uiState.update { it.copy(remoteSaved = null) }
             }
         }
     }
 
+    /** 收藏心点击的唯一路径:直接切换云端账号收藏;成功镜像本地行+中性 toast。 */
     fun setRemoteSaved(saved: Boolean) {
-        viewModelScope.launch { setRemoteSavedInternal(saved) }
-    }
-
-    private suspend fun setRemoteSavedInternal(saved: Boolean) {
-        _uiState.update { it.copy(remoteSavePending = true) }
-        val ok =
-            albumRepository.setRemoteSavedState(
-                uiState.value.browseId,
-                uiState.value.audioPlaylistId,
-                saved,
-            )
-        _uiState.update {
-            it.copy(
-                remoteSaved = if (ok) saved else it.remoteSaved,
-                remoteSavePending = false,
-            )
+        viewModelScope.launch {
+            val isNeteaseId = uiState.value.browseId.toLongOrNull() != null
+            _uiState.update { it.copy(remoteSavePending = true) }
+            val ok =
+                albumRepository.setRemoteSavedState(
+                    uiState.value.browseId,
+                    uiState.value.audioPlaylistId,
+                    saved,
+                )
+            _uiState.update {
+                it.copy(
+                    remoteSaved = if (ok) saved else it.remoteSaved,
+                    remoteSavePending = false,
+                    liked = if (ok) saved else it.liked,
+                )
+            }
+            if (ok) {
+                albumRepository.updateAlbumLiked(uiState.value.browseId, if (saved) 1 else 0)
+                makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
+            } else {
+                makeToast(getString(if (isNeteaseId) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube))
+            }
         }
-        if (!ok) makeToast(getString(Res.string.source_account_action_failed))
     }
 
     private fun getAlbumFlow(browseId: String) {

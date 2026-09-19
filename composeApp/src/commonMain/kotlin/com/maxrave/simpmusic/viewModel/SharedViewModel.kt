@@ -113,7 +113,12 @@ import simpmusic.composeapp.generated.resources.lastfm_login_failed
 import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.liked_toast
+import simpmusic.composeapp.generated.resources.need_login_toast
 import simpmusic.composeapp.generated.resources.shared
+import simpmusic.composeapp.generated.resources.unliked_toast
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
 import java.io.FileOutputStream
@@ -145,12 +150,6 @@ class SharedViewModel(
         dataStoreManager.neteaseCookie
             .map { it.isNotEmpty() }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    /** 红心同步开关:开着时播放条红心自动跟进云村,云心按钮随之隐藏 */
-    val neteaseLikeSync: StateFlow<Boolean> =
-        dataStoreManager.neteaseLikeSync
-            .map { it == DataStoreManager.TRUE }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
         viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
@@ -672,38 +671,56 @@ class SharedViewModel(
     private var neteaseSongInfoJob: Job? = null
 
     /**
-     * 网易歌红心的"或合并"(与 YT 侧 combineLocalAndYouTubeLiked 对称):
-     * 本地已红 || 云村已红 → 点亮。云端有而本地无时回填本地行(一首一行,随播放发生,
-     * 库页"喜欢"动态歌单等本地视图随之可见);开关关闭/未登录/拉取失败只看本地。
-     * 取消方向不受影响:点灭时 [SongRepositoryImpl.updateLikeStatus] 会同时清两边。
+     * 红心=云端账号状态(云端是唯一事实源):切歌时拉云端态,驱动显示与本地缓存镜像
+     * (song.liked 行,库页"喜欢的歌曲"等本地视图读它)。未登录/拉取失败时保持本地
+     * 缓存值显示,操作会走云端并给出失败提示。
      */
     private fun refreshRemoteSongLike(song: SongEntity) {
         _remoteSongLikeState.value = RemoteSongLikeState()
         viewModelScope.launch {
             val cloudLiked = songRepository.getRemoteLikeStatus(song.videoId)
             _remoteSongLikeState.value = RemoteSongLikeState(liked = cloudLiked)
-            if (cloudLiked != true) return@launch
-            val syncEnabled =
-                if (song.videoId.toLongOrNull() != null) {
-                    neteaseLikeSync.first()
-                } else {
-                    dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE
+            if (cloudLiked != null) {
+                _liked.value = cloudLiked
+                mediaPlayerHandler.like(cloudLiked)
+                val localLiked = songRepository.getSongById(song.videoId).lastOrNull()?.liked == true
+                if (localLiked != cloudLiked) {
+                    songRepository.setLikedLocal(song.videoId, if (cloudLiked) 1 else 0)
                 }
-            if (!syncEnabled) return@launch
-            val localLiked = song.liked == true
-            if (!localLiked) {
-                songRepository.setLikedLocal(song.videoId, 1)
-                _liked.value = true
             }
         }
     }
 
-    /** Explicit account action used by the full player. The mini player remains local-only. */
+    /**
+     * 红心点击的唯一路径:直接切换云端账号红心。成功后镜像本地缓存(song.liked,供
+     * 库页本地视图)并同步通知栏图标;失败 toast。迷你播放条红心也走这里。
+     */
+    /** 红心/收藏在未登录源上被点击时:置灰按钮仍可点,点这里给统一提示。 */
+    fun notifyFavoriteNeedsLogin() {
+        makeToast(getString(Res.string.need_login_toast))
+    }
+
     fun setRemoteSongLiked(liked: Boolean) {
         val song = nowPlayingState.value?.songEntity ?: return
         viewModelScope.launch {
             _remoteSongLikeState.value = _remoteSongLikeState.value.copy(pending = true, failed = false)
             val ok = songRepository.setRemoteLikeStatus(song.videoId, liked)
+            if (!ok) {
+                makeToast(
+                    getString(
+                        if (song.videoId.toLongOrNull() != null) {
+                            Res.string.cloud_action_failed_netease
+                        } else {
+                            Res.string.cloud_action_failed_youtube
+                        },
+                    ),
+                )
+            } else {
+                makeToast(getString(if (liked) Res.string.liked_toast else Res.string.unliked_toast))
+                songRepository.setLikedLocal(song.videoId, if (liked) 1 else 0)
+                _liked.value = liked
+                mediaPlayerHandler.like(liked)
+            }
             _remoteSongLikeState.value =
                 if (ok) {
                     RemoteSongLikeState(liked = liked)
@@ -1076,8 +1093,10 @@ class SharedViewModel(
                 }
 
                 UIEvent.ToggleLike -> {
+                    // 红心直连云端:当前态优先读云端快照,未知时回落本地镜像
                     Logger.w(tag, "ToggleLike")
-                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.ToggleLike)
+                    val current = _remoteSongLikeState.value.liked ?: _liked.value
+                    setRemoteSongLiked(!current)
                 }
 
                 is UIEvent.UpdateVolume -> {

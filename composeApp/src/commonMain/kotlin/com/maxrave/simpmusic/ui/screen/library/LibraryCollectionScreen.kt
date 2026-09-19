@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -95,14 +96,8 @@ fun LibraryCollectionScreen(
     val pageType = runCatching { LibraryChipType.valueOf(type) }.getOrDefault(LibraryChipType.LOCAL_PLAYLIST)
     val localPlaylists by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val collections by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
-    val downloads by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val podcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
-    val downloadedSongs by dynamicPlaylistViewModel.listDownloadedSong.collectAsStateWithLifecycle()
-    val nowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     var showCreatePlaylist by remember { mutableStateOf(false) }
-    var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
-    var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
-    var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
 
     LaunchedEffect(pageType) {
         when (pageType) {
@@ -161,80 +156,19 @@ fun LibraryCollectionScreen(
                     contentPadding = contentPadding,
                     data = collections,
                     emptyText = Res.string.no_favorite_playlists,
-                    showSourceBadge = true,
                     onReload = viewModel::getPlaylistFavorite,
                 )
             }
 
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
-                Column(modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            LibraryTilingItem(
-                                state = LibraryTilingState.DownloadedSongs,
-                                selected = downloadedSection == DownloadedSection.Songs,
-                                onClick = { downloadedSection = DownloadedSection.Songs },
-                            )
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            LibraryTilingItem(
-                                state = LibraryTilingState.DownloadedPlaylists,
-                                selected = downloadedSection == DownloadedSection.Playlists,
-                                onClick = { downloadedSection = DownloadedSection.Playlists },
-                            )
-                        }
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (downloadedSection == DownloadedSection.Songs) {
-                            if (downloadedSongs.isEmpty()) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = stringResource(Res.string.no_downloaded_songs),
-                                        style = typo().labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            } else {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-                                ) {
-                                    items(downloadedSongs, key = { it.videoId }) { song ->
-                                        SongFullWidthItems(
-                                            songEntity = song,
-                                            isPlaying = nowPlaying?.track?.videoId == song.videoId,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            onClickListener = {
-                                                dynamicPlaylistViewModel.playSong(
-                                                    it,
-                                                    LibraryDynamicPlaylistType.Downloaded,
-                                                )
-                                            },
-                                            onMoreClickListener = { selectedDownloadedSong = song },
-                                            onAddToQueue = {
-                                                sharedViewModel.addListToQueue(arrayListOf(song.toTrack()))
-                                            },
-                                        )
-                                    }
-                                    item { EndOfPage() }
-                                }
-                            }
-                        } else {
-                            GridLibraryPlaylist(
-                                navController = navController,
-                                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-                                data = downloads,
-                                emptyText = Res.string.no_playlists_downloaded,
-                                showSourceBadge = true,
-                                onRemoveDownload = { removeDownloadTarget = it },
-                                onReload = viewModel::getDownloadedPlaylist,
-                            )
-                        }
-                    }
-                }
+                DownloadedManagementBody(
+                    topPadding = contentPadding.calculateTopPadding(),
+                    bottomPadding = contentPadding.calculateBottomPadding(),
+                    navController = navController,
+                    viewModel = viewModel,
+                    dynamicPlaylistViewModel = dynamicPlaylistViewModel,
+                    sharedViewModel = sharedViewModel,
+                )
             }
 
             LibraryChipType.FAVORITE_PODCAST -> {
@@ -251,13 +185,6 @@ fun LibraryCollectionScreen(
         }
     }
 
-    selectedDownloadedSong?.let { song ->
-        NowPlayingBottomSheet(
-            onDismiss = { selectedDownloadedSong = null },
-            navController = navController,
-            song = song,
-        )
-    }
 
     if (showCreatePlaylist) {
         CreateLocalPlaylistSheet(
@@ -266,34 +193,108 @@ fun LibraryCollectionScreen(
         )
     }
 
-    removeDownloadTarget?.let { target ->
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.remove_download_title)) },
-            text = { Text(text = stringResource(Res.string.remove_download_message)) },
-            onDismissRequest = { removeDownloadTarget = null },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.removeDownloadedPlaylist(target)
-                        removeDownloadTarget = null
-                    },
-                ) {
-                    Text(text = stringResource(Res.string.delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { removeDownloadTarget = null }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
 }
 
-private enum class DownloadedSection {
+/**
+ * “下载管理”页体(歌曲/歌单两段切换):既被独立路由 [LibraryCollectionScreen] 用,也被
+ * 库页 chip 页(DOWNLOADED_PLAYLIST 分支)直接内嵌——chip 页没有自己的 TopAppBar,
+ * 两处共用同一份内容,各自处理顶/底 padding。
+ */
+@Composable
+fun DownloadedManagementBody(
+    topPadding: Dp,
+    bottomPadding: Dp,
+    navController: NavController,
+    viewModel: LibraryViewModel,
+    dynamicPlaylistViewModel: LibraryDynamicPlaylistViewModel,
+    sharedViewModel: SharedViewModel,
+) {
+    val downloads by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
+    val downloadedSongs by dynamicPlaylistViewModel.listDownloadedSong.collectAsStateWithLifecycle()
+    val nowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
+    var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
+    var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
+    var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                LibraryTilingItem(
+                    state = LibraryTilingState.DownloadedSongs,
+                    selected = downloadedSection == DownloadedSection.Songs,
+                    onClick = { downloadedSection = DownloadedSection.Songs },
+                )
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                LibraryTilingItem(
+                    state = LibraryTilingState.DownloadedPlaylists,
+                    selected = downloadedSection == DownloadedSection.Playlists,
+                    onClick = { downloadedSection = DownloadedSection.Playlists },
+                )
+            }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            if (downloadedSection == DownloadedSection.Songs) {
+                if (downloadedSongs.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(Res.string.no_downloaded_songs),
+                            style = typo().labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = bottomPadding),
+                    ) {
+                        items(downloadedSongs, key = { it.videoId }) { song ->
+                            SongFullWidthItems(
+                                songEntity = song,
+                                isPlaying = nowPlaying?.track?.videoId == song.videoId,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClickListener = {
+                                    dynamicPlaylistViewModel.playSong(
+                                        song.videoId,
+                                        LibraryDynamicPlaylistType.Downloaded,
+                                    )
+                                },
+                                onMoreClickListener = { selectedDownloadedSong = song },
+                                onAddToQueue = {
+                                    sharedViewModel.addListToQueue(arrayListOf(song.toTrack()))
+                                },
+                            )
+                        }
+                        item { EndOfPage() }
+                    }
+                }
+            } else {
+                GridLibraryPlaylist(
+                    navController = navController,
+                    contentPadding = PaddingValues(bottom = bottomPadding),
+                    data = downloads,
+                    emptyText = Res.string.no_playlists_downloaded,
+                    onRemoveDownload = { removeDownloadTarget = it },
+                    onReload = viewModel::getDownloadedPlaylist,
+                )
+            }
+        }
+    }
+
+    selectedDownloadedSong?.let { song ->
+        NowPlayingBottomSheet(
+            onDismiss = { selectedDownloadedSong = null },
+            navController = navController,
+            song = song,
+        )
+    }
+
+}
+
+internal enum class DownloadedSection {
     Songs,
     Playlists,
 }

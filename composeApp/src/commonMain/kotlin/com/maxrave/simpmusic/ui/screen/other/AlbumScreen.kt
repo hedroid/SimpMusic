@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -91,7 +92,6 @@ import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
-import com.maxrave.simpmusic.ui.component.SourceCollectionBadge
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -169,6 +169,11 @@ fun AlbumScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 收藏心=云端态;显隐按"该源是否登录"判(未登录无云端态可显)
+    val albumIsNetease = uiState.browseId.toLongOrNull() != null
+    val ytLoggedInAlbum by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
+    val neteaseLoggedInAlbum by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
+    val albumFavoriteEnabled = if (albumIsNetease) neteaseLoggedInAlbum else ytLoggedInAlbum
 
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
     var albumBottomSheetShow by rememberSaveable { mutableStateOf(false) }
@@ -394,24 +399,17 @@ fun AlbumScreen(
                                                         .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Box(
+                                                if (true) Box(
                                                     modifier = Modifier.size(48.dp),
                                                     contentAlignment = Alignment.Center,
                                                 ) {
                                                     HeartCheckBox(
                                                         size = 28,
                                                         checked = uiState.liked,
+                                                        modifier = Modifier.alpha(if (albumFavoriteEnabled) 1f else 0.38f),
                                                         onStateChange = {
-                                                            viewModel.setAlbumLike()
+                                                            if (albumFavoriteEnabled) viewModel.setRemoteSaved(!uiState.liked) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                         },
-                                                    )
-                                                    SourceCollectionBadge(
-                                                        isNetease = browseId.toLongOrNull() != null,
-                                                        saved = uiState.remoteSaved,
-                                                        pending = uiState.remoteSavePending,
-                                                        onToggle = viewModel::setRemoteSaved,
-                                                        inactiveTint = Color.White,
-                                                        modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                     )
                                                 }
                                                 IconButton(
@@ -682,24 +680,17 @@ fun AlbumScreen(
                                                         .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Box(
+                                                if (true) Box(
                                                     modifier = Modifier.size(48.dp),
                                                     contentAlignment = Alignment.Center,
                                                 ) {
                                                     HeartCheckBox(
                                                         size = 28,
                                                         checked = uiState.liked,
+                                                        modifier = Modifier.alpha(if (albumFavoriteEnabled) 1f else 0.38f),
                                                         onStateChange = {
-                                                            viewModel.setAlbumLike()
+                                                            if (albumFavoriteEnabled) viewModel.setRemoteSaved(!uiState.liked) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                         },
-                                                    )
-                                                    SourceCollectionBadge(
-                                                        isNetease = browseId.toLongOrNull() != null,
-                                                        saved = uiState.remoteSaved,
-                                                        pending = uiState.remoteSavePending,
-                                                        onToggle = viewModel::setRemoteSaved,
-                                                        inactiveTint = Color.White,
-                                                        modifier = Modifier.align(Alignment.BottomEnd).size(19.dp),
                                                     )
                                                 }
                                                 IconButton(

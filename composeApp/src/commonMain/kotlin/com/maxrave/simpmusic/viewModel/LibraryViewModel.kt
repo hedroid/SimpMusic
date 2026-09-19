@@ -193,11 +193,15 @@ class LibraryViewModel(
                             _currentScreen.value = it
                         }
                     }
-                    // 持久化值是"您的网易云"但网易已登出 → 弹回默认(同 YOUTUBE_MIX_FOR_YOU 的回落处理)
+                    // "您的库"chip 页已下线:持久化落在它(或旧回落目标)上的弹回新默认
+                    if (_currentScreen.value in invisibleLibraryChips()) {
+                        setCurrentScreen(defaultLibraryChip())
+                    }
+                    // 持久化值是"您的网易云"但网易已登出 → 弹回默认
                     if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST &&
                         dataStoreManager.neteaseCookie.first().isEmpty()
                     ) {
-                        setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                        setCurrentScreen(defaultLibraryChip())
                     }
                 }
             val cookieJob =
@@ -212,7 +216,7 @@ class LibraryViewModel(
                     dataStoreManager.neteaseCookie.distinctUntilChanged().collect { cookie ->
                         if (cookie.isEmpty()) {
                             if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST) {
-                                setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
+                                setCurrentScreen(defaultLibraryChip())
                             }
                             _neteasePlaylist.value = LocalResource.Loading()
                             _subscribedArtists.value = LocalResource.Loading()
@@ -225,6 +229,40 @@ class LibraryViewModel(
             neteaseLogoutJob.join()
         }
     }
+
+    /**
+     * 库页默认落点:网易登录 → "您的网易云";否则 YT 登录 → YT 歌单;再不然 → 排行榜。
+     * ("您的库"chip 页已下线,旧持久化值/登出回落都改道到这里)
+     */
+    private suspend fun defaultLibraryChip(): LibraryChipType {
+        // DataStore 首读偶发拿空(启动竞态):500ms 超时兜底,并把实际读值打进日志,下次
+        // 再落到排行榜就知道是哪个分支判的
+        val netease = kotlinx.coroutines.withTimeoutOrNull(500) { dataStoreManager.neteaseCookie.first() } ?: ""
+        val yt = kotlinx.coroutines.withTimeoutOrNull(500) { dataStoreManager.cookie.first() } ?: ""
+        com.maxrave.logger.Logger.w(
+            "LibraryVM",
+            "defaultLibraryChip: netease=${netease.length} yt=${yt.length} -> " +
+                when {
+                    netease.isNotEmpty() -> "NETEASE"
+                    yt.isNotEmpty() -> "YOUTUBE"
+                    else -> "CHART"
+                },
+        )
+        return when {
+            netease.isNotEmpty() -> LibraryChipType.NETEASE_PLAYLIST
+            yt.isNotEmpty() -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
+            else -> LibraryChipType.CHART
+        }
+    }
+
+    /** 不再以 chip 形式出现的页(持久化值命中即回落):"您的库"及其四个子页入口。 */
+    private fun invisibleLibraryChips() =
+        setOf(
+            LibraryChipType.YOUR_LIBRARY,
+            LibraryChipType.LOCAL_PLAYLIST,
+            LibraryChipType.FAVORITE_PLAYLIST,
+            LibraryChipType.FAVORITE_PODCAST,
+        )
 
     fun setCurrentScreen(chipType: LibraryChipType) {
         _currentScreen.value = chipType
