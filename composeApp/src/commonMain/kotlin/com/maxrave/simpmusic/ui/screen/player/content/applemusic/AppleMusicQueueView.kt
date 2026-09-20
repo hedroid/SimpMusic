@@ -39,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -106,33 +105,19 @@ internal fun AppleMusicQueueView(
     val localDensity = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Queue rows live in the SAME index space as musicServiceHandler.swap(from, to) and
+    // The FULL queue, QueueBottomSheet semantics: played tracks stay ABOVE the current one, so
+    // the locate button can land ON the current song and you can still scroll up past it. This
+    // view used to drop the played prefix (Apple Music's own "Playing Next" shape), but then the
+    // current track was row 0 with nothing above it — locating pinned the list at its top edge
+    // with no way to scroll up, which reads as stuck.
+    //
+    // Rows live in the SAME index space as musicServiceHandler.swap(from, to) and
     // removeMediaItem(index): artworkQueue == queueData.data.listTracks, and both operations
     // read/write that list (and the player timeline) at the SAME position — confirmed by reading
     // MediaServiceHandlerImpl.removeMediaItem/swap and ExoPlayerAdapter.moveMediaItem/
     // removeMediaItem/getUnshuffledIndex, which all treat their index argument as "current
-    // shuffle/display order", i.e. exactly artworkQueue's own order. `offset` converts a position
-    // within this sublist back to that absolute space.
-    //
-    // The list LEADS WITH the track now playing (Apple Music's own queue shows it right under
-    // the section header, equalizer and all) followed by everything still to come: drop()
-    // discards only the PLAYED prefix, so local index 0 IS the current track. That row is also
-    // what the locate button scrolls to — an upcoming-only list had nowhere to land it.
-    val offset = state.currentOrderIndex
-    // withIndex() BEFORE drop(), so every row carries the index it had in the full queue.
-    //
-    // This used to be a plain drop() with `offset + localIndex` added back at click time, and that
-    // is exactly where the Apple Music queue diverged from QueueBottomSheet — which never computes
-    // an index at all, it reads the one itemsIndexed hands it over the whole list. Adding the
-    // offset back makes every row's identity depend on state.currentOrderIndex, a value DERIVED in
-    // the shell; the moment that derivation is off by anything, the row the user tapped and the
-    // index sent to the player are two different songs. Carrying the original index removes the
-    // arithmetic, so a wrong currentOrderIndex can now only cut the list in the wrong PLACE — it
-    // can no longer play the wrong song, because the index travels with the track it belongs to.
-    val queueRows =
-        remember(state.artworkQueue, state.currentOrderIndex) {
-            if (state.currentOrderIndex < 0) emptyList() else state.artworkQueue.withIndex().drop(offset)
-        }
+    // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
+    // local index == absolute index — no offset arithmetic to get wrong anywhere.
 
     Column(modifier = modifier.fillMaxSize()) {
         // statusBars + 20dp, not a bare status-bar offset: the grabber that
@@ -161,24 +146,19 @@ internal fun AppleMusicQueueView(
             modifier = Modifier.padding(bottom = 8.dp),
         )
 
-        val lazyListState = rememberLazyListState()
-        // rememberDragDropState stores this lambda in remember(lazyListState), so it is frozen at
-        // FIRST composition — capturing `offset` directly would keep using the offset from the
-        // track that was playing back then and swap the wrong two rows after any track change.
-        val currentOffset by rememberUpdatedState(offset)
+        // Start already anchored on the current track (no top-of-list flash on entry), then
+        // follow track changes: the scroll offset does not move on its own, so a queue the user
+        // had scrolled through stays parked mid-list with the current track off-screen.
+        val lazyListState =
+            rememberLazyListState(initialFirstVisibleItemIndex = state.currentOrderIndex.coerceAtLeast(0))
         val dragDropState =
             rememberDragDropState(lazyListState) { from, to ->
-                actions.onMoveQueueItem(from + currentOffset, to + currentOffset)
+                actions.onMoveQueueItem(from, to)
             }
 
-        // Follow the track change. When the player advances, the drop point moves past the track
-        // that just finished: it leaves the list, the new current becomes row 0 — but the scroll
-        // offset does not move, so a queue the user had scrolled through stays parked mid-list
-        // with the current track off-screen. Re-anchoring to the top is what "showing the current
-        // position" means for this list, and it is the same anchor the locate button returns to.
         LaunchedEffect(state.currentOrderIndex) {
             if (state.currentOrderIndex >= 0) {
-                lazyListState.animateScrollToItem(0)
+                lazyListState.animateScrollToItem(state.currentOrderIndex)
             }
         }
 
@@ -257,25 +237,22 @@ internal fun AppleMusicQueueView(
                         },
             ) {
                 itemsIndexed(
-                    queueRows,
-                    // Absolute index in the key: `queueRows` is a sublist, so a bare local index
-                    // shifts on every track change and invalidates every row.
-                    key = { _, item -> item.index.toString() + item.value.videoId },
-                ) { localIndex, item ->
-                    val track = item.value
-                    // The queue-wide index this row actually has. Everything the PLAYER is told
-                    // uses this; only the drag gesture below uses localIndex, because that one is
-                    // genuinely about position within the visible list.
-                    val queueIndex = item.index
+                    state.artworkQueue,
+                    // Same key shape QueueBottomSheet uses over the full list.
+                    key = { i, t -> i.toString() + t.videoId },
+                ) { index, track ->
+                    // Local index == absolute queue index (whole list is shown), so everything the
+                    // PLAYER is told — click seeks, ⋯ sheet, drag reorder — takes this directly.
+                    val queueIndex = index
                     DraggableItem(
                         dragDropState = dragDropState,
-                        index = localIndex,
+                        index = index,
                         modifier = Modifier,
                     ) { _ ->
                         // Owner's call: the OLD queue sheet's row component, verbatim — no bespoke
                         // row. Long-press-drag reorders (list-level gesture above); ⋯ opens the
-                        // same per-item sheet the queue sheet uses. Row 0 is the track now playing
-                        // (by construction — see `offset`), so it gets the equalizer treatment.
+                        // same per-item sheet the queue sheet uses; the current track gets the
+                        // equalizer highlight.
                         SongFullWidthItems(
                             track = track,
                             isPlaying = queueIndex == state.currentOrderIndex,
@@ -288,14 +265,17 @@ internal fun AppleMusicQueueView(
                     }
                 }
             }
-            if (queueRows.isNotEmpty()) {
+            if (state.artworkQueue.isNotEmpty()) {
                 // Over the last song row (the list's bottom fade is blank space, so the button
-                // centres on the last visible row). Item 0 is the track now playing, so this
-                // scrolls it — with the equalizer row — to the top of the list.
+                // centres on the last visible row). Scrolls the CURRENT track's row — equalizer
+                // and all — to the top of the list; played tracks above it stay reachable.
                 AppleMusicFloatingCircleButton(
                     icon = SimpIcons.MyLocation,
                     onClick = {
-                        coroutineScope.launch { lazyListState.animateScrollToItem(0) }
+                        val target = state.currentOrderIndex
+                        if (target >= 0 && target < lazyListState.layoutInfo.totalItemsCount) {
+                            coroutineScope.launch { lazyListState.animateScrollToItem(target) }
+                        }
                     },
                     modifier =
                         Modifier
