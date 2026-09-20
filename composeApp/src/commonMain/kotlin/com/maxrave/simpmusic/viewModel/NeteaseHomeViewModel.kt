@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -123,11 +124,16 @@ class NeteaseHomeViewModel(
         val force = forceNextLoads
         viewModelScope.launch {
             val ui = loadRow(row, force)
-            _state.value =
-                ReadyState(
-                    rows = _state.value.rows + (row to ui),
-                    newAlbumsArea = _state.value.newAlbumsArea,
-                )
+            // update{} 是原子读改写,并行完成的行各自结果都保留。这里曾是
+            // "_state.value = ReadyState(_state.value.rows + …)" 的先读后写:下拉刷新后
+            // 多行并行完成撞车,后写者把先写者刚落地的 Ready 覆盖回 Loading,该行占位
+            // 重组后再次拉取再次转圈——"下拉刷新顶部转圈转好几轮"的根因。
+            _state.update { it.copy(rows = it.rows + (row to ui)) }
+            // 本轮全部行离开 Loading 即收掉 force,兑现"本次重置后的行加载走 force"
+            // 的注释语义;置位后永不复位会让之后的行加载全绕过行缓存打网络。
+            if (force && _state.value.rows.values.all { it !is RowUi.Loading }) {
+                forceNextLoads = false
+            }
             synchronized(inFlightRows) { inFlightRows.remove(row) }
         }
     }
@@ -136,18 +142,18 @@ class NeteaseHomeViewModel(
      *  (loadRow 的 NEW_ALBUMS 分支读的是 state.newAlbumsArea,已切到新地区)。
      *  别在这里再手动 launch 拉一次,否则和槽位触发并发成双请求(回归时实测过)。 */
     fun loadNewAlbumsArea(area: String) {
-        val current = _state.value
-        if (area == current.newAlbumsArea) return
-        _state.value =
-            current.copy(
-                rows = current.rows + (Row.NEW_ALBUMS to RowUi.Loading),
+        if (area == _state.value.newAlbumsArea) return
+        _state.update {
+            it.copy(
+                rows = it.rows + (Row.NEW_ALBUMS to RowUi.Loading),
                 newAlbumsArea = area,
             )
+        }
     }
 
     /** 失败行点重试:回 Loading 再走正常加载 */
     fun retryRow(row: Row) {
-        _state.value = ReadyState(rows = _state.value.rows + (row to RowUi.Loading))
+        _state.update { it.copy(rows = it.rows + (row to RowUi.Loading)) }
         ensureRowLoaded(row)
     }
 
