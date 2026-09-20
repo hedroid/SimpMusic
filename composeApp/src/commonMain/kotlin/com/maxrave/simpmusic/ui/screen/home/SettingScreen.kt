@@ -472,6 +472,11 @@ private const val SHOW_BACKUP_DOWNLOADED_SETTINGS = false
 // compiled — flip this to true to restore the section as-is.
 private const val SHOW_IMPORT_PLAYLIST_SETTINGS = false
 
+// "Keep showing your YouTube playlist when offline" is hidden (2026-09-20): the owner asked for
+// it to go. The DataStore key, SettingsViewModel state/setter and the PlaylistRepositoryImpl
+// offline-fallback branch all stay compiled — flip this to true to restore the toggle as-is.
+private const val SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
@@ -1145,11 +1150,13 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.play_explicit_content_description),
                     switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.keep_your_youtube_playlist_offline),
-                    subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
-                    switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
-                )
+                if (SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE) {
+                    SettingItem(
+                        title = stringResource(Res.string.keep_your_youtube_playlist_offline),
+                        subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
+                        switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
+                    )
+                }
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
                     subtitle =

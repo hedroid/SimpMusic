@@ -17,6 +17,7 @@
 | Discord 集成整个设置区（登录行 + Rich Presence 开关） | `SHOW_DISCORD_SETTINGS = false` | `SettingScreen.kt`（常量区） | 2026-09-20, d00110e8 | 常量改 `true`。登录路由/VM 状态/RPC sender/kizzy 模块全保留 |
 | "备份已下载数据"开关（下载缓存并入备份 zip） | `SHOW_BACKUP_DOWNLOADED_SETTINGS = false` | `SettingScreen.kt`（常量区，紧随 Discord 门控） | 2026-09-20 | 常量改 `true`。DataStore 键（默认关）/`setBackupDownloaded`/备份管线分支全保留 |
 | "导入播放列表"（从 Spotify/其它 YT 客户端迁移歌单） | `SHOW_IMPORT_PLAYLIST_SETTINGS = false` | `SettingScreen.kt`（常量区；行 + 工具链接说明文本 + 文件选择 launcher 一并门控） | 2026-09-20 | 常量改 `true`。`ImportViewModel`/进度弹窗/解析管线全保留 |
+| "离线时继续展示您的 YouTube 播放列表"（`keep_your_youtube_playlist_offline`） | `SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE = false` | `SettingScreen.kt`（常量区，紧随导入播放列表门控） | 2026-09-20 | 常量改 `true`。DataStore 键/`setKeepYouTubePlaylistOffline`/`PlaylistRepositoryImpl` 离线回读分支全保留 |
 | "主歌词提供商"设置项 | 入口删除（无门控，恢复看 TODO） | `SettingScreen.kt`（已无引用）；唯一选择处 = 播放页三点菜单，且仅 YT 歌显示（网易歌走官方专线） | 2026-09-15, 9829c5b2 | 跨源歌词供应商（QQ/酷狗…）做好后，入口放回**播放页菜单**，设置页不恢复（决策见 AGENTS.md 跨源歌词 TODO） |
 | neteaseAutoSwitch（网易灰歌自动切 YT 源） | SettingItem 注释掉 | `SettingScreen.kt:1431` 附近 | 2026-09-15（切源统一入口轮） | M9 灰歌回退实现后恢复此 SettingItem；VM 状态与 setter 均保留 |
 
@@ -29,7 +30,7 @@
 | chip | 现状 |
 | --- | --- |
 | YOUR_LIBRARY（您的库聚合页） | 持久化选中落在它上面会弹回新默认（`LibraryViewModel.kt:196`），登出回落同理 |
-| LOCAL_PLAYLIST（本地歌单） | **暂无 UI 入口**（用户点名下线；数据仍在库中） |
+| LOCAL_PLAYLIST（本地歌单） | ~~暂无 UI 入口~~ **入口已恢复（2026-09-20）**："您的 YouTube Music" tab 改双分区（YouTube 云端歌单 + 本地歌单含创建 tile），本地歌单浏览与新建都从那里进；独立路由仍在 |
 | FAVORITE_PLAYLIST（收藏歌曲/红心聚合） | **暂无 UI 入口**；红心本身仍可在播放页/迷你条操作，云端同步不受影响 |
 | FAVORITE_PODCAST | 随"您的库"一并下线 |
 
