@@ -253,6 +253,9 @@ class NeteaseMixViewModel(
         playQueue(contents, index, playlistId = null, name = name)
     }
 
+    /** 共用起播:整队 RADIO 语义。**必须传 [Config.RADIO_CLICK]+index**(SONG_CLICK 只把点击那首
+     *  装进 player、整队永远缺席,表现为播放页上一首/下一首置灰、队列页点其它歌无效——
+     *  RADIO_CLICK 走 loadPlaylistOrAlbum→updateCatalog 把 listTracks 全量装进 player)。 */
     private fun playQueue(
         contents: List<Content>,
         index: Int,
@@ -274,7 +277,7 @@ class NeteaseMixViewModel(
                     continuation = null,
                 ),
             )
-            loadMediaItem(first, Config.SONG_CLICK)
+            loadMediaItem(first, Config.RADIO_CLICK, index)
         }
     }
 
