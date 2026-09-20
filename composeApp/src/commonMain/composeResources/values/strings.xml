@@ -922,6 +922,8 @@
     <string name="personal_fm">Personal FM</string>
     <string name="personal_fm_subtitle">An endless stream tuned to your taste</string>
     <string name="personal_fm_start">Start listening</string>
+    <string name="personal_fm_pause">Pause</string>
+    <string name="personal_fm_resume">Resume</string>
     <string name="log_in_to_netease">Log in to NetEase</string>
     <string name="log_out_from_netease">Log out of NetEase</string>
     <string name="intro_login_to_netease">NetEase as a second music source</string>

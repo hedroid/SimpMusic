@@ -6,6 +6,7 @@ import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.data.model.home.Content
 import com.maxrave.domain.mediaservice.handler.PlaylistType
+import com.maxrave.domain.mediaservice.handler.PlayerEvent
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
@@ -15,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
@@ -22,6 +24,10 @@ import simpmusic.composeapp.generated.resources.personal_fm
 
 /** 下拉指示器时长上限,与 [NeteaseHomeViewModel] 同款:确认信号而非进度条 */
 private const val REFRESH_INDICATOR_MS = 600L
+
+/** 红心电台起播写入 queueData 的 playlistName([playHeartRadio] 与播放态判定共用;
+ *  FM 批次队列名=personal_fm 本地化串,两类队列同挂 [NETEASE_FM_PLAYLIST_ID] 哨兵,靠名字区分) */
+private const val HEART_RADIO_QUEUE_NAME = "红心电台"
 
 /**
  * 网易"混合"tab(私人FM)独立 ViewModel:与 [NeteaseHomeViewModel] 同款模式——数据全部来自
@@ -40,6 +46,14 @@ class NeteaseMixViewModel(
         /** 新歌速递默认地区:华语(0 全部 7 华语 96 欧美 8 日语 16 韩语) */
         const val EXPRESS_DEFAULT_AREA = 7
     }
+
+    /** 双入口卡(FM hero/红心电台)的播放态:当前活动队列是否 FM 批次/红心电台 + 是否正在出声。
+     *  供两张卡把"开始收听/播放箭头"切成暂停/继续形态,点击变暂停/恢复。 */
+    data class MixPlaybackState(
+        val isFmQueue: Boolean = false,
+        val isHeartQueue: Boolean = false,
+        val isPlaying: Boolean = false,
+    )
 
     sealed interface State {
         data object Loading : State
@@ -77,8 +91,38 @@ class NeteaseMixViewModel(
     /** 上限提示只弹一次(VM 生命周期内;列表只增不减,重进页面/换进程自然重置) */
     private var fmCapNotified = false
 
+    /** FM 批次队列名(=personal_fm 本地化串,起播与播放态判定两侧取同一来源) */
+    private val fmQueueName by lazy { getString(Res.string.personal_fm) }
+
+    private val _playbackState = MutableStateFlow(MixPlaybackState())
+    val playbackState: StateFlow<MixPlaybackState> = _playbackState.asStateFlow()
+
     init {
         refresh()
+        // FM 与红心电台同挂 NETEASE_FM 哨兵(红心播完接 FM 续批、名字不变),按 playlistName 区分;
+        // reset() 会把 queueData 打回默认(null playlistId),两卡随之回"开始收听"形态。
+        viewModelScope.launch {
+            combine(mediaPlayerHandler.queueData, mediaPlayerHandler.controlState) { queueData, controlState ->
+                val isFmQueue =
+                    queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID &&
+                        queueData.data.playlistName == fmQueueName
+                val isHeartQueue =
+                    queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID &&
+                        queueData.data.playlistName == HEART_RADIO_QUEUE_NAME
+                MixPlaybackState(
+                    isFmQueue = isFmQueue,
+                    isHeartQueue = isHeartQueue,
+                    isPlaying = controlState.isPlaying,
+                )
+            }.collect { _playbackState.value = it }
+        }
+    }
+
+    /** 播放/暂停切换(两卡在各自队列处于活动态时的点击动作,恢复不打断队列位置) */
+    fun togglePlayback() {
+        viewModelScope.launch {
+            mediaPlayerHandler.onPlayerEvent(PlayerEvent.PlayPause)
+        }
     }
 
     /** 下拉刷新:已有内容(Ready)时**向后追加一批**,不整页重刷(列表只增不减,90 封顶);
@@ -191,7 +235,7 @@ class NeteaseMixViewModel(
                     if (contents.isEmpty()) {
                         makeToast("红心歌单为空")
                     } else {
-                        playQueue(contents, 0, playlistId = NETEASE_FM_PLAYLIST_ID, name = "红心电台")
+                        playQueue(contents, 0, playlistId = NETEASE_FM_PLAYLIST_ID, name = HEART_RADIO_QUEUE_NAME)
                     }
                 },
                 onFailure = { makeToast(it.message ?: "红心电台启动失败") },

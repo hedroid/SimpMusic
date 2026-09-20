@@ -893,6 +893,8 @@
     <string name="personal_fm">私人FM</string>
     <string name="personal_fm_subtitle">根据你的口味不断生成</string>
     <string name="personal_fm_start">开始收听</string>
+    <string name="personal_fm_pause">暂停</string>
+    <string name="personal_fm_resume">继续收听</string>
     <string name="log_in_to_netease">登录网易云</string>
     <string name="log_out_from_netease">从网易云退出</string>
     <string name="intro_login_to_netease">接入网易云音源</string>

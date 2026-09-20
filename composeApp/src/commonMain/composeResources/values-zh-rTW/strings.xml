@@ -98,6 +98,8 @@
     <string name="personal_fm">私人FM</string>
     <string name="personal_fm_subtitle">根據你的口味不斷生成</string>
     <string name="personal_fm_start">開始收聽</string>
+    <string name="personal_fm_pause">暫停</string>
+    <string name="personal_fm_resume">繼續收聽</string>
     <string name="clear_player_cache">清除播放器快取</string>
     <string name="cancel">取消</string>
     <string name="clear">清除</string>

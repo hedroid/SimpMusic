@@ -70,6 +70,7 @@ import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeShimmer
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
@@ -78,6 +79,8 @@ import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.netease_home_error
 import simpmusic.composeapp.generated.resources.personal_fm
+import simpmusic.composeapp.generated.resources.personal_fm_pause
+import simpmusic.composeapp.generated.resources.personal_fm_resume
 import simpmusic.composeapp.generated.resources.personal_fm_start
 import simpmusic.composeapp.generated.resources.personal_fm_subtitle
 import simpmusic.composeapp.generated.resources.retry
@@ -102,6 +105,7 @@ fun NeteaseMixScreen(
     val heartLoading by viewModel.heartLoading.collectAsStateWithLifecycle()
     val fmLoadingMore by viewModel.fmLoadingMore.collectAsStateWithLifecycle()
     val expressLoading by viewModel.expressLoading.collectAsStateWithLifecycle()
+    val playback by viewModel.playbackState.collectAsStateWithLifecycle()
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -210,14 +214,20 @@ fun NeteaseMixScreen(
                                             ?: fmContents.first()
                                     FmHeroCard(
                                         content = heroContent,
+                                        isFmActive = playback.isFmQueue,
+                                        isPlaying = playback.isPlaying,
                                         onStart = { viewModel.playFrom(fmContents, 0) },
+                                        onToggle = viewModel::togglePlayback,
                                     )
                                 }
                                 // 红心电台入口:红心随机起播,播完接 FM 续批
                                 item(key = "heart-radio") {
                                     HeartRadioCard(
                                         loading = heartLoading,
+                                        isHeartActive = playback.isHeartQueue,
+                                        isPlaying = playback.isPlaying,
                                         onClick = viewModel::playHeartRadio,
+                                        onToggle = viewModel::togglePlayback,
                                     )
                                 }
                                 // FM 当前批次:单行横滑(主页歌单行同款排版),滑到尾自动拉下批
@@ -417,11 +427,15 @@ private fun FmSongRow(
     }
 }
 
-/** 红心电台入口卡:红心随机 30 首起播,播完接私人FM(心动模式端点已死,本地替代方案) */
+/** 红心电台入口卡:红心随机 30 首起播,播完接私人FM(心动模式端点已死,本地替代方案)。
+ *  红心队列处于活动态时整行点击=暂停/恢复,尾图标随播放态切 Pause/PlayArrow。 */
 @Composable
 private fun HeartRadioCard(
     loading: Boolean,
+    isHeartActive: Boolean,
+    isPlaying: Boolean,
     onClick: () -> Unit,
+    onToggle: () -> Unit,
 ) {
     Row(
         modifier =
@@ -430,7 +444,7 @@ private fun HeartRadioCard(
                 .padding(horizontal = 15.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .clickable(onClick = onClick)
+                .clickable(onClick = if (isHeartActive) onToggle else onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -470,20 +484,25 @@ private fun HeartRadioCard(
             )
         } else {
             Icon(
-                imageVector = SimpIcons.PlayArrow,
+                imageVector = if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isHeartActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
-/** FM hero 大卡:首曲封面铺底 + 暗部渐变 + 标题/副标题/开始收听按钮 */
+/** FM hero 大卡:首曲封面铺底 + 暗部渐变 + 标题/副标题/收听按钮。
+ *  FM 队列处于活动态时按钮/整卡点击=暂停/恢复(开始收听→暂停/继续收听),否则起播 FM 批次。 */
 @Composable
 private fun FmHeroCard(
     content: Content,
+    isFmActive: Boolean,
+    isPlaying: Boolean,
     onStart: () -> Unit,
+    onToggle: () -> Unit,
 ) {
+    val cardAction = if (isFmActive) onToggle else onStart
     Box(
         modifier =
             Modifier
@@ -491,7 +510,7 @@ private fun FmHeroCard(
                 .padding(horizontal = 15.dp)
                 .height(300.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onStart),
+                .clickable(onClick = cardAction),
     ) {
         AsyncImage(
             model = content.thumbnails.lastOrNull()?.url,
@@ -526,13 +545,19 @@ private fun FmHeroCard(
                 color = Color.White.copy(alpha = 0.8f),
             )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onStart) {
+            Button(onClick = cardAction) {
                 Icon(
-                    imageVector = SimpIcons.PlayArrow,
+                    imageVector = if (isFmActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.personal_fm_start))
+                Text(
+                    when {
+                        isFmActive && isPlaying -> stringResource(Res.string.personal_fm_pause)
+                        isFmActive -> stringResource(Res.string.personal_fm_resume)
+                        else -> stringResource(Res.string.personal_fm_start)
+                    },
+                )
             }
         }
     }
