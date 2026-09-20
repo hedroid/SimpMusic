@@ -14,12 +14,16 @@ import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** 下拉刷新指示器时长上限:指示器是"手势已受理"的确认信号而非进度条,超过约半圈就会读成"转了好几圈" */
+private const val REFRESH_INDICATOR_MS = 600L
 
 /**
  * 网易主页独立 ViewModel(行级懒加载版):页面立即渲染,每行独立状态
@@ -117,6 +121,12 @@ class NeteaseHomeViewModel(
         if (!_refreshing.compareAndSet(expect = false, update = true)) return
         val snapshot = _state.value.rows
         viewModelScope.launch {
+            // 指示器只作"手势已受理"的确认:首批落地或 REFRESH_INDICATOR_MS 到点(先到先收)。
+            // 不设上限时指示器随最慢行陪跑,一秒多的整圈旋转用户就读成"转了好多圈"。
+            launch {
+                delay(REFRESH_INDICATOR_MS)
+                _refreshing.value = false
+            }
             var firstLanded = false
             snapshot.filterValues { it is RowUi.Failed }.keys.forEach { row ->
                 _state.update { it.copy(rows = it.rows + (row to RowUi.Loading)) }

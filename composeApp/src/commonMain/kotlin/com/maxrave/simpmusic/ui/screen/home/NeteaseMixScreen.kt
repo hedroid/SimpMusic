@@ -98,6 +98,7 @@ fun NeteaseMixScreen(
     viewModel: NeteaseMixViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val heartLoading by viewModel.heartLoading.collectAsStateWithLifecycle()
     val fmLoadingMore by viewModel.fmLoadingMore.collectAsStateWithLifecycle()
     val expressLoading by viewModel.expressLoading.collectAsStateWithLifecycle()
@@ -125,11 +126,12 @@ fun NeteaseMixScreen(
         PullToRefreshBox(
             state = pullToRefreshState,
             onRefresh = { viewModel.refresh(force = true) },
-            isRefreshing = state is NeteaseMixViewModel.State.Loading,
+            // 指示器=手势已受理的短确认(≤600ms),不再绑定整页 Loading 态陪跑全部请求
+            isRefreshing = refreshing,
             indicator = {
                 PullToRefreshDefaults.Indicator(
                     state = pullToRefreshState,
-                    isRefreshing = state is NeteaseMixViewModel.State.Loading,
+                    isRefreshing = refreshing,
                     modifier =
                         Modifier
                             .align(Alignment.TopCenter)

@@ -11,6 +11,7 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,9 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.personal_fm
+
+/** 下拉指示器时长上限,与 [NeteaseHomeViewModel] 同款:确认信号而非进度条 */
+private const val REFRESH_INDICATOR_MS = 600L
 
 /**
  * 网易"混合"tab(私人FM)独立 ViewModel:与 [NeteaseHomeViewModel] 同款模式——数据全部来自
@@ -54,6 +58,10 @@ class NeteaseMixViewModel(
     private val _state = MutableStateFlow<State>(State.Loading)
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** 下拉指示器:手势已受理的短确认(≤600ms/首批落地先到先收),不等数据工作全程 */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
     /** 红心电台入口卡加载态(拉红心 id + 批量详情期间转圈) */
     private val _heartLoading = MutableStateFlow(false)
     val heartLoading: StateFlow<Boolean> = _heartLoading.asStateFlow()
@@ -74,40 +82,48 @@ class NeteaseMixViewModel(
     }
 
     /** 下拉刷新:已有内容(Ready)时**向后追加一批**,不整页重刷(列表只增不减,90 封顶);
-     *  无内容(Loading/Error)时全量拉取兜底(错误页重试同路)。 */
+     *  无内容(Loading/Error)时全量拉取兜底(错误页重试同路)。
+     *  指示器统一走 [refreshing](600ms 上限/首批落地先收):Ready 追加路曾经完全不转(无反馈),
+     *  整页重载路曾经陪跑全部 4 个并行请求——转好几秒就读成"转了好多圈"。 */
     fun refresh(force: Boolean = false) {
         if (!force && _state.value is State.Ready) return
-        if (force && _state.value is State.Ready) {
-            loadMoreFm()
-            return
-        }
-        _state.value = State.Loading
+        if (!_refreshing.compareAndSet(expect = false, update = true)) return
         viewModelScope.launch {
-            val (fm, daily, express, recent) =
-                coroutineScope {
-                    val fmDeferred = async { neteaseRepository.getPersonalFmContents().getOrDefault(emptyList()) }
-                    // 每日推荐恒走日缓存,不随下拉刷新重拉:端点带 afresh=true,服务端每次
-                    // 重掷一版(探针实测),force 重拉等于换掉当天整份列表。跨日由 epochDay 失效。
-                    val dailyDeferred = async { neteaseRepository.getDailyRecommendContents().getOrDefault(emptyList()) }
-                    val expressDeferred =
-                        async { neteaseRepository.getNewSongExpress(EXPRESS_DEFAULT_AREA).getOrDefault(emptyList()) }
-                    val recentDeferred = async { neteaseRepository.getRecentPlayedContents().getOrDefault(emptyList()) }
-                    listOf(fmDeferred.await(), dailyDeferred.await(), expressDeferred.await(), recentDeferred.await())
-                }
-            val ready =
-                State.Ready(
-                    fmContents = fm,
-                    dailyContents = daily,
-                    expressContents = express,
-                    expressArea = EXPRESS_DEFAULT_AREA,
-                    recentContents = recent,
-                )
-            _state.value =
-                if (fm.isEmpty() && daily.isEmpty() && express.isEmpty() && recent.isEmpty()) {
-                    State.Error()
-                } else {
-                    ready
-                }
+            launch {
+                delay(REFRESH_INDICATOR_MS)
+                _refreshing.value = false
+            }
+            if (force && _state.value is State.Ready) {
+                loadMoreFm()
+            } else {
+                _state.value = State.Loading
+                val (fm, daily, express, recent) =
+                    coroutineScope {
+                        val fmDeferred = async { neteaseRepository.getPersonalFmContents().getOrDefault(emptyList()) }
+                        // 每日推荐恒走日缓存,不随下拉刷新重拉:端点带 afresh=true,服务端每次
+                        // 重掷一版(探针实测),force 重拉等于换掉当天整份列表。跨日由 epochDay 失效。
+                        val dailyDeferred = async { neteaseRepository.getDailyRecommendContents().getOrDefault(emptyList()) }
+                        val expressDeferred =
+                            async { neteaseRepository.getNewSongExpress(EXPRESS_DEFAULT_AREA).getOrDefault(emptyList()) }
+                        val recentDeferred = async { neteaseRepository.getRecentPlayedContents().getOrDefault(emptyList()) }
+                        listOf(fmDeferred.await(), dailyDeferred.await(), expressDeferred.await(), recentDeferred.await())
+                    }
+                val ready =
+                    State.Ready(
+                        fmContents = fm,
+                        dailyContents = daily,
+                        expressContents = express,
+                        expressArea = EXPRESS_DEFAULT_AREA,
+                        recentContents = recent,
+                    )
+                _state.value =
+                    if (fm.isEmpty() && daily.isEmpty() && express.isEmpty() && recent.isEmpty()) {
+                        State.Error()
+                    } else {
+                        ready
+                    }
+            }
+            _refreshing.value = false
         }
     }
 
