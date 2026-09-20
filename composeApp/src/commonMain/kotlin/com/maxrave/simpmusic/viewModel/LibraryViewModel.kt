@@ -111,6 +111,16 @@ class LibraryViewModel(
         MutableStateFlow(LocalResource.Loading())
     val followedYTArtists: StateFlow<LocalResource<List<ArtistsResult>>> get() = _followedYTArtists.asStateFlow()
 
+    /** 收藏的他人歌单(YT 库歌单分区,tab2) */
+    private val _youTubeLikedPlaylists: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val youTubeLikedPlaylists: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubeLikedPlaylists.asStateFlow()
+
+    /** 系统歌单(红心歌单 Liked Music 等),置顶满行展示 */
+    private val _youTubeAutoPlaylists: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val youTubeAutoPlaylists: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubeAutoPlaylists.asStateFlow()
+
     private val _youTubeMixForYou: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
     val youTubeMixForYou: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubeMixForYou.asStateFlow()
@@ -311,11 +321,16 @@ class LibraryViewModel(
      */
     fun getYouTubeLibrary() {
         _youTubePlaylist.value = LocalResource.Loading()
+        _youTubeLikedPlaylists.value = LocalResource.Loading()
+        _youTubeAutoPlaylists.value = LocalResource.Loading()
         _youTubeAlbums.value = LocalResource.Loading()
         _followedYTArtists.value = LocalResource.Loading()
         viewModelScope.launch {
-            playlistRepository.getLibraryPlaylist().collect { data ->
-                _youTubePlaylist.value = LocalResource.Success(data ?: emptyList())
+            playlistRepository.getLibraryPlaylistSplit().collect { split ->
+                // created 进主网格(加歌单弹窗也吃它:自建才能加);LM 等系统歌单置顶;他人歌单纯展示
+                _youTubePlaylist.value = LocalResource.Success(split?.created ?: emptyList())
+                _youTubeAutoPlaylists.value = LocalResource.Success(split?.auto ?: emptyList())
+                _youTubeLikedPlaylists.value = LocalResource.Success(split?.liked ?: emptyList())
             }
         }
         viewModelScope.launch {

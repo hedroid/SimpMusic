@@ -286,6 +286,38 @@ class ArtistViewModel(
             }
         }
     }
+
+    /**
+     * 网易艺人随机播放:shuffleParam(YouTube watch endpoint)对网易艺人恒为 null——
+     * simiSong 电台是"歌曲级"相似,不适合整个艺人。直接把热门歌曲洗牌整队装载,
+     * 语义对齐 YT 艺人 shuffleParam(队列=艺人电台,播完由无尽队列逻辑接管)。
+     * 必须传 PLAYLIST_CLICK+index:SONG_CLICK 只装点击那一首(混合页整队装载同款教训)。
+     */
+    fun onNeteaseShuffleClick(
+        songs: List<Track>,
+        artistId: String,
+        artistName: String?,
+    ) {
+        if (songs.isEmpty()) return
+        val shuffled = songs.shuffled()
+        viewModelScope.launch {
+            setQueueData(
+                QueueData.Data(
+                    listTracks = shuffled,
+                    firstPlayedTrack = shuffled.first(),
+                    playlistId = "NETEASE_ARTIST_$artistId",
+                    playlistName = "\"$artistName\" ${getString(Res.string.shuffle)}",
+                    playlistType = PlaylistType.RADIO,
+                    continuation = null,
+                ),
+            )
+            loadMediaItem(
+                shuffled.first(),
+                Config.PLAYLIST_CLICK,
+                0,
+            )
+        }
+    }
 }
 
 data class ArtistScreenData(

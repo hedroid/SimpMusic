@@ -510,10 +510,18 @@ fun ArtistScreen(
                                                 .background(artistAccent)
                                                 .clickable {
                                                     val param = state.data.shuffleParam
-                                                    if (param != null) {
-                                                        viewModel.onShuffleClick(param)
-                                                    } else {
-                                                        viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                                    val neteaseArtistId =
+                                                        state.data.channelId?.takeIf { it.toLongOrNull() != null }
+                                                    when {
+                                                        param != null -> viewModel.onShuffleClick(param)
+                                                        // 网易艺人:shuffleParam 恒 null,热门歌曲洗牌整队
+                                                        neteaseArtistId != null && state.data.popularSongs.isNotEmpty() ->
+                                                            viewModel.onNeteaseShuffleClick(
+                                                                songs = state.data.popularSongs,
+                                                                artistId = neteaseArtistId,
+                                                                artistName = state.data.title,
+                                                            )
+                                                        else -> viewModel.makeToast(runBlocking { getString(Res.string.error) })
                                                     }
                                                 },
                                         contentAlignment = Alignment.Center,

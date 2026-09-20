@@ -69,6 +69,8 @@ import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.track_count_short
+import simpmusic.composeapp.generated.resources.collected_playlists
+import simpmusic.composeapp.generated.resources.created_playlists
 import simpmusic.composeapp.generated.resources.unsubscribe_album_message
 import simpmusic.composeapp.generated.resources.unsubscribe_album_title
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
@@ -167,10 +169,12 @@ internal fun LibraryNeteaseTab(
 
             else -> {
                 // 红心歌单单独一行(用户 2026-09-20 定案):从网格里抽出,满行横卡置顶;
-                // 其余歌单走统一网格(主页口径 15dp 边距/Adaptive 160)。全宽行(专辑/歌手/
-                // 标题)不再自带水平 padding——网格整体已缩进,行内再 pad 会双重缩进。
+                // 其余按自建/收藏分区(用户点名:要区分自己歌单和收藏歌单)。
+                // 全宽行(专辑/歌手/标题)不再自带水平 padding——网格整体已缩进。
                 val heartPlaylist = playlistList.firstOrNull { it.id == likedPlaylistId }
                 val otherPlaylists = playlistList.filterNot { it.id == likedPlaylistId }
+                val ownPlaylists = otherPlaylists.filter { it.id in ownPlaylistIds }
+                val collectedPlaylists = otherPlaylists.filter { it.id !in ownPlaylistIds }
                 val layoutDirection = LocalLayoutDirection.current
                 val gridContentPadding =
                     PaddingValues(
@@ -196,31 +200,34 @@ internal fun LibraryNeteaseTab(
                             )
                         }
                     }
-                    if (otherPlaylists.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_playlists_header") {
-                            SectionHeader(stringResource(Res.string.netease_playlists))
+                    if (ownPlaylists.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_created_header") {
+                            SectionHeader(stringResource(Res.string.created_playlists))
                         }
-                        items(otherPlaylists, key = { "netease_pl_${it.id}" }) { playlist ->
-                            HomeItemContentPlaylist(
-                                onClick = {
-                                    // 纯数字 ID 自动走网易歌单详情(M2 同页路由)
-                                    navController.navigate(PlaylistDestination(playlist.id))
-                                },
-                                data = playlist,
-                                // 长按三分支:收藏歌单=取消收藏;自建非红心=删除歌单(强确认);红心歌单=无
-                                onLongClick =
-                                    when {
-                                        playlist.id !in ownPlaylistIds -> {
-                                            { unsubscribePlaylistTarget = playlist }
-                                        }
+                        items(ownPlaylists, key = { "netease_pl_${it.id}" }) { playlist ->
+                            NeteasePlaylistTile(
+                                playlist = playlist,
+                                likedPlaylistId = likedPlaylistId,
+                                ownPlaylistIds = ownPlaylistIds,
+                                navController = navController,
+                                onUnsubscribe = { unsubscribePlaylistTarget = playlist },
+                                onDelete = { deletePlaylistTarget = playlist },
+                            )
+                        }
+                    }
 
-                                        playlist.id != likedPlaylistId -> {
-                                            { deletePlaylistTarget = playlist }
-                                        }
-
-                                        else -> null
-                                    },
-                                fillWidth = true,
+                    if (collectedPlaylists.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_collected_header") {
+                            SectionHeader(stringResource(Res.string.collected_playlists))
+                        }
+                        items(collectedPlaylists, key = { "netease_pl_${it.id}" }) { playlist ->
+                            NeteasePlaylistTile(
+                                playlist = playlist,
+                                likedPlaylistId = likedPlaylistId,
+                                ownPlaylistIds = ownPlaylistIds,
+                                navController = navController,
+                                onUnsubscribe = { unsubscribePlaylistTarget = playlist },
+                                onDelete = { deletePlaylistTarget = playlist },
                             )
                         }
                     }
@@ -336,6 +343,32 @@ private fun SectionHeader(
                 top = 10.dp,
                 bottom = 4.dp,
             ),
+    )
+}
+
+/** 歌单 tile(自建/收藏两分区共用):长按三分支——收藏=取消收藏,自建非红心=删除,红心=无 */
+@Composable
+private fun NeteasePlaylistTile(
+    playlist: PlaylistEntity,
+    likedPlaylistId: String?,
+    ownPlaylistIds: Set<String>,
+    navController: NavController,
+    onUnsubscribe: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    HomeItemContentPlaylist(
+        onClick = {
+            // 纯数字 ID 自动走网易歌单详情(M2 同页路由)
+            navController.navigate(PlaylistDestination(playlist.id))
+        },
+        data = playlist,
+        onLongClick =
+            when {
+                playlist.id !in ownPlaylistIds -> onUnsubscribe
+                playlist.id != likedPlaylistId -> onDelete
+                else -> null
+            },
+        fillWidth = true,
     )
 }
 

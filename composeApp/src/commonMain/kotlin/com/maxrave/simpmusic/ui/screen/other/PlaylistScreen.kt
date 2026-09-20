@@ -578,10 +578,10 @@ fun PlaylistScreen(
                                                             ) {
                                                                 HeartCheckBox(
                                                                     size = 28,
-                                                                    checked = liked,
+                                                                    checked = remoteSaved ?: liked,
                                                                     modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
                                                                     onStateChange = {
-                                                                        if (favoriteEnabled) viewModel.setRemoteSaved(!liked) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                                        if (favoriteEnabled) viewModel.setRemoteSaved(!(remoteSaved ?: liked)) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                                     },
                                                                 )
                                                             }
@@ -878,10 +878,10 @@ fun PlaylistScreen(
                                                         ) {
                                                             HeartCheckBox(
                                                                 size = 28,
-                                                                checked = liked,
+                                                                checked = remoteSaved ?: liked,
                                                                 modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
                                                                 onStateChange = {
-                                                                    if (favoriteEnabled) viewModel.setRemoteSaved(!liked) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                                    if (favoriteEnabled) viewModel.setRemoteSaved(!(remoteSaved ?: liked)) else sharedViewModel.notifyFavoriteNeedsLogin()
                                                                 },
                                                             )
                                                         }

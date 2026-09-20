@@ -1,16 +1,23 @@
 package com.maxrave.simpmusic.ui.screen.library
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,9 +30,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
@@ -42,18 +57,21 @@ import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.followed
+import simpmusic.composeapp.generated.resources.collected_playlists
+import simpmusic.composeapp.generated.resources.created_playlists
 import simpmusic.composeapp.generated.resources.no_YouTube_playlists
-import simpmusic.composeapp.generated.resources.playlists
 import simpmusic.composeapp.generated.resources.starred_albums
 
 /**
- * "您的 YouTube Music" tab(2026-09-20 定稿):三分区单页,结构镜像"您的网易云"——
- * YouTube 歌单(云端,点赞收藏+自建) / 收藏的专辑(云端 FEmusic_liked_albums) /
- * 关注的歌手(本地关注表镜像,YT 关注双写;沉底)。
+ * "您的 YouTube Music" tab(2026-09-20 定稿):分区镜像"您的网易云"——
+ * 系统歌单置顶满行(红心歌单 Liked Music 等,browseId 固定) / 创建的歌单(云端自建) /
+ * 收藏的歌单(他人创建,tab2) / 收藏的专辑(云端) / 关注的歌手(本地镜像;沉底)。
  * **不放本地歌单**——本地歌单/收藏是刻意下线的功能,入口不在这里恢复。
  *
  * 布局走 [LibraryGridDefaults] 统一口径(主页 15dp 边距);专辑/歌手行复用网易 tab 同款
- * 行组件(horizontalPadding=0,网格整体已缩进);三分区独立降级,失败分区隐藏。
+ * 行组件(horizontalPadding=0,网格整体已缩进);分区独立降级,失败分区隐藏。
+ * 分区数据来自 [com.maxrave.domain.repository.PlaylistRepository.getLibraryPlaylistSplit]
+ * (YTM App"已创建/已喜欢"筛选同源 tab;单 tab 响应退化见其注释)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +79,8 @@ internal fun LibraryYouTubeTab(
     navController: NavController,
     contentPadding: PaddingValues,
     playlists: LocalResource<List<PlaylistsResult>>,
+    likedPlaylists: LocalResource<List<PlaylistsResult>> = LocalResource.Loading(),
+    autoPlaylists: LocalResource<List<PlaylistsResult>> = LocalResource.Loading(),
     albums: LocalResource<List<AlbumsResult>>,
     artists: LocalResource<List<ArtistsResult>>,
     isRefreshing: Boolean,
@@ -82,10 +102,19 @@ internal fun LibraryYouTubeTab(
     val pullToRefreshState = rememberPullToRefreshState()
 
     val playlistList = (playlists as? LocalResource.Success)?.data.orEmpty()
+    val likedList = (likedPlaylists as? LocalResource.Success)?.data.orEmpty()
+    val autoList = (autoPlaylists as? LocalResource.Success)?.data.orEmpty()
     val albumList = (albums as? LocalResource.Success)?.data.orEmpty()
     val artistList = (artists as? LocalResource.Success)?.data.orEmpty()
-    val anyLoading = playlists is LocalResource.Loading || albums is LocalResource.Loading || artists is LocalResource.Loading
-    val hasContent = playlistList.isNotEmpty() || albumList.isNotEmpty() || artistList.isNotEmpty()
+    val anyLoading =
+        playlists is LocalResource.Loading ||
+            likedPlaylists is LocalResource.Loading ||
+            autoPlaylists is LocalResource.Loading ||
+            albums is LocalResource.Loading ||
+            artists is LocalResource.Loading
+    val hasContent =
+        playlistList.isNotEmpty() || likedList.isNotEmpty() || autoList.isNotEmpty() ||
+            albumList.isNotEmpty() || artistList.isNotEmpty()
 
     PullToRefreshBox(
         modifier = Modifier.fillMaxSize(),
@@ -141,15 +170,46 @@ internal fun LibraryYouTubeTab(
                     contentPadding = gridContentPadding,
                     state = state,
                 ) {
+                    // 系统歌单置顶满行(红心歌单 Liked Music 等),不与自建混排
+                    if (autoList.isNotEmpty()) {
+                        items(autoList, span = { GridItemSpan(maxLineSpan) }, key = { "yt_auto_${it.browseId}" }) { playlist ->
+                            PinnedPlaylistRow(
+                                playlist = playlist,
+                                onClick = {
+                                    navController.navigate(
+                                        PlaylistDestination(playlist.browseId, isYourYouTubePlaylist = true),
+                                    )
+                                },
+                            )
+                        }
+                    }
+
                     if (playlistList.isNotEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }, key = "yt_cloud_header") {
-                            SectionHeader(stringResource(Res.string.playlists))
+                            SectionHeader(stringResource(Res.string.created_playlists))
                         }
                         items(playlistList, key = { "yt_${it.browseId}" }) { playlist ->
                             HomeItemContentPlaylist(
                                 onClick = {
                                     navController.navigate(
                                         PlaylistDestination(playlist.browseId, isYourYouTubePlaylist = true),
+                                    )
+                                },
+                                data = playlist,
+                                fillWidth = true,
+                            )
+                        }
+                    }
+
+                    if (likedList.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }, key = "yt_liked_header") {
+                            SectionHeader(stringResource(Res.string.collected_playlists))
+                        }
+                        items(likedList, key = { "yt_liked_${it.browseId}" }) { playlist ->
+                            HomeItemContentPlaylist(
+                                onClick = {
+                                    navController.navigate(
+                                        PlaylistDestination(playlist.browseId, isYourYouTubePlaylist = false),
                                     )
                                 },
                                 data = playlist,
@@ -207,4 +267,59 @@ private fun SectionHeader(
                 bottom = 4.dp,
             ),
     )
+}
+
+/** 置顶系统歌单满行横卡(同网易 tab 红心行样式):封面 + 标题 + 创建者副标题 */
+@Composable
+private fun PinnedPlaylistRow(
+    playlist: PlaylistsResult,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model =
+                ImageRequest
+                    .Builder(LocalPlatformContext.current)
+                    .data(playlist.thumbnails.lastOrNull()?.url)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .crossfade(550)
+                    .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .size(112.dp)
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(10.dp)),
+        )
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp),
+        ) {
+            Text(
+                text = playlist.title,
+                style = typo().titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (playlist.author.isNotBlank()) {
+                Text(
+                    text = playlist.author,
+                    style = typo().bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
 }

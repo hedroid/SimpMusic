@@ -92,6 +92,8 @@
     <string name="add">添加</string>
     <string name="playlist_name">歌单名称</string>
     <string name="create_new_playlist">新建歌单</string>
+    <string name="created_playlists">创建的歌单</string>
+    <string name="collected_playlists">收藏的歌单</string>
     <string name="could_not_create_playlist">创建歌单失败</string>
     <string name="create">创建</string>
     <string name="edit">编辑</string>

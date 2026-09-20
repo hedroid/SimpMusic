@@ -156,6 +156,8 @@ fun LibraryScreen(
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
     val nowPlaying by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
+    val youTubeLikedPlaylists by viewModel.youTubeLikedPlaylists.collectAsStateWithLifecycle()
+    val youTubeAutoPlaylists by viewModel.youTubeAutoPlaylists.collectAsStateWithLifecycle()
     val youTubeAlbums by viewModel.youTubeAlbums.collectAsStateWithLifecycle()
     val followedYTArtists by viewModel.followedYTArtists.collectAsStateWithLifecycle()
     val listCanvasSong by viewModel.listCanvasSong.collectAsStateWithLifecycle()
@@ -219,8 +221,10 @@ fun LibraryScreen(
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                // 三分区并行(歌单/收藏的专辑/关注的歌手),全空才拉,下拉刷新整页重拉
+                // 分区并行(系统/自建/收藏歌单/专辑/关注歌手),全空才拉,下拉刷新整页重拉
                 if (youTubePlaylist.data.isNullOrEmpty() &&
+                    youTubeLikedPlaylists.data.isNullOrEmpty() &&
+                    youTubeAutoPlaylists.data.isNullOrEmpty() &&
                     youTubeAlbums.data.isNullOrEmpty() &&
                     followedYTArtists.data.isNullOrEmpty()
                 ) {
@@ -289,6 +293,8 @@ fun LibraryScreen(
                     navController = navController,
                     contentPadding = innerPadding.copy(top = topAppBarHeight),
                     playlists = youTubePlaylist,
+                    likedPlaylists = youTubeLikedPlaylists,
+                    autoPlaylists = youTubeAutoPlaylists,
                     albums = youTubeAlbums,
                     artists = followedYTArtists,
                     isRefreshing = youTubePlaylist is LocalResource.Loading,
