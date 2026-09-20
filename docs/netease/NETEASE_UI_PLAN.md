@@ -549,10 +549,12 @@ channelId/browseId 均裸数字字符串，通知页导航按数字形状路由�
 `GridLibraryPlaylist`/`LibraryNeteaseTab` 全部走它（旧 FixedSize(132)+SpaceEvenly 的浮动
 页边作废）；`HomeItemContentPlaylist` 加 `fillWidth` 参数（槽内铺满，解决 cell>封面时的
 左右不对称）。同轮落地：红心歌单满行横卡置顶（`HeartPlaylistRow`）、"您的 YouTube Music"
-改双分区（YouTube 云端歌单 + 本地歌单含创建 tile，**本地歌单入口恢复**，HIDDEN_FEATURES
-二节同步）、混合页"新歌速递"标题 30dp 双重缩进修掉、tag 歌单页边距对齐、下载管理分段行
-10→15dp、隐藏设置项"离线时继续展示您的 YouTube 播放列表"（`SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE`）。
-全宽行组件 `NeteaseAlbumRow/NeteaseArtistRow` 加 `horizontalPadding` 参数（库页传 0 防双重缩进）。
+改三分区（**结构镜像"您的网易云"**：YouTube 云端歌单 / 收藏的专辑 `FEmusic_liked_albums`
+新增 `PlaylistRepository.getLibraryAlbum` / 关注的歌手=本地关注表镜像只取 YT 艺人；
+**明确不放本地歌单**，那是刻意下线的功能）、混合页"新歌速递"标题 30dp 双重缩进修掉、
+tag 歌单页边距对齐、下载管理分段行 10→15dp、隐藏设置项"离线时继续展示您的 YouTube 播放
+列表"（`SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE`）。全宽行组件 `NeteaseAlbumRow/NeteaseArtistRow`
+加 `horizontalPadding` 参数（库页传 0 防双重缩进）。
 
 ## 剩余工作盘点（2026-09-16 重整）
 

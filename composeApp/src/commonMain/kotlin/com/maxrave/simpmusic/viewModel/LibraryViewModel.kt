@@ -12,6 +12,7 @@ import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.data.type.ChartItem
 import com.maxrave.domain.data.type.MonthlyRecapItem
 import com.maxrave.domain.data.type.PlaylistType
@@ -21,6 +22,7 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.AnalyticsRepository
+import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.CommonRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
@@ -79,6 +81,7 @@ class LibraryViewModel(
     private val albumRepository: AlbumRepository,
     private val podcastRepository: PodcastRepository,
     private val neteaseRepository: NeteaseRepositoryImpl,
+    private val artistRepository: ArtistRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
 
@@ -95,6 +98,18 @@ class LibraryViewModel(
     private val _youTubePlaylist: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
     val youTubePlaylist: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubePlaylist.asStateFlow()
+
+    // ------------------------------------------------ "您的 YouTube Music"tab(三分区,并行独立降级,结构镜像"您的网易云")
+
+    /** 收藏的专辑(YT 云端 FEmusic_liked_albums) */
+    private val _youTubeAlbums: MutableStateFlow<LocalResource<List<AlbumsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val youTubeAlbums: StateFlow<LocalResource<List<AlbumsResult>>> get() = _youTubeAlbums.asStateFlow()
+
+    /** 关注的歌手(本地关注表镜像,YT 关注按钮本地+云端双写;只取 YT 艺人,数字 id=网易) */
+    private val _followedYTArtists: MutableStateFlow<LocalResource<List<ArtistsResult>>> =
+        MutableStateFlow(LocalResource.Loading())
+    val followedYTArtists: StateFlow<LocalResource<List<ArtistsResult>>> get() = _followedYTArtists.asStateFlow()
 
     private val _youTubeMixForYou: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
@@ -301,11 +316,47 @@ class LibraryViewModel(
         }
     }
 
-    fun getYouTubePlaylist() {
+    /**
+     * "您的 YouTube Music"tab 三分区并行拉取:YouTube 歌单(云端)/收藏的专辑(云端)/
+     * 关注的歌手(本地镜像)。分区独立降级,一个失败只隐藏该分区;结构与"您的网易云"tab 对称。
+     */
+    fun getYouTubeLibrary() {
         _youTubePlaylist.value = LocalResource.Loading()
+        _youTubeAlbums.value = LocalResource.Loading()
+        _followedYTArtists.value = LocalResource.Loading()
         viewModelScope.launch {
             playlistRepository.getLibraryPlaylist().collect { data ->
                 _youTubePlaylist.value = LocalResource.Success(data ?: emptyList())
+            }
+        }
+        viewModelScope.launch {
+            playlistRepository.getLibraryAlbum().collect { data ->
+                _youTubeAlbums.value = LocalResource.Success(data ?: emptyList())
+            }
+        }
+        viewModelScope.launch {
+            artistRepository.getFollowedArtists().collect { artists ->
+                _followedYTArtists.value =
+                    LocalResource.Success(
+                        artists
+                            .filter { it.channelId.toLongOrNull() == null }
+                            .map { entity ->
+                                ArtistsResult(
+                                    artist = entity.name,
+                                    browseId = entity.channelId,
+                                    category = "",
+                                    radioId = "",
+                                    resultType = "artist",
+                                    shuffleId = "",
+                                    thumbnails =
+                                        listOfNotNull(
+                                            entity.thumbnails?.let {
+                                                Thumbnail(width = 560, height = 560, url = it)
+                                            },
+                                        ),
+                                )
+                            },
+                    )
             }
         }
     }

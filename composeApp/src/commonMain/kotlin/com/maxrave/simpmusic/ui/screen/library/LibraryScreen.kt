@@ -156,6 +156,8 @@ fun LibraryScreen(
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
     val nowPlaying by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
+    val youTubeAlbums by viewModel.youTubeAlbums.collectAsStateWithLifecycle()
+    val followedYTArtists by viewModel.followedYTArtists.collectAsStateWithLifecycle()
     val listCanvasSong by viewModel.listCanvasSong.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
@@ -217,11 +219,12 @@ fun LibraryScreen(
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                if (youTubePlaylist.data.isNullOrEmpty()) {
-                    viewModel.getYouTubePlaylist()
-                }
-                if (yourLocalPlaylist.data.isNullOrEmpty()) {
-                    viewModel.getLocalPlaylist()
+                // 三分区并行(歌单/收藏的专辑/关注的歌手),全空才拉,下拉刷新整页重拉
+                if (youTubePlaylist.data.isNullOrEmpty() &&
+                    youTubeAlbums.data.isNullOrEmpty() &&
+                    followedYTArtists.data.isNullOrEmpty()
+                ) {
+                    viewModel.getYouTubeLibrary()
                 }
             }
 
@@ -285,14 +288,11 @@ fun LibraryScreen(
                 LibraryYouTubeTab(
                     navController = navController,
                     contentPadding = innerPadding.copy(top = topAppBarHeight),
-                    cloudPlaylists = youTubePlaylist,
-                    localPlaylists = yourLocalPlaylist,
+                    playlists = youTubePlaylist,
+                    albums = youTubeAlbums,
+                    artists = followedYTArtists,
                     isRefreshing = youTubePlaylist is LocalResource.Loading,
-                    onRefresh = {
-                        viewModel.getYouTubePlaylist()
-                        viewModel.getLocalPlaylist()
-                    },
-                    onCreateLocalPlaylist = { showAddSheet = true },
+                    onRefresh = { viewModel.getYouTubeLibrary() },
                     onScrolling = onScrolling,
                 )
             }
