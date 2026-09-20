@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -157,15 +158,16 @@ fun CreditScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Copyright text — same credit line as the EndOfPage footers on other pages
+        // Copyright text — same credit line and centered alignment as the EndOfPage footers
         Text(
             text = endOfPageCredit(),
             style = typo().bodySmall,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 25.dp, vertical = 5.dp),
-            textAlign = TextAlign.Start,
+                    .padding(horizontal = 25.dp, vertical = 5.dp)
+                    .alpha(0.8f),
+            textAlign = TextAlign.Center,
         )
 
         // Bottom spacing
