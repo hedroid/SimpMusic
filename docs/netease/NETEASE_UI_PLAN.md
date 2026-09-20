@@ -467,7 +467,7 @@ cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）�
     getRelated 对数字 ID 的静默失败；simiSong 见底后 `reseedNeteaseRadioIfEndless` 以当前尾曲换种子
     续链（种子没变=整批撞重即停，防循环）。android+jvm 双端同构。追加的歌照旧进 listTracks，
     队列页计数 YY 会随之增长。
-  - 未完成：模拟器运行时验证被用户接管（编译双 target 通过），FM toast/网易续链待手测。
+  - 运行时验证：编译双 target 通过后由用户在模拟器上手测接管（2026-09-20，未回报问题）。
 
 ## 剩余工作盘点（2026-09-16 重整）
 
