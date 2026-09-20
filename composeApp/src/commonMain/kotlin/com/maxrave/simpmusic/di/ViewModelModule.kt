@@ -154,7 +154,11 @@ val viewModelModule =
                 get(),
             )
         }
-        viewModel {
+        // single 而非 viewModel:{}——koinViewModel() 会把实例 scope 到导航栈条目,
+        // 底栏 tab 每次切走再回来都重建 VM,整页行/分区全部回 Loading 占位重拉
+        // (就是"切个 tab 回来满屏转圈"的根因)。single 让 tab 往返零重拉,兑现
+        // "tab 切换往返靠 VM 状态"的设计;进程重启自然重来。
+        single {
             NeteaseHomeViewModel(
                 get(),
             )
@@ -164,7 +168,7 @@ val viewModelModule =
                 get(),
             )
         }
-        viewModel {
+        single {
             NeteaseMixViewModel(
                 get(),
             )

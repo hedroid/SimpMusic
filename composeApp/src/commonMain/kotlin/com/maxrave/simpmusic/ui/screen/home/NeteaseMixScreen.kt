@@ -74,7 +74,7 @@ import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.netease_home_error
 import simpmusic.composeapp.generated.resources.personal_fm
@@ -95,7 +95,7 @@ import simpmusic.composeapp.generated.resources.retry
 @Composable
 fun NeteaseMixScreen(
     onScrolling: (onTop: Boolean) -> Unit = {},
-    viewModel: NeteaseMixViewModel = koinViewModel(),
+    viewModel: NeteaseMixViewModel = koinInject(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()

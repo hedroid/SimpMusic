@@ -84,7 +84,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.all
 import simpmusic.composeapp.generated.resources.let_s_pick_a_playlist_for_you
@@ -101,7 +101,7 @@ import simpmusic.composeapp.generated.resources.retry
 @Composable
 fun NeteaseHomeScreen(
     onScrolling: (onTop: Boolean) -> Unit = {},
-    viewModel: NeteaseHomeViewModel = koinViewModel(),
+    viewModel: NeteaseHomeViewModel = koinInject(),
     navController: NavController,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
