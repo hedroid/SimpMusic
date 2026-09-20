@@ -220,6 +220,9 @@ fun LibraryScreen(
                 if (youTubePlaylist.data.isNullOrEmpty()) {
                     viewModel.getYouTubePlaylist()
                 }
+                if (yourLocalPlaylist.data.isNullOrEmpty()) {
+                    viewModel.getLocalPlaylist()
+                }
             }
 
             // "您的网易云"三分区(歌单/关注的歌手/收藏的专辑):空数据才拉,下拉刷新走 force。
@@ -279,15 +282,19 @@ fun LibraryScreen(
             }
 
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                GridLibraryPlaylist(
-                    navController,
-                    innerPadding.copy(top = topAppBarHeight),
-                    youTubePlaylist,
-                    emptyText = Res.string.no_YouTube_playlists,
+                LibraryYouTubeTab(
+                    navController = navController,
+                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    cloudPlaylists = youTubePlaylist,
+                    localPlaylists = yourLocalPlaylist,
+                    isRefreshing = youTubePlaylist is LocalResource.Loading,
+                    onRefresh = {
+                        viewModel.getYouTubePlaylist()
+                        viewModel.getLocalPlaylist()
+                    },
+                    onCreateLocalPlaylist = { showAddSheet = true },
                     onScrolling = onScrolling,
-                ) {
-                    viewModel.getYouTubePlaylist()
-                }
+                )
             }
 
             LibraryChipType.NETEASE_PLAYLIST -> {

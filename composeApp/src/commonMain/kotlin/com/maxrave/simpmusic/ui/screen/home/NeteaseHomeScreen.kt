@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -432,13 +433,15 @@ internal fun NeteaseSongCard(
     }
 }
 
-/** 热门歌手行:100dp 圆形头像卡,点击进艺人页(M6 数字 ID 同页路由);库页"您的网易云"关注的歌手分区复用(showRank=false) */
+/** 热门歌手行:100dp 圆形头像卡,点击进艺人页(M6 数字 ID 同页路由);库页"您的网易云"关注的歌手分区复用(showRank=false,
+ *  horizontalPadding=0:网格已统一 15dp 边距,行自带会双重缩进) */
 @Composable
 internal fun NeteaseArtistRow(
     title: String,
     artists: List<com.maxrave.domain.data.model.searchResult.artists.ArtistsResult>,
     showRank: Boolean,
     navController: NavController,
+    horizontalPadding: Dp = 15.dp,
 ) {
     // YTM 主页"热门艺人"(排行榜 shelf 艺人榜)同款:3 行 240dp 横滑网格 + ItemArtistChart
     // (排名+60dp 圆头像+名字+副标题)。网易无订阅数,副标题留空隐藏。
@@ -447,7 +450,7 @@ internal fun NeteaseArtistRow(
     val lazyGridState = rememberLazyGridState()
     val snapperFlingBehavior =
         rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyGridState))
-    Column(Modifier.padding(horizontal = 15.dp)) {
+    Column(Modifier.padding(horizontal = horizontalPadding)) {
         Text(
             text = title,
             style = typo().headlineMedium,
@@ -504,8 +507,9 @@ internal fun NeteaseAlbumRow(
     area: String? = null,
     onAreaSelect: ((String) -> Unit)? = null,
     onAlbumLongClick: ((com.maxrave.domain.data.model.searchResult.albums.AlbumsResult) -> Unit)? = null,
+    horizontalPadding: Dp = 15.dp,
 ) {
-    Column(Modifier.padding(horizontal = 15.dp)) {
+    Column(Modifier.padding(horizontal = horizontalPadding)) {
         Text(
             text = title,
             style = typo().headlineMedium,

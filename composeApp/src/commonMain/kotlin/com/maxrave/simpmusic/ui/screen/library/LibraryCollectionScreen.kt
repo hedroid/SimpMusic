@@ -218,7 +218,8 @@ fun DownloadedManagementBody(
 
     Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            // 库页统一口径:水平边距 15dp 与主页/各 chip 一致(原 10dp 与其它页不同口径)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(modifier = Modifier.weight(1f)) {

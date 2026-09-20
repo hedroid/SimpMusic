@@ -20,8 +20,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.wrapped_recap_empty
 
-/** The page margin the card sits in, matching the gutter the playlist tiles below it carry. */
-private val CARD_GUTTER = 10.dp
+/** Zero: GridLibraryPlaylist already insets the whole grid 15dp, so the card only needs its
+ *  vertical breathing room — a gutter here would double the page margin. */
+private val CARD_GUTTER = 0.dp
 
 /**
  * The Wrapped filter's page: the way in to the reel, and a recap playlist per month beneath it.

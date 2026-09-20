@@ -317,8 +317,17 @@ fun HomeItemContentPlaylist(
     onLongClick: (() -> Unit)? = null,
     // 混源网格(收藏/下载)里标记来源的双品牌角标(网易/YT);纯源页面不传。
     showSourceBadge: Boolean = false,
+    // true=封面铺满所在网格槽宽(Adaptive 网格槽宽>thumbSize 时保持左右边距对称);
+    // false=固定 thumbSize 方卡(主页 LazyRow 等固定尺寸场景)。
+    fillWidth: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val thumbModifier =
+        if (fillWidth) {
+            Modifier.fillMaxWidth().aspectRatio(1f)
+        } else {
+            Modifier.size(thumbSize)
+        }
     Box(
         Modifier
             .wrapContentSize()
@@ -360,7 +369,7 @@ fun HomeItemContentPlaylist(
                     is MonthlyRecapItem -> null
                     else -> null
                 }
-            Box(modifier = Modifier.size(thumbSize)) {
+            Box(modifier = thumbModifier) {
                 AsyncImage(
                     model =
                         ImageRequest
@@ -439,9 +448,7 @@ fun HomeItemContentPlaylist(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier =
-                        Modifier
-                            .size(thumbSize)
-                            .aspectRatio(1f)
+                        thumbModifier
                             .clip(
                                 RoundedCornerShape(10.dp),
                             ),

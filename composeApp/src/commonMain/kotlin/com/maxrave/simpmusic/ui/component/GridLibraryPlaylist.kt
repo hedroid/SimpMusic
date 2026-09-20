@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.domain.data.entities.AlbumEntity
@@ -61,6 +64,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
+import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.StringResource
@@ -130,13 +134,25 @@ internal inline fun <reified T> GridLibraryPlaylist(
     ) {
         Crossfade(targetState = data) { data ->
             val list = (data as? LocalResource.Success)?.data ?: emptyList()
+            // 网格自身补主页口径的水平边距(15dp)+上下呼吸位;调用方 contentPadding 只需管
+            // TopBar/MiniPlayer 让位。全宽 header 项因此不再自带 gutter——包在本网格里的
+            // header 严禁再写水平 padding,否则双重缩进。
+            val layoutDirection = LocalLayoutDirection.current
+            val gridContentPadding =
+                PaddingValues(
+                    start = contentPadding.calculateStartPadding(layoutDirection) + LibraryGridDefaults.horizontalPadding,
+                    top = contentPadding.calculateTopPadding() + 4.dp,
+                    end = contentPadding.calculateEndPadding(layoutDirection) + LibraryGridDefaults.horizontalPadding,
+                    bottom = contentPadding.calculateBottomPadding() + 8.dp,
+                )
             // A header counts as content: a tab whose list is empty but whose header is the
             // point of the tab must not fall through to the empty text and hide it.
             if ((data is LocalResource.Success && list.isNotEmpty()) || createNewPlaylist != null || header != null) {
                 LazyVerticalGrid(
-                    columns = GridCells.FixedSize(size = 132.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    contentPadding = contentPadding,
+                    columns = GridCells.Adaptive(minSize = LibraryGridDefaults.minTileSize),
+                    horizontalArrangement = LibraryGridDefaults.horizontalArrangement,
+                    verticalArrangement = LibraryGridDefaults.verticalArrangement,
+                    contentPadding = gridContentPadding,
                     state = state,
                 ) {
                     if (header != null) {
@@ -152,14 +168,10 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                         createNewPlaylist()
                                     },
                             ) {
-                                Column(
-                                    modifier =
-                                        Modifier
-                                            .padding(10.dp),
-                                ) {
+                                Column {
                                     Box(
                                         Modifier
-                                            .size(132.dp)
+                                            .fillMaxWidth()
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(10.dp))
                                             .angledGradientBackground(
@@ -189,7 +201,7 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                         maxLines = 1,
                                         modifier =
                                             Modifier
-                                                .width(132.dp)
+                                                .fillMaxWidth()
                                                 .wrapContentHeight(align = Alignment.CenterVertically)
                                                 .padding(top = 8.dp)
                                                 .basicMarquee(
@@ -290,8 +302,9 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                 }
                             },
                             data = item,
-                            thumbSize = 132.dp,
+                            thumbSize = LibraryGridDefaults.minTileSize,
                             showSourceBadge = showSourceBadge,
+                            fillWidth = true,
                             onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
                         )
                     }
