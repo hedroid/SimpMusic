@@ -803,6 +803,7 @@
     <string name="share_lyrics_background">背景</string>
     <string name="share_lyrics_permission_denied">保存图片需要存储权限</string>
     <string name="share_lyrics_no_lyrics">这首歌没有可分享的歌词</string>
+        <string name="wrapped">年度回顾</string>
     <string name="wrapped_tap_to_begin">点按开始</string>
     <string name="wrapped_tap_to_continue">点按继续</string>
     <string name="wrapped_share">分享</string>

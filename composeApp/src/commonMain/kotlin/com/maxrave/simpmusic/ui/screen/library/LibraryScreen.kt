@@ -624,11 +624,13 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             // "您的库"chip 页已下线;下载管理升为顶层 chip(在 Wrapped 后),本地歌单等
-            // 独立路由保留但不再从 chip 行进入。
+            // 独立路由保留但不再从 chip 行进入。顺序(用户 2026-09-20 定序):网易云 →
+            // YouTube Music → 排行榜 → Wrapped → 下载管理;"进库默认选第一个可见 chip"
+            // 的取值顺序与此保持一致。
             val topLevelLibraryChips =
                 listOf(
-                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                     LibraryChipType.NETEASE_PLAYLIST,
+                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                     LibraryChipType.CHART,
                     LibraryChipType.WRAPPED,
                     LibraryChipType.DOWNLOADED_PLAYLIST,

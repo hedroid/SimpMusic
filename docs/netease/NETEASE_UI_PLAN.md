@@ -524,21 +524,25 @@ channelId/browseId 均裸数字字符串，通知页导航按数字形状路由�
   分区的**视觉**确认被模拟器 adb 注入失灵挡住（艺人行/搜索按钮 tap 间歇无效，AGENTS.md
   已有记录的坑），未走完 UI 冒烟——下次手动用模拟器时顺带看一眼周杰伦页的单曲/专辑两栏。
 
-## 播放稳定性修复 + 库页布局统一（2026-09-20 落地，core 714994d/9f4a948/3508aab + 主仓）
+## 播放稳定性修复 + 库页布局统一（2026-09-20 落地，core 714994d/9f4a948/3508aab/487f21d/7532dec + 主仓）
 
-**两个用户报的播放 bug 同根**：网易流 URL 短效 + HEAD 探活误判 → 反复打 `/song/url/v1`
-触发频控 → resolver 抛错（ExoPlayer 暂停后仍填缓冲 → 错误在暂停态发生）→ 旧重试逻辑
-`shouldPlay=true` 硬编码 → 暂停的歌"自己播放"；错误耗尽进 ERROR 态后 `play()` 是 no-op →
-"听了一会就不能播放"。修法全部平移 **NeriPlayer 的恢复语义**（`~/Documents/NeriPlayer`，
-`PlayerManagerLifecycleExtensions.onPlayerError` 是参考实现，**改播放恢复逻辑先看它**）：
+**"网易歌播放 1-2 分钟就没声音"的真根因（模拟器复现+OkHttp/AudioTrack/线程栈实锤，7532dec 修复）**：
+resolver 给**所有** DataSpec（含网络路径）截了 5MiB 分块，Media3 把"读满截断长度的 EOF"当流
+结束——**第二个分块永远不会装载**。网易 320k mp3 普遍 9-12MB，每首只解码 chunk1（~131s PCM，
+AudioTrack 精确送完这个量就 stop），剩余时间轴静音走完，下一首再响 2 分钟循环。YT 多数曲
+<5MiB 单块装得下所以长期没暴露（长 YT 曲同样中招）。修法：**网络解析路径返回不封顶 DataSpec**
+（一次 open 流完整首）；**仅缓存命中路径保留 5MiB 截断**（分块重查是防 LRU 驱逐的设计意图）。
+教训：①诊断"静音但进度在走"先抓 audio_flinger 活动轨+AudioTrack stop 帧数+OkHttp 请求清单，
+三者对上即可定位装载层;②kermit 日志默认没接 logcat writer，别指望 Logger.d 出现在 logcat。
 
-- `CrossfadeExoPlayerAdapter`：重试是否续播=错误瞬间 `playWhenReady||isPlaying`；加载完成
-  尊重 mid-load 暂停；ERROR 态按播放键=失效缓存+原地重载（换新链接）；焦点 GAIN 只在
-  用户未再交互时自动恢复（交互计数）；2001 加入可重试集合。
-- `Media3ServiceModule` resolver：网易行跳过 `is403Url` HEAD 探测（网易 CDN 对裸 HEAD 回
-  405/403 常态化误判，信任自盖 600s TTL；YT 保留探测）。
-- `NeteaseRepositoryImpl.getStreamInfo`：请求失败（≠灰歌）带 1.5s/3s 退避重试两次。
-- **网易封面模糊根因（探针实锤）**：`/playlist/list` 的 coverImgUrl 自带
+**"暂停的歌自己播放"修复（NeriPlayer 语义平移，`~/Documents/NeriPlayer` 的
+`PlayerManagerLifecycleExtensions.onPlayerError` 是参考实现，改播放恢复逻辑先看它）**：
+旧重试 `shouldPlay=true` 硬编码，ExoPlayer 暂停后仍填缓冲、错误可在暂停态发生 → 重装即复活。
+现在：重试是否续播=错误瞬间 `playWhenReady||isPlaying`；加载完成尊重 mid-load 暂停；ERROR 态
+按播放键=失效缓存原地重载；焦点 GAIN 只在用户未再交互时自动恢复；2001 入可重试集合。
+另有取流退避重试（请求失败≠灰歌，1.5s/3s 重试两次；灰歌不重试）——频控理论的产物，保留作加固。
+
+**网易封面模糊根因（探针实锤）**：`/playlist/list` 的 coverImgUrl 自带
   `?imageView&thumbnail=800y800|watermark|...|thumbnail=140y140&` 处理链，**链尾 140y140
   才是生效变换**（140px+水印，34KB vs param=500y500 的 390KB）——追加 `?param=` 会被忽略，
   必须**整段替换 query**（`toNeteaseCoverUrl`：`substringBefore('?')` + `?param=NNNyNN`）。
@@ -555,6 +559,11 @@ channelId/browseId 均裸数字字符串，通知页导航按数字形状路由�
 tag 歌单页边距对齐、下载管理分段行 10→15dp、隐藏设置项"离线时继续展示您的 YouTube 播放
 列表"（`SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE`）。全宽行组件 `NeteaseAlbumRow/NeteaseArtistRow`
 加 `horizontalPadding` 参数（库页传 0 防双重缩进）。
+
+**同轮小项（用户 2026-09-20 晚点名）**：库页 chip 顺序=网易云→YT→排行榜→Wrapped→下载管理；
+chip 标签 Wrapped 中文化（`wrapped` 去掉 translatable=false，zh=年度回顾/年度回顧）；长按搜索
+音源菜单网易在前；进库 tab 默认选第一个可见 chip（`LibraryViewModel` init 不再恢复持久化选中，
+恒取 `defaultLibraryChip()`=网易→YT→排行榜）。
 
 ## 剩余工作盘点（2026-09-16 重整）
 

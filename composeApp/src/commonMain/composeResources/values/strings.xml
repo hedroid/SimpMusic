@@ -830,7 +830,7 @@
     <string name="share_lyrics_background">Background</string>
     <string name="share_lyrics_permission_denied">Storage permission is needed to save the image</string>
     <string name="share_lyrics_no_lyrics">This song has no lyrics to share</string>
-    <string name="wrapped" translatable="false">Wrapped</string>
+    <string name="wrapped">Wrapped</string>
     <string name="wrapped_year" translatable="false">Wrapped %1$s</string>
     <string name="wrapped_tap_to_begin">Tap to begin</string>
     <string name="wrapped_tap_to_continue">Tap to continue</string>

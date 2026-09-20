@@ -92,24 +92,7 @@ fun SourceSwitchMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
     ) {
-        DropdownMenuItem(
-            text = { Text("YouTube Music") },
-            leadingIcon = {
-                Icon(
-                    SimpIcons.YouTubeMusic,
-                    null,
-                    tint = com.maxrave.simpmusic.ui.component.YouTubeBrandRed,
-                    modifier = Modifier.size(24.dp),
-                )
-            },
-            trailingIcon = {
-                if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
-            },
-            onClick = {
-                onSourceSelected(MusicSource.YOUTUBE_MUSIC)
-                onDismiss()
-            },
-        )
+        // 网易在前(用户 2026-09-20 定序,与库页 chip 顺序一致)
         DropdownMenuItem(
             text = { Text(stringResource(Res.string.netease)) },
             leadingIcon = {
@@ -126,6 +109,24 @@ fun SourceSwitchMenu(
             enabled = neteaseLoggedIn,
             onClick = {
                 onSourceSelected(MusicSource.NETEASE)
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("YouTube Music") },
+            leadingIcon = {
+                Icon(
+                    SimpIcons.YouTubeMusic,
+                    null,
+                    tint = com.maxrave.simpmusic.ui.component.YouTubeBrandRed,
+                    modifier = Modifier.size(24.dp),
+                )
+            },
+            trailingIcon = {
+                if (selectedSource == MusicSource.YOUTUBE_MUSIC) Icon(SimpIcons.Check, null)
+            },
+            onClick = {
+                onSourceSelected(MusicSource.YOUTUBE_MUSIC)
                 onDismiss()
             },
         )

@@ -203,21 +203,10 @@ class LibraryViewModel(
         viewModelScope.launch {
             val currentScreenJob =
                 launch {
-                    dataStoreManager.getString("library_current_screen").first()?.let { chipType ->
-                        LibraryChipType.fromStringValue(chipType)?.let {
-                            _currentScreen.value = it
-                        }
-                    }
-                    // "您的库"chip 页已下线:持久化落在它(或旧回落目标)上的弹回新默认
-                    if (_currentScreen.value in invisibleLibraryChips()) {
-                        setCurrentScreen(defaultLibraryChip())
-                    }
-                    // 持久化值是"您的网易云"但网易已登出 → 弹回默认
-                    if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST &&
-                        dataStoreManager.neteaseCookie.first().isEmpty()
-                    ) {
-                        setCurrentScreen(defaultLibraryChip())
-                    }
+                    // 进库默认选第一个可见 chip(2026-09-20 定序:网易云 → YT → 排行榜)。
+                    // 不再恢复持久化选中——持久化值没有其它读者,选中记忆与"点库回到
+                    // 第一个分区"的需求冲突;运行中登出网易的回落由下面的 collect 兜底。
+                    setCurrentScreen(defaultLibraryChip())
                 }
             val cookieJob =
                 launch {
