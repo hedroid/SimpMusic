@@ -467,6 +467,11 @@ private const val SHOW_DISCORD_SETTINGS = false
 // this to true to restore the toggle as-is.
 private const val SHOW_BACKUP_DOWNLOADED_SETTINGS = false
 
+// "Import playlists" is shelved (2026-09-20): the owner doesn't migrate from Spotify/other YT
+// clients anymore. The file picker launcher, ImportViewModel and the progress dialog all stay
+// compiled — flip this to true to restore the section as-is.
+private const val SHOW_IMPORT_PLAYLIST_SETTINGS = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
@@ -530,18 +535,10 @@ fun SettingScreen(
     // KmpFile rather than a Uri, so no expect/actual is needed. The type stays All because a
     // converted .json arrives with whatever MIME its source assigned it, and an application/json
     // filter would hide it on some hosts.
+    // The launcher itself lives inside the SHOW_IMPORT_PLAYLIST_SETTINGS block below; the
+    // ViewModel/state stay here because the progress dialog at the bottom still consumes them.
     val importViewModel: ImportViewModel = koinViewModel()
     val importState by importViewModel.importState.collectAsStateWithLifecycle()
-    val importLauncher =
-        rememberFilePickerLauncher(
-            type =
-                FilePickerFileType.All,
-            selectionMode = FilePickerSelectionMode.Single,
-        ) { file ->
-            file.firstOrNull()?.let {
-                importViewModel.import(it, pl)
-            }
-        }
 
     val enableTranslucentNavBar by remember { viewModel.translucentBottomBar.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val language by viewModel.language.collectAsStateWithLifecycle()
@@ -2693,33 +2690,45 @@ fun SettingScreen(
                         }
                     },
                 )
-                SettingItem(
-                    title = stringResource(Res.string.import_data),
-                    subtitle = stringResource(Res.string.import_playlists_from_other_apps),
-                    onClick = {
-                        coroutineScope.launch {
-                            importLauncher.launch()
+                if (SHOW_IMPORT_PLAYLIST_SETTINGS) {
+                    val importLauncher =
+                        rememberFilePickerLauncher(
+                            type =
+                                FilePickerFileType.All,
+                            selectionMode = FilePickerSelectionMode.Single,
+                        ) { file ->
+                            file.firstOrNull()?.let {
+                                importViewModel.import(it, pl)
+                            }
                         }
-                    },
-                )
-                val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.simpmusic.org/tools")
-                val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.simpmusic.org/tools")
-                Text(
-                    buildAnnotatedString {
-                        append(beforeUrl)
-                        withLink(
-                            LinkAnnotation.Url(
-                                "https://www.simpmusic.org/tools",
-                                TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
-                            ),
-                        ) {
-                            append("https://www.simpmusic.org/tools")
-                        }
-                        append(afterUrl)
-                    },
-                    style = typo().bodySmall,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                )
+                    SettingItem(
+                        title = stringResource(Res.string.import_data),
+                        subtitle = stringResource(Res.string.import_playlists_from_other_apps),
+                        onClick = {
+                            coroutineScope.launch {
+                                importLauncher.launch()
+                            }
+                        },
+                    )
+                    val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.simpmusic.org/tools")
+                    val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.simpmusic.org/tools")
+                    Text(
+                        buildAnnotatedString {
+                            append(beforeUrl)
+                            withLink(
+                                LinkAnnotation.Url(
+                                    "https://www.simpmusic.org/tools",
+                                    TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
+                                ),
+                            ) {
+                                append("https://www.simpmusic.org/tools")
+                            }
+                            append(afterUrl)
+                        },
+                        style = typo().bodySmall,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    )
+                }
             }
         }
         item(key = "about_us") {

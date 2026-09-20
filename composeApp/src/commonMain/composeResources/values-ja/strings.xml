@@ -121,7 +121,7 @@
     <string name="thumbnail_cache">サムネイルのキャッシュ</string>
     <string name="backup">バックアップ</string>
     <string name="backup_your_data">データをバックアップ</string>
-    <string name="backup_description">設定・ローカルプレイリスト・お気に入りの曲・ライブラリ・再生履歴をバックアップします</string>
+    <string name="backup_description">設定や再生履歴を含むアプリの全データをバックアップします</string>
     <string name="restore_your_data">データの復元</string>
     <string name="restore_your_saved_data">保存したデータを復元</string>
     <string name="about_us">開発者について</string>

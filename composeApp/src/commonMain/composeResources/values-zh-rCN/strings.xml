@@ -125,7 +125,7 @@
     <string name="thumbnail_cache">缩略图缓存</string>
     <string name="backup">备份</string>
     <string name="backup_your_data">备份您的数据</string>
-    <string name="backup_description">备份设置、本地歌单、收藏歌曲、曲库与听歌记录</string>
+    <string name="backup_description">备份全部应用数据（含设置与听歌记录）</string>
     <string name="restore_your_data">恢复您的数据</string>
     <string name="restore_your_saved_data">恢复您保存的数据</string>
     <string name="about_us">关于我们</string>

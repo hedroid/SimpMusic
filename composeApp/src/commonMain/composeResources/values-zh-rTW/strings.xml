@@ -146,7 +146,7 @@
     <string name="thumbnail_cache">縮圖快取</string>
     <string name="backup">備份</string>
     <string name="backup_your_data">備份您的資料</string>
-    <string name="backup_description">備份設定、本機播放清單、收藏歌曲、媒體庫與聆聽記錄</string>
+    <string name="backup_description">備份全部應用資料（含設定與聆聽記錄）</string>
     <string name="restore_your_data">還原您的資料</string>
     <string name="restore_your_saved_data">從備份還原</string>
     <string name="about_us">關於我們</string>

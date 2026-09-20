@@ -125,7 +125,7 @@
     <string name="thumbnail_cache">Thumbnail Cache</string>
     <string name="backup">Backup</string>
     <string name="backup_your_data">Backup Your Data</string>
-    <string name="backup_description">Back up settings, local playlists, liked songs, library and listening history</string>
+    <string name="backup_description">Back up all app data, including settings and listening history</string>
     <string name="restore_your_data">Restore Your Data</string>
     <string name="restore_your_saved_data">Restore your saved data</string>
     <string name="about_us">About us</string>

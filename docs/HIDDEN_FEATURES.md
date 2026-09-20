@@ -16,6 +16,7 @@
 | --- | --- | --- | --- | --- |
 | Discord 集成整个设置区（登录行 + Rich Presence 开关） | `SHOW_DISCORD_SETTINGS = false` | `SettingScreen.kt`（常量区） | 2026-09-20, d00110e8 | 常量改 `true`。登录路由/VM 状态/RPC sender/kizzy 模块全保留 |
 | "备份已下载数据"开关（下载缓存并入备份 zip） | `SHOW_BACKUP_DOWNLOADED_SETTINGS = false` | `SettingScreen.kt`（常量区，紧随 Discord 门控） | 2026-09-20 | 常量改 `true`。DataStore 键（默认关）/`setBackupDownloaded`/备份管线分支全保留 |
+| "导入播放列表"（从 Spotify/其它 YT 客户端迁移歌单） | `SHOW_IMPORT_PLAYLIST_SETTINGS = false` | `SettingScreen.kt`（常量区；行 + 工具链接说明文本 + 文件选择 launcher 一并门控） | 2026-09-20 | 常量改 `true`。`ImportViewModel`/进度弹窗/解析管线全保留 |
 | "主歌词提供商"设置项 | 入口删除（无门控，恢复看 TODO） | `SettingScreen.kt`（已无引用）；唯一选择处 = 播放页三点菜单，且仅 YT 歌显示（网易歌走官方专线） | 2026-09-15, 9829c5b2 | 跨源歌词供应商（QQ/酷狗…）做好后，入口放回**播放页菜单**，设置页不恢复（决策见 AGENTS.md 跨源歌词 TODO） |
 | neteaseAutoSwitch（网易灰歌自动切 YT 源） | SettingItem 注释掉 | `SettingScreen.kt:1431` 附近 | 2026-09-15（切源统一入口轮） | M9 灰歌回退实现后恢复此 SettingItem；VM 状态与 setter 均保留 |
 
@@ -32,8 +33,9 @@
 | FAVORITE_PLAYLIST（收藏歌曲/红心聚合） | **暂无 UI 入口**；红心本身仍可在播放页/迷你条操作，云端同步不受影响 |
 | FAVORITE_PODCAST | 随"您的库"一并下线 |
 
-**衍生影响（2026-09-20 已处理）**：本地歌单/收藏歌曲无入口后，**备份是这批本地数据的唯一带出通道**，
-"备份"按钮文案已改为明示包含它们（`backup_description`："备份设置、本地歌单、收藏歌曲、曲库与听歌记录"）。
+**衍生影响（2026-09-20 定稿）**：本地歌单/收藏歌曲无入口后，**备份是这批本地数据的唯一带出通道**，
+但文案**不罗列**这些无入口的条目（用户读不到对应物反而困惑）——"备份"按钮副标题最终归纳为
+`backup_description`："备份全部应用数据（含设置与听歌记录）"，准确且不超出用户可见范围。
 
 ## 三、播放器 / 菜单级移除
 
