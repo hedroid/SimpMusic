@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -159,18 +160,23 @@ fun NeteaseTagScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 160.dp),
                             modifier = Modifier.fillMaxSize(),
+                            // 与主页歌单行同口径:页面水平边距 15dp、卡片间距 4dp。
+                            // 旧实现无 contentPadding,间距靠每个 item 外包 Box(padding 8dp),
+                            // 页边只有 8dp 且随列数浮动,与主页 15dp 不一致
+                            contentPadding = PaddingValues(start = 15.dp, end = 15.dp, top = 4.dp, bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(current.contents, key = { it.playlistBrowseId }) { content ->
-                                Box(Modifier.padding(8.dp)) {
-                                    HomeItemContentPlaylist(
-                                        onClick = {
-                                            content.playlistBrowseId?.let { id ->
-                                                navController.navigate(PlaylistDestination(playlistId = id))
-                                            }
-                                        },
-                                        data = content,
-                                    )
-                                }
+                                HomeItemContentPlaylist(
+                                    onClick = {
+                                        content.playlistBrowseId?.let { id ->
+                                            navController.navigate(PlaylistDestination(playlistId = id))
+                                        }
+                                    },
+                                    data = content,
+                                    fillWidth = true,
+                                )
                             }
                             // copyright 页脚:跨满整行(普通 item 只占一格宽,格式就不对了)
                             item(span = { GridItemSpan(maxLineSpan) }) { EndOfPage() }
