@@ -282,8 +282,16 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
   设置；两个 handler 同步改）。
 - **实测坑**：`/v1/radio/get` 一批只回 **3 首**（与网易云 App"播一首补一首"的 FM
   语义一致），不是 30；页面 hero + 3 卡属正常形态。
-- **字符串**：`personal_fm`/`personal_fm_subtitle`/`personal_fm_start`（base+zh-rCN+zh-rTW）。
+- **字符串**：`personal_fm`/`personal_fm_subtitle`/`personal_fm_start`（base+zh-rCN+zh-rTW），
+  播放态按钮加 `personal_fm_pause`/`personal_fm_resume`（同 3 locale，ja/ko 回落 base）。
 - **不做**（后续候选）：底部 tab 标签随源切换文案；popAdjust 提示。
+- **双卡播放态**（2026-09-20 落地，6a4c2411）：FM hero"开始收听"按钮与红心电台入口卡
+  随当前活动队列切换形态——VM 用 `combine(queueData, controlState)` 出
+  `MixPlaybackState(isFmQueue/isHeartQueue/isPlaying)`；两类队列**同挂 FM 哨兵，按
+  playlistName 区分**（FM=personal_fm 本地化串、红心=`HEART_RADIO_QUEUE_NAME` 常量，
+  起播与判定两侧同源取值；core 续批不改名，reset() 清 queueData 后两卡自然回初始形态）。
+  活动态时按钮/整卡点击=暂停/恢复（`PlayerEvent.PlayPause`，不打断队列位置），否则起播；
+  FM 按钮 开始收听→暂停/继续收听 三态文案，红心卡尾图标 PlayArrow↔Pause（活动时 primary 色）。
 - **红心电台**（2026-09-13 落地，心动模式的本地替代）：原计划调
   `/playmode/intelligence/list`，实测该端点对第三方已**全面 500**（weapi/eapi/明文×
   参数网格全灭，见 core PITFALLS）——改为本地实现：红心歌单随机 30 首
