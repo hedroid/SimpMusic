@@ -431,6 +431,34 @@ cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）�
   当前逐首失败+汇总 toast）；
 - 本地歌单等"您的库"下线后的入口形态待定。
 
+## 播放队列页增强（2026-09-20 落地，双源通用非网易专属，80188193..4552c149）
+
+需求：队列标题显示当前曲目位置 xx/YY（字号与"无尽队列"一致）；列表浮动定位按钮，点击滚回当前曲行。两个队列 UI 都做了：
+
+- **队列弹窗 `QueueBottomSheet`**（ModalBottomSheet.kt；M3 Expressive/经典主题播放页 + MiniPlayer/歌词页入口共用）：
+  标题行变"队列 xx/YY"（titleMedium + bodySmall 计数，与 endless_queue 同 style）；定位按钮用 Material
+  `SmallFloatingActionButton` 右下浮动（bottom=116dp≈抬高两行歌高，容器 75% 透明），
+  `animateScrollToItem(currentQueueIndex)`。索引复用 `deriveOrderIndex`（NowPlayingScreen artwork pager
+  同款：播放器索引指向当前曲时采信、否则 videoId 回退 indexOfLast），输入全是响应式状态，
+  弹窗开着切歌/拖动换序实时联动。
+- **AM 主题队列视图 `AppleMusicQueueView`**：计数挂"正在播放"副标题行（"正在播放 12/34"，
+  queueSectionSubtitle，与无尽队列开关同款字号——右半行被开关占了、下行歌单名跑马灯占满，副标题是唯一空位）；
+  定位按钮复用 AM 自有浮动圆钮语言（`AppleMusicFloatingCircleButton`，38dp 白24%，从歌词页私有提升到
+  AppleMusicShared 共用）。定位按钮悬在列表最后一行上方（bottom=QUEUE_BOTTOM_FADE+16dp）。
+- **AM 队列语义定稿（重要变更）**：原"仅显示待播曲目"（drop 已播前缀，Apple Music 官方形状）→
+  **完整队列**（与 QueueBottomSheet 同构，已播在当前曲上方）。两次返工的教训都在这：upcoming-only 时
+  当前曲不在列表里，定位按钮无处可落（用户报"没定位到正播放的歌"）；把当前曲塞到列表头又导致
+  顶部无内容可翻（用户报"不能往上翻了"）。终稿=完整队列 + 本地索引==绝对索引（offset 换算全删，
+  拖动/点击/⋯菜单直用索引）+ 列表初始锚定当前曲（`rememberLazyListState(initialFirstVisibleItemIndex)`）+
+  切歌与定位都滚到 `currentOrderIndex` + 当前曲行 isPlaying 均衡器高亮。
+- **顺手修复**：QueueBottomSheet 的 LazyColumn 原是 Column 裸子节点，拿到无界高度约束 → 整个队列
+  一次性全组合不虚拟化；包 `Box(weight(1f))` 修复（AM 视图本来就是这种结构）。
+- **新增图标** `SimpIcons.MyLocation`（Material my_location，定位语义通用图标）。
+- **实测**（模拟器 2026-09-20）：双主题计数/定位/定位后上翻/拖动换序联动全过（拖当前曲 12→14 位，
+  计数 12/34→14/34，均衡器跟歌走；拖非当前曲计数不变=正确语义，顺序是否移动看列表即可）。
+- 遗留观察：adb 自动化测试 dismissing 单曲"⋯"菜单后，右下角出现过一次半透明白色残影（再点即消），
+  未复现；用户手动复现触发路径前不立项。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
