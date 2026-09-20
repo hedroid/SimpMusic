@@ -63,6 +63,11 @@
   无反馈）；Loading/Error 态=整页重载（指示器曾陪跑 4 个并行请求全程）。现统一 `refreshing`
   StateFlow + 600ms 上限/首批落地先收；防抖动重触发（compareAndSet）。
   实测（10fps 逐帧）：两页指示器均 ~0.5s 收，内容全程稳定，数据静默落地替换。
+- **tab 往返重建 VM（2026-09-20 终局根因，ab4d4a2f）**：`koinViewModel()` 把
+  NeteaseHome/NeteaseMixViewModel scope 到导航栈条目——每次切底栏 tab 回来 VM 重建，主页整页回
+  行占位、混合页整页 shimmer 重拉，观感即"不管怎么修都在转圈"（由用户操作录屏定位；adb 复现的
+  单次下拉始终是干净路径，前四轮都没碰到这个）。两 VM 已注册 Koin **single**（调用侧 koinInject），
+  tab 往返零重拉。库页 LibraryViewModel 同为 entry-scoped（全库共享含 YT 数据，影响面大未动）。
 - chips：固定 8 个高频快捷（华语/欧美/日语/韩语/流行/摇滚/说唱/ACG），点击进分类网格页。
 - 分类体系：`/playlist/catalogue` 全量五组（语种/风格/场景/情感/主题），每组 hot 优先 15 张。
 - 分类内容：`/playlist/list`（网页同源，热度序）两页 ≈100 张。
