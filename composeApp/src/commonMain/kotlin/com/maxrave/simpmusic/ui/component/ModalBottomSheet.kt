@@ -66,6 +66,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -154,6 +155,7 @@ import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.Lyrics
+import com.maxrave.simpmusic.ui.icon.MyLocation
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlayCircle
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
@@ -169,6 +171,7 @@ import com.maxrave.simpmusic.ui.icon.SyncDisabled
 import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.screen.player.deriveOrderIndex
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
@@ -1078,6 +1081,22 @@ fun QueueBottomSheet(
     }
     val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsState(false)
 
+    // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
+    // uses (deriveOrderIndex): trust the player's own index when it points at the track
+    // nowPlayingState says is playing, else fall back to that track's last position in the
+    // queue. Both inputs are collected state, so the header counter and the locate button
+    // track song changes while the sheet is open.
+    val nowPlayingVideoId = songEntity?.videoId
+    val currentQueueIndex by remember(queue, nowPlayingVideoId) {
+        derivedStateOf {
+            deriveOrderIndex(
+                queue = queue,
+                nowPlayingVideoId = nowPlayingVideoId,
+                playerOrderIndex = musicServiceHandler.currentOrderIndex(),
+            )
+        }
+    }
+
     val shouldLoadMore =
         remember {
             derivedStateOf {
@@ -1226,14 +1245,25 @@ fun QueueBottomSheet(
                             .padding(10.dp),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(Res.string.queue),
-                        style = typo().titleMedium,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier =
                             Modifier
-                                .padding(horizontal = 20.dp)
-                                .weight(1f),
-                    )
+                                .weight(1f)
+                                .padding(start = 20.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.queue),
+                            style = typo().titleMedium,
+                        )
+                        if (queue.isNotEmpty()) {
+                            Text(
+                                text = "${currentQueueIndex + 1}/${queue.size}",
+                                style = typo().bodySmall,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(Res.string.endless_queue),
@@ -1252,98 +1282,131 @@ fun QueueBottomSheet(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                LazyColumn(
-                    horizontalAlignment = Alignment.Start,
-                    state = lazyListState,
+                // Box (not a bare LazyColumn) so the locate button can float over the list at
+                // BottomEnd, and weight(1f) so the list receives the sheet's remaining height as
+                // a BOUNDED constraint — a plain Column child gets an unbounded one, which makes
+                // the lazy list size to its whole content instead of virtualizing.
+                Box(
                     modifier =
                         Modifier
-                            .pointerInput(Unit) {
-                                detectDragGesturesAfterLongPress(
-                                    onDrag = { change, offset ->
-                                        Logger.d("QueueBottomSheet", "onDrag $offset")
-                                        change.consume()
-                                        dragDropState.onDrag(offset = offset)
-
-                                        if (overscrollJob?.isActive == true) {
-                                            return@detectDragGesturesAfterLongPress
-                                        }
-
-                                        dragDropState
-                                            .checkForOverScroll()
-                                            .takeIf { it != 0f }
-                                            ?.let {
-                                                overscrollJob =
-                                                    coroutineScope.launch {
-                                                        dragDropState.state.animateScrollBy(
-                                                            it * 1.3f,
-                                                            tween(easing = FastOutLinearInEasing),
-                                                        )
-                                                    }
-                                            }
-                                            ?: run { overscrollJob?.cancel() }
-                                    },
-                                    onDragStart = { offset ->
-                                        Logger.d("QueueBottomSheet", "onDragStart $offset")
-                                        dragDropState.onDragStart(offset)
-                                    },
-                                    onDragEnd = {
-                                        Logger.d("QueueBottomSheet", "onDragEnd")
-                                        dragDropState.onDragInterrupted(true)
-                                        overscrollJob?.cancel()
-                                    },
-                                    onDragCancel = {
-                                        Logger.d("QueueBottomSheet", "onDragCancel")
-                                        dragDropState.onDragInterrupted()
-                                        overscrollJob?.cancel()
-                                    },
-                                )
-                            },
+                            .fillMaxWidth()
+                            .weight(1f),
                 ) {
-                    itemsIndexed(
-                        queue,
-                        key = { i, t -> i.toString() + t.videoId },
-                    ) { index, track ->
-                        if (index != -1) {
-                            DraggableItem(
-                                dragDropState = dragDropState,
-                                index = index,
-                                modifier = Modifier,
-                            ) { _ ->
-                                SongFullWidthItems(
-                                    track = track,
-                                    isPlaying = track.videoId == songEntity?.videoId,
+                    LazyColumn(
+                        horizontalAlignment = Alignment.Start,
+                        state = lazyListState,
+                        modifier =
+                            Modifier
+                                .pointerInput(Unit) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDrag = { change, offset ->
+                                            Logger.d("QueueBottomSheet", "onDrag $offset")
+                                            change.consume()
+                                            dragDropState.onDrag(offset = offset)
+
+                                            if (overscrollJob?.isActive == true) {
+                                                return@detectDragGesturesAfterLongPress
+                                            }
+
+                                            dragDropState
+                                                .checkForOverScroll()
+                                                .takeIf { it != 0f }
+                                                ?.let {
+                                                    overscrollJob =
+                                                        coroutineScope.launch {
+                                                            dragDropState.state.animateScrollBy(
+                                                                it * 1.3f,
+                                                                tween(easing = FastOutLinearInEasing),
+                                                            )
+                                                        }
+                                                }
+                                                ?: run { overscrollJob?.cancel() }
+                                        },
+                                        onDragStart = { offset ->
+                                            Logger.d("QueueBottomSheet", "onDragStart $offset")
+                                            dragDropState.onDragStart(offset)
+                                        },
+                                        onDragEnd = {
+                                            Logger.d("QueueBottomSheet", "onDragEnd")
+                                            dragDropState.onDragInterrupted(true)
+                                            overscrollJob?.cancel()
+                                        },
+                                        onDragCancel = {
+                                            Logger.d("QueueBottomSheet", "onDragCancel")
+                                            dragDropState.onDragInterrupted()
+                                            overscrollJob?.cancel()
+                                        },
+                                    )
+                                },
+                    ) {
+                        itemsIndexed(
+                            queue,
+                            key = { i, t -> i.toString() + t.videoId },
+                        ) { index, track ->
+                            if (index != -1) {
+                                DraggableItem(
+                                    dragDropState = dragDropState,
+                                    index = index,
+                                    modifier = Modifier,
+                                ) { _ ->
+                                    SongFullWidthItems(
+                                        track = track,
+                                        isPlaying = track.videoId == songEntity?.videoId,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth(),
+                                        onClickListener = { videoId ->
+                                            if (videoId == track.videoId) {
+                                                musicServiceHandler.playMediaItemInMediaSource(index)
+                                            }
+                                        },
+                                        onMoreClickListener = {
+                                            showQueueItemBottomSheet(index)
+                                        },
+                                        onAddToQueue = {
+                                            sharedViewModel.addListToQueue(
+                                                arrayListOf(track),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            if (loadMoreState == QueueData.StateSource.STATE_INITIALIZING) {
+                                CenterLoadingBox(
                                     modifier =
                                         Modifier
-                                            .fillMaxWidth(),
-                                    onClickListener = { videoId ->
-                                        if (videoId == track.videoId) {
-                                            musicServiceHandler.playMediaItemInMediaSource(index)
-                                        }
-                                    },
-                                    onMoreClickListener = {
-                                        showQueueItemBottomSheet(index)
-                                    },
-                                    onAddToQueue = {
-                                        sharedViewModel.addListToQueue(
-                                            arrayListOf(track),
-                                        )
-                                    },
+                                            .fillMaxWidth()
+                                            .height(80.dp),
                                 )
                             }
                         }
-                    }
-                    item {
-                        if (loadMoreState == QueueData.StateSource.STATE_INITIALIZING) {
-                            CenterLoadingBox(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(80.dp),
-                            )
+                        item {
+                            EndOfPage()
                         }
                     }
-                    item {
-                        EndOfPage()
+                    if (queue.isNotEmpty()) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                if (currentQueueIndex in queue.indices) {
+                                    coroutineScope.launch {
+                                        lazyListState.animateScrollToItem(currentQueueIndex)
+                                    }
+                                }
+                            },
+                            containerColor = rememberSurfaceDarkColors().handle,
+                            contentColor = rememberSurfaceDarkColors().content,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = 16.dp),
+                        ) {
+                            Icon(
+                                imageVector = SimpIcons.MyLocation,
+                                contentDescription = stringResource(Res.string.now_playing),
+                            )
+                        }
                     }
                 }
             }
