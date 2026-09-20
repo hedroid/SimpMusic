@@ -13,6 +13,7 @@ import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,9 +85,9 @@ class NeteaseHomeViewModel(
     /** 顶栏 chips:固定 8 个高频分类快捷 */
     val chips: List<String> = neteaseRepository.curatedHomeTags
 
-    /** 下拉刷新置位:本次重置后的行加载走 force(绕过 10min 行缓存) */
-    @Volatile
-    private var forceNextLoads = false
+    /** 下拉刷新进行中(顶部指示器):已就绪行的后台重拉尚未全部落地 */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
     /** 进行中的行,防占位重组重复发请求 */
     private val inFlightRows = mutableSetOf<Row>()
@@ -107,33 +108,53 @@ class NeteaseHomeViewModel(
         }
     }
 
-    /** 下拉刷新:全部行回 Loading(页面原地不闪),可见行随即重拉;force 绕过行缓存 */
+    /** 下拉刷新(静默):已就绪的行**保持内容不回占位**,后台 force 重拉(绕过 10min 行缓存)、
+     *  落地即原位替换;失败行回 Loading 走重试;从未加载的行维持原状,滚到才拉。
+     *  指示器只陪跑到**第一批**重拉落地——各行并行重拉,最慢的行(分类目录/排行榜这类
+     *  多接口聚合)能到 10s+,指示器全程陪跑就是"顶端转圈转好多圈"的观感;收起后其余行
+     *  继续静默原位替换。曾经的实现是"全部行重置 Loading、各行转圈",已废弃。 */
     fun refresh() {
-        forceNextLoads = true
-        inFlightRows.clear()
-        _state.value = ReadyState(rows = Row.entries.associateWith { RowUi.Loading })
+        if (!_refreshing.compareAndSet(expect = false, update = true)) return
+        val snapshot = _state.value.rows
+        viewModelScope.launch {
+            var firstLanded = false
+            snapshot.filterValues { it is RowUi.Failed }.keys.forEach { row ->
+                _state.update { it.copy(rows = it.rows + (row to RowUi.Loading)) }
+            }
+            coroutineScope {
+                snapshot.forEach { (row, ui) ->
+                    when (ui) {
+                        is RowUi.Ready ->
+                            launch {
+                                val fresh = loadRow(row, force = true)
+                                _state.update { it.copy(rows = it.rows + (row to fresh)) }
+                                if (!firstLanded) {
+                                    firstLanded = true
+                                    _refreshing.value = false
+                                }
+                            }
+                        is RowUi.Failed -> launch { ensureRowLoaded(row) }
+                        RowUi.Loading -> {}
+                    }
+                }
+            }
+            _refreshing.value = false
+        }
     }
 
-    /** 行进入可视区(Loading 占位被组合)时调用:幂等,进行中/已就绪不重发 */
+    /** 行进入可视区(Loading 占位被组合)时调用:幂等,进行中/已就绪不重发;行走行缓存 */
     fun ensureRowLoaded(row: Row) {
         val current = (_state.value.rows[row]) ?: return
         if (current !is RowUi.Loading) return
         synchronized(inFlightRows) {
             if (!inFlightRows.add(row)) return
         }
-        val force = forceNextLoads
         viewModelScope.launch {
-            val ui = loadRow(row, force)
             // update{} 是原子读改写,并行完成的行各自结果都保留。这里曾是
-            // "_state.value = ReadyState(_state.value.rows + …)" 的先读后写:下拉刷新后
-            // 多行并行完成撞车,后写者把先写者刚落地的 Ready 覆盖回 Loading,该行占位
-            // 重组后再次拉取再次转圈——"下拉刷新顶部转圈转好几轮"的根因。
+            // "_state.value = ReadyState(_state.value.rows + …)" 的先读后写:并行行完成撞车,
+            // 后写者把先写者刚落地的 Ready 覆盖回 Loading,该行占位重组后再次拉取再次转圈。
+            val ui = loadRow(row, force = false)
             _state.update { it.copy(rows = it.rows + (row to ui)) }
-            // 本轮全部行离开 Loading 即收掉 force,兑现"本次重置后的行加载走 force"
-            // 的注释语义;置位后永不复位会让之后的行加载全绕过行缓存打网络。
-            if (force && _state.value.rows.values.all { it !is RowUi.Loading }) {
-                forceNextLoads = false
-            }
             synchronized(inFlightRows) { inFlightRows.remove(row) }
         }
     }

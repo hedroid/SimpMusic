@@ -105,6 +105,7 @@ fun NeteaseHomeScreen(
     navController: NavController,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
@@ -131,11 +132,12 @@ fun NeteaseHomeScreen(
         PullToRefreshBox(
             state = pullToRefreshState,
             onRefresh = viewModel::refresh,
-            isRefreshing = false, // 行级懒加载:刷新是同步重置到占位,各行自行转圈
+            // 静默刷新:行内容保持不动、后台重拉原位替换,顶部指示器是唯一的刷新信号
+            isRefreshing = refreshing,
             indicator = {
                 PullToRefreshDefaults.Indicator(
                     state = pullToRefreshState,
-                    isRefreshing = false,
+                    isRefreshing = refreshing,
                     modifier =
                         Modifier
                             .align(Alignment.TopCenter)
