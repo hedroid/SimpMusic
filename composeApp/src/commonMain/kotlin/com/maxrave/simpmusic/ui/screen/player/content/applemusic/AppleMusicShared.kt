@@ -138,6 +138,32 @@ internal val AppleMusicPillInactive = Color.White.copy(alpha = 0.24f)
 internal val AppleMusicTrackInactive = Color.White.copy(alpha = 0.26f)
 internal val AppleMusicTrackActive = Color.White.copy(alpha = 0.92f)
 
+/**
+ * Small translucent circle for overlay buttons floating over the artwork-derived background
+ * (lyrics share/vote/fullscreen, queue locate). Was private in AppleMusicLyricsView; promoted
+ * when the queue view needed the same button.
+ */
+@Composable
+internal fun AppleMusicFloatingCircleButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    Box(
+        modifier =
+            modifier
+                .appleMusicPressInflate()
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.24f))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(18.dp))
+    }
+}
+
 @Immutable
 internal data class AppleMusicTypography(
     val mainTitle: TextStyle,

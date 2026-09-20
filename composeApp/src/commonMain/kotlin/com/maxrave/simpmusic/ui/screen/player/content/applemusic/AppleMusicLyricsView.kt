@@ -305,25 +305,6 @@ internal fun AppleMusicLyricsView(
 // itself while you are just listening.
 private const val CLUSTER_AUTO_HIDE_MS = 8_000L
 
-@Composable
-private fun AppleMusicFloatingCircleButton(
-    icon: ImageVector,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .appleMusicPressInflate()
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.24f))
-                .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(imageVector = icon, contentDescription = "", tint = Color.White, modifier = Modifier.size(18.dp))
-    }
-}
-
 /** The sync-type half of the caption: "Word by word", "Line Synced" or "Unsynced". Its own line. */
 @Composable
 private fun appleMusicLyricsSyncText(lyricsData: NowPlayingScreenData.LyricsData): String {

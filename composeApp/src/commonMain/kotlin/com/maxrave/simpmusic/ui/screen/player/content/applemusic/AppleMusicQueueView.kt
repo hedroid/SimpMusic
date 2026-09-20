@@ -62,6 +62,7 @@ import com.maxrave.simpmusic.ui.component.QueueItemBottomSheet
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.rememberDragDropState
 import com.maxrave.simpmusic.ui.icon.Info
+import com.maxrave.simpmusic.ui.icon.MyLocation
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.Repeat
 import com.maxrave.simpmusic.ui.icon.RepeatOne
@@ -281,6 +282,23 @@ internal fun AppleMusicQueueView(
                     }
                 }
             }
+            if (upcoming.isNotEmpty()) {
+                // Over the last song row (the list's bottom fade is blank space, so the button
+                // centres on the last visible row). The AM queue is upcoming-only and already
+                // re-anchors to item 0 on every track change, so "locate" here means returning
+                // to that anchor — the boundary right under the current track.
+                AppleMusicFloatingCircleButton(
+                    icon = SimpIcons.MyLocation,
+                    onClick = {
+                        coroutineScope.launch { lazyListState.animateScrollToItem(0) }
+                    },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = QUEUE_BOTTOM_FADE + 16.dp),
+                    contentDescription = stringResource(Res.string.now_playing),
+                )
+            }
         }
 
         AppleMusicBottomCluster(
@@ -400,7 +418,16 @@ private fun AppleMusicContinuePlayingHeader(
             // printing an empty one.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(Res.string.now_playing),
+                    // "Now playing 12/34" — the count rides the subtitle line because this row's
+                    // right half is already taken by the endless-queue switch, and the playlist
+                    // name below marquee-fills the whole width. Same queueSectionSubtitle the
+                    // endless label uses, mirroring the queue sheet's 队列 xx/YY.
+                    text =
+                        if (state.currentOrderIndex >= 0 && state.artworkQueue.isNotEmpty()) {
+                            "${stringResource(Res.string.now_playing)} ${state.currentOrderIndex + 1}/${state.artworkQueue.size}"
+                        } else {
+                            stringResource(Res.string.now_playing)
+                        },
                     style = typography.queueSectionSubtitle,
                 )
                 val source = state.screenData.playlistName
