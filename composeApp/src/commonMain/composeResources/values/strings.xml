@@ -91,6 +91,8 @@
     <string name="clear_thumbnail_cache">Clear Thumbnail Cache</string>
     <string name="add">Add</string>
     <string name="playlist_name">Playlist Name</string>
+    <string name="create_new_playlist">New playlist</string>
+    <string name="could_not_create_playlist">Couldn\'t create the playlist</string>
     <string name="create">Create</string>
     <string name="edit">Edit</string>
     <string name="edit_title">Edit title</string>

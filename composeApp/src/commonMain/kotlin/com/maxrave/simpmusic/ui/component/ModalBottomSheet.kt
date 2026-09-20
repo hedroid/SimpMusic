@@ -128,6 +128,8 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
@@ -192,6 +194,10 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.create
+import simpmusic.composeapp.generated.resources.create_new_playlist
+import simpmusic.composeapp.generated.resources.could_not_create_playlist
+import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.remove_from_playlist
 import simpmusic.composeapp.generated.resources.unsubscribe_from_library
 import simpmusic.composeapp.generated.resources.netease_delete_playlist
@@ -2876,6 +2882,11 @@ fun SleepTimerBottomSheet(
     }
 }
 
+// 三点菜单"添加到歌单"的本地歌单分区下线(2026-09-20,用户定):只留云端歌单(按歌曲来源
+// 互斥)+ 列表顶部"新建歌单"直接建云端歌单并塞入这首歌。管线保留,恢复改 true。
+// 登记:docs/HIDDEN_FEATURES.md
+private const val SHOW_LOCAL_PLAYLIST_SECTION = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddToPlaylistModalBottomSheet(
@@ -2889,6 +2900,8 @@ fun AddToPlaylistModalBottomSheet(
     onNeteasePlaylistClick: (PlaylistsResult) -> Unit = {},
     onDismiss: () -> Unit,
     dataStoreManager: DataStoreManager = koinInject(),
+    playlistRepository: PlaylistRepository = koinInject(),
+    neteaseRepository: NeteaseRepositoryImpl = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
@@ -2902,6 +2915,82 @@ fun AddToPlaylistModalBottomSheet(
                 onDismiss()
             }
         }
+
+    // 新建歌单弹窗:云端(网易=隐私歌单+塞歌两步;YT=建单接口原生支持初始曲目)
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var creatingPlaylist by remember { mutableStateOf(false) }
+    if (showCreatePlaylistDialog) {
+        var newPlaylistName by remember { mutableStateOf("") }
+        val createFailedText = stringResource(Res.string.could_not_create_playlist)
+        val createPlaylistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { if (!creatingPlaylist) showCreatePlaylistDialog = false },
+            sheetState = createPlaylistSheetState,
+            containerColor = Color.Transparent,
+            contentColor = Color.Transparent,
+            dragHandle = null,
+            scrimColor = Color.Black.copy(alpha = .5f),
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Card(
+                        modifier = Modifier.width(60.dp).height(4.dp),
+                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
+                        shape = RoundedCornerShape(50),
+                    ) {}
+                    Spacer(modifier = Modifier.height(5.dp))
+                    OutlinedTextField(
+                        value = newPlaylistName,
+                        onValueChange = { s -> newPlaylistName = s },
+                        label = { Text(text = stringResource(Res.string.playlist_name)) },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        enabled = !creatingPlaylist,
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    TextButton(
+                        enabled = !creatingPlaylist && newPlaylistName.isNotBlank(),
+                        onClick = {
+                            val name = newPlaylistName.trim()
+                            val songId = videoId ?: return@TextButton
+                            if (name.isEmpty()) return@TextButton
+                            creatingPlaylist = true
+                            coroutineScope.launch {
+                                val ok =
+                                    runCatching {
+                                        if (songId.toLongOrNull() != null) {
+                                            neteaseRepository.createNeteasePlaylist(name).getOrNull()
+                                                ?.let { id ->
+                                                    neteaseRepository.addTracksToNeteasePlaylist(id, listOf(songId)).getOrDefault(false)
+                                                } ?: false
+                                        } else {
+                                            playlistRepository.createYouTubePlaylistWithTracks(name, listOf(songId)) != null
+                                        }
+                                    }.getOrDefault(false)
+                                creatingPlaylist = false
+                                if (ok) {
+                                    showCreatePlaylistDialog = false
+                                    hideModalBottomSheet()
+                                } else {
+                                    showToast(createFailedText, ToastGravity.Bottom)
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally),
+                    ) {
+                        Text(text = stringResource(Res.string.create))
+                    }
+                    EndOfModalBottomSheet()
+                }
+            }
+        }
+    }
+
     if (isBottomSheetVisible) {
         ModalBottomSheet(
             onDismissRequest = onDismiss,
@@ -2934,8 +3023,12 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
 
                     val chipRowState = rememberScrollState()
-                    // 0 = SimpMusic local, 1 = YouTube Music account, 2 = NetEase account.
-                    var selectedLibrary by remember { mutableStateOf(0) }
+                    // 0 = SimpMusic local(已下线,常量门控), 1 = YouTube Music account, 2 = NetEase account.
+                    var selectedLibrary by remember {
+                        mutableStateOf(
+                            if (videoId?.toLongOrNull() != null) 2 else if (SHOW_LOCAL_PLAYLIST_SECTION) 0 else 1,
+                        )
+                    }
                     // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败),YT 分区整段不亮
                     val visibleYouTubePlaylists =
                         if (videoId?.toLongOrNull() != null || youtubeLoggedIn != DataStoreManager.TRUE) {
@@ -2959,12 +3052,14 @@ fun AddToPlaylistModalBottomSheet(
                                     .background(Color.Transparent),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Chip(
-                                isAnimated = false,
-                                isSelected = selectedLibrary == 0,
-                                text = stringResource(Res.string.your_playlists),
-                                onClick = { selectedLibrary = 0 },
-                            )
+                            if (SHOW_LOCAL_PLAYLIST_SECTION) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 0,
+                                    text = stringResource(Res.string.your_playlists),
+                                    onClick = { selectedLibrary = 0 },
+                                )
+                            }
                             if (visibleYouTubePlaylists.isNotEmpty()) {
                                 Chip(
                                     isAnimated = false,
@@ -2984,9 +3079,18 @@ fun AddToPlaylistModalBottomSheet(
                         }
                     }
 
-                    if ((listLocalPlaylist.isEmpty() && selectedLibrary == 0) ||
+                    // 所选分区的云端账号已登录时,即使歌单列表为空也进入列表分支——
+                    // "新建歌单"行是列表的一部分,不能被空态文案挡掉
+                    val canCreateInSelectedLibrary =
+                        when (selectedLibrary) {
+                            1 -> youtubeLoggedIn == DataStoreManager.TRUE
+                            2 -> neteaseCookie.isNotBlank()
+                            else -> false
+                        }
+                    if (((SHOW_LOCAL_PLAYLIST_SECTION && listLocalPlaylist.isEmpty() && selectedLibrary == 0) ||
                         (visibleYouTubePlaylists.isEmpty() && selectedLibrary == 1) ||
                         (visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
+                    ) && !canCreateInSelectedLibrary
                     ) {
                         Text(
                             text = stringResource(Res.string.no_playlist_found),
@@ -3000,6 +3104,33 @@ fun AddToPlaylistModalBottomSheet(
                                 val cloudPlaylists =
                                     if (library == 1) visibleYouTubePlaylists else visibleNeteasePlaylists
                                 LazyColumn {
+                                    // 列表顶部固定"新建歌单"行:直接建云端歌单并把这首歌塞进去
+                                    item(key = "create_new_playlist") {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .clickable(onClick = { showCreatePlaylistDialog = true }),
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(12.dp).align(Alignment.CenterStart),
+                                            ) {
+                                                Image(
+                                                    imageVector = SimpIcons.Add,
+                                                    contentDescription = "",
+                                                    colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = stringResource(Res.string.create_new_playlist),
+                                                    style = typo().labelSmall,
+                                                    color = rememberSurfaceDarkColors().content,
+                                                )
+                                            }
+                                        }
+                                    }
                                     items(cloudPlaylists) { playlist ->
                                         Box(
                                             modifier =
@@ -3034,7 +3165,7 @@ fun AddToPlaylistModalBottomSheet(
                                         }
                                     }
                                 }
-                            } else {
+                            } else if (SHOW_LOCAL_PLAYLIST_SECTION) {
                                 LazyColumn {
                                     items(listLocalPlaylist) { playlist ->
                                         Box(

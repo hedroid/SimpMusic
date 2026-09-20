@@ -43,6 +43,7 @@
 | 功能 | 处置 | 位置 | 说明 |
 | --- | --- | --- | --- |
 | 详情卡"相似歌曲"入口 | 删除（字符串 `similar_songs` 保留备用） | 原 NowPlaying 详情卡数据行 | 因 YTM 描述卡无此元素、破坏双源一致性（2026-09-15）。电台功能仍从三点菜单"收听电台"进入；将来做独立相似歌曲页（复用歌单页布局），不回详情卡 |
+| "添加到歌单"弹窗的本地歌单分区 | 隐藏（`SHOW_LOCAL_PLAYLIST_SECTION = false`，`ModalBottomSheet.kt`） | 三点菜单→添加到歌单 | 2026-09-20 用户定：只留云端歌单（按歌曲来源互斥），列表顶部新增"新建歌单"行直接建云端歌单（网易=隐私歌单+塞歌，YT=建单接口原生带初始曲目，`PlaylistRepository.createYouTubePlaylistWithTracks`）。恢复改 true |
 | 网易艺人页 Popular"更多"按钮 | 隐藏（browseId 置 null） | `core` NeteaseRepository songs 映射 | 4e8752c3（2026-09-17）：top-50 一次给全，本就无更多页 |
 | 网易歌"加到歌单"弹窗的 YouTube 分区 | 按源隐藏 | `ModalBottomSheet.kt`（`visibleYouTubePlaylists` 对网易歌置空） | d1e076e0（2026-09-14） |
 
