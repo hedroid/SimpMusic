@@ -1387,6 +1387,10 @@ fun QueueBottomSheet(
                         }
                     }
                     if (queue.isNotEmpty()) {
+                        // Two song rows above the sheet bottom (row ≈ 50dp) so it floats over
+                        // the list instead of hugging the gesture bar; translucent container so
+                        // the rows it covers stay readable through it.
+                        val surfaceColors = rememberSurfaceDarkColors()
                         SmallFloatingActionButton(
                             onClick = {
                                 if (currentQueueIndex in queue.indices) {
@@ -1395,12 +1399,12 @@ fun QueueBottomSheet(
                                     }
                                 }
                             },
-                            containerColor = rememberSurfaceDarkColors().handle,
-                            contentColor = rememberSurfaceDarkColors().content,
+                            containerColor = surfaceColors.handle.copy(alpha = 0.75f),
+                            contentColor = surfaceColors.content,
                             modifier =
                                 Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(end = 16.dp, bottom = 16.dp),
+                                    .padding(end = 16.dp, bottom = 116.dp),
                         ) {
                             Icon(
                                 imageVector = SimpIcons.MyLocation,
