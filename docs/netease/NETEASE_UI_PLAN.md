@@ -292,6 +292,11 @@ LibraryViewModel 早期 TODO 里的"跨源合并分区页"设想已作废（会�
   起播与判定两侧同源取值；core 续批不改名，reset() 清 queueData 后两卡自然回初始形态）。
   活动态时按钮/整卡点击=暂停/恢复（`PlayerEvent.PlayPause`，不打断队列位置），否则起播；
   FM 按钮 开始收听→暂停/继续收听 三态文案，红心卡尾图标 PlayArrow↔Pause（活动时 primary 色）。
+- **混合页整队装载修复**（2026-09-20，73c2f6c9）：`playQueue` 原传 `SONG_CLICK`——只把点击
+  那首装进 player、`loadPlaylistOrAlbum` 永远缺席，表现为播放页上一首/下一首恒置灰、队列页
+  点其它歌无效（player 实际只有 1 首，`playMediaItemInMediaSource(index)` 越界无效）。
+  改传 `RADIO_CLICK`+index（PlaylistViewModel 电台同款），updateCatalog 整队入 player；
+  覆盖 FM/红心/每日推荐/新歌速递/最近在听五路起播，FM 哨兵续批不受影响。
 - **红心电台**（2026-09-13 落地，心动模式的本地替代）：原计划调
   `/playmode/intelligence/list`，实测该端点对第三方已**全面 500**（weapi/eapi/明文×
   参数网格全灭，见 core PITFALLS）——改为本地实现：红心歌单随机 30 首
