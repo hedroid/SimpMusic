@@ -221,6 +221,7 @@ UI 实现：chips 按 selectedSource 过滤，不动 `SearchType` 枚举。
   收藏的专辑（`/mine/rn/resource/list`），行级懒加载/10min 行缓存同其它行。
 - **艺人页"更多专辑"**：`AlbumRepositoryImpl.getAlbumMore` 对 `MPAD{数字}` 前缀分流 →
   `artistAlbums(limit=50)` 一次给全（无分页）；MoreAlbumsScreen 原样渲染。
+  （2026-09-20 二轮：按 type 拆单曲/专辑两组，见"通知页网易接入"节。）
 - **新碟上架地区 chips**（全部/华语/欧美/韩语/日语）：分地区行缓存 10min，
   chips 切换命中缓存即时换、miss 才网络。
 - 封面持久缓存可选加 Room 表/DataStore 之外的批量落盘（当前每封面一次 DataStore 写，
@@ -482,6 +483,33 @@ cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）�
     续链（种子没变=整批撞重即停，防循环）。android+jvm 双端同构。追加的歌照旧进 listTracks，
     队列页计数 YY 会随之增长。
   - 运行时验证：编译双 target 通过后由用户在模拟器上手测接管（2026-09-20，未回报问题）。
+
+## 通知页网易接入（2026-09-20 落地，关注歌手新发行提醒双源化）
+
+首页铃铛 → 通知页 = 关注歌手的新专辑/新单曲（12h 一次 `NotifyWork` 后台差集比对
+本地 `FollowedArtistSingleAndAlbum` 快照表）。**链路大半本来就通**：`getFollowedArtists`
+SQL 只有 `followed = 1` 不分源（网易关注经 setFollowedLocal 镜像写本地行），NotifyWork
+拼 `MPAD{channelId}` 对数字 ID 天然落 `getAlbumMore` 的网易路由；通知实体
+channelId/browseId 均裸数字字符串，通知页导航按数字形状路由（M6 已验）。本轮补三块：
+
+- **单曲/专辑拆分（重复通知根因修复）**：`/artist/albums` 的 hotAlbums 混装
+  专辑/EP/单曲，原网易分支**忽略 ALBUM/SINGLE 参数**、NotifyWork 两次拿到同一列表 →
+  一张新发行同时进 album/single 两个差集 = 两条重复通知。现在 `NeteaseAlbum` 新增
+  `type` 字段（toAlbum 解析；实测词表 `[EP, Single, 专辑]`），拆分规则 = 单曲
+  `type=="Single"`、**其余（专辑/EP/未知 null）一律归专辑组**——null 归专辑组保证
+  albumDetail 等无 type 的端点共享 DTO 不受影响。`getArtistMoreAlbums(artistId,
+  singles)` 按参数过滤，两组**不相交是硬约束**（jvmTest `AlbumTypeProbe` 实网断言：
+  周杰伦 44 张分 16 单曲/28 专辑，不相交+并集=全集）。`AlbumRepositoryImpl` 复制了
+  `MoreAlbumsViewModel.SINGLE_PARAM` 常量值（core 不依赖 composeApp，只能同值复制
+  并注释互指）。
+- **歌手页 singles 分区**：`getArtistBrowseData` 同规则拆分，`ArtistBrowse.singles`
+  从恒 null 变为真分区（ResultSingle 形状）→ 网易歌手页获得与 YT 同构的
+  单曲/专辑 两栏，行内与"更多"页数据一致（拆分规则同一处维护）。
+- **NotifyWork 限频**：网易歌手（channelId 纯数字）串行拉取间 `delay(500ms)` 防风控
+  （PITFALLS -462）；YT 侧不延迟。桌面端无 WorkManager worker 属平台既有限制，不动。
+- 验证边界：数据层经 AlbumTypeProbe 实网验证 + android 编译通过；歌手页新 singles
+  分区的**视觉**确认被模拟器 adb 注入失灵挡住（艺人行/搜索按钮 tap 间歇无效，AGENTS.md
+  已有记录的坑），未走完 UI 冒烟——下次手动用模拟器时顺带看一眼周杰伦页的单曲/专辑两栏。
 
 ## 剩余工作盘点（2026-09-16 重整）
 

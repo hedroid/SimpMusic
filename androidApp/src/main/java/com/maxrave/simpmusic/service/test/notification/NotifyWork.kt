@@ -15,6 +15,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.symmetricDifference
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
@@ -33,6 +34,11 @@ class NotifyWork(
     private val commonRepository: CommonRepository by inject()
 
     private val mapOfNotification = arrayListOf<NotificationModel>()
+
+    private companion object {
+        /** 网易艺人轮询间隔(风控保护,PITFALLS -462) */
+        const val NETEASE_POLL_GAP_MS = 500L
+    }
 
     override suspend fun doWork(): Result =
         withContext(Dispatchers.IO) {
@@ -104,6 +110,8 @@ class NotifyWork(
                         ),
                     )
                 }
+                // 网易歌手(artistId 纯数字)串行拉取间留间隔防风控;YT 侧无此敏感性,不延迟。
+                if (art.channelId.toLongOrNull() != null) delay(NETEASE_POLL_GAP_MS)
             }
             Logger.w("NotifyWork", "doWork: $mapOfNotification")
             NotificationHandler.createNotificationChannel(applicationContext)
