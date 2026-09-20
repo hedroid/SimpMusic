@@ -454,6 +454,12 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+// Discord Rich Presence is shelved (2026-09-20): the owner doesn't need the feature, so its
+// settings section is hidden. Everything behind it (login screen, SettingsViewModel state,
+// MediaServiceHandler RPC sender, kizzy module) stays compiled — flip this to true to restore
+// the section as-is.
+private const val SHOW_DISCORD_SETTINGS = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
@@ -607,7 +613,6 @@ fun SettingScreen(
     val romanizationStored by sharedViewModel.getRomanizationLanguages().collectAsStateWithLifecycle("")
     val japaneseDictionaryState by viewModel.japaneseDictionaryState.collectAsStateWithLifecycle()
     var showColorPickerDialog by rememberSaveable { mutableStateOf(false) }
-    val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
     val loggedIn by viewModel.loggedIn.collectAsStateWithLifecycle()
     val equalizerEnabled by viewModel.equalizerEnabled.collectAsStateWithLifecycle()
     val delayEnabled by viewModel.delayEnabled.collectAsStateWithLifecycle()
@@ -615,7 +620,6 @@ fun SettingScreen(
     val lastfmLoggedIn by viewModel.lastfmLoggedIn.collectAsStateWithLifecycle()
     val lastfmUsername by viewModel.lastfmUsername.collectAsStateWithLifecycle()
     val lastfmScrobbleEnabled by viewModel.lastfmScrobbleEnabled.collectAsStateWithLifecycle()
-    val richPresenceEnabled by viewModel.richPresenceEnabled.collectAsStateWithLifecycle()
     val keepServiceAlive by viewModel.keepServiceAlive.collectAsStateWithLifecycle()
 
     val crossfadeEnabled by viewModel.crossfadeEnabled.collectAsStateWithLifecycle()
@@ -2042,43 +2046,47 @@ fun SettingScreen(
                 )
             }
         }
-        item(key = "discord") {
-            Column {
-                Text(
-                    text = stringResource(Res.string.discord_integration),
-                    style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                SettingItem(
-                    title =
-                        if (discordLoggedIn) {
-                            stringResource(Res.string.log_out_from_discord)
-                        } else {
-                            stringResource(Res.string.log_in_to_discord)
+        if (SHOW_DISCORD_SETTINGS) {
+            item(key = "discord") {
+                val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
+                val richPresenceEnabled by viewModel.richPresenceEnabled.collectAsStateWithLifecycle()
+                Column {
+                    Text(
+                        text = stringResource(Res.string.discord_integration),
+                        style = typo().labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                    SettingItem(
+                        title =
+                            if (discordLoggedIn) {
+                                stringResource(Res.string.log_out_from_discord)
+                            } else {
+                                stringResource(Res.string.log_in_to_discord)
+                            },
+                        subtitle =
+                            if (discordLoggedIn) {
+                                stringResource(Res.string.logged_in)
+                            } else {
+                                stringResource(Res.string.intro_login_to_discord)
+                            },
+                        onClick = {
+                            if (discordLoggedIn) {
+                                viewModel.confirmLogOut(
+                                    confirmLabel = runBlocking { getString(Res.string.log_out_from_discord) },
+                                ) { viewModel.logOutDiscord() }
+                            } else {
+                                navController.navigate(DiscordLoginDestination)
+                            }
                         },
-                    subtitle =
-                        if (discordLoggedIn) {
-                            stringResource(Res.string.logged_in)
-                        } else {
-                            stringResource(Res.string.intro_login_to_discord)
-                        },
-                    onClick = {
-                        if (discordLoggedIn) {
-                            viewModel.confirmLogOut(
-                                confirmLabel = runBlocking { getString(Res.string.log_out_from_discord) },
-                            ) { viewModel.logOutDiscord() }
-                        } else {
-                            navController.navigate(DiscordLoginDestination)
-                        }
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.enable_rich_presence),
-                    subtitle = stringResource(Res.string.rich_presence_info),
-                    switch = (richPresenceEnabled to { viewModel.setDiscordRichPresenceEnabled(it) }),
-                    isEnable = discordLoggedIn,
-                )
+                    )
+                    SettingItem(
+                        title = stringResource(Res.string.enable_rich_presence),
+                        subtitle = stringResource(Res.string.rich_presence_info),
+                        switch = (richPresenceEnabled to { viewModel.setDiscordRichPresenceEnabled(it) }),
+                        isEnable = discordLoggedIn,
+                    )
+                }
             }
         }
         // Hidden entirely when the build carries no Last.fm credentials — a FOSS build, or a full

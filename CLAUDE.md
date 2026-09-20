@@ -109,7 +109,7 @@ Service modules:
 - **autoEqService/**: AutoEq headphone correction profiles (index + fixed-band curves)
 - **lyricsService/**: Lyrics fetching (LRCLIB, SimpMusic Lyrics, BetterLyrics)
 - **listenTogether/**: shared listening rooms, wire-compatible with Metrolist (`MetrolistGroup/metroproto`)
-- **kizzy/**: Discord Rich Presence
+- **kizzy/**: Discord Rich Presence (settings section hidden 2026-09-20 behind `SHOW_DISCORD_SETTINGS` in `SettingScreen.kt`; module itself intact)
 - **ktorExt/**: Ktor extensions for networking
 
 #### 4. **crashlytics/** & **crashlytics-empty/**
@@ -785,6 +785,8 @@ if (getPlatform() == Platform.Android) {
   - **Linux bundle: the whitelist gained `afir,amovie,asplit,amix`** (`scripts/mpv-linux/Dockerfile`), and the rebuilt slice no longer bundles `libglib-2.0.so.0` (the `java.awt.Desktop` cure finally lands). Trap on Apple Silicon: `docker buildx` is absent, so `--platform linux/amd64` is **silently ignored** by the legacy builder and `mpvSetupLinuxCi` produces an arm64 slice whose ELF check (e_type only) passes — pin the amd64 `ubuntu:22.04` base by digest (or install buildx) and check `e_machine == 62`. Built in 8 min under colima (vz + Rosetta); the tarball (16,909,206 B, SHA-256 `6cc64efb…`) replaced the Linux asset on the `abc` release of `simpmusic-files` on 2026-09-02 and is pinned in `mpvNativesChecksums`. An older pinned tarball would make Linux fall back to Delay-only through the tiered drop.
   - Verification lives in JVM tests against ffmpeg-generated reference vectors under `core/media/media3/src/test/resources/audio/` (echo bit-exact, convolver < 1e-4). **kotlin-lsp is not a compile gate here**: it has no KMP support and answers "No diagnostics" for a broken `commonMain` file; the JetBrains MCP is the only gate.
 
+- **Discord integration hidden from Settings (2026-09-20)**: the owner doesn't need Discord Rich Presence, so its whole settings section ("Discord integration" header + login/logout row + "Enable Rich Presence" toggle) is now gated behind `SHOW_DISCORD_SETTINGS = false` at the top of `SettingScreen.kt` — the same conditional-item shape Last.fm already uses (`if (viewModel.lastfmAvailable)`). **Hidden, not removed**: the login screen route, `SettingsViewModel` state, the `MediaServiceHandlerImpl` RPC sender and the `kizzy` module all stay compiled; flip the const to `true` to restore the section as-is. The two `collectAsStateWithLifecycle` calls moved inside the guarded item so no unused-state warnings remain. Caveat: the runtime path keys on `discordEnabled` + stored token in DataStore, so an account logged in *before* the hide would still push presence with no UI left to log out — clear app data (or the DataStore keys) if that ever matters.
+
 ## 🔄 CLAUDE.md Auto-Update Rule (MANDATORY)
 
 After completing any of the following types of changes, the AI agent **MUST** update this CLAUDE.md file:
@@ -809,6 +811,6 @@ After completing any of the following types of changes, the AI agent **MUST** up
 
 *This document helps AI Agents quickly understand the SimpMusic project. Update regularly when there are major changes to architecture or structure.*
 
-**Last updated**: 2026-09-17
+**Last updated**: 2026-09-20
 **Project version**: Check latest release on GitHub
 **Maintained by**: maxrave-dev and contributors
