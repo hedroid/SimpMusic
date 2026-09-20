@@ -524,6 +524,36 @@ channelId/browseId 均裸数字字符串，通知页导航按数字形状路由�
   分区的**视觉**确认被模拟器 adb 注入失灵挡住（艺人行/搜索按钮 tap 间歇无效，AGENTS.md
   已有记录的坑），未走完 UI 冒烟——下次手动用模拟器时顺带看一眼周杰伦页的单曲/专辑两栏。
 
+## 播放稳定性修复 + 库页布局统一（2026-09-20 落地，core 714994d/9f4a948/3508aab + 主仓）
+
+**两个用户报的播放 bug 同根**：网易流 URL 短效 + HEAD 探活误判 → 反复打 `/song/url/v1`
+触发频控 → resolver 抛错（ExoPlayer 暂停后仍填缓冲 → 错误在暂停态发生）→ 旧重试逻辑
+`shouldPlay=true` 硬编码 → 暂停的歌"自己播放"；错误耗尽进 ERROR 态后 `play()` 是 no-op →
+"听了一会就不能播放"。修法全部平移 **NeriPlayer 的恢复语义**（`~/Documents/NeriPlayer`，
+`PlayerManagerLifecycleExtensions.onPlayerError` 是参考实现，**改播放恢复逻辑先看它**）：
+
+- `CrossfadeExoPlayerAdapter`：重试是否续播=错误瞬间 `playWhenReady||isPlaying`；加载完成
+  尊重 mid-load 暂停；ERROR 态按播放键=失效缓存+原地重载（换新链接）；焦点 GAIN 只在
+  用户未再交互时自动恢复（交互计数）；2001 加入可重试集合。
+- `Media3ServiceModule` resolver：网易行跳过 `is403Url` HEAD 探测（网易 CDN 对裸 HEAD 回
+  405/403 常态化误判，信任自盖 600s TTL；YT 保留探测）。
+- `NeteaseRepositoryImpl.getStreamInfo`：请求失败（≠灰歌）带 1.5s/3s 退避重试两次。
+- **网易封面模糊根因（探针实锤）**：`/playlist/list` 的 coverImgUrl 自带
+  `?imageView&thumbnail=800y800|watermark|...|thumbnail=140y140&` 处理链，**链尾 140y140
+  才是生效变换**（140px+水印，34KB vs param=500y500 的 390KB）——追加 `?param=` 会被忽略，
+  必须**整段替换 query**（`toNeteaseCoverUrl`：`substringBefore('?')` + `?param=NNNyNN`）。
+  应用于 toMoodsMomentObject/toPlaylistEntity/toThumbnails 三个映射出口。
+
+库页统一（用户点名"都如主页一样保持同样的边距"）：新增 `ui/theme/LibraryGrid.kt`
+（`LibraryGridDefaults`：水平 15dp/间距 4(纵 8)dp/Adaptive 160dp tile 铺满槽宽），
+`GridLibraryPlaylist`/`LibraryNeteaseTab` 全部走它（旧 FixedSize(132)+SpaceEvenly 的浮动
+页边作废）；`HomeItemContentPlaylist` 加 `fillWidth` 参数（槽内铺满，解决 cell>封面时的
+左右不对称）。同轮落地：红心歌单满行横卡置顶（`HeartPlaylistRow`）、"您的 YouTube Music"
+改双分区（YouTube 云端歌单 + 本地歌单含创建 tile，**本地歌单入口恢复**，HIDDEN_FEATURES
+二节同步）、混合页"新歌速递"标题 30dp 双重缩进修掉、tag 歌单页边距对齐、下载管理分段行
+10→15dp、隐藏设置项"离线时继续展示您的 YouTube 播放列表"（`SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE`）。
+全宽行组件 `NeteaseAlbumRow/NeteaseArtistRow` 加 `horizontalPadding` 参数（库页传 0 防双重缩进）。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
