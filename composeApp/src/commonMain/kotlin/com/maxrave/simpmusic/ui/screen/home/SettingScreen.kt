@@ -205,6 +205,8 @@ import simpmusic.composeapp.generated.resources.auto_check_for_update_descriptio
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs_description
 import simpmusic.composeapp.generated.resources.backup
+import simpmusic.composeapp.generated.resources.backup_default_folder_name
+import simpmusic.composeapp.generated.resources.backup_description
 import simpmusic.composeapp.generated.resources.backup_location
 import simpmusic.composeapp.generated.resources.backup_location_default
 import simpmusic.composeapp.generated.resources.backup_downloaded
@@ -392,7 +394,6 @@ import simpmusic.composeapp.generated.resources.restore_your_data
 import simpmusic.composeapp.generated.resources.restore_your_saved_data
 import simpmusic.composeapp.generated.resources.rich_presence_info
 import simpmusic.composeapp.generated.resources.save
-import simpmusic.composeapp.generated.resources.save_all_your_playlist_data
 import simpmusic.composeapp.generated.resources.save_last_played
 import simpmusic.composeapp.generated.resources.save_last_played_track_and_queue
 import simpmusic.composeapp.generated.resources.save_playback_state
@@ -2523,6 +2524,12 @@ fun SettingScreen(
         }
         item(key = "backup") {
             Column {
+                val backupFolderName =
+                    backupLocation
+                        ?.substringAfterLast("tree/")
+                        ?.replace("%3A", ":")
+                        ?.replace("%2F", "/")
+                        ?.removePrefix("primary:")
                 Text(
                     text = stringResource(Res.string.backup),
                     style = typo().labelMedium,
@@ -2538,7 +2545,11 @@ fun SettingScreen(
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.auto_backup),
-                        subtitle = stringResource(Res.string.auto_backup_description),
+                        subtitle =
+                            stringResource(
+                                Res.string.auto_backup_description,
+                                backupFolderName ?: stringResource(Res.string.backup_default_folder_name),
+                            ),
                         switch = (autoBackupEnabled to { viewModel.setAutoBackupEnabled(it) }),
                     )
                     AnimatedVisibility(visible = autoBackupEnabled) {
@@ -2645,11 +2656,7 @@ fun SettingScreen(
                     SettingItem(
                         title = stringResource(Res.string.backup_location),
                         subtitle =
-                            backupLocation
-                                ?.substringAfterLast("tree/")
-                                ?.replace("%3A", ":")
-                                ?.replace("%2F", "/")
-                                ?.removePrefix("primary:")
+                            backupFolderName
                                 ?: stringResource(Res.string.backup_location_default),
                         onClick = {
                             backupLocationPicker.launch()
@@ -2658,7 +2665,7 @@ fun SettingScreen(
                 }
                 SettingItem(
                     title = stringResource(Res.string.backup),
-                    subtitle = stringResource(Res.string.save_all_your_playlist_data),
+                    subtitle = stringResource(Res.string.backup_description),
                     onClick = {
                         if (getPlatform() == Platform.Android) {
                             viewModel.backupNow()

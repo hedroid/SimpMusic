@@ -125,7 +125,7 @@
     <string name="thumbnail_cache">Thumbnail Cache</string>
     <string name="backup">Backup</string>
     <string name="backup_your_data">Backup Your Data</string>
-    <string name="save_all_your_playlist_data">Save all your playlist data</string>
+    <string name="backup_description">Back up settings, playlists, library and listening history</string>
     <string name="restore_your_data">Restore Your Data</string>
     <string name="restore_your_saved_data">Restore your saved data</string>
     <string name="about_us">About us</string>
@@ -619,7 +619,7 @@
     <string name="backup_downloaded">Backup downloaded data</string>
     <string name="backup_downloaded_description">Backup all downloaded songs's data</string>
     <string name="auto_backup">Auto backup</string>
-    <string name="auto_backup_description">Automatically backup your data to Downloads/SimpMusic folder</string>
+    <string name="auto_backup_description">Automatically back up your data to %1$s</string>
     <string name="backup_frequency">Backup frequency</string>
     <string name="daily">Daily</string>
     <string name="weekly">Weekly</string>
@@ -908,6 +908,7 @@
     <string name="month_full_dec">December</string>
     <string name="backup_location">Backup location</string>
     <string name="backup_location_default">Documents/SimpMusic (default)</string>
+    <string name="backup_default_folder_name">Documents/SimpMusic</string>
     <string name="language_follow_system">Follow system</string>
     <string name="language_follow_system_current">Follow system (current: %1$s)</string>
     <!-- NetEase source (feat/netease-source) -->

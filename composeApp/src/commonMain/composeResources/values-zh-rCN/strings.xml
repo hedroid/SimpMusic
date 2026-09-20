@@ -125,7 +125,7 @@
     <string name="thumbnail_cache">缩略图缓存</string>
     <string name="backup">备份</string>
     <string name="backup_your_data">备份您的数据</string>
-    <string name="save_all_your_playlist_data">保存您所有的歌单数据</string>
+    <string name="backup_description">备份设置、歌单、曲库与听歌记录</string>
     <string name="restore_your_data">恢复您的数据</string>
     <string name="restore_your_saved_data">恢复您保存的数据</string>
     <string name="about_us">关于我们</string>
@@ -511,7 +511,7 @@
     <string name="backup_downloaded">备份已下载数据</string>
     <string name="backup_downloaded_description">备份所有已下载的歌曲数据</string>
     <string name="auto_backup">自动备份</string>
-    <string name="auto_backup_description">自动备份您的数据到 Downloads/SimpMusic 文件夹</string>
+    <string name="auto_backup_description">自动备份您的数据到 %1$s</string>
     <string name="backup_frequency">备份频率</string>
     <string name="daily">每天</string>
     <string name="weekly">每周</string>

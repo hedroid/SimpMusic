@@ -121,7 +121,7 @@
     <string name="thumbnail_cache">サムネイルのキャッシュ</string>
     <string name="backup">バックアップ</string>
     <string name="backup_your_data">データをバックアップ</string>
-    <string name="save_all_your_playlist_data">再生リストのデータをすべて保存します</string>
+    <string name="backup_description">設定・プレイリスト・ライブラリ・再生履歴をバックアップします</string>
     <string name="restore_your_data">データの復元</string>
     <string name="restore_your_saved_data">保存したデータを復元</string>
     <string name="about_us">開発者について</string>
@@ -471,7 +471,7 @@
     <string name="backup_downloaded">ダウンロードしたデータをバックアップする</string>
     <string name="backup_downloaded_description">ダウンロードしたすべての曲のデータをバックアップします</string>
     <string name="auto_backup">自動バックアップ</string>
-    <string name="auto_backup_description">Downloads/SimpMusic フォルダにデータを自動的にバックアップします</string>
+    <string name="auto_backup_description">データを %1$s に自動的にバックアップします</string>
     <string name="no_playlist_found">ローカルプレイリストが見つかりませんでした。最初に作成してください</string>
     <string name="list_all_cookies_of_this_page">このページのすべてのクッキーを一覧表示</string>
     <string name="copied_to_clipboard">クリップボードにコピーしました</string>

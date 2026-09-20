@@ -121,7 +121,7 @@
     <string name="thumbnail_cache">썸네일 캐시</string>
     <string name="backup">백업</string>
     <string name="backup_your_data">데이터 백업</string>
-    <string name="save_all_your_playlist_data">내 재생목록 데이터 모두 저장</string>
+    <string name="backup_description">설정, 재생목록, 라이브러리, 재생 기록을 백업합니다</string>
     <string name="restore_your_data">데이터 복원</string>
     <string name="restore_your_saved_data">내 저장한 데이터 복원</string>
     <string name="about_us">정보</string>
@@ -504,7 +504,7 @@
     <string name="backup_downloaded">다운로드한 데이터 백업</string>
     <string name="backup_downloaded_description">모든 다운로드한 음악 데이터를 백업</string>
     <string name="auto_backup">자동 백업</string>
-    <string name="auto_backup_description">데이터를 Downloads/SimpMusic 폴더로 자동 백업합니다</string>
+    <string name="auto_backup_description">데이터를 %1$s 폴더로 자동 백업합니다</string>
     <string name="backup_frequency">백업 주기</string>
     <string name="daily">매일</string>
     <string name="weekly">매주</string>
