@@ -256,8 +256,9 @@ fun NeteaseMixScreen(
                             if (expressContents.isNotEmpty() || expressLoading) {
                                 // 新歌速递:编辑性新歌(与主页"推荐新歌"个性化不同源),地区 chips
                                 item(key = "express-header") {
+                                    // 外层别再加水平 padding:SectionHeader 自带 15dp,叠加会把
+                                    // 标题缩进 30dp、与其它分区标题错位
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 15.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
