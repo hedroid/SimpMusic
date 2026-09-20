@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.endOfPageCredit
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
@@ -156,9 +157,9 @@ fun CreditScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Copyright text
+        // Copyright text — same credit line as the EndOfPage footers on other pages
         Text(
-            text = stringResource(Res.string.copyright),
+            text = endOfPageCredit(),
             style = typo().bodySmall,
             modifier =
                 Modifier
