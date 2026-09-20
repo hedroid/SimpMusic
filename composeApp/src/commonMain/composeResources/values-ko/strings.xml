@@ -121,7 +121,7 @@
     <string name="thumbnail_cache">썸네일 캐시</string>
     <string name="backup">백업</string>
     <string name="backup_your_data">데이터 백업</string>
-    <string name="backup_description">설정, 재생목록, 라이브러리, 재생 기록을 백업합니다</string>
+    <string name="backup_description">설정, 로컬 재생목록, 좋아요한 곡, 라이브러리, 재생 기록을 백업합니다</string>
     <string name="restore_your_data">데이터 복원</string>
     <string name="restore_your_saved_data">내 저장한 데이터 복원</string>
     <string name="about_us">정보</string>

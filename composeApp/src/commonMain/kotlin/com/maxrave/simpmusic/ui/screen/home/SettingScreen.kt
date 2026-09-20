@@ -461,6 +461,12 @@ import java.time.format.DateTimeFormatter
 // the section as-is.
 private const val SHOW_DISCORD_SETTINGS = false
 
+// "Backup downloaded data" is shelved (2026-09-20): downloads live in the private SimpleCache
+// and bloating backup zips with them isn't wanted. The DataStore flag (default off),
+// SettingsViewModel setter and the backup/restore pipeline branches all stay compiled — flip
+// this to true to restore the toggle as-is.
+private const val SHOW_BACKUP_DOWNLOADED_SETTINGS = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
@@ -599,7 +605,6 @@ fun SettingScreen(
     val customOpenAIHeaders by viewModel.customOpenAIHeaders.collectAsStateWithLifecycle()
     val notificationLyrics by viewModel.notificationLyrics.collectAsStateWithLifecycle()
     val notificationLyricsMode by viewModel.notificationLyricsMode.collectAsStateWithLifecycle()
-    val backupDownloaded by viewModel.backupDownloaded.collectAsStateWithLifecycle()
     val backupLocation by viewModel.backupLocation.collectAsStateWithLifecycle()
     val autoBackupEnabled by viewModel.autoBackupEnabled.collectAsStateWithLifecycle()
     val autoBackupFrequency by viewModel.autoBackupFrequency.collectAsStateWithLifecycle()
@@ -2536,11 +2541,14 @@ fun SettingScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.backup_downloaded),
-                    subtitle = stringResource(Res.string.backup_downloaded_description),
-                    switch = (backupDownloaded to { viewModel.setBackupDownloaded(it) }),
-                )
+                if (SHOW_BACKUP_DOWNLOADED_SETTINGS) {
+                    val backupDownloaded by viewModel.backupDownloaded.collectAsStateWithLifecycle()
+                    SettingItem(
+                        title = stringResource(Res.string.backup_downloaded),
+                        subtitle = stringResource(Res.string.backup_downloaded_description),
+                        switch = (backupDownloaded to { viewModel.setBackupDownloaded(it) }),
+                    )
+                }
                 // Auto Backup (Android only)
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
