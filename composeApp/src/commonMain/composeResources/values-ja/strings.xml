@@ -395,6 +395,7 @@
     <string name="lyrics_provider_lrc">歌詞の提供元 LRCLIB</string>
     <string name="sync_first">この再生リストをYouTube Music に同期</string>
     <string name="endless_queue">無限のキュー</string>
+    <string name="endless_queue_fm_locked">パーソナルFMは無限ラジオのためオフにできません</string>
     <string name="do_not_show_again">再び表示しない</string>
     <string name="auto_check_for_update">最新版を自動で確認</string>
     <string name="auto_check_for_update_description">アプリを開いた時に更新を確認します</string>

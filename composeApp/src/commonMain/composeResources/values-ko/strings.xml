@@ -422,6 +422,7 @@
     <string name="lyrics_provider_lrc">LRCLIB에서 제공된 가사</string>
     <string name="sync_first">이 재생목록을 YouTube Music에 먼저 동기화</string>
     <string name="endless_queue">무한 대기열</string>
+    <string name="endless_queue_fm_locked">개인 FM은 무한 라디오라서 끌 수 없어요</string>
     <string name="do_not_show_again">다시 보지 않기</string>
     <string name="auto_check_for_update">업데이트 자동 확인</string>
     <string name="auto_check_for_update_description">앱을 열 때 업데이트 유무 확인</string>

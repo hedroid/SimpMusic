@@ -425,6 +425,7 @@
     <string name="lyrics_provider_lrc">歌词由 LRCLIB 提供</string>
     <string name="sync_first">首先将此播放列表同步到 YouTube 音乐</string>
     <string name="endless_queue">无尽队列</string>
+    <string name="endless_queue_fm_locked">私人FM本身就是无限电台，无法关闭</string>
     <string name="do_not_show_again">不再显示</string>
     <string name="auto_check_for_update">自动检查更新</string>
     <string name="auto_check_for_update_description">当您打开应用程序时检查更新</string>

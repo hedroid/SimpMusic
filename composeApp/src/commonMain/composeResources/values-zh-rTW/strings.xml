@@ -470,6 +470,7 @@
     <string name="lyrics_provider_lrc">歌詞由LRCLIB提供</string>
     <string name="sync_first">先將此播放清單同步至YouTube Music</string>
     <string name="endless_queue">無休止隊列</string>
+    <string name="endless_queue_fm_locked">私人FM本身就是無限電台，無法關閉</string>
     <string name="do_not_show_again">以後不再提示</string>
     <string name="auto_check_for_update">自動檢查更新</string>
     <string name="auto_check_for_update_description">啓動時檢查更新</string>

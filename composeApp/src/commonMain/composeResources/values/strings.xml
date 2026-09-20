@@ -525,6 +525,7 @@
     <string name="lyrics_provider_lrc">Lyrics provided by LRCLIB</string>
     <string name="sync_first">Sync this playlist to YouTube Music first</string>
     <string name="endless_queue">Endless queue</string>
+    <string name="endless_queue_fm_locked">Personal FM is always endless and can't be turned off</string>
     <string name="continue_playing">Continue Playing</string>
     <string name="continue_playing_endless_subtitle">Automatically adds similar songs when the queue ends</string>
     <string name="lyrics_sync_provider_footer" translatable="false">%1$s • %2$s</string>

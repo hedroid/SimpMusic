@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
@@ -73,11 +74,16 @@ import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import multiplatform.network.cmptoast.ToastGravity
+import multiplatform.network.cmptoast.showToast
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.continue_playing
 import simpmusic.composeapp.generated.resources.endless_queue
+import simpmusic.composeapp.generated.resources.endless_queue_fm_locked
 import simpmusic.composeapp.generated.resources.now_playing
 
 /**
@@ -137,12 +143,15 @@ internal fun AppleMusicQueueView(
             activePillContent = activePillContent,
             modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
         )
+        val queueDataState by musicServiceHandler.queueData.collectAsStateWithLifecycle()
         AppleMusicContinuePlayingHeader(
             state = state,
             dataStoreManager = dataStoreManager,
             typography = typography,
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
+            // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
+            isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
             modifier = Modifier.padding(bottom = 8.dp),
         )
 
@@ -385,6 +394,7 @@ private fun AppleMusicContinuePlayingHeader(
     typography: AppleMusicTypography,
     activePillContainer: Color,
     activePillContent: Color,
+    isFmQueue: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -433,9 +443,16 @@ private fun AppleMusicContinuePlayingHeader(
                 modifier = Modifier.padding(end = 8.dp),
             )
             Switch(
-                checked = endlessQueueEnabled,
+                checked = isFmQueue || endlessQueueEnabled,
                 onCheckedChange = { checked ->
-                    coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                    if (isFmQueue) {
+                        showToast(
+                            runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                            ToastGravity.Bottom,
+                        )
+                    } else {
+                        coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                    }
                 },
                 colors =
                     SwitchDefaults.colors(

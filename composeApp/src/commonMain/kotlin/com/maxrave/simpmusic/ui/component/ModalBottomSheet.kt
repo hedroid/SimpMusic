@@ -116,6 +116,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.data.io.readLocalImageBytes
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
@@ -231,6 +232,7 @@ import simpmusic.composeapp.generated.resources.downloading_video
 import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
 import simpmusic.composeapp.generated.resources.endless_queue
+import simpmusic.composeapp.generated.resources.endless_queue_fm_locked
 import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.extract_source
 import simpmusic.composeapp.generated.resources.itag
@@ -1080,6 +1082,8 @@ fun QueueBottomSheet(
         }
     }
     val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsState(false)
+    // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
+    val isFmQueue = queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID
 
     // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
     // uses (deriveOrderIndex): trust the player's own index when it points at the track
@@ -1271,10 +1275,17 @@ fun QueueBottomSheet(
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                         Switch(
-                            checked = endlessQueueEnable,
-                            onCheckedChange = {
-                                coroutineScope.launch {
-                                    dataStoreManager.setEndlessQueue(it)
+                            checked = isFmQueue || endlessQueueEnable,
+                            onCheckedChange = { checked ->
+                                if (isFmQueue) {
+                                    showToast(
+                                        runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                                        ToastGravity.Bottom,
+                                    )
+                                } else {
+                                    coroutineScope.launch {
+                                        dataStoreManager.setEndlessQueue(checked)
+                                    }
                                 }
                             },
                         )

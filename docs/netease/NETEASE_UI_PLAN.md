@@ -458,6 +458,16 @@ cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）�
   计数 12/34→14/34，均衡器跟歌走；拖非当前曲计数不变=正确语义，顺序是否移动看列表即可）。
 - 遗留观察：adb 自动化测试 dismissing 单曲"⋯"菜单后，右下角出现过一次半透明白色残影（再点即消），
   未复现；用户手动复现触发路径前不立项。
+- **2026-09-20 二轮（FM 锁定 + 网易无尽续播，core 4a88555）**：
+  - 无尽开关对**网易私人FM队列锁定为开**——FM 语义即无限电台（loadMore 凭哨兵放行与开关无关），
+    两个队列 UI 的 Switch checked 强制 true，点关闭弹 toast（新字符串 `endless_queue_fm_locked`×5 locale），
+    不落 DataStore。
+  - **网易普通队列的无尽续播打通**（原为"可做快赢"项）：无尽钩子耗尽时按尾曲 ID 形状分流——
+    网易数字 ID 转 `NETEASE_RADIO_<id>` 哨兵（continuation="0"）走 simiSong 首批，替代原来无条件
+    getRelated 对数字 ID 的静默失败；simiSong 见底后 `reseedNeteaseRadioIfEndless` 以当前尾曲换种子
+    续链（种子没变=整批撞重即停，防循环）。android+jvm 双端同构。追加的歌照旧进 listTracks，
+    队列页计数 YY 会随之增长。
+  - 未完成：模拟器运行时验证被用户接管（编译双 target 通过），FM toast/网易续链待手测。
 
 ## 剩余工作盘点（2026-09-16 重整）
 
@@ -491,8 +501,9 @@ cookie 在而表空时拉账号摘要补行，防清库只清 Room 的分裂）�
   405 时 toast"操作过于频繁，请稍后再试"。
 - **haze 顶栏闪烁修复推广**：库页四宫格页已修（底色兜底+fade 转场，065f3ca1），同款玻璃顶栏
   的高频页（歌单/专辑详情等）可照搬两步修法。
-- 无限队列网易尾曲续播：混源队列播到网易歌结尾 getRelated 静默失败不自动续——改走 simiSong
-  续批，链路全现成，反向打通后体验对齐 YT。
+- 无限队列网易尾曲续播：**已打通（2026-09-20）**——无尽钩子按 ID 形状分流（YT=RDAMVM+getRelated，
+  网易=NETEASE_RADIO_ 哨兵+simiSong 首批），simiSong 见底后以当前尾曲换种子续链
+  （种子没变即整批撞重则停，防循环）；android+jvm 双端。详见"播放队列页增强"小节。
 - RYD/SponsorBlock 对数字 ID 短路：去 logcat 噪音，和 songInfo 短路同款改法。
 - 官方罗马音 romalrc：M1 遗留增强项，渲染端本地引擎现成。
 - 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"定稿相悖已过时）；MusicSourceProvider
