@@ -25,15 +25,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,6 +102,7 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.description
+import simpmusic.composeapp.generated.resources.more
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.subscribers
 import simpmusic.composeapp.generated.resources.wrapped_recap_subtitle
@@ -112,9 +116,6 @@ fun HomeItem(
 ) {
     var bottomSheetShow by remember { mutableStateOf(false) }
 
-    val lazyListState = rememberLazyListState()
-    val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
-
     var track by remember { mutableStateOf<Track?>(null) }
 
     if (bottomSheetShow) {
@@ -125,37 +126,174 @@ fun HomeItem(
         )
     }
 
-    val channelId = data.channelId
-    Column {
+    MediaRow(
+        title = data.title,
+        subtitle = data.subtitle,
+        headerThumbnail = data.thumbnail?.lastOrNull()?.url,
+        // HomeScreen 的 shelf 外层 Column 已提供 15dp 水平边距,行内传 0 防双重缩进
+        horizontalPadding = 0.dp,
+        onHeaderClick =
+            data.channelId?.let { channelId ->
+                {
+                    navController.navigate(
+                        ArtistDestination(
+                            channelId = channelId,
+                        ),
+                    )
+                }
+            },
+    ) {
+        items(data.contents) { temp ->
+            if (temp != null) {
+                val browseId = temp.browseId
+                val playlistId = temp.playlistId
+                if ((playlistId != null && temp.videoId == null) || (playlistId != null && temp.videoId == "")) {
+                    if (playlistId.startsWith("UC")) {
+                        HomeItemArtist(onClick = {
+                            navController.navigate(
+                                ArtistDestination(
+                                    channelId = playlistId,
+                                ),
+                            )
+                        }, data = temp)
+                    } else {
+                        HomeItemContentPlaylist(onClick = {
+                            navController.navigate(
+                                PlaylistDestination(
+                                    playlistId = playlistId,
+                                ),
+                            )
+                        }, data = temp)
+                    }
+                } else if ((browseId != null && temp.videoId == null) || (browseId != null && temp.videoId == "")) {
+                    if (browseId.startsWith("UC")) {
+                        HomeItemArtist(onClick = {
+                            navController.navigate(
+                                ArtistDestination(
+                                    channelId = browseId,
+                                ),
+                            )
+                        }, data = temp)
+                    } else if (browseId.startsWith("MPSP")) {
+                        HomeItemContentPlaylist(onClick = {
+                            navController.navigate(
+                                PodcastDestination(
+                                    podcastId = browseId,
+                                ),
+                            )
+                        }, data = temp)
+                    } else {
+                        HomeItemContentPlaylist(onClick = {
+                            navController.navigate(
+                                AlbumDestination(
+                                    browseId = browseId,
+                                ),
+                            )
+                        }, data = temp)
+                    }
+                } else if (temp.thumbnails.firstOrNull()?.width != temp.thumbnails.firstOrNull()?.height) {
+                    HomeItemVideo(
+                        onClick = {
+                            val firstQueue: Track = temp.toTrack()
+                            homeViewModel.setQueueData(
+                                QueueData.Data(
+                                    listTracks = arrayListOf(firstQueue),
+                                    firstPlayedTrack = firstQueue,
+                                    playlistId = "RDAMVM${temp.videoId}",
+                                    playlistName = temp.title,
+                                    playlistType = PlaylistType.RADIO,
+                                    continuation = null,
+                                ),
+                            )
+                            homeViewModel.loadMediaItem(
+                                firstQueue,
+                                Config.SONG_CLICK,
+                            )
+                        },
+                        onLongClick = {
+                            track = temp.toTrack()
+                            bottomSheetShow = true
+                        },
+                        data = temp,
+                    )
+                } else {
+                    HomeItemSong(
+                        onClick = {
+                            val firstQueue: Track = temp.toTrack()
+                            homeViewModel.setQueueData(
+                                QueueData.Data(
+                                    listTracks = arrayListOf(firstQueue),
+                                    firstPlayedTrack = firstQueue,
+                                    playlistId = "RDAMVM${temp.videoId}",
+                                    playlistName = temp.title,
+                                    playlistType = PlaylistType.RADIO,
+                                    continuation = null,
+                                ),
+                            )
+                            homeViewModel.loadMediaItem(
+                                firstQueue,
+                                Config.SONG_CLICK,
+                            )
+                        },
+                        onLongClick = {
+                            track = temp.toTrack()
+                            bottomSheetShow = true
+                        },
+                        data = temp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 统一的"标题 + 横滑卡行"组件(网易主页"每日推荐歌单"同款几何,2026-09-21 起 YTM 主页/
+ * 歌手页/专辑页的横行一律走它,替代各自手写的 LazyRow):
+ * - 标题与首卡封面严格左对齐(行容器 horizontal=15dp,卡片自身不带外边距);
+ * - 卡行 spacedBy(4.dp)、与标题间距 8.dp——卡与卡之间不再紧贴;
+ * - 可选:圆形头像 + 副标题 + 整行标题点击(YTM 主页 shelf 跳艺人页)、右侧"更多"按钮
+ *   (歌手/专辑页跳 MoreAlbums)。卡片内容(160dp 方卡/180dp 等)由调用方在 [content] 给。
+ */
+@Composable
+fun MediaRow(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    headerThumbnail: String? = null,
+    onHeaderClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
+    titleColor: Color = MaterialTheme.colorScheme.onSurface,
+    moreColor: Color = MaterialTheme.colorScheme.primary,
+    horizontalPadding: Dp = 15.dp,
+    content: LazyListScope.() -> Unit,
+) {
+    val lazyListState = rememberLazyListState()
+    val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
+    Column(modifier = modifier.padding(horizontal = horizontalPadding)) {
         Row(
             modifier =
-                if (channelId != null) {
+                if (onHeaderClick != null) {
                     Modifier
                         .focusable(true)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            navController.navigate(
-                                ArtistDestination(
-                                    channelId = channelId,
-                                ),
-                            )
-                        }
+                        .clickable { onHeaderClick() }
                 } else {
                     Modifier
                 },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedVisibility(
-                visible = (data.thumbnail?.lastOrNull() != null),
+                visible = (headerThumbnail != null),
                 modifier = Modifier.align(Alignment.CenterVertically),
             ) {
                 AsyncImage(
                     model =
                         ImageRequest
                             .Builder(LocalPlatformContext.current)
-                            .data(data.thumbnail?.lastOrNull()?.url)
+                            .data(headerThumbnail)
                             .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(data.thumbnail?.lastOrNull()?.url)
+                            .diskCacheKey(headerThumbnail)
                             .crossfade(550)
                             .build(),
                     contentDescription = "",
@@ -164,136 +302,45 @@ fun HomeItem(
                     modifier =
                         Modifier
                             .size(36.dp)
-                            .clip(
-                                CircleShape,
-                            ),
+                            .clip(CircleShape),
                 )
             }
             Column(
                 Modifier
-                    .padding(start = 10.dp),
+                    .weight(1f)
+                    // 有头像时标题跟在头像后 10dp;无头像时与下方首卡封面严格对齐(15dp)
+                    .padding(start = if (headerThumbnail != null) 10.dp else 0.dp),
             ) {
-                AnimatedVisibility(visible = (data.subtitle != null && data.subtitle != "")) {
+                AnimatedVisibility(visible = (subtitle != null && subtitle != "")) {
                     Text(
-                        text = data.subtitle ?: "",
+                        text = subtitle ?: "",
                         style = typo().bodySmall,
                     )
                 }
                 Text(
-                    text = data.title,
+                    text = title,
                     style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = titleColor,
                     maxLines = 1,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+            if (onMoreClick != null) {
+                TextButton(
+                    onClick = onMoreClick,
+                    colors = ButtonDefaults.textButtonColors().copy(contentColor = moreColor),
+                ) {
+                    Text(stringResource(Res.string.more), style = typo().bodySmall)
+                }
             }
         }
         LazyRow(
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
-        ) {
-            items(data.contents) { temp ->
-                if (temp != null) {
-                    val browseId = temp.browseId
-                    val playlistId = temp.playlistId
-                    if ((playlistId != null && temp.videoId == null) || (playlistId != null && temp.videoId == "")) {
-                        if (playlistId.startsWith("UC")) {
-                            HomeItemArtist(onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = playlistId,
-                                    ),
-                                )
-                            }, data = temp)
-                        } else {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    PlaylistDestination(
-                                        playlistId = playlistId,
-                                    ),
-                                )
-                            }, data = temp)
-                        }
-                    } else if ((browseId != null && temp.videoId == null) || (browseId != null && temp.videoId == "")) {
-                        if (browseId.startsWith("UC")) {
-                            HomeItemArtist(onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        } else if (browseId.startsWith("MPSP")) {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    PodcastDestination(
-                                        podcastId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        } else {
-                            HomeItemContentPlaylist(onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        browseId = browseId,
-                                    ),
-                                )
-                            }, data = temp)
-                        }
-                    } else if (temp.thumbnails.firstOrNull()?.width != temp.thumbnails.firstOrNull()?.height) {
-                        HomeItemVideo(
-                            onClick = {
-                                val firstQueue: Track = temp.toTrack()
-                                homeViewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${temp.videoId}",
-                                        playlistName = temp.title,
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
-                                    ),
-                                )
-                                homeViewModel.loadMediaItem(
-                                    firstQueue,
-                                    Config.SONG_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                track = temp.toTrack()
-                                bottomSheetShow = true
-                            },
-                            data = temp,
-                        )
-                    } else {
-                        HomeItemSong(
-                            onClick = {
-                                val firstQueue: Track = temp.toTrack()
-                                homeViewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${temp.videoId}",
-                                        playlistName = temp.title,
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
-                                    ),
-                                )
-                                homeViewModel.loadMediaItem(
-                                    firstQueue,
-                                    Config.SONG_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                track = temp.toTrack()
-                                bottomSheetShow = true
-                            },
-                            data = temp,
-                        )
-                    }
-                }
-            }
-        }
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 8.dp),
+            content = content,
+        )
         if (getPlatform() == Platform.Desktop) {
             HorizontalScrollBar(
                 modifier =
@@ -719,10 +766,11 @@ fun HomeItemSong(
                     onLongClick = onLongClick,
                 ),
     ) {
+        // 与 HomeItemContentPlaylist 同款几何:封面贴行首(无外边距,标题行对齐靠行的 15dp
+        // 容器),标题 minLines=2 恒占两行——标题长短不再改变卡高,行内所有卡统一 236dp。
         Column(
             modifier =
                 Modifier
-                    .padding(10.dp)
                     .heightIn(min = 236.dp),
         ) {
             val thumb =
@@ -749,7 +797,6 @@ fun HomeItemSong(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .align(Alignment.CenterHorizontally)
                         .size(160.dp)
                         .clip(
                             RoundedCornerShape(10.dp),
@@ -759,13 +806,14 @@ fun HomeItemSong(
                 text = data.title,
                 style = typo().titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
                     Modifier
                         .width(160.dp)
                         .wrapContentHeight(align = Alignment.CenterVertically)
-                        .padding(top = 8.dp),
+                        .padding(start = 10.dp, top = 8.dp),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AnimatedVisibility(visible = data.isExplicit == true) {
@@ -798,7 +846,7 @@ fun HomeItemSong(
                                 initialDelayMillis = 2000,
                                 repeatDelayMillis = 2000,
                                 velocity = 25.dp,
-                            ).padding(vertical = 3.dp),
+                            ).padding(start = 10.dp, top = 3.dp, bottom = 3.dp),
                 )
             }
         }
@@ -824,10 +872,10 @@ fun HomeItemVideo(
                 onLongClick = onLongClick,
             ),
     ) {
+        // 与 HomeItemSong 同款几何:封面贴行首、标题 minLines=2 恒占两行,行内卡高统一 236dp
         Column(
             modifier =
                 Modifier
-                    .padding(10.dp)
                     .heightIn(min = 236.dp),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
@@ -847,7 +895,6 @@ fun HomeItemVideo(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .align(Alignment.CenterHorizontally)
                         .height(160.dp)
                         .aspectRatio(16f / 9f)
                         .clip(
@@ -858,13 +905,14 @@ fun HomeItemVideo(
                 text = data.title,
                 style = typo().titleSmall,
                 color = titleColor,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
                     Modifier
                         .width(284.5.dp)
                         .wrapContentHeight(align = Alignment.CenterVertically)
-                        .padding(top = 8.dp),
+                        .padding(start = 10.dp, top = 8.dp),
             )
             Text(
                 text =
@@ -887,7 +935,7 @@ fun HomeItemVideo(
                             initialDelayMillis = 2000,
                             repeatDelayMillis = 2000,
                             velocity = 25.dp,
-                        ).padding(vertical = 2.dp),
+                        ).padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
             )
         }
     }
@@ -910,10 +958,10 @@ fun HomeItemArtist(
                 onClick()
             },
     ) {
+        // 与 HomeItemSong 同款几何:封面贴行首、标题 minLines=2 恒占两行,行内卡高统一 236dp
         Column(
             modifier =
                 Modifier
-                    .padding(10.dp)
                     .heightIn(min = 236.dp),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
@@ -933,7 +981,6 @@ fun HomeItemArtist(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .align(Alignment.CenterHorizontally)
                         .size(160.dp)
                         .clip(
                             CircleShape,
@@ -943,6 +990,7 @@ fun HomeItemArtist(
                 text = data.title,
                 style = typo().titleSmall,
                 color = titleColor,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,

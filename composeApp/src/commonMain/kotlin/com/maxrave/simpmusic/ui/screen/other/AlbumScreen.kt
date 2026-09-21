@@ -87,6 +87,7 @@ import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HeartCheckBox
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
+import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
@@ -352,13 +353,16 @@ fun AlbumScreen(
                                                         textAlign = TextAlign.Center,
                                                         modifier =
                                                             Modifier.clickable {
-                                                                uiState.artist.id?.let { channelId ->
-                                                                    navController.navigate(
-                                                                        ArtistDestination(
-                                                                            channelId = channelId,
-                                                                        ),
-                                                                    )
-                                                                }
+                                                                // 空串=网易合辑等无歌手 id,名字保留但不可跳歌手页
+                                                                uiState.artist.id
+                                                                    ?.takeIf { it.isNotEmpty() }
+                                                                    ?.let { channelId ->
+                                                                        navController.navigate(
+                                                                            ArtistDestination(
+                                                                                channelId = channelId,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                             },
                                                     )
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -491,13 +495,16 @@ fun AlbumScreen(
                                                             color = seed,
                                                             modifier =
                                                                 Modifier.clickable {
-                                                                    uiState.artist.id?.let { channelId ->
-                                                                        navController.navigate(
-                                                                            ArtistDestination(
-                                                                                channelId = channelId,
-                                                                            ),
-                                                                        )
-                                                                    }
+                                                                    // 空串=网易合辑等无歌手 id,名字保留但不可跳歌手页
+                                                                    uiState.artist.id
+                                                                        ?.takeIf { it.isNotEmpty() }
+                                                                        ?.let { channelId ->
+                                                                            navController.navigate(
+                                                                                ArtistDestination(
+                                                                                    channelId = channelId,
+                                                                                ),
+                                                                            )
+                                                                        }
                                                                 },
                                                         )
                                                         Spacer(modifier = Modifier.height(6.dp))
@@ -924,35 +931,25 @@ fun AlbumScreen(
                     }
                     item(contentType = "other_version") {
                         AnimatedVisibility(uiState.otherVersion.isNotEmpty()) {
-                            Column {
-                                Spacer(Modifier.height(10.dp))
-                                Text(
-                                    text = stringResource(Res.string.other_version),
-                                    style = typo().labelMedium,
-                                    modifier =
-                                        Modifier.padding(
-                                            horizontal = 24.dp,
-                                            vertical = 8.dp,
-                                        ),
-                                )
-                                LazyRow(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                ) {
-                                    items(uiState.otherVersion) { album ->
-                                        HomeItemContentPlaylist(
-                                            forceDark = true,
-                                            onClick = {
-                                                navController.navigate(
-                                                    AlbumDestination(
-                                                        browseId = album.browseId,
-                                                    ),
-                                                )
-                                            },
-                                            data = album,
-                                            thumbSize = 180.dp,
-                                        )
-                                    }
+                            // 统一横行组件:标题与首卡对齐 + 卡间 4dp 间距(深色页沿用白标题)
+                            MediaRow(
+                                title = stringResource(Res.string.other_version),
+                                titleColor = Color.White,
+                                horizontalPadding = 12.dp,
+                            ) {
+                                items(uiState.otherVersion) { album ->
+                                    HomeItemContentPlaylist(
+                                        forceDark = true,
+                                        onClick = {
+                                            navController.navigate(
+                                                AlbumDestination(
+                                                    browseId = album.browseId,
+                                                ),
+                                            )
+                                        },
+                                        data = album,
+                                        thumbSize = 180.dp,
+                                    )
                                 }
                             }
                         }
@@ -1120,7 +1117,6 @@ fun AlbumScreen(
                             } else {
                                 null
                             },
-                        onSaveToLocal = null,
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 uiState.listTrack.toCollection(arrayListOf()),

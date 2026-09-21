@@ -55,8 +55,6 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
-import simpmusic.composeapp.generated.resources.copied_as_local_playlist
-import simpmusic.composeapp.generated.resources.copying_as_local_playlist
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
@@ -856,28 +854,6 @@ class PlaylistViewModel(
                     }
                 }
             }
-        }
-    }
-
-    fun saveToLocal(tracks: List<Track>) {
-        viewModelScope.launch {
-            val data = uiState.value.data ?: return@launch
-            localPlaylistRepository
-                .copyOnlinePlaylistToLocal(
-                    data,
-                    tracks,
-                    getString(Res.string.copied_as_local_playlist),
-                ).collectLatestResource(
-                    onSuccess = {
-                        makeToast(it)
-                    },
-                    onLoading = {
-                        makeToast(getString(Res.string.copying_as_local_playlist))
-                    },
-                    onError = {
-                        makeToast(it)
-                    },
-                )
         }
     }
 

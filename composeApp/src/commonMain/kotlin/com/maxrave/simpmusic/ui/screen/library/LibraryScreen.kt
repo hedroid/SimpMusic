@@ -298,7 +298,7 @@ fun LibraryScreen(
                     albums = youTubeAlbums,
                     artists = followedYTArtists,
                     isRefreshing = youTubePlaylist is LocalResource.Loading,
-                    onRefresh = { viewModel.getYouTubeLibrary() },
+                    onRefresh = { viewModel.getYouTubeLibrary(force = true) },
                     onScrolling = onScrolling,
                 )
             }

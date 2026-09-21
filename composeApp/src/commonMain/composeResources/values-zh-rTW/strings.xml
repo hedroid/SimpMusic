@@ -305,9 +305,6 @@
     <string name="no_YouTube_playlists">目前沒有任何YouTube播放清單</string>
     <string name="track">歌曲</string>
     <string name="save_to_local_playlist">儲存到裝置播放清單</string>
-    <string name="copy_as_local_playlist">複製為本機播放清單</string>
-    <string name="copying_as_local_playlist">正在複製為本機播放清單</string>
-    <string name="copied_as_local_playlist">已複製為本機播放清單</string>
     <string name="added_local_playlist">新增到裝置播放清單</string>
     <string name="sync">同步到YouTube Music</string>
     <string name="synced">已同步到YouTube Music</string>

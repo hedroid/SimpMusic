@@ -1456,16 +1456,6 @@ fun PlaylistScreen(
                             } else {
                                 null
                             },
-                        onSaveToLocal =
-                            if (!data.isRadio) {
-                                {
-                                    viewModel.getFullTracks { track ->
-                                        viewModel.saveToLocal(track)
-                                    }
-                                }
-                            } else {
-                                null
-                            },
                         onEditTitle = { newTitle ->
                             viewModel.updatePlaylistTitle(newTitle, data.id)
                         },

@@ -127,7 +127,6 @@ import com.maxrave.domain.data.model.searchResult.songs.Artist
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
-import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.FilterState
@@ -275,7 +274,6 @@ import simpmusic.composeapp.generated.resources.queue
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.save
 import simpmusic.composeapp.generated.resources.save_to_local_playlist
-import simpmusic.composeapp.generated.resources.copy_as_local_playlist
 import simpmusic.composeapp.generated.resources.saved_to_local_playlist
 import simpmusic.composeapp.generated.resources.scale
 import simpmusic.composeapp.generated.resources.set
@@ -3313,16 +3311,13 @@ fun PlaylistBottomSheet(
     playlistName: String,
     isYourYouTubePlaylist: Boolean,
     onEditTitle: (newTitle: String) -> Unit = {},
-    onSaveToLocal: (() -> Unit)?,
     onAddToQueue: (() -> Unit)? = null,
     // 网易收藏歌单/专辑详情页"更多"菜单露出:取消收藏(云端 subscribe t=0)。调用方负责二次确认。
     onUnsubscribe: (() -> Unit)? = null,
     // 网易自建歌单详情页"更多"菜单露出:删除歌单(/playlist/delete,不可逆)。调用方负责强确认。
     onDeletePlaylist: (() -> Unit)? = null,
-    localPlaylistRepository: LocalPlaylistRepository = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var isSavedToLocal by remember { mutableStateOf(false) }
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val hideModalBottomSheet: () -> Unit =
@@ -3394,12 +3389,6 @@ fun PlaylistBottomSheet(
         }
     }
 
-    LaunchedEffect(true) {
-        localPlaylistRepository.getAllLocalPlaylists().collect {
-            isSavedToLocal = it.any { playlist -> playlist.youtubePlaylistId == playlistId }
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = modelBottomSheetState,
@@ -3452,15 +3441,6 @@ fun PlaylistBottomSheet(
                 if (isYourYouTubePlaylist) {
                     ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
-                    }
-                }
-                if (onSaveToLocal != null) {
-                    ActionButton(
-                        icon = SimpIcons.PlaylistAdd,
-                        text = Res.string.copy_as_local_playlist,
-                    ) {
-                        onSaveToLocal()
-                        hideModalBottomSheet()
                     }
                 }
                 val shareTitle = stringResource(Res.string.share)

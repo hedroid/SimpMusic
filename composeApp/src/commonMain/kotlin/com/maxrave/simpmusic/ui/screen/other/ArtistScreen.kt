@@ -101,6 +101,7 @@ import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemArtist
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
+import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.component.HomeItemVideo
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
@@ -825,63 +826,37 @@ private fun ArtistSections(
                     .results
                     .isNotEmpty(),
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.singles),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = {
-                            if (state.data.channelId != null) {
-                                val id = "MPAD${state.data.channelId}"
-                                navController.navigate(
-                                    MoreAlbumsDestination(
-                                        id = id,
-                                        type = MoreAlbumsDestination.SINGLE_TYPE,
-                                    ),
-                                )
-                            } else {
-                                viewModel.makeToast(getStringBlocking(Res.string.error))
-                            }
-                        },
-                        colors =
-                            ButtonDefaults
-                                .textButtonColors()
-                                .copy(
-                                    contentColor = Color.White,
-                                ),
-                    ) {
-                        Text(stringResource(Res.string.more), style = typo().bodySmall)
-                    }
-                }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.singles?.results ?: emptyList()) { single ->
-                        HomeItemContentPlaylist(
-                            forceDark = true,                            onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        single.browseId,
-                                    ),
-                                )
-                            },
-                            data = single,
-                            thumbSize = 180.dp,
+            MediaRow(
+                title = stringResource(Res.string.singles),
+                titleColor = Color.White,
+                moreColor = Color.White,
+                horizontalPadding = 20.dp,
+                onMoreClick = {
+                    if (state.data.channelId != null) {
+                        val id = "MPAD${state.data.channelId}"
+                        navController.navigate(
+                            MoreAlbumsDestination(
+                                id = id,
+                                type = MoreAlbumsDestination.SINGLE_TYPE,
+                            ),
                         )
+                    } else {
+                        viewModel.makeToast(getStringBlocking(Res.string.error))
                     }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                },
+            ) {
+                items(state.data.singles?.results ?: emptyList()) { single ->
+                    HomeItemContentPlaylist(
+                        forceDark = true,                            onClick = {
+                            navController.navigate(
+                                AlbumDestination(
+                                    single.browseId,
+                                ),
+                            )
+                        },
+                        data = single,
+                        thumbSize = 180.dp,
+                    )
                 }
             }
         }
@@ -893,63 +868,37 @@ private fun ArtistSections(
                     .results
                     .isNotEmpty(),
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.albums),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = {
-                            if (state.data.channelId != null) {
-                                val id = "MPAD${state.data.channelId}"
-                                navController.navigate(
-                                    MoreAlbumsDestination(
-                                        id = id,
-                                        type = MoreAlbumsDestination.ALBUM_TYPE,
-                                    ),
-                                )
-                            } else {
-                                viewModel.makeToast(getStringBlocking(Res.string.error))
-                            }
-                        },
-                        colors =
-                            ButtonDefaults
-                                .textButtonColors()
-                                .copy(
-                                    contentColor = Color.White,
-                                ),
-                    ) {
-                        Text(stringResource(Res.string.more), style = typo().bodySmall)
-                    }
-                }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.albums?.results ?: emptyList()) { album ->
-                        HomeItemContentPlaylist(
-                            forceDark = true,                            onClick = {
-                                navController.navigate(
-                                    AlbumDestination(
-                                        browseId = album.browseId,
-                                    ),
-                                )
-                            },
-                            data = album,
-                            thumbSize = 180.dp,
+            MediaRow(
+                title = stringResource(Res.string.albums),
+                titleColor = Color.White,
+                moreColor = Color.White,
+                horizontalPadding = 20.dp,
+                onMoreClick = {
+                    if (state.data.channelId != null) {
+                        val id = "MPAD${state.data.channelId}"
+                        navController.navigate(
+                            MoreAlbumsDestination(
+                                id = id,
+                                type = MoreAlbumsDestination.ALBUM_TYPE,
+                            ),
                         )
+                    } else {
+                        viewModel.makeToast(getStringBlocking(Res.string.error))
                     }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                },
+            ) {
+                items(state.data.albums?.results ?: emptyList()) { album ->
+                    HomeItemContentPlaylist(
+                        forceDark = true,                            onClick = {
+                            navController.navigate(
+                                AlbumDestination(
+                                    browseId = album.browseId,
+                                ),
+                            )
+                        },
+                        data = album,
+                        thumbSize = 180.dp,
+                    )
                 }
             }
         }
@@ -961,129 +910,83 @@ private fun ArtistSections(
                     .video
                     .isNotEmpty(),
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.videos),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        onClick = {
-                            val videoListParam = state.data.video?.videoListParam
-                            if (videoListParam != null) {
-                                navController.navigate(
-                                    PlaylistDestination(
-                                        videoListParam,
-                                    ),
-                                )
-                            } else {
-                                viewModel.makeToast(getStringBlocking(Res.string.error))
-                            }
-                        },
-                        colors =
-                            ButtonDefaults
-                                .textButtonColors()
-                                .copy(
-                                    contentColor = Color.White,
-                                ),
-                    ) {
-                        Text(stringResource(Res.string.more), style = typo().bodySmall)
-                    }
-                }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.video?.video ?: emptyList()) { video ->
-                        HomeItemVideo(
-                            forceDark = true,                            onClick = {
-                                val firstQueue: Track = video
-                                viewModel.setQueueData(
-                                    QueueData.Data(
-                                        listTracks = arrayListOf(firstQueue),
-                                        firstPlayedTrack = firstQueue,
-                                        playlistId = "RDAMVM${video.videoId}",
-                                        playlistName = (state.data.title ?: "") + getStringBlocking(Res.string.videos),
-                                        playlistType = PlaylistType.RADIO,
-                                        continuation = null,
-                                    ),
-                                )
-                                viewModel.loadMediaItem(
-                                    firstQueue,
-                                    type = Config.VIDEO_CLICK,
-                                )
-                            },
-                            onLongClick = {
-                                onTrackMore(video)
-                            },
-                            data =
-                                Content(
-                                    album = null,
-                                    artists = video.artists,
-                                    description = null,
-                                    isExplicit = video.isExplicit,
-                                    playlistId = null,
-                                    browseId = null,
-                                    thumbnails = video.thumbnails ?: emptyList(),
-                                    title = video.title,
-                                    videoId = video.videoId,
-                                    views = video.views,
-                                ),
+            MediaRow(
+                title = stringResource(Res.string.videos),
+                titleColor = Color.White,
+                moreColor = Color.White,
+                horizontalPadding = 20.dp,
+                onMoreClick = {
+                    val videoListParam = state.data.video?.videoListParam
+                    if (videoListParam != null) {
+                        navController.navigate(
+                            PlaylistDestination(
+                                videoListParam,
+                            ),
                         )
+                    } else {
+                        viewModel.makeToast(getStringBlocking(Res.string.error))
                     }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                },
+            ) {
+                items(state.data.video?.video ?: emptyList()) { video ->
+                    HomeItemVideo(
+                        forceDark = true,                            onClick = {
+                            val firstQueue: Track = video
+                            viewModel.setQueueData(
+                                QueueData.Data(
+                                    listTracks = arrayListOf(firstQueue),
+                                    firstPlayedTrack = firstQueue,
+                                    playlistId = "RDAMVM${video.videoId}",
+                                    playlistName = (state.data.title ?: "") + getStringBlocking(Res.string.videos),
+                                    playlistType = PlaylistType.RADIO,
+                                    continuation = null,
+                                ),
+                            )
+                            viewModel.loadMediaItem(
+                                firstQueue,
+                                type = Config.VIDEO_CLICK,
+                            )
+                        },
+                        onLongClick = {
+                            onTrackMore(video)
+                        },
+                        data =
+                            Content(
+                                album = null,
+                                artists = video.artists,
+                                description = null,
+                                isExplicit = video.isExplicit,
+                                playlistId = null,
+                                browseId = null,
+                                thumbnails = video.thumbnails ?: emptyList(),
+                                title = video.title,
+                                videoId = video.videoId,
+                                views = video.views,
+                            ),
+                    )
                 }
             }
         }
 
         // Feature on
         AnimatedVisibility(state.data.featuredOn.isNotEmpty()) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.featured_inArtist),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .padding(vertical = 10.dp),
+            MediaRow(
+                title = stringResource(Res.string.featured_inArtist),
+                titleColor = Color.White,
+                horizontalPadding = 20.dp,
+            ) {
+                items(state.data.featuredOn) { feature ->
+                    HomeItemContentPlaylist(
+                        forceDark = true,                            onClick = {
+                            navController.navigate(
+                                PlaylistDestination(
+                                    feature.id,
+                                ),
+                            )
+                        },
+                        data = feature,
+                        thumbSize = 180.dp,
                     )
-                }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.featuredOn) { feature ->
-                        HomeItemContentPlaylist(
-                            forceDark = true,                            onClick = {
-                                navController.navigate(
-                                    PlaylistDestination(
-                                        feature.id,
-                                    ),
-                                )
-                            },
-                            data = feature,
-                            thumbSize = 180.dp,
-                        )
-                    }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
                 }
             }
         }
@@ -1095,62 +998,42 @@ private fun ArtistSections(
                     .results
                     .isNotEmpty(),
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.related_artists),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .padding(vertical = 10.dp),
-                    )
-                }
-                LazyRow(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
-                    items(state.data.related?.results ?: emptyList()) { related ->
-                        HomeItemArtist(
-                            forceDark = true,                            onClick = {
-                                navController.navigate(
-                                    ArtistDestination(
-                                        channelId = related.browseId,
-                                    ),
-                                )
-                            },
-                            data =
-                                Content(
-                                    album = null,
-                                    artists =
-                                        listOf(
-                                            Artist(
-                                                id = related.browseId,
-                                                name = related.title,
-                                            ),
-                                        ),
-                                    description = related.subscribers,
-                                    isExplicit = null,
-                                    playlistId = null,
-                                    browseId = related.browseId,
-                                    thumbnails = related.thumbnails,
-                                    title = related.title,
-                                    videoId = null,
-                                    views = null,
-                                    durationSeconds = null,
-                                    radio = null,
+            MediaRow(
+                title = stringResource(Res.string.related_artists),
+                titleColor = Color.White,
+                horizontalPadding = 20.dp,
+            ) {
+                items(state.data.related?.results ?: emptyList()) { related ->
+                    HomeItemArtist(
+                        forceDark = true,                            onClick = {
+                            navController.navigate(
+                                ArtistDestination(
+                                    channelId = related.browseId,
                                 ),
-                        )
-                    }
-                    item {
-                        Spacer(Modifier.size(10.dp))
-                    }
+                            )
+                        },
+                        data =
+                            Content(
+                                album = null,
+                                artists =
+                                    listOf(
+                                        Artist(
+                                            id = related.browseId,
+                                            name = related.title,
+                                        ),
+                                    ),
+                                description = related.subscribers,
+                                isExplicit = null,
+                                playlistId = null,
+                                browseId = related.browseId,
+                                thumbnails = related.thumbnails,
+                                title = related.title,
+                                videoId = null,
+                                views = null,
+                                durationSeconds = null,
+                                radio = null,
+                            ),
+                    )
                 }
             }
         }

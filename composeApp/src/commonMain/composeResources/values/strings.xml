@@ -264,9 +264,6 @@
     <string name="no_YouTube_playlists">No YouTube Playlists</string>
     <string name="track">track(s)</string>
     <string name="save_to_local_playlist">Save to local playlist</string>
-    <string name="copy_as_local_playlist">Copy as local playlist</string>
-    <string name="copying_as_local_playlist">Copying as local playlist</string>
-    <string name="copied_as_local_playlist">Copied as local playlist</string>
     <string name="added_local_playlist">Added Local Playlist</string>
     <string name="sync">Sync to YouTube Music</string>
     <string name="synced">Synced with YouTube Music</string>

@@ -317,9 +317,10 @@ class LibraryViewModel(
 
     /**
      * "您的 YouTube Music"tab 三分区并行拉取:YouTube 歌单(云端)/收藏的专辑(云端)/
-     * 关注的歌手(本地镜像)。分区独立降级,一个失败只隐藏该分区;结构与"您的网易云"tab 对称。
+     * 关注的歌手(YT 订阅列表真源,adopt-on 回填本地关注位)。分区独立降级,一个失败只隐藏
+     * 该分区;结构与"您的网易云"tab 对称。force=下拉刷新绕过艺人列表的 10min 缓存。
      */
-    fun getYouTubeLibrary() {
+    fun getYouTubeLibrary(force: Boolean = false) {
         _youTubePlaylist.value = LocalResource.Loading()
         _youTubeLikedPlaylists.value = LocalResource.Loading()
         _youTubeAutoPlaylists.value = LocalResource.Loading()
@@ -339,10 +340,10 @@ class LibraryViewModel(
             }
         }
         viewModelScope.launch {
-            artistRepository.getFollowedArtists().collect { artists ->
+            artistRepository.getYouTubeLibraryArtists(force).collect { artists ->
                 _followedYTArtists.value =
                     LocalResource.Success(
-                        artists
+                        (artists ?: emptyList())
                             .filter { it.channelId.toLongOrNull() == null }
                             .map { entity ->
                                 ArtistsResult(

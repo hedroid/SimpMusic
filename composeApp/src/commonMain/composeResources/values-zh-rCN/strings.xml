@@ -260,9 +260,6 @@
     <string name="no_YouTube_playlists">没有 YouTube 歌单</string>
     <string name="track">音轨(s)</string>
     <string name="save_to_local_playlist">保存到本地歌单</string>
-    <string name="copy_as_local_playlist">复制为本地歌单</string>
-    <string name="copying_as_local_playlist">正在复制为本地歌单</string>
-    <string name="copied_as_local_playlist">已复制为本地歌单</string>
     <string name="added_local_playlist">已添加本地歌单</string>
     <string name="sync">同步到 YouTube Music</string>
     <string name="synced">已同步到 YouTube Music</string>

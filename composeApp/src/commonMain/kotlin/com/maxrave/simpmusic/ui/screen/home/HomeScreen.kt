@@ -113,6 +113,7 @@ import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeShimmer
 import com.maxrave.simpmusic.ui.component.ItemArtistChart
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
+import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.OfflineErrorState
@@ -1101,19 +1102,8 @@ fun ChartData(
         },
     ) {
         chart.listChartItem.forEach { item ->
-            Text(
-                text = item.title,
-                style = typo().headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-            )
-            val lazyListState = rememberLazyListState()
-            val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyListState = lazyListState))
-            LazyRow(flingBehavior = snapperFlingBehavior) {
+            // 统一横行组件:标题与首卡对齐 + 卡间 4dp 间距(外层 Column 已有 15dp,行内传 0)
+            MediaRow(title = item.title, horizontalPadding = 0.dp) {
                 items(item.playlists.size, key = { index ->
                     val data = item.playlists[index]
                     data.id + data.title + index

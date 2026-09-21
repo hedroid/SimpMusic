@@ -565,6 +565,34 @@ chip 标签 Wrapped 中文化（`wrapped` 去掉 translatable=false，zh=年度�
 音源菜单网易在前；进库 tab 默认选第一个可见 chip（`LibraryViewModel` init 不再恢复持久化选中，
 恒取 `defaultLibraryChip()`=网易→YT→排行榜）。
 
+## 统一横行组件 MediaRow + YT 库真源修复（2026-09-21 落地，7 项问题包）
+
+用户报的 7 个问题一轮收口，涉及双源：
+
+1. **复制为本地歌单删除**：`PlaylistBottomSheet` 菜单项+`saveToLocal`+`copyOnlinePlaylistToLocal`+strings 全删
+   （HIDDEN_FEATURES 已登记；本地歌单无入口政策）。
+2. **网易歌单作者/专辑歌手名点击报"歌手不存在"**：歌单 creatorId 是账号 ID 不是歌手 ID——`getPlaylistBrowseData`
+   的 `Author.id` 恒置空串（`isNotEmpty` 守卫令作者名不可点）；专辑 `toAlbum()` 补解析 `artists[0].id` →
+   `NeteaseAlbum.artistId` → `AlbumBrowse.artists[0].id` 用真实歌手 ID（合辑等缺失时置空串，AlbumScreen
+   加 `takeIf { isNotEmpty() }` 守卫）。
+3. **YTM 主页"老歌重温"卡高不一**：`HomeItemSong/Video/Artist` 标题只有 maxLines=2 无 minLines，标题折两行
+   的卡比一行高 ~20dp。修法=三卡统一成 `HomeItemContentPlaylist` 同款几何（封面贴行首、标题 minLines=2
+   恒占两行、去内部 padding(10)），行内所有卡统一 236dp。
+4/5. **统一横行组件 `MediaRow`**（AdapterItems.kt）：标题与首卡封面严格左对齐（15dp）、LazyRow
+   spacedBy(4)+标题间距 8、可选头像/副标题/标题点击/“更多”按钮。接入：YTM 主页 shelf（HomeItem 重写）、
+   主页排行榜行、ArtistScreen 五行（singles/albums/videos/featuredOn/related，labelMedium→headlineMedium）、
+   AlbumScreen 其他版本行。歌手页横行从“标题 20dp vs 首卡 10dp + 0 间距”修为对齐+4dp 间距。
+6. **YT 库歌单分区**：FEmusic_liked_playlists 实测常态是**单 tab grid 自建/收藏混排**（ytmusicapi 也只读
+   tab0），此前单 tab 兜底全落"创建"。修法：按 **kebab 菜单 iconType 签名**分流（自建有 PLAYLIST_EDIT/DELETE、
+   收藏有 LIBRARY_REMOVE/REMOVE_FROM_LIBRARY；token 失配退化归自建不误伤）；两 tab 响应仍结构优先。
+   系统歌单 auto 认 LM/WL + 标题兜底（稍后在听/Listen later 等），各自渲染为置顶满行（红心一行+稍后在听一行）。
+   **遗留**：`YT-SPLIT` println 探针待登录设备核对真实 browseId/菜单 token 后收紧（探针在
+   `PlaylistRepositoryImpl.getLibraryPlaylistSplit`）。
+7. **YT 关注歌手真源**：scraper 新增 `getLibraryArtists`（FEmusic_library_corpus_artists，musicShelfRenderer
+   形状，含 musicShelfContinuation/grid 双形状翻页）+ `ArtistRepository.getYouTubeLibraryArtists(force)`
+   （10min 缓存，adopt-on 回填本地关注位只加不减，失败回落本地镜像）。库页 YT tab 关注歌手分区从"仅本地
+   镜像"改为该真源；下拉刷新 force。模拟器无 YT 登录，两端点均未实测，待登录设备验证。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
