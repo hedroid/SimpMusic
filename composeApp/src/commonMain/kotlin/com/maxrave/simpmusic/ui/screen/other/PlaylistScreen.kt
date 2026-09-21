@@ -115,6 +115,7 @@ import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
+import com.maxrave.simpmusic.ui.component.rememberThrottledLottieProgress
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -145,7 +146,6 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.Compottie
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
@@ -802,7 +802,7 @@ fun PlaylistScreen(
                                                                                             painter =
                                                                                                 rememberLottiePainter(
                                                                                                     composition = composition,
-                                                                                                    iterations = Compottie.IterateForever,
+                                                                                                    progress = rememberThrottledLottieProgress(),
                                                                                                 ),
                                                                                             contentDescription = "Lottie animation",
                                                                                             modifier = Modifier.size(28.dp),
@@ -1020,7 +1020,7 @@ fun PlaylistScreen(
                                                                                     painter =
                                                                                         rememberLottiePainter(
                                                                                             composition = composition,
-                                                                                            iterations = Compottie.IterateForever,
+                                                                                            progress = rememberThrottledLottieProgress(),
                                                                                         ),
                                                                                     contentDescription = "Lottie animation",
                                                                                     modifier = Modifier.size(28.dp),

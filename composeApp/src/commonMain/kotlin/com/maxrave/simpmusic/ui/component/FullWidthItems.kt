@@ -92,7 +92,6 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
-import io.github.alexzhirkevich.compottie.Compottie
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
@@ -288,7 +287,7 @@ fun SongFullWidthItems(
                                 painter =
                                     rememberLottiePainter(
                                         composition = composition,
-                                        iterations = Compottie.IterateForever,
+                                        progress = rememberThrottledLottieProgress(),
                                     ),
                                 contentDescription = "Lottie animation",
                             )
@@ -366,9 +365,10 @@ fun SongFullWidthItems(
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
+                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
+                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
                                 ).focusable(),
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -417,7 +417,6 @@ fun SongFullWidthItems(
                                     .wrapContentHeight(align = Alignment.CenterVertically)
                                     .basicMarquee(
                                         iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
                                     ).focusable(),
                         )
                     }
@@ -488,7 +487,7 @@ fun SuggestItems(
                             painter =
                                 rememberLottiePainter(
                                     composition = composition,
-                                    iterations = Compottie.IterateForever,
+                                    progress = rememberThrottledLottieProgress(),
                                 ),
                             contentDescription = "Lottie animation",
                         )
@@ -732,9 +731,10 @@ fun PlaylistFullWidthItems(
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
+                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
+                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
                                 ).focusable(),
                     )
                 }
@@ -749,9 +749,10 @@ fun PlaylistFullWidthItems(
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
+                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
+                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
                                 ).focusable(),
                     )
                 }

@@ -148,6 +148,7 @@ import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.painterPlaylistThumbnail
 import com.maxrave.simpmusic.ui.component.playlistTitleGradient
 import com.maxrave.simpmusic.ui.component.rememberDragDropState
+import com.maxrave.simpmusic.ui.component.rememberThrottledLottieProgress
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
@@ -172,7 +173,6 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.Compottie
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
@@ -938,7 +938,7 @@ fun LocalPlaylistScreen(
                                                                         painter =
                                                                             rememberLottiePainter(
                                                                                 composition = composition,
-                                                                                iterations = Compottie.IterateForever,
+                                                                                progress = rememberThrottledLottieProgress(),
                                                                             ),
                                                                         contentDescription = "Lottie animation",
                                                                         modifier = Modifier.size(28.dp),
@@ -1187,7 +1187,7 @@ fun LocalPlaylistScreen(
                                                                 painter =
                                                                     rememberLottiePainter(
                                                                         composition = composition,
-                                                                        iterations = Compottie.IterateForever,
+                                                                        progress = rememberThrottledLottieProgress(),
                                                                     ),
                                                                 contentDescription = "Lottie animation",
                                                                 modifier = Modifier.size(28.dp),
