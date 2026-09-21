@@ -629,6 +629,23 @@ CacheDataSource(key=mediaId)缓存全命中时全程读盘不走网,LRU 中途�
 排障手段沉淀:audio_flinger 的 "Tracks of which N are active" + Server 帧计数十六进制
 冻结判静音;缓存重播=点同一行第二次。
 
+## 真机发热归因与修复（2026-09-21，三星 SM-S9380/120Hz 实测）
+
+用户报"听歌发热明显,NeriPlayer 不热"。真机三轮监控+gfxinfo 帧计数差分+线程归因:
+**息屏播放仅 7.3% CPU(解码无罪,flac 也很轻),亮屏歌单页平均 52.9%、峰值 100%,
+静止页面仍以 ~122-130fps 持续渲染**——主线程 44-55%+GC 18%,纯 UI 无效功。
+**根因①(主犯)**:当前曲指示条 Lottie(audio_playing_animation.json,fr=100)用 compottie
+自动播放(iterations=IterateForever),以屏幕刷新率逐帧失效;播放行滚出视野页面立刻
+安静实锤因果。修法=新增 `rememberThrottledLottieProgress`(12fps 手写 progress,
+状态写入率=重绘率),替换全仓 8 处调用点(歌单/专辑/本地歌单/FullWidthItems)。
+**根因②(从犯)**:TrackRow 标题/艺人 marquee `MarqueeAnimationMode.Immediately`(滚动
+无间隔=连续全帧率动画,超宽行常驻烧),4 处恢复默认模式(滚完停 1.2s);其余 70+ 处
+Immediately 是上游全局风格未动(歌单页实测普通行不超宽时不烧)。
+**A/B 验证(同场景冷启动+起播+播放行可见)**:修复前 122fps/瞬时 35-55%;修复后
+**8-13fps/11%**。监控脚本 /tmp/smp/monitor.sh(每 10s 采 app CPU+电池温度)。
+注意:Round A2 尾段 CPU 爬升与切歌后遇到灰歌(取流失败 Source error→重试churn)
+时间线吻合,非稳态 UI 热源;灰歌换行播放即恢复(既有行为)。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
