@@ -51,3 +51,5 @@ sentry.properties
 .video_agent/
 .zcode/
 .zcode-screenshots/
+# 用户本地备份(含登录 cookie,严禁入库)
+simpmusic_backup*.zip

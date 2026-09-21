@@ -646,6 +646,14 @@ Immediately 是上游全局风格未动(歌单页实测普通行不超宽时不�
 注意:Round A2 尾段 CPU 爬升与切歌后遇到灰歌(取流失败 Source error→重试churn)
 时间线吻合,非稳态 UI 热源;灰歌换行播放即恢复(既有行为)。
 
+**息屏发热归因(同日补测,8.5min 息屏听歌+dumpsys batterystats)**:息屏无 UI(帧率为零),
+app 自身播放 CPU 仅 ~0.9mAh/6.5min、音频硬件 1.56mAh(任何播放器的固定开销)、蜂窝基带
+~0.87mAh 且捕捉到 cellular_high_tx_power 事件(流量+中等信号=加大发射功率);**最大头是
+系统与后台 ~3.5mAh**(播放令设备无法深睡,AOD/SystemUI/常驻应用全程跟着跑)。**app 侧
+放大项=无损 flac(~900kbps,320k mp3 的 2-3 倍流量→基带在线更久+软解更费)**。可选后续:
+"蜂窝下自动降 320k 音质"开关(未做,待用户拍板)。上游考证:Lottie IterateForever 与
+Immediately marquee 均为上游 2024 年提交(db3d5f21 等,原作者),fork 修复未回馈上游。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
