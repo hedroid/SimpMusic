@@ -192,13 +192,18 @@ class PlaylistViewModel(
         val isNeteaseId = id.toLongOrNull() != null
         viewModelScope.launch {
             _remoteSavePending.value = true
-            if (playlistRepository.setRemoteSavedState(id, saved)) {
+            // 网易分支失败会抛出服务端原文(如"操作过于频繁,请稍后再试"),直接 toast 更可读
+            val outcome = runCatching { playlistRepository.setRemoteSavedState(id, saved) }
+            if (outcome.getOrDefault(false)) {
                 _remoteSaved.value = saved
                 playlistRepository.updatePlaylistLiked(id, if (saved) 1 else 0)
                 _playlistEntity.update { it?.copy(liked = saved) }
                 makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
             } else {
-                makeToast(getString(if (isNeteaseId) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube))
+                makeToast(
+                    outcome.exceptionOrNull()?.message
+                        ?: getString(if (isNeteaseId) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube),
+                )
             }
             _remoteSavePending.value = false
         }

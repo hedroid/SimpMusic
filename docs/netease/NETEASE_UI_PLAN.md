@@ -596,6 +596,25 @@ chip 标签 Wrapped 中文化（`wrapped` 去掉 translatable=false，zh=年度�
    半截响应不动本地防误删）。关注动作即时推云端且成功才镜像落本地，本地⊆云端成立，删除方向安全。
    模拟器无 YT 登录，两端点均未实测，待登录设备验证。
 
+## 备份导入实测 + 网易收藏 405 真凶 + YT 分区真实数据修正（2026-09-21 二轮）
+
+用户回传备份 zip（settings.preferences_pb + Music Database，含 YT 登录态），adb root 直推
+`files/datastore/` 与 `databases/` 等效 restore 流程，模拟器拿到双源登录态后三项修复：
+
+1. **网易歌单收藏失败真凶=请求形状**：`/playlist/subscribe` 被发了 `t=1/t=0`，服务端回
+   405"操作过于频繁"（PITFALLS 旧"频控"结论系误诊）。修正为 binaryify 同款双端点
+   （subscribe/unsubscribe 各自 URL，body 只带 id）。**反复失败会在账号上攒出长效 405 窗口
+   （实测 >20min，重试疑似续期），修复后需静置一段时间才恢复 200**。
+2. **三点菜单"取消收藏"错出**：原条件是"网易&&非自建"就露，与实际收藏状态脱节；
+   改为与红心同源（`(remoteSaved ?: liked)` 为真才露）。收藏入口=头部红心，菜单不放"收藏"项。
+3. **YT 库分区按登录账号实测重写**：响应单 tab"媒体库"（tab2=下载内容，空 grid），
+   grid 混排全部歌单；**browseId 带 VL 前缀（VLLM/VLSE）**，系统歌单识别先剥 VL 再比
+   {LM,SE,WL}+标题兜底（赞过的音乐/稍后在听…），auto 置顶行固定 LM 在 SE 上方；
+   自建/收藏按 **kebab 菜单动作签名**：EDIT/DELETE=自建独有、BOOKMARK(_BOUNDREY) 双态项
+   （toggleMenuServiceItemRenderer，scraper Menu 模型已补该字段）=收藏独有；token 全失配
+   退化为全自建不误分。关注歌手真源 FEmusic_library_corpus_artists 实测 musicShelfRenderer
+   形状与解析一致，20 个订阅艺人正确渲染。YT-SPLIT/YT-ARTISTS 探针已验证删除。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，

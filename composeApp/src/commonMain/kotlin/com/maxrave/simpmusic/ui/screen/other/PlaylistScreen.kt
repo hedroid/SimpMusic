@@ -1443,9 +1443,14 @@ fun PlaylistScreen(
                         playlistId = data.id,
                         playlistName = data.title,
                         isYourYouTubePlaylist = isYourYouTubePlaylist && !data.isRadio,
-                        // 网易歌单:收藏的露"取消收藏",自建的露"删除歌单"(红心歌单两者都不露)
+                        // 网易歌单:已收藏的才露"取消收藏"(与红心状态同源,未收藏时不露),
+                        // 自建的露"删除歌单"(红心歌单两者都不露)
                         onUnsubscribe =
-                            if (data.id.toLongOrNull() != null && !neteaseOwnPlaylist) {
+                            if (data.id.toLongOrNull() != null &&
+                                !neteaseOwnPlaylist &&
+                                !neteaseLikedPlaylist &&
+                                (remoteSaved ?: liked)
+                            ) {
                                 { showUnsubscribeDialog = true }
                             } else {
                                 null
