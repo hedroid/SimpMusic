@@ -3953,7 +3953,12 @@ fun NeteaseCommentsSheet(
             Column(Modifier.fillMaxSize()) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Card(
-                    modifier = Modifier.width(60.dp).height(4.dp),
+                    // 与其它弹框同款:拖拽条水平居中(Column 默认 Start 对齐,曾一直偏左)
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(60.dp)
+                            .height(4.dp),
                     colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
                     shape = RoundedCornerShape(50),
                 ) {}

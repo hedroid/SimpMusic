@@ -739,6 +739,29 @@ class PlaylistViewModel(
 
             PlaylistUIEvent.Shuffle -> {
                 val shuffleEndpoint = data.shuffleEndpoint
+                if (shuffleEndpoint == null && data.id.toLongOrNull() != null) {
+                    // 网易歌单没有 YT 的 shuffleEndpoint:本地洗牌已加载曲目直接起播
+                    // (与艺人页随机播放同款,35c997bd);分页未拉完先洗已加载部分,
+                    // 后续仍走队列 continuation 续拉
+                    val loaded = tracks.value
+                    if (loaded.isEmpty()) {
+                        makeToast(getString(Res.string.playlist_is_empty))
+                        return
+                    }
+                    val shuffled = loaded.shuffled()
+                    setQueueData(
+                        QueueData.Data(
+                            listTracks = shuffled.toCollection(arrayListOf<Track>()),
+                            firstPlayedTrack = shuffled.first(),
+                            playlistId = data.id,
+                            playlistName = "\"${data.title}\" ${getString(Res.string.shuffle)}",
+                            playlistType = PlaylistType.PLAYLIST,
+                            continuation = continuation.value,
+                        ),
+                    )
+                    loadMediaItem(shuffled.first(), Config.PLAYLIST_CLICK, 0)
+                    return
+                }
                 if (shuffleEndpoint == null) {
                     makeToast(
                         getString(Res.string.shuffle_not_available),

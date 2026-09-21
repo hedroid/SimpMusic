@@ -58,7 +58,6 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_MEDIUM_LOWER_BOUND
-import coil3.toUri
 import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
@@ -234,7 +233,10 @@ fun App(
         val data = intent.data
         Logger.d("MainActivity", "onCreate: $data")
         if (data != null) {
-            if (data == "simpmusic://notification".toUri()) {
+            // 字符串比较:这里曾用 coil3.toUri() 造比较对象,而 intent.data 是 eygraber 的
+            // KmpUri——两个不相干类型 == 恒 false,通知深链(点系统通知进通知页)冷/热路径
+            // 全部静默失效。KmpUri.toString() 即原始 uri 串。
+            if (data.toString() == "simpmusic://notification") {
                 viewModel.setIntent(null)
                 navController.navigate(
                     NotificationDestination,
