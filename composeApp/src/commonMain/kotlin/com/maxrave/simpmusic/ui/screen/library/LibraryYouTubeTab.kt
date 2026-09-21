@@ -27,6 +27,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,8 +62,12 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.collected_playlists
 import simpmusic.composeapp.generated.resources.created_playlists
+import simpmusic.composeapp.generated.resources.delete_playlist_title
+import simpmusic.composeapp.generated.resources.delete_youtube_playlist_message
 import simpmusic.composeapp.generated.resources.no_YouTube_playlists
 import simpmusic.composeapp.generated.resources.starred_albums
+import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
+import simpmusic.composeapp.generated.resources.unsubscribe_youtube_playlist_message
 
 /**
  * "您的 YouTube Music" tab(2026-09-20 定稿):分区镜像"您的网易云"——
@@ -85,8 +92,18 @@ internal fun LibraryYouTubeTab(
     artists: LocalResource<List<ArtistsResult>>,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    // 歌单移除操作对齐网易逻辑(2026-09-21):自建=删除、收藏=取消收藏,长按确认弹窗;
+    // 系统歌单(LM/SE)置顶行不参与。两端同一 playlist/delete 端点,语义由归属决定
+    onDeletePlaylist: (playlistId: String) -> Unit = {},
+    onUnsubscribePlaylist: (playlistId: String) -> Unit = {},
+    // "创建的歌单"分区固定入口:弹窗在本文件,建单走 VM(成功后静默刷新)
+    onCreatePlaylist: (name: String) -> Unit = {},
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
+    // 长按目标:待确认删除(自建)/取消收藏(他人歌单)的写操作,均弹窗确认
+    var deletePlaylistTarget by remember { mutableStateOf<PlaylistsResult?>(null) }
+    var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistsResult?>(null) }
+    var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
     val isScrollingUp by state.isScrollingUp()
     LaunchedEffect(state) {
@@ -184,21 +201,24 @@ internal fun LibraryYouTubeTab(
                         }
                     }
 
-                    if (playlistList.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }, key = "yt_cloud_header") {
-                            SectionHeader(stringResource(Res.string.created_playlists))
-                        }
-                        items(playlistList, key = { "yt_${it.browseId}" }) { playlist ->
-                            HomeItemContentPlaylist(
-                                onClick = {
-                                    navController.navigate(
-                                        PlaylistDestination(playlist.browseId, isYourYouTubePlaylist = true),
-                                    )
-                                },
-                                data = playlist,
-                                fillWidth = true,
-                            )
-                        }
+                    // "创建的歌单"分区常驻(与网易 tab 同构):固定"新建歌单"入口 tile 置顶
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "yt_cloud_header") {
+                        SectionHeader(stringResource(Res.string.created_playlists))
+                    }
+                    item(key = "yt_create_playlist") {
+                        CreatePlaylistTile(onClick = { showCreatePlaylist = true })
+                    }
+                    items(playlistList, key = { "yt_${it.browseId}" }) { playlist ->
+                        HomeItemContentPlaylist(
+                            onClick = {
+                                navController.navigate(
+                                    PlaylistDestination(playlist.browseId, isYourYouTubePlaylist = true),
+                                )
+                            },
+                            data = playlist,
+                            fillWidth = true,
+                            onLongClick = { deletePlaylistTarget = playlist },
+                        )
                     }
 
                     if (likedList.isNotEmpty()) {
@@ -214,6 +234,7 @@ internal fun LibraryYouTubeTab(
                                 },
                                 data = playlist,
                                 fillWidth = true,
+                                onLongClick = { unsubscribePlaylistTarget = playlist },
                             )
                         }
                     }
@@ -248,6 +269,39 @@ internal fun LibraryYouTubeTab(
                 }
             }
         }
+    }
+
+    // 删除/取消收藏确认(写操作,共享组件,与网易 tab 同款结构)
+    deletePlaylistTarget?.let { target ->
+        LibraryRemoveConfirmDialog(
+            title = stringResource(Res.string.delete_playlist_title),
+            message = stringResource(Res.string.delete_youtube_playlist_message, target.title),
+            onConfirm = {
+                onDeletePlaylist(target.browseId)
+                deletePlaylistTarget = null
+            },
+            onDismiss = { deletePlaylistTarget = null },
+        )
+    }
+    unsubscribePlaylistTarget?.let { target ->
+        LibraryRemoveConfirmDialog(
+            title = stringResource(Res.string.unsubscribe_playlist_title),
+            message = stringResource(Res.string.unsubscribe_youtube_playlist_message, target.title),
+            onConfirm = {
+                onUnsubscribePlaylist(target.browseId)
+                unsubscribePlaylistTarget = null
+            },
+            onDismiss = { unsubscribePlaylistTarget = null },
+        )
+    }
+    if (showCreatePlaylist) {
+        CreatePlaylistDialog(
+            onCreate = {
+                showCreatePlaylist = false
+                onCreatePlaylist(it)
+            },
+            onDismiss = { showCreatePlaylist = false },
+        )
     }
 }
 

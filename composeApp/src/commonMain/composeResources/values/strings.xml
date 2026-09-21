@@ -387,6 +387,10 @@
     <string name="unsubscribe_album_title">Unsubscribe album?</string>
     <string name="unsubscribe_album_message">The album %1$s will be removed from your NetEase starred albums.</string>
     <string name="unsubscribed_netease_playlist">Unsubscribed from the NetEase playlist</string>
+    <string name="unsubscribed_youtube_playlist">Removed from your YouTube Music library</string>
+    <string name="unsubscribe_youtube_playlist_message">The playlist %1$s will be removed from your YouTube Music library.</string>
+    <string name="delete_youtube_playlist_message">The playlist \"%1$s\" will be permanently deleted from your YouTube account. This cannot be undone.</string>
+    <string name="created_playlist">Playlist created</string>
     <string name="unsubscribe_from_library">Remove from favorites</string>
     <string name="netease_action_failed">Action failed. Please try again.</string>
     <string name="unsubscribed_netease_album">Removed from starred albums</string>

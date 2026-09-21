@@ -29,6 +29,10 @@
     <string name="unsubscribe_album_title">取消收藏該專輯？</string>
     <string name="unsubscribe_album_message">專輯「%1$s」將從你的網易雲收藏中移除。</string>
     <string name="unsubscribed_netease_playlist">已取消收藏網易雲播放清單</string>
+    <string name="unsubscribed_youtube_playlist">已取消收藏該播放清單</string>
+    <string name="unsubscribe_youtube_playlist_message">播放清單「%1$s」將從你的 YouTube Music 音樂庫中移除。</string>
+    <string name="delete_youtube_playlist_message">播放清單「%1$s」將從你的 YouTube 帳號中永久刪除，且無法復原。</string>
+    <string name="created_playlist">已建立播放清單</string>
     <string name="unsubscribe_from_library">取消收藏</string>
     <string name="netease_action_failed">操作失敗，請重試</string>
     <string name="unsubscribed_netease_album">已取消收藏專輯</string>

@@ -19,9 +19,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -55,7 +53,6 @@ import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
-import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.screen.home.NeteaseAlbumRow
 import com.maxrave.simpmusic.ui.screen.home.NeteaseArtistRow
@@ -63,10 +60,8 @@ import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.delete_playlist_message
 import simpmusic.composeapp.generated.resources.delete_playlist_title
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.collected_playlists
@@ -75,7 +70,6 @@ import simpmusic.composeapp.generated.resources.unsubscribe_album_message
 import simpmusic.composeapp.generated.resources.unsubscribe_album_title
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
-import simpmusic.composeapp.generated.resources.netease_playlists
 import simpmusic.composeapp.generated.resources.no_netease_content
 import simpmusic.composeapp.generated.resources.starred_albums
 
@@ -102,12 +96,15 @@ internal fun LibraryNeteaseTab(
     onUnsubscribePlaylist: (playlistId: String) -> Unit = {},
     onDeletePlaylist: (playlistId: String) -> Unit = {},
     onUnsubscribeAlbum: (albumId: String) -> Unit = {},
+    // "创建的歌单"分区固定入口:弹窗在本文件,建单走 VM(成功后静默刷新三分区)
+    onCreatePlaylist: (name: String) -> Unit = {},
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
     // 长按目标:待确认取消收藏/删除的歌单/专辑(均为写操作,弹窗确认;删除不可逆,文案更强)
     var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var deletePlaylistTarget by remember { mutableStateOf<PlaylistEntity?>(null) }
     var unsubscribeAlbumTarget by remember { mutableStateOf<AlbumsResult?>(null) }
+    var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
     val isScrollingUp by state.isScrollingUp()
     LaunchedEffect(state) {
@@ -200,20 +197,23 @@ internal fun LibraryNeteaseTab(
                             )
                         }
                     }
-                    if (ownPlaylists.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }, key = "netease_created_header") {
-                            SectionHeader(stringResource(Res.string.created_playlists))
-                        }
-                        items(ownPlaylists, key = { "netease_pl_${it.id}" }) { playlist ->
-                            NeteasePlaylistTile(
-                                playlist = playlist,
-                                likedPlaylistId = likedPlaylistId,
-                                ownPlaylistIds = ownPlaylistIds,
-                                navController = navController,
-                                onUnsubscribe = { unsubscribePlaylistTarget = playlist },
-                                onDelete = { deletePlaylistTarget = playlist },
-                            )
-                        }
+                    // "创建的歌单"分区常驻(用户 2026-09-21 定案):固定"新建歌单"入口 tile 置顶,
+                    // 无自建歌单也露出分区标题+入口
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "netease_created_header") {
+                        SectionHeader(stringResource(Res.string.created_playlists))
+                    }
+                    item(key = "netease_create_playlist") {
+                        CreatePlaylistTile(onClick = { showCreatePlaylist = true })
+                    }
+                    items(ownPlaylists, key = { "netease_pl_${it.id}" }) { playlist ->
+                        NeteasePlaylistTile(
+                            playlist = playlist,
+                            likedPlaylistId = likedPlaylistId,
+                            ownPlaylistIds = ownPlaylistIds,
+                            navController = navController,
+                            onUnsubscribe = { unsubscribePlaylistTarget = playlist },
+                            onDelete = { deletePlaylistTarget = playlist },
+                        )
                     }
 
                     if (collectedPlaylists.isNotEmpty()) {
@@ -265,9 +265,9 @@ internal fun LibraryNeteaseTab(
         }
     }
 
-    // 取消收藏确认(写操作):与库页"移除下载"弹窗同款结构
+    // 取消收藏/删除确认(写操作):与库页"移除下载"弹窗同款结构(共享组件,YT tab 同款)
     unsubscribePlaylistTarget?.let { target ->
-        NeteaseUnsubscribeDialog(
+        LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.unsubscribe_playlist_title),
             message = stringResource(Res.string.unsubscribe_playlist_message, target.title),
             onConfirm = {
@@ -278,7 +278,7 @@ internal fun LibraryNeteaseTab(
         )
     }
     deletePlaylistTarget?.let { target ->
-        NeteaseUnsubscribeDialog(
+        LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.delete_playlist_title),
             message = stringResource(Res.string.delete_playlist_message, target.title),
             onConfirm = {
@@ -289,7 +289,7 @@ internal fun LibraryNeteaseTab(
         )
     }
     unsubscribeAlbumTarget?.let { target ->
-        NeteaseUnsubscribeDialog(
+        LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.unsubscribe_album_title),
             message = stringResource(Res.string.unsubscribe_album_message, target.title),
             onConfirm = {
@@ -299,33 +299,15 @@ internal fun LibraryNeteaseTab(
             onDismiss = { unsubscribeAlbumTarget = null },
         )
     }
-}
-
-@Composable
-private fun NeteaseUnsubscribeDialog(
-    title: String,
-    message: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        containerColor = rememberSurfaceDarkColors().container,
-        titleContentColor = rememberSurfaceDarkColors().content,
-        textContentColor = rememberSurfaceDarkColors().content,
-        title = { Text(text = title) },
-        text = { Text(text = message) },
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(text = stringResource(Res.string.delete))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(Res.string.cancel))
-            }
-        },
-    )
+    if (showCreatePlaylist) {
+        CreatePlaylistDialog(
+            onCreate = {
+                showCreatePlaylist = false
+                onCreatePlaylist(it)
+            },
+            onDismiss = { showCreatePlaylist = false },
+        )
+    }
 }
 
 /** 分区标题:对齐网易主页行标题(headlineMedium);网格已统一 15dp 边距,行内不再水平 pad */

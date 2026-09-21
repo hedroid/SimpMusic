@@ -654,6 +654,43 @@ app 自身播放 CPU 仅 ~0.9mAh/6.5min、音频硬件 1.56mAh(任何播放器�
 "蜂窝下自动降 320k 音质"开关(未做,待用户拍板)。上游考证:Lottie IterateForever 与
 Immediately marquee 均为上游 2024 年提交(db3d5f21 等,原作者),fork 修复未回馈上游。
 
+## 库页云端 tab 新建歌单 + 移除操作对齐 + 返回自动刷新(2026-09-21 落地,模拟器实测)
+
+用户三点需求一次落地,**双 tab("您的网易云"/"您的 YouTube Music")行为对称**:
+
+- **"创建的歌单"分区常驻新建入口**:两 tab 分区标题下固定第一个 tile=渐变+白加号
+  (视觉对齐本地歌单网格的既有新建 tile,`LibraryPlaylistActions.kt` 共享组件:tile/
+  命名弹窗/移除确认弹窗三件套)。弹窗乐观关闭,成败 toast 由 VM 提示,成功后静默刷新,
+  新歌单几秒内入列。网易=createNeteasePlaylist(隐私);**YT=空曲目建单**
+  (createYouTubePlaylistWithTracks 空 videoIds→scraper 侧转 null 省略字段,实测 InnerTube
+  接受)。无自建歌单也露出分区标题+入口。
+- **子页动作返回列表页即时刷新(不再手动下拉)**:根因=LibraryScreen 的
+  LaunchedEffect(currentFilter) 原本"空数据才拉",子页(歌单/歌手/播放页/红心)改动后
+  VM 里还是旧数据。修法=effect 重跑时总是拉取,**首拉(全 null)整页 spinner,已有数据
+  转"静默 force 刷新"**(原地替换不清已显示分区,指示器走 refreshing StateFlow)。本屏
+  是导航 destination,任何子页返回都重组→effect 重跑,取消关注/取消收藏/删除/红心曲目数
+  全部自动回写;艺人/专辑 10min 行缓存被 force 绕过。getYouTubeLibrary 重构为单
+  coroutineScope 聚合五路+firstLoad 判定(新增 youTubeRefreshing,镜像 neteaseRefreshing);
+  **null 防护**:split/专辑/艺人拉取失败(null)不再把已显示内容覆盖成空列表(静默刷新
+  模式下失败清空会让分区闪没)。
+- **YT 歌单移除操作对齐网易**:YT tab 自建歌单长按=**删除歌单**、收藏歌单长按=**取消
+  收藏**(与网易同款确认弹窗,共享 LibraryRemoveConfirmDialog;系统歌单置顶行不参与)。
+  core 新增 `playlist/delete` 端点(DeletePlaylistBody+Ytmusic.deleteYouTubePlaylist+
+  YouTube.deletePlaylist+仓库 deleteYouTubePlaylist):**同一端点,语义由歌单归属决定**
+  (自建=真删除,收藏=移出资料库)——与 Metrolist 同款用法(其源码先 toggleLike 再
+  deletePlaylist,已考证)。YT 专属弹窗文案两条(unsubscribe/delete_youtube_playlist_message,
+  base+zh-CN+zh-TW);toast 复用 deleted_playlist/unsubscribed_youtube_playlist。
+
+**实测**(模拟器双账号登录态,网易建 zcodetest0921→长按删除全链路 ✓;YT 建空单+删除/取消
+收藏弹窗文案 ✓;返回自动刷新 logcat 实锤 getLibraryPlaylists 在 BACK 后自动重拉)。**已知
+边缘**:①YT 新建的**空歌单**会被 split 判入收藏区(服务端对空歌单不下发 EDIT/DELETE 菜单
+icon,只有 BOOKMARK toggle;加歌后菜单恢复、自动归位创建区)——无碍,记录;②split 间歇
+报 "Parent job is Completed"(上游既有,VM null 防护兜底保留旧数据);③YTM 库列表不显示
+空歌单,YT 测试空单无法经 UI 删除(残留账号无害,网页可删)。**测试纪律:模拟器带用户真实
+双账号,移除类操作只许对自己创建的测试单执行;长按命中务必以 uiautomator dump 文本核对
+弹窗里的歌单名再确认——本轮 CDN 截图通道两度串图/幻觉,险些误判**(弹窗按钮坐标也必须从
+dump bounds 取,目测两次全偏)。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，

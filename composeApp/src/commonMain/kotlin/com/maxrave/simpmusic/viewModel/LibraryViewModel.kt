@@ -62,9 +62,12 @@ import kotlinx.datetime.plus
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_local_playlist
+import simpmusic.composeapp.generated.resources.could_not_create_playlist
+import simpmusic.composeapp.generated.resources.created_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
+import simpmusic.composeapp.generated.resources.unsubscribed_youtube_playlist
 import simpmusic.composeapp.generated.resources.deleted_playlist
 import simpmusic.composeapp.generated.resources.removed_download
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
@@ -120,6 +123,10 @@ class LibraryViewModel(
     private val _youTubeAutoPlaylists: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
     val youTubeAutoPlaylists: StateFlow<LocalResource<List<PlaylistsResult>>> get() = _youTubeAutoPlaylists.asStateFlow()
+
+    /** YT tab 静默刷新指示(已有数据时的下拉/返回刷新,镜像 neteaseRefreshing 语义) */
+    private val _youTubeRefreshing = MutableStateFlow(false)
+    val youTubeRefreshing: StateFlow<Boolean> get() = _youTubeRefreshing.asStateFlow()
 
     private val _youTubeMixForYou: MutableStateFlow<LocalResource<List<PlaylistsResult>>> =
         MutableStateFlow(LocalResource.Loading())
@@ -318,51 +325,78 @@ class LibraryViewModel(
     /**
      * "您的 YouTube Music"tab 三分区并行拉取:YouTube 歌单(云端)/收藏的专辑(云端)/
      * 关注的歌手(YT 订阅列表真源,adopt-on 回填本地关注位)。分区独立降级,一个失败只隐藏
-     * 该分区;结构与"您的网易云"tab 对称。force=下拉刷新绕过艺人列表的 10min 缓存。
+     * 该分区;结构与"您的网易云"tab 对称。force=绕过艺人列表的 10min 缓存。
+     *
+     * 首次(五路全空)整页 Loading;已有数据时**静默刷新**——原地替换不清已显示分区,
+     * 仅 [youTubeRefreshing] 驱动下拉指示器(语义与"您的网易云"一致)。从子页(歌单/歌手/
+     * 播放页)返回本 tab 时静默 force 重拉,移除操作/红心曲目数无需手动下拉即可回写。
      */
     fun getYouTubeLibrary(force: Boolean = false) {
-        _youTubePlaylist.value = LocalResource.Loading()
-        _youTubeLikedPlaylists.value = LocalResource.Loading()
-        _youTubeAutoPlaylists.value = LocalResource.Loading()
-        _youTubeAlbums.value = LocalResource.Loading()
-        _followedYTArtists.value = LocalResource.Loading()
-        viewModelScope.launch {
-            playlistRepository.getLibraryPlaylistSplit().collect { split ->
-                // created 进主网格(加歌单弹窗也吃它:自建才能加);LM 等系统歌单置顶;他人歌单纯展示
-                _youTubePlaylist.value = LocalResource.Success(split?.created ?: emptyList())
-                _youTubeAutoPlaylists.value = LocalResource.Success(split?.auto ?: emptyList())
-                _youTubeLikedPlaylists.value = LocalResource.Success(split?.liked ?: emptyList())
-            }
+        val firstLoad =
+            _youTubePlaylist.value.data == null &&
+                _youTubeLikedPlaylists.value.data == null &&
+                _youTubeAutoPlaylists.value.data == null &&
+                _youTubeAlbums.value.data == null &&
+                _followedYTArtists.value.data == null
+        if (firstLoad) {
+            _youTubePlaylist.value = LocalResource.Loading()
+            _youTubeLikedPlaylists.value = LocalResource.Loading()
+            _youTubeAutoPlaylists.value = LocalResource.Loading()
+            _youTubeAlbums.value = LocalResource.Loading()
+            _followedYTArtists.value = LocalResource.Loading()
+        } else {
+            _youTubeRefreshing.value = true
         }
         viewModelScope.launch {
-            playlistRepository.getLibraryAlbum().collect { data ->
-                _youTubeAlbums.value = LocalResource.Success(data ?: emptyList())
-            }
-        }
-        viewModelScope.launch {
-            artistRepository.getYouTubeLibraryArtists(force).collect { artists ->
-                _followedYTArtists.value =
-                    LocalResource.Success(
-                        (artists ?: emptyList())
-                            .filter { it.channelId.toLongOrNull() == null }
-                            .map { entity ->
-                                ArtistsResult(
-                                    artist = entity.name,
-                                    browseId = entity.channelId,
-                                    category = "",
-                                    radioId = "",
-                                    resultType = "artist",
-                                    shuffleId = "",
-                                    thumbnails =
-                                        listOfNotNull(
-                                            entity.thumbnails?.let {
-                                                Thumbnail(width = 560, height = 560, url = it)
-                                            },
-                                        ),
+            coroutineScope {
+                launch {
+                    playlistRepository.getLibraryPlaylistSplit().collect { split ->
+                        // null=拉取失败/空库:静默刷新模式下保留已显示内容,失败清空会让
+                        // 歌单分区闪没(重进本 tab 必拉,失败概率被放大)
+                        if (split != null) {
+                            // created 进主网格(加歌单弹窗也吃它:自建才能加);LM 等系统歌单置顶;他人歌单纯展示
+                            _youTubePlaylist.value = LocalResource.Success(split.created)
+                            _youTubeAutoPlaylists.value = LocalResource.Success(split.auto)
+                            _youTubeLikedPlaylists.value = LocalResource.Success(split.liked)
+                        }
+                    }
+                }
+                launch {
+                    playlistRepository.getLibraryAlbum().collect { data ->
+                        if (data != null) {
+                            _youTubeAlbums.value = LocalResource.Success(data)
+                        }
+                    }
+                }
+                launch {
+                    artistRepository.getYouTubeLibraryArtists(force).collect { artists ->
+                        if (artists != null) {
+                            _followedYTArtists.value =
+                                LocalResource.Success(
+                                    artists
+                                        .filter { it.channelId.toLongOrNull() == null }
+                                        .map { entity ->
+                                            ArtistsResult(
+                                                artist = entity.name,
+                                                browseId = entity.channelId,
+                                                category = "",
+                                                radioId = "",
+                                                resultType = "artist",
+                                                shuffleId = "",
+                                                thumbnails =
+                                                    listOfNotNull(
+                                                        entity.thumbnails?.let {
+                                                            Thumbnail(width = 560, height = 560, url = it)
+                                                        },
+                                                    ),
+                                            )
+                                        },
                                 )
-                            },
-                    )
+                        }
+                    }
+                }
             }
+            _youTubeRefreshing.value = false
         }
     }
 
@@ -465,6 +499,58 @@ class LibraryViewModel(
                     },
                     onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
                 )
+        }
+    }
+
+    /** 库页"创建的歌单"分区新建入口(网易):建隐私歌单,成功 toast+静默刷新三分区 */
+    fun createNeteasePlaylistInLibrary(name: String) {
+        viewModelScope.launch {
+            neteaseRepository
+                .createNeteasePlaylist(name)
+                .fold(
+                    onSuccess = {
+                        makeToast(getString(Res.string.created_playlist))
+                        getNeteaseLibrary(force = true)
+                    },
+                    onFailure = { makeToast(getString(Res.string.could_not_create_playlist)) },
+                )
+        }
+    }
+
+    /** 库页"创建的歌单"分区新建入口(YT):建空歌单,成功 toast+静默刷新 */
+    fun createYouTubePlaylistInLibrary(name: String) {
+        viewModelScope.launch {
+            val id = playlistRepository.createYouTubePlaylistWithTracks(name, emptyList())
+            if (id != null) {
+                makeToast(getString(Res.string.created_playlist))
+                getYouTubeLibrary(force = true)
+            } else {
+                makeToast(getString(Res.string.could_not_create_playlist))
+            }
+        }
+    }
+
+    /** 取消收藏他人 YT 歌单(playlist/delete,服务端移出资料库),成功 toast+静默刷新 */
+    fun unsubscribeYouTubePlaylist(playlistId: String) {
+        viewModelScope.launch {
+            if (playlistRepository.deleteYouTubePlaylist(playlistId)) {
+                makeToast(getString(Res.string.unsubscribed_youtube_playlist))
+                getYouTubeLibrary(force = true)
+            } else {
+                makeToast(getString(Res.string.netease_action_failed))
+            }
+        }
+    }
+
+    /** 删除自建 YT 歌单(playlist/delete,不可逆;UI 层已强确认),成功 toast+静默刷新 */
+    fun deleteYouTubePlaylist(playlistId: String) {
+        viewModelScope.launch {
+            if (playlistRepository.deleteYouTubePlaylist(playlistId)) {
+                makeToast(getString(Res.string.deleted_playlist))
+                getYouTubeLibrary(force = true)
+            } else {
+                makeToast(getString(Res.string.netease_action_failed))
+            }
         }
     }
 
