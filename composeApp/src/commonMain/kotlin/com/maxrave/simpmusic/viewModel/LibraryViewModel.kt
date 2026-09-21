@@ -21,6 +21,7 @@ import com.maxrave.domain.extension.now
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AlbumRepository
+import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.AnalyticsRepository
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.CommonRepository
@@ -85,6 +86,7 @@ class LibraryViewModel(
     private val podcastRepository: PodcastRepository,
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val artistRepository: ArtistRepository,
+    private val accountRepository: AccountRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
 
@@ -225,10 +227,29 @@ class LibraryViewModel(
                     // 第一个分区"的需求冲突;运行中登出网易的回落由下面的 collect 兜底。
                     setCurrentScreen(defaultLibraryChip())
                 }
-            val cookieJob =
+            val accountThumbJob =
                 launch {
-                    dataStoreManager.cookie.distinctUntilChanged().collect {
-                        _accountThumbnail.value = dataStoreManager.getString("AccountThumbUrl").first().takeIf { !it.isNullOrEmpty() }
+                    // Live-observe the key instead of a one-shot read on cookie change, so
+                    // repairs to the stored value (settings account sync, re-login) reach
+                    // the Library avatar immediately without an app restart.
+                    dataStoreManager
+                        .getString("AccountThumbUrl")
+                        .distinctUntilChanged()
+                        .collect { thumb -> _accountThumbnail.value = thumb?.takeIf { it.isNotEmpty() } }
+                }
+            val accountHealJob =
+                launch {
+                    // AccountThumbUrl/AccountName were once overwritten by the YT home scrape
+                    // with a mood shelf's header (title fragment + artwork), and a Netease-first
+                    // user never re-fetches the YT home to repair them. The Room row was written
+                    // at login from the account endpoint, so when the stored NAME disagrees with
+                    // it the stored pair is polluted — re-assert the row. Name-only check keeps a
+                    // legitimate scrape refresh (same name, upscaled thumb URL) from ping-ponging.
+                    accountRepository.getUsedGoogleAccount().firstOrNull()?.let { used ->
+                        if (used.thumbnailUrl.isNotEmpty() && dataStoreManager.getString("AccountName").first() != used.name) {
+                            dataStoreManager.putString("AccountName", used.name)
+                            dataStoreManager.putString("AccountThumbUrl", used.thumbnailUrl)
+                        }
                     }
                 }
             val neteaseLogoutJob =
@@ -246,7 +267,8 @@ class LibraryViewModel(
                     }
                 }
             currentScreenJob.join()
-            cookieJob.join()
+            accountThumbJob.join()
+            accountHealJob.join()
             neteaseLogoutJob.join()
         }
     }
