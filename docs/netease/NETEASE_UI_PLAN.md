@@ -590,8 +590,11 @@ chip 标签 Wrapped 中文化（`wrapped` 去掉 translatable=false，zh=年度�
    `PlaylistRepositoryImpl.getLibraryPlaylistSplit`）。
 7. **YT 关注歌手真源**：scraper 新增 `getLibraryArtists`（FEmusic_library_corpus_artists，musicShelfRenderer
    形状，含 musicShelfContinuation/grid 双形状翻页）+ `ArtistRepository.getYouTubeLibraryArtists(force)`
-   （10min 缓存，adopt-on 回填本地关注位只加不减，失败回落本地镜像）。库页 YT tab 关注歌手分区从"仅本地
-   镜像"改为该真源；下拉刷新 force。模拟器无 YT 登录，两端点均未实测，待登录设备验证。
+   （10min 缓存，失败回落本地镜像）。库页 YT tab 关注歌手分区从"仅本地镜像"改为该真源；下拉刷新 force。
+   **同步语义=云端为准双向**（2026-09-21 二轮定稿）：云端新增回填 INSERT IGNORE+补关注位；云端已取关而
+   本地仍关注的，**拉取完整（翻页无失败）时就地取关**（走 updateFollowedStatus 清理路径含通知/新发行行，
+   半截响应不动本地防误删）。关注动作即时推云端且成功才镜像落本地，本地⊆云端成立，删除方向安全。
+   模拟器无 YT 登录，两端点均未实测，待登录设备验证。
 
 ## 剩余工作盘点（2026-09-16 重整）
 
