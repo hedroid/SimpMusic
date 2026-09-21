@@ -615,6 +615,20 @@ chip 标签 Wrapped 中文化（`wrapped` 去掉 translatable=false，zh=年度�
    退化为全自建不误分。关注歌手真源 FEmusic_library_corpus_artists 实测 musicShelfRenderer
    形状与解析一致，20 个订阅艺人正确渲染。YT-SPLIT/YT-ARTISTS 探针已验证删除。
 
+## 缓存路径 5MiB 截断静音（2026-09-21 三轮,「记忆磁带」前两首真机无声真凶）
+
+用户报"记忆磁带丨老歌独有的浪漫"前两首真机无声、其余正常,且"上次没修完"。用 deeplink
+(simpmusic://playlist?list=3206565622)+备份账号在模拟器复现:**旧构建缓存重播该歌
+(泪海 flac),约 66s 处 AudioTrack 停写帧(0x5827AF 冻结)转 inactive——进度在走没有
+声音**;新构建同场景帧数持续前进过整首。根因=7532dec 只放开了**网络路径**的 DataSpec
+封顶,**缓存路径(downloadCache/playerCache isFullyCached)仍 subrange 截 5MiB**,整首
+被缓存的歌(网易 320k mp3/flac 全 >5MiB)chunk1 解码完即静音到曲尾——"恰好前两首"
+因为只有它们俩被完整缓存过。修法=缓存命中不再提前返回截断 spec,统一走 URL 解析不封顶:
+CacheDataSource(key=mediaId)缓存全命中时全程读盘不走网,LRU 中途驱逐透明回退 OkHttp
+(比裸 id 的 FileNotFound 不可恢复更稳);取不到 URL 的灰歌且整首在缓存才用裸 id 不封顶兜底。
+排障手段沉淀:audio_flinger 的 "Tracks of which N are active" + Server 帧计数十六进制
+冻结判静音;缓存重播=点同一行第二次。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
