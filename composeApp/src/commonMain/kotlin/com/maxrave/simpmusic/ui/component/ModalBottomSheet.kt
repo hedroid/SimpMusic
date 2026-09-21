@@ -3425,8 +3425,15 @@ fun PlaylistBottomSheet(
                         icon = SimpIcons.Delete,
                         text = Res.string.unsubscribe_from_library,
                     ) {
-                        onUnsubscribe()
-                        hideModalBottomSheet()
+                        // 先等本 sheet 完全收起再触发回调(确认弹窗)——回调里置
+                        // showXxxDialog=true 会立即重组,若在 hide() 完成前执行,
+                        // 确认框会叠在未收起的菜单上;一旦 hide 协程被重组打断,
+                        // onDismiss 永不执行,点掉确认框后菜单"重新弹回"(用户实测 bug)
+                        coroutineScope.launch {
+                            modelBottomSheetState.hide()
+                            onUnsubscribe()
+                            onDismiss()
+                        }
                     }
                 }
                 if (onDeletePlaylist != null) {
@@ -3434,8 +3441,12 @@ fun PlaylistBottomSheet(
                         icon = SimpIcons.Delete,
                         text = Res.string.netease_delete_playlist,
                     ) {
-                        onDeletePlaylist()
-                        hideModalBottomSheet()
+                        // 同上:删除歌单也弹确认框,必须在 sheet 收起后再弹
+                        coroutineScope.launch {
+                            modelBottomSheetState.hide()
+                            onDeletePlaylist()
+                            onDismiss()
+                        }
                     }
                 }
                 if (isYourYouTubePlaylist) {
