@@ -171,6 +171,7 @@ import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.confirm
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
@@ -1426,7 +1427,7 @@ fun PlaylistScreen(
                                 }
                                 showUnsubscribeDialog = false
                             }) {
-                                Text(text = stringResource(Res.string.delete))
+                                Text(text = stringResource(Res.string.confirm))
                             }
                         },
                         dismissButton = {

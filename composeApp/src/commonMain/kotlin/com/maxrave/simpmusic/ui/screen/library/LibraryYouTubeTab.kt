@@ -59,6 +59,7 @@ import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.confirm
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.collected_playlists
 import simpmusic.composeapp.generated.resources.created_playlists
@@ -287,6 +288,7 @@ internal fun LibraryYouTubeTab(
         LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.unsubscribe_playlist_title),
             message = stringResource(Res.string.unsubscribe_youtube_playlist_message, target.title),
+            confirmLabel = stringResource(Res.string.confirm),
             onConfirm = {
                 onUnsubscribePlaylist(target.browseId)
                 unsubscribePlaylistTarget = null

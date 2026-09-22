@@ -141,6 +141,7 @@ import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
 import simpmusic.composeapp.generated.resources.cancel
+import simpmusic.composeapp.generated.resources.confirm
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
@@ -1094,7 +1095,7 @@ fun AlbumScreen(
                                 viewModel.unsubscribeNeteaseAlbum(browseId)
                                 showUnsubscribeAlbumDialog = false
                             }) {
-                                Text(text = stringResource(Res.string.delete))
+                                Text(text = stringResource(Res.string.confirm))
                             }
                         },
                         dismissButton = {

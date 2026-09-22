@@ -141,7 +141,7 @@
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
     <string name="netease_play_report">재생 데이터를 NetEase에 전송</string>
-    <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트에 반영합니다</string>
+    <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트를 개선하지만, 리스크 관리가 발동될 위험이 있습니다</string>
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
     <string name="likes_count">좋아요 %1$s개</string>
@@ -351,6 +351,7 @@
     <string name="guide_liked_title">YouTube 좋아요 표시한 재생목록에 추가 완료</string>
     <string name="log_out_from_spotify">Spotify에서 로그아웃</string>
     <string name="delete">삭제</string>
+    <string name="confirm">확인</string>
     <string name="top_videos">인기 동영상</string>
     <string name="trending">인기 급상승</string>
     <string name="new_singles">새 싱글</string>

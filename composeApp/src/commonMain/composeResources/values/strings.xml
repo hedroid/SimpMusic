@@ -429,6 +429,7 @@
     <string name="guide_liked_title">Add to YouTube Liked Playlist</string>
     <string name="log_out_from_spotify">Log out from Spotify</string>
     <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
     <string name="top_videos">Top videos</string>
     <string name="trending">Trending</string>
     <string name="new_singles">New singles</string>
@@ -940,7 +941,7 @@
     <string name="delete_playlist_title">Delete this playlist?</string>
     <string name="delete_playlist_message">The playlist \"%1$s\" will be permanently deleted from your NetEase account. This cannot be undone.</string>
     <string name="netease_play_report">Send playback data to NetEase</string>
-    <string name="netease_play_report_description">Report plays to your NetEase account so its recommendations and yearly report learn from them</string>
+    <string name="netease_play_report_description">Report plays to your NetEase account for better recommendations and yearly reports, at the risk of triggering NetEase risk control</string>
     <string name="your_netease_playlists">Your NetEase Cloud Music playlists</string>
     <string name="added_to_netease_playlist">Added to NetEase Cloud Music playlist</string>
     <string name="download_management">Downloads</string>

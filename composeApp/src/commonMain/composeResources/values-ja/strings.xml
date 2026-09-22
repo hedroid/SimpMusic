@@ -139,7 +139,7 @@
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
     <string name="netease_play_report">再生データをNetEaseに送信</string>
-    <string name="netease_play_report_description">再生記録をNetEaseアカウントに報告し、おすすめや年間レポートに反映します</string>
+    <string name="netease_play_report_description">再生記録をNetEaseアカウントに報告しておすすめや年間レポートを改善しますが、リスク制御が発動する恐れがあります</string>
     <string name="fans_count">%1$s フォロワー</string>
     <string name="comments_count">%1$s 件のコメント</string>
     <string name="likes_count">%1$s 件の高評価</string>
@@ -341,6 +341,7 @@
     <string name="guide_liked_title">YouTubeの高評価の再生リストに追加</string>
     <string name="log_out_from_spotify">Spotifyアカウントからログアウト</string>
     <string name="delete">削除</string>
+    <string name="confirm">確認</string>
     <string name="top_videos">上位の動画</string>
     <string name="trending">急上昇</string>
     <string name="new_singles">ニューシングル</string>

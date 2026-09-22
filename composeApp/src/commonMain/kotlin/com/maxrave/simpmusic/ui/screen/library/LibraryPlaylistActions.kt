@@ -143,12 +143,14 @@ internal fun CreatePlaylistDialog(
 
 /**
  * 库页移除类操作的确认弹窗(取消收藏歌单/专辑、删除歌单共用,原 NeteaseUnsubscribeDialog
- * 提升共用——YT tab 对齐网易逻辑后两 tab 同款)。
+ * 提升共用——YT tab 对齐网易逻辑后两 tab 同款)。取消收藏不是删除,按钮文案用
+ * [confirmLabel] 传"确认";真删除(自建歌单)走默认"删除"。
  */
 @Composable
 internal fun LibraryRemoveConfirmDialog(
     title: String,
     message: String,
+    confirmLabel: String? = null,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -161,7 +163,7 @@ internal fun LibraryRemoveConfirmDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(text = stringResource(Res.string.delete))
+                Text(text = confirmLabel ?: stringResource(Res.string.delete))
             }
         },
         dismissButton = {

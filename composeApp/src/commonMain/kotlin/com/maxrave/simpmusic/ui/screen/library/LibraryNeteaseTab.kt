@@ -60,6 +60,7 @@ import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.confirm
 import simpmusic.composeapp.generated.resources.delete_playlist_message
 import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.followed
@@ -270,6 +271,7 @@ internal fun LibraryNeteaseTab(
         LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.unsubscribe_playlist_title),
             message = stringResource(Res.string.unsubscribe_playlist_message, target.title),
+            confirmLabel = stringResource(Res.string.confirm),
             onConfirm = {
                 onUnsubscribePlaylist(target.id)
                 unsubscribePlaylistTarget = null
@@ -292,6 +294,7 @@ internal fun LibraryNeteaseTab(
         LibraryRemoveConfirmDialog(
             title = stringResource(Res.string.unsubscribe_album_title),
             message = stringResource(Res.string.unsubscribe_album_message, target.title),
+            confirmLabel = stringResource(Res.string.confirm),
             onConfirm = {
                 onUnsubscribeAlbum(target.browseId)
                 unsubscribeAlbumTarget = null

@@ -359,6 +359,7 @@
     <string name="guide_liked_title">添加到 YouTube 赞过的播放列表</string>
     <string name="log_out_from_spotify">登出Spotify</string>
     <string name="delete">删除</string>
+    <string name="confirm">确认</string>
     <string name="top_videos">热门视频</string>
     <string name="trending">热门趋势</string>
     <string name="new_singles">新单曲</string>
@@ -912,7 +913,7 @@
     <string name="delete_playlist_title">删除该歌单？</string>
     <string name="delete_playlist_message">歌单“%1$s”将从你的网易云音乐账号中永久删除，且无法恢复。</string>
     <string name="netease_play_report">发送播放数据到网易云</string>
-    <string name="netease_play_report_description">把播放记录上报到你的网易云账号，让每日推荐和年度报告更懂你</string>
+    <string name="netease_play_report_description">把播放记录上报到你的网易云账号，优化每日推荐和年度报告，但有触发风控的风险</string>
     <string name="your_netease_playlists">您的网易云歌单</string>
     <string name="added_to_netease_playlist">已添加到网易云歌单</string>
     <string name="download_management">下载管理</string>

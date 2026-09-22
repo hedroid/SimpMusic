@@ -180,7 +180,7 @@
     <string name="delete_playlist_title">刪除該播放清單？</string>
     <string name="delete_playlist_message">播放清單「%1$s」將從你的網易雲帳號中永久刪除，且無法復原。</string>
     <string name="netease_play_report">發送播放數據到網易雲</string>
-    <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，讓每日推薦和年度報告更懂你</string>
+    <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，優化每日推薦和年度報告，但有觸發風控的風險</string>
     <string name="your_netease_playlists">您的網易雲播放清單</string>
     <string name="added_to_netease_playlist">已加入網易雲播放清單</string>
     <string name="download_management">下載管理</string>
@@ -409,6 +409,7 @@
     <string name="guide_liked_title">新增到YouTube「喜歡的影片」播放清單</string>
     <string name="log_out_from_spotify">登出Spotify</string>
     <string name="delete">刪除</string>
+    <string name="confirm">確認</string>
     <string name="top_videos">熱門影片</string>
     <string name="trending">熱門</string>
     <string name="new_singles">最新單曲</string>
