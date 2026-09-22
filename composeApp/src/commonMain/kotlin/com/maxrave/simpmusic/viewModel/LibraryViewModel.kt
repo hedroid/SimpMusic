@@ -480,20 +480,27 @@ class LibraryViewModel(
     private fun applyMutation(mutation: LibraryMutation) {
         when (mutation) {
             is LibraryMutation.PlaylistRemoved -> {
+                // YT 歌单 id 的 VL 前缀在两处形状可能不同(库页 tile/详情页),归一化匹配
+                val removedId = mutation.playlistId.removePrefix("VL")
                 (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
                     _neteasePlaylist.value =
                         LocalResource.Success(state.data.orEmpty().filterNot { it.id == mutation.playlistId })
                 }
                 (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
                     _youTubePlaylist.value =
-                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.playlistId })
+                        LocalResource.Success(
+                            state.data.orEmpty().filterNot { it.browseId.removePrefix("VL") == removedId },
+                        )
                 }
                 (_youTubeLikedPlaylists.value as? LocalResource.Success)?.let { state ->
                     _youTubeLikedPlaylists.value =
-                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.playlistId })
+                        LocalResource.Success(
+                            state.data.orEmpty().filterNot { it.browseId.removePrefix("VL") == removedId },
+                        )
                 }
                 // 创建者缓存同步剔除,防止"创建的歌单"分区判断残留
-                _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value - mutation.playlistId
+                _ownNeteasePlaylistIds.value =
+                    _ownNeteasePlaylistIds.value.filterNot { it.removePrefix("VL") == removedId }.toSet()
             }
 
             is LibraryMutation.NeteaseHeartCountChanged -> {
@@ -513,9 +520,10 @@ class LibraryViewModel(
 
             is LibraryMutation.YouTubePlaylistCreated -> {
                 (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
+                    // 插入分区首位(用户新建单应排最前,与 YTM 官方行为一致)
                     _youTubePlaylist.value =
                         LocalResource.Success(
-                            state.data.orEmpty() +
+                            listOf(
                                 PlaylistsResult(
                                     author = "",
                                     browseId = mutation.playlistId,
@@ -525,6 +533,7 @@ class LibraryViewModel(
                                     thumbnails = listOf(),
                                     title = mutation.title,
                                 ),
+                            ) + state.data.orEmpty(),
                         )
                 }
             }
@@ -533,13 +542,16 @@ class LibraryViewModel(
                 (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
                     _neteasePlaylist.value =
                         LocalResource.Success(
-                            state.data.orEmpty() +
+                            // 网易 userPlaylists 服务端序=新建置顶,本地插入同样放最前
+                            // (红心歌单由排序兜底仍居首,不影响)
+                            listOf(
                                 PlaylistEntity(
                                     id = mutation.playlistId,
                                     source = MusicSource.NETEASE.name,
                                     title = mutation.title,
                                     trackCount = 0,
                                 ),
+                            ) + state.data.orEmpty(),
                         )
                     // 新建即自建,创建区判断即刻生效
                     _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value + mutation.playlistId
@@ -657,10 +669,11 @@ class LibraryViewModel(
         }
     }
 
-    /** 取消收藏他人 YT 歌单(playlist/delete,服务端移出资料库),成功 toast+本地移除 */
+    /** 取消收藏他人 YT 歌单(like/removelike,2026-09-22 改——playlist/delete 对收藏歌单
+     *  403 无权限),成功 toast+本地移除 */
     fun unsubscribeYouTubePlaylist(playlistId: String) {
         viewModelScope.launch {
-            if (playlistRepository.deleteYouTubePlaylist(playlistId)) {
+            if (playlistRepository.removeYouTubePlaylistFromLibrary(playlistId)) {
                 makeToast(getString(Res.string.unsubscribed_youtube_playlist))
                 applyMutation(LibraryMutation.PlaylistRemoved(playlistId))
             } else {

@@ -229,18 +229,29 @@ fun NowPlayingScreenContent(
     // repeatedly, so the size changed again and again and cut the animation short each time,
     // leaving the pager parked between two pages. The size is still read below — just as a value,
     // not as a trigger; ③ handles the case where the queue shrinks under the current page.
+    //
+    // Same track, new position (shuffle reorder) snaps instead of animating: animateScrollToPage
+    // would sweep the pager across every page in between — flashing other covers on the way to
+    // the same song — which reads as "the cover glitched to another song and back".
+    var lastAnimatedTrackId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(currentOrderIndex) {
         val target = currentOrderIndex
+        val trackChanged = lastAnimatedTrackId != nowPlayingVideoId
+        lastAnimatedTrackId = nowPlayingVideoId
         if (!isUserDraggingActive &&
             artworkQueue.isNotEmpty() &&
             target in 0 until artworkQueue.size &&
             target != artworkPagerState.currentPage
         ) {
-            isAnimatingFromPlayer = true
-            try {
-                artworkPagerState.animateScrollToPage(target)
-            } finally {
-                isAnimatingFromPlayer = false
+            if (trackChanged) {
+                isAnimatingFromPlayer = true
+                try {
+                    artworkPagerState.animateScrollToPage(target)
+                } finally {
+                    isAnimatingFromPlayer = false
+                }
+            } else {
+                artworkPagerState.scrollToPage(target)
             }
         }
     }

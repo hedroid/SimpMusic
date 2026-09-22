@@ -1436,12 +1436,8 @@ fun PlaylistScreen(
                             } else {
                                 null
                             },
-                        onLikeChanged =
-                            if (neteaseLikedPlaylist) {
-                                { liked -> viewModel.onTrackLikeChanged(track.videoId, liked) }
-                            } else {
-                                null
-                            },
+                        // 红心歌单内取消红心不再即时剔歌(用户定案:闪动效果差,云端为准下次进入更新)
+                        onLikeChanged = null,
                     )
                 }
                 if (playlistBottomSheetShow) {

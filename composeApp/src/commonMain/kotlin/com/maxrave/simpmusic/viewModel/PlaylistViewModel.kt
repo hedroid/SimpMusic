@@ -86,46 +86,9 @@ class PlaylistViewModel(
     private val dataStoreManager: DataStoreManager,
     private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
-
-    init {
-        // B1:红心下降沿(已赞→取消)时,若正停在网易红心歌单页,立即把该歌从列表剔掉——
-        // 否则取消红心后返回歌单看到的还是旧列表(页面只在进入时拉数据)。
-        // 上升沿不管(点赞不加列表:云村红心歌单内容以服务端为准,下次进入自然带上)。
-        viewModelScope.launch {
-            var prev: Boolean? = null
-            sharedViewModel.liked.collect { likedNow ->
-                if (prev == true && !likedNow) removeNowPlayingFromLikedPlaylist()
-                prev = likedNow
-            }
-        }
-    }
-
-    private fun removeNowPlayingFromLikedPlaylist() {
-        val videoId = nowPlayingVideoId.value
-        if (videoId.isEmpty()) return
-        removeTrackFromLikedPlaylist(videoId)
-    }
-
-    /** 红心歌单内任意入口取消红心后，立即让当前页面列表与新的点赞状态保持一致。 */
-    fun onTrackLikeChanged(
-        videoId: String,
-        liked: Boolean,
-    ) {
-        if (!liked) removeTrackFromLikedPlaylist(videoId)
-    }
-
-    private fun removeTrackFromLikedPlaylist(videoId: String) {
-        val id = (uiState.value as? Success)?.data?.id ?: return
-        if (id.toLongOrNull() == null || !neteaseRepository.isNeteaseLikedPlaylist(id)) return
-        val removed = _tracks.value.any { it.videoId == videoId }
-        if (!removed) return
-        _tracks.update { list -> list.filterNot { it.videoId == videoId } }
-        (uiState.value as? Success)?.data?.let { state ->
-            _uiState.value = Success(state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)))
-        }
-        // 库页红心歌单行计数同步 -1(本地回写,不走网络刷新)
-        mutationBus.send(LibraryMutation.NeteaseHeartCountChanged(-1))
-    }
+    // 红心歌单页不做"取消红心→立即剔歌/计数-1"(用户 2026-09-22 定案:页面会闪动,
+    // 效果差;云端为准,下次进入自然更新)。曾经有 B1 下降沿联动+onTrackLikeChanged
+    // 即时剔歌,已整体撤除;三选一菜单的"从歌单移除"是显式移除操作,保留剔歌。
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val albumRepository: AlbumRepository by inject<AlbumRepository>()
     private val mutationBus: LibraryMutationBus by inject()
@@ -247,8 +210,11 @@ class PlaylistViewModel(
      * "更多"菜单,与网易自建同款入口)。成功后发库页本地回写。
      */
     fun deleteYouTubePlaylist() {
-        val id = (uiState.value as? Success)?.data?.id ?: return
-        if (id.toLongOrNull() != null) return
+        val rawId = (uiState.value as? Success)?.data?.id ?: return
+        if (rawId.toLongOrNull() != null) return
+        // 详情页 id 可能缺 VL 前缀(两个来源形状不一);playlist/delete 要求原样 browseId,
+        // 统一补齐(Metrolist 同款透传形状)
+        val id = if (rawId.startsWith("VL")) rawId else "VL$rawId"
         viewModelScope.launch {
             if (playlistRepository.deleteYouTubePlaylist(id)) {
                 makeToast(getString(Res.string.deleted_playlist))
