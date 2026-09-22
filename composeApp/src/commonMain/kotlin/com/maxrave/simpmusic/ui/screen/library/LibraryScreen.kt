@@ -222,11 +222,14 @@ fun LibraryScreen(
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                // 未加载过才拉(与网易侧同口径):不看"空"——删除唯一自建歌单后 created
-                // 分区为空,YTM 服务端删除是异步的(~1min),按空重拉会把还没删掉的歌单
-                // 又拉回来,读作"删除后返回列表还残留"。子页写操作走 LibraryMutationBus
-                // 本地回写(2026-09-22 定案),不依赖返回时刷新。
-                if (youTubePlaylist !is LocalResource.Success) {
+                // 未加载过、或"登录态下系统歌单置顶行为空"(首拉撞上 cookie 恢复竞态/
+                // split 间歇失败时 auto 分区空——登录账号必有 LM/SE,空=那次数据不可信)
+                // 才拉。不看 created 空:删除唯一自建歌单后 YTM 服务端删除是异步的(~1min),
+                // 按空重拉会把还没删掉的歌单又拉回来(2026-09-22)。子页写操作走
+                // LibraryMutationBus 本地回写,不依赖返回时刷新。
+                if (youTubePlaylist !is LocalResource.Success ||
+                    youTubeAutoPlaylists.data.isNullOrEmpty()
+                ) {
                     viewModel.getYouTubeLibrary()
                 }
             }
