@@ -395,6 +395,10 @@ class LibraryViewModel(
                             _youTubePlaylist.value = LocalResource.Success(split.created)
                             _youTubeAutoPlaylists.value = LocalResource.Success(split.auto)
                             _youTubeLikedPlaylists.value = LocalResource.Success(split.liked)
+                            // 收藏对账(同网易):云端全量(auto+created+liked)没有的本地 liked 行清零
+                            playlistRepository.reconcileLikedYouTubePlaylists(
+                                (split.auto + split.created + split.liked).map { it.browseId }.toSet(),
+                            )
                         }
                     }
                 }
@@ -462,6 +466,9 @@ class LibraryViewModel(
                             _neteasePlaylist.value = LocalResource.Success(it)
                             _ownNeteasePlaylistIds.value = neteaseRepository.getOwnNeteasePlaylistIds()
                             _neteaseLikedPlaylistId.value = neteaseRepository.getNeteaseLikedPlaylistIdCached()
+                            // 收藏对账(2026-09-22 短期方案):云端列表没有而本地还标着收藏的行清零,
+                            // app 外取消收藏自动收敛;列表为空(拉取异常形状)时上面直接 return 不过这里
+                            playlistRepository.reconcileLikedNeteasePlaylists(it.map { p -> p.id }.toSet())
                         },
                         onFailure = { _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed") },
                     )
