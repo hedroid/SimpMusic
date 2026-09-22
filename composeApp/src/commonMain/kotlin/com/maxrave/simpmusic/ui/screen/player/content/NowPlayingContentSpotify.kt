@@ -146,6 +146,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Subtitles
 import com.maxrave.simpmusic.ui.icon.SubtitlesOff
 import com.maxrave.simpmusic.ui.icon.ThumbsUpDown
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.blackMoreOverlay
 import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
@@ -1646,7 +1647,7 @@ fun NowPlayingContentSpotify(
                                         Text(
                                             text =
                                                 neteaseMeta?.artistFans?.let {
-                                                    stringResource(Res.string.fans_count, it.toPlaybackCompactCount())
+                                                    stringResource(Res.string.fans_count, formatCompactCount(it))
                                                 } ?: state.screenData.songInfoData?.subscribers ?: "",
                                             style = typo().bodySmall,
                                             color = Color.White.copy(alpha = 0.7f),
@@ -1692,7 +1693,7 @@ fun NowPlayingContentSpotify(
                                         }
                                         neteaseMeta.likeCount?.let { likeCount ->
                                             Text(
-                                                text = stringResource(Res.string.likes_count, "%,d".format(likeCount)),
+                                                text = stringResource(Res.string.likes_count, formatCompactCount(likeCount)),
                                                 style = typo().labelMedium,
                                                 color = Color.White,
                                             )
@@ -1700,7 +1701,7 @@ fun NowPlayingContentSpotify(
                                         }
                                         if (neteaseMeta.commentCount > 0) {
                                             Text(
-                                                text = stringResource(Res.string.comments_count, "%,d".format(neteaseMeta.commentCount)),
+                                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
                                                 style = typo().bodyMedium,
                                                 modifier = Modifier.clickable { actions.onShowNeteaseComments() },
                                             )
@@ -1736,7 +1737,7 @@ fun NowPlayingContentSpotify(
                                             text =
                                                 stringResource(
                                                     Res.string.view_count,
-                                                    "%,d".format(state.screenData.songInfoData?.viewCount),
+                                                    formatCompactCount(state.screenData.songInfoData?.viewCount ?: 0),
                                                 ),
                                             style = typo().labelMedium,
                                             color = Color.White,
@@ -1746,8 +1747,8 @@ fun NowPlayingContentSpotify(
                                             text =
                                                 stringResource(
                                                     Res.string.like_and_dislike,
-                                                    state.screenData.songInfoData?.like ?: 0,
-                                                    state.screenData.songInfoData?.dislike ?: 0,
+                                                    formatCompactCount(state.screenData.songInfoData?.like ?: 0),
+                                                    formatCompactCount(state.screenData.songInfoData?.dislike ?: 0),
                                                 ),
                                             style = typo().bodyMedium,
                                         )

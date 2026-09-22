@@ -320,7 +320,7 @@
     <string name="play_next">次を再生</string>
     <string name="codec">コー​​デック</string>
     <string name="plays">再生/表示回数</string>
-    <string name="like_and_dislike">%1$d 高評価/ %2$d 低評価</string>
+    <string name="like_and_dislike">%1$s 高評価/ %2$s 低評価</string>
     <string name="less">少なく表示</string>
     <string name="spotify">Spotify</string>
     <string name="log_in_to_spotify">Spotify にログインする</string>

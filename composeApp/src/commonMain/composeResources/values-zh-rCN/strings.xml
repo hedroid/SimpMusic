@@ -337,7 +337,7 @@
     <string name="play_next">下一个播放</string>
     <string name="codec">Codec</string>
     <string name="plays">播放/查看计数</string>
-    <string name="like_and_dislike">%1$d 赞(s), %2$d 踩(s)</string>
+    <string name="like_and_dislike">%1$s 赞(s), %2$s 踩(s)</string>
     <string name="published_at">发布在 %1$s</string>
     <string name="less">减少</string>
     <string name="spotify">Spotify</string>

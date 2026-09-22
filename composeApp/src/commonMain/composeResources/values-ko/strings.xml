@@ -329,7 +329,7 @@
     <string name="play_next">다음에 재생</string>
     <string name="codec">코덱</string>
     <string name="plays">재생/조회수</string>
-    <string name="like_and_dislike">좋아요 %1$d, 싫어요 %2$d</string>
+    <string name="like_and_dislike">좋아요 %1$s, 싫어요 %2$s</string>
     <string name="published_at">발매일: %1$s</string>
     <string name="less">간단히</string>
     <string name="spotify">Spotify</string>

@@ -174,6 +174,7 @@ import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.screen.player.deriveOrderIndex
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
@@ -840,7 +841,7 @@ fun InfoPlayerBottomSheet(
                             color = rememberSurfaceDarkColors().content,
                         )
                         Text(
-                            text = "%,d".format(likeCount),
+                            text = formatCompactCount(likeCount),
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -862,7 +863,7 @@ fun InfoPlayerBottomSheet(
                             color = rememberSurfaceDarkColors().content,
                         )
                         Text(
-                            text = stringResource(Res.string.comments_count, "%,d".format(neteaseMeta.commentCount)),
+                            text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -907,7 +908,7 @@ fun InfoPlayerBottomSheet(
                         color = rememberSurfaceDarkColors().content,
                     )
                     Text(
-                        text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
+                        text = screenDataState.songInfoData?.viewCount?.let { formatCompactCount(it) } ?: stringResource(Res.string.unknown),
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -935,8 +936,8 @@ fun InfoPlayerBottomSheet(
                         text =
                             stringResource(
                                 Res.string.like_and_dislike,
-                                screenDataState.songInfoData?.like ?: 0,
-                                screenDataState.songInfoData?.dislike ?: 0,
+                                formatCompactCount(screenDataState.songInfoData?.like ?: 0),
+                                formatCompactCount(screenDataState.songInfoData?.dislike ?: 0),
                             ),
                         modifier =
                             Modifier
@@ -3982,7 +3983,7 @@ fun NeteaseCommentsSheet(
                     text =
                         stringResource(
                             Res.string.comments_title,
-                            "%,d".format(totalCount),
+                            formatCompactCount(totalCount),
                         ),
                     style = typo().titleMedium,
                     color = rememberSurfaceDarkColors().content,
@@ -4030,7 +4031,7 @@ fun NeteaseCommentsSheet(
                                     modifier = Modifier.size(14.dp),
                                 )
                                 Text(
-                                    text = comment.likedCount?.let { "%,d".format(it) } ?: "",
+                                    text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
                                     style = typo().labelSmall,
                                     color = rememberSurfaceDarkColors().subtitle,
                                 )

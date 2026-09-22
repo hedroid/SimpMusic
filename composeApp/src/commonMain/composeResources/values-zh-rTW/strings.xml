@@ -387,7 +387,7 @@
     <string name="play_next">下一首播放</string>
     <string name="codec">編解碼器</string>
     <string name="plays">播放/觀看次數</string>
-    <string name="like_and_dislike">%1$d 喜歡, %2$d 不喜歡</string>
+    <string name="like_and_dislike">%1$s 喜歡, %2$s 不喜歡</string>
     <string name="published_at">發佈於%1$s</string>
     <string name="less">收起</string>
     <string name="spotify">Spotify</string>
