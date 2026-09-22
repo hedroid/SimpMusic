@@ -64,6 +64,7 @@ import simpmusic.composeapp.generated.resources.unsaved_toast
 import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.deleted_playlist
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_playlist
+import simpmusic.composeapp.generated.resources.unsubscribed_youtube_playlist
 import simpmusic.composeapp.generated.resources.remove_from_playlist_failed
 import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
@@ -202,6 +203,26 @@ class PlaylistViewModel(
                     },
                     onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
                 )
+        }
+    }
+
+    /**
+     * 收藏歌单详情页"取消收藏"(YT):like/removelike 移出资料库,成功后发库页本地回写。
+     * 不自动返回导航(歌单还在云端,调用方留在当前页)。
+     */
+    fun unsubscribeYouTubePlaylist() {
+        val rawId = (uiState.value as? Success)?.data?.id ?: return
+        if (rawId.toLongOrNull() != null) return
+        val id = if (rawId.startsWith("VL")) rawId else "VL$rawId"
+        viewModelScope.launch {
+            if (playlistRepository.removeYouTubePlaylistFromLibrary(id)) {
+                _playlistEntity.update { it?.copy(liked = false) }
+                _remoteSaved.value = false
+                makeToast(getString(Res.string.unsubscribed_youtube_playlist))
+                mutationBus.send(LibraryMutation.PlaylistRemoved(id))
+            } else {
+                makeToast(getString(Res.string.netease_action_failed))
+            }
         }
     }
 

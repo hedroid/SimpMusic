@@ -163,6 +163,7 @@ import simpmusic.composeapp.generated.resources.delete_playlist_message
 import simpmusic.composeapp.generated.resources.delete_youtube_playlist_message
 import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
+import simpmusic.composeapp.generated.resources.unsubscribe_youtube_playlist_message
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
@@ -1398,16 +1399,31 @@ fun PlaylistScreen(
                     )
                 }
                 if (showUnsubscribeDialog) {
+                    // 收藏歌单取消收藏:网易/YT 各用本源文案;确认后**不自动返回**(歌单还在
+                    // 云端,留在当前页即可,用户 2026-09-22 定案),库页分区由事件本地移除
+                    val isNeteasePlaylist = data.id.toLongOrNull() != null
                     AlertDialog(
                         containerColor = rememberSurfaceDarkColors().container,
                         titleContentColor = rememberSurfaceDarkColors().content,
                         textContentColor = rememberSurfaceDarkColors().content,
                         title = { Text(text = stringResource(Res.string.unsubscribe_playlist_title)) },
-                        text = { Text(text = stringResource(Res.string.unsubscribe_playlist_message, data.title)) },
+                        text = {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (isNeteasePlaylist) Res.string.unsubscribe_playlist_message else Res.string.unsubscribe_youtube_playlist_message,
+                                        data.title,
+                                    ),
+                            )
+                        },
                         onDismissRequest = { showUnsubscribeDialog = false },
                         confirmButton = {
                             TextButton(onClick = {
-                                viewModel.unsubscribeNeteasePlaylist()
+                                if (isNeteasePlaylist) {
+                                    viewModel.unsubscribeNeteasePlaylist()
+                                } else {
+                                    viewModel.unsubscribeYouTubePlaylist()
+                                }
                                 showUnsubscribeDialog = false
                             }) {
                                 Text(text = stringResource(Res.string.delete))
@@ -1457,10 +1473,13 @@ fun PlaylistScreen(
                         // 网易歌单:已收藏的才露"取消收藏"(与红心状态同源,未收藏时不露),
                         // 自建的露"删除歌单"(红心歌单两者都不露)
                         onUnsubscribe =
-                            if (data.id.toLongOrNull() != null &&
+                            // 收藏歌单露"取消收藏":网易(已收藏的)+ YT 从收藏分区进入的
+                            // (isYourYouTubePlaylist=false 即收藏歌单入口);确认后不返回
+                            if ((data.id.toLongOrNull() != null &&
                                 !neteaseOwnPlaylist &&
                                 !neteaseLikedPlaylist &&
-                                (remoteSaved ?: liked)
+                                (remoteSaved ?: liked)) ||
+                                (data.id.toLongOrNull() == null && !isYourYouTubePlaylist && !data.isRadio)
                             ) {
                                 { showUnsubscribeDialog = true }
                             } else {
