@@ -105,8 +105,6 @@ internal fun LibraryYouTubeTab(
     var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistsResult?>(null) }
     var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
-    // 进 tab 默认顶部(置顶系统歌单行可见),理由同 LibraryNeteaseTab;子页返回不重跑
-    LaunchedEffect(Unit) { state.scrollToItem(0) }
     val isScrollingUp by state.isScrollingUp()
     LaunchedEffect(state) {
         snapshotFlow { state.firstVisibleItemIndex }

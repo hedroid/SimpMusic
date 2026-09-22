@@ -106,10 +106,6 @@ internal fun LibraryNeteaseTab(
     var unsubscribeAlbumTarget by remember { mutableStateOf<AlbumsResult?>(null) }
     var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
-    // 进 tab 默认顶部(红心行可见):rememberLazyGridState 是可保存状态,底部导航 restoreState
-    // 会把上次离开时的中间位置带回来。仅在(重新)组合时归零一次——从子页返回时本组合
-    // 未销毁、effect 不重跑,滚动位置保留(2026-09-22 用户定案)
-    LaunchedEffect(Unit) { state.scrollToItem(0) }
     val isScrollingUp by state.isScrollingUp()
     LaunchedEffect(state) {
         snapshotFlow { state.firstVisibleItemIndex }
