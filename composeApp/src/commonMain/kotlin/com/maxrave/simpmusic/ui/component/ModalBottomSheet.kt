@@ -1129,7 +1129,10 @@ fun QueueBottomSheet(
     // 不做落批链式追加——曾按总条数边沿续射,一次下拉能连灌几十首、指示器连转多圈。
     // 两路开火共享 2s 抑制窗:同一次手势里"到尾边沿"+"手势停止兜底"只算一次。
     var lastLoadMoreAt by remember { mutableStateOf(0L) }
-    LaunchedEffect(shouldLoadMore) {
+    // 键里带 endlessQueueEnable:开关翻转(尤其关→开)重启本协程,prevMore 归零=重新武装
+    // 边沿。否则弹窗打开时(开关还是关的)近尾边沿已白白消费一次,之后布尔恒 true 不再有
+    // 新边沿,而满屏小队列的"下拉"是 overscroll 不产生滚动事件——开关怎么开都不会追加。
+    LaunchedEffect(shouldLoadMore, endlessQueueEnable) {
         var prevMore = false
         var pending = false
         snapshotFlow { shouldLoadMore.value to loadMoreState }
@@ -1338,6 +1341,8 @@ fun QueueBottomSheet(
                                         ToastGravity.Bottom,
                                     )
                                 } else {
+                                    // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                                    if (!checked) musicServiceHandler.restoreOriginalQueueAfterEndless()
                                     coroutineScope.launch {
                                         dataStoreManager.setEndlessQueue(checked)
                                     }

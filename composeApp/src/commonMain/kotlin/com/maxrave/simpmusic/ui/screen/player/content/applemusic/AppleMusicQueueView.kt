@@ -148,6 +148,11 @@ internal fun AppleMusicQueueView(
             modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
         )
         val queueDataState by musicServiceHandler.queueData.collectAsStateWithLifecycle()
+        // 到尾触发协程的"重武装"键:开关翻转(尤其关→开)要重启边沿判定,否则弹窗打开时
+        // (开关还是关的)近尾边沿已白白消费一次,之后布尔恒 true 不再有新边沿(同 QueueBottomSheet)
+        val endlessQueueEnabledForRearm by remember(dataStoreManager) {
+            dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }
+        }.collectAsStateWithLifecycle(initialValue = false)
         AppleMusicContinuePlayingHeader(
             state = state,
             dataStoreManager = dataStoreManager,
@@ -156,6 +161,7 @@ internal fun AppleMusicQueueView(
             activePillContent = activePillContent,
             // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
             isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
+            onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
             modifier = Modifier.padding(bottom = 8.dp),
         )
 
@@ -193,7 +199,7 @@ internal fun AppleMusicQueueView(
         // 手势兜底:批次太小(≤2 首)时布尔无边沿可用,手势停止后复核一次;
         // drop(1) 跳过初始未滚动发射,两路共享 2s 抑制窗防同手势双批。同 QueueBottomSheet。
         var lastLoadMoreAt by remember { mutableStateOf(0L) }
-        LaunchedEffect(Unit) {
+        LaunchedEffect(endlessQueueEnabledForRearm) {
             var prevMore = false
             var pending = false
             snapshotFlow { shouldLoadMore to loadMoreState }
@@ -445,6 +451,7 @@ private fun AppleMusicContinuePlayingHeader(
     activePillContainer: Color,
     activePillContent: Color,
     isFmQueue: Boolean,
+    onEndlessDisabled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -501,6 +508,8 @@ private fun AppleMusicContinuePlayingHeader(
                             ToastGravity.Bottom,
                         )
                     } else {
+                        // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                        if (!checked) onEndlessDisabled()
                         coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
                     }
                 },
