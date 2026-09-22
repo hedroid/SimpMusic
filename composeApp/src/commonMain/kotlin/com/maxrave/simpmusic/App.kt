@@ -523,12 +523,11 @@ fun App(
                                     neteaseLoggedIn = neteaseLoggedInValue,
                                     onSourceSelected = { source ->
                                         if (selectedSourceValue != source.name) {
-                                            // 统一入口:停播清队列(含持久化恢复源)都在 switchSource 里
+                                            // 切源不停播、不跳页(用户 2026-09-22 定案):留在当前页,
+                                            // 区分音源的页(Home/Mix 按状态分流、Search 自适应)原地
+                                            // 刷新;若切源后 Mix tab 不再可见,下方
+                                            // LaunchedEffect(showMixForYouTab) 会把用户带回主页
                                             viewModel.switchSource(source)
-                                            navController.navigate(HomeDestination) {
-                                                popUpTo(navController.graph.startDestinationId) { saveState = false }
-                                                launchSingleTop = true
-                                            }
                                         }
                                     },
                                     reloadDestinationIfNeeded = { klass ->
@@ -545,12 +544,8 @@ fun App(
                                     neteaseLoggedIn = neteaseLoggedInValue,
                                     onSourceSelected = { source ->
                                         if (selectedSourceValue != source.name) {
-                                            // 统一入口:停播清队列(含持久化恢复源)都在 switchSource 里
+                                            // 同上:切源不停播、不跳页,原地刷新区分音源的页
                                             viewModel.switchSource(source)
-                                            navController.navigate(HomeDestination) {
-                                                popUpTo(navController.graph.startDestinationId) { saveState = false }
-                                                launchSingleTop = true
-                                            }
                                         }
                                     },
                                     reloadDestinationIfNeeded = { klass ->

@@ -1925,7 +1925,7 @@ class SettingsViewModel(
         }
     }
 
-    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM(统一入口,停播清队列;已是 YT 源则无操作) */
+    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM(统一入口,只切 setting 不动播放状态;已是 YT 源则无操作) */
     fun useGuestNetease() {
         viewModelScope.launch {
             neteaseRepository.useGuest()

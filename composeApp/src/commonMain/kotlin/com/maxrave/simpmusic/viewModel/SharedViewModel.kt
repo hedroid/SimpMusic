@@ -157,21 +157,14 @@ class SharedViewModel(
 
     /**
      * 统一的切源入口:三处切源路径(底栏长按菜单、网易登录成功自动切、登出/访客回落 YT)
-     * 必须都走这里。除了停播清内存队列,还要清持久化恢复源(queue 表 + recentMediaId +
-     * playlistFromSaved)——mayBeRestoreQueue 按 recentMediaId 恢复,只清内存的话下次启动
-     * 会把旧源队列原样恢复回来,破坏"播放队列/正在播放与音源绑定"的规则。
-     * 切源即弃队列是产品规则,不做保留;同源重复调用无副作用。
+     * 必须都走这里。只切 setting,**不停播、不清播放状态**(用户 2026-09-22 定案):播放管线
+     * 按歌曲 ID 形状路由,混源队列本就能播,切源不打断正在听的音乐。持久化的队列/recentMediaId
+     * 也保留,跨源残留在下次启动时由 core mayBeRestoreQueue 的跨源守卫(恢复曲 ID 形状≠当前源
+     * 则跳过)兜住。同源重复调用无副作用。
      */
     fun switchSource(source: com.maxrave.domain.source.MusicSource) {
         if (selectedSource.value == source.name) return
         setSelectedSource(source)
-        stopPlayer()
-        isServiceRunning = false
-        viewModelScope.launch {
-            songRepository.removeQueue()
-            dataStoreManager.saveRecentSong("", 0)
-            dataStoreManager.setPlaylistFromSaved("")
-        }
     }
 
     var isFirstLiked: Boolean = false

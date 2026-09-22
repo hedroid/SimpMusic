@@ -201,8 +201,9 @@ class NeteaseLoginViewModel(
             .onSuccess { account ->
                 Logger.d(TAG, "finishLogin: success account=${account?.nickname}")
                 _qrUi.value = QrUi.LOGGED_IN
-                // 登录成功自动切到网易源;统一入口会停播并清掉另一源的播放状态
-                // (此前只改 setting 不停播,会出现"选网易、播 YT 歌"的错配)
+                // 登录成功自动切到网易源;切源只改 setting,不停播不清播放状态
+                // (播放管线按歌曲 ID 形状路由,"选网易、继续播 YT 歌"属设计内容忍,
+                // 用户 2026-09-22 定案切源不打断音乐)
                 sharedViewModel.switchSource(com.maxrave.domain.source.MusicSource.NETEASE)
                 _loginSuccess.emit(account?.nickname)
             }.onFailure {
