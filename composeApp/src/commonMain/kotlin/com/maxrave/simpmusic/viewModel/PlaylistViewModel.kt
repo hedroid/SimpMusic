@@ -123,9 +123,12 @@ class PlaylistViewModel(
         (uiState.value as? Success)?.data?.let { state ->
             _uiState.value = Success(state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)))
         }
+        // 库页红心歌单行计数同步 -1(本地回写,不走网络刷新)
+        mutationBus.send(LibraryMutation.NeteaseHeartCountChanged(-1))
     }
     val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val albumRepository: AlbumRepository by inject<AlbumRepository>()
+    private val mutationBus: LibraryMutationBus by inject()
     private var _uiState = MutableStateFlow<PlaylistUIState>(Loading)
     val uiState: StateFlow<PlaylistUIState> = _uiState
 
@@ -199,6 +202,10 @@ class PlaylistViewModel(
                 playlistRepository.updatePlaylistLiked(id, if (saved) 1 else 0)
                 _playlistEntity.update { it?.copy(liked = saved) }
                 makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
+                if (!saved) {
+                    // 取消收藏成功 → 库页歌单分区原地移除(本地回写;收藏方向下次拉取自然出现)
+                    mutationBus.send(LibraryMutation.PlaylistRemoved(id))
+                }
             } else {
                 makeToast(
                     outcome.exceptionOrNull()?.message
@@ -225,12 +232,30 @@ class PlaylistViewModel(
                             playlistRepository.updatePlaylistLiked(id, 0)
                             _playlistEntity.update { it?.copy(liked = false) }
                             makeToast(getString(Res.string.deleted_playlist))
+                            mutationBus.send(LibraryMutation.PlaylistRemoved(id))
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
                     onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
                 )
+        }
+    }
+
+    /**
+     * 删除自己的 YT 歌单(playlist/delete,不可逆;2026-09-22 补齐——自建歌单详情页
+     * "更多"菜单,与网易自建同款入口)。成功后发库页本地回写。
+     */
+    fun deleteYouTubePlaylist() {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() != null) return
+        viewModelScope.launch {
+            if (playlistRepository.deleteYouTubePlaylist(id)) {
+                makeToast(getString(Res.string.deleted_playlist))
+                mutationBus.send(LibraryMutation.PlaylistRemoved(id))
+            } else {
+                makeToast(getString(Res.string.netease_action_failed))
+            }
         }
     }
 
@@ -250,6 +275,7 @@ class PlaylistViewModel(
                             playlistRepository.updatePlaylistLiked(id, 0)
                             _playlistEntity.update { it?.copy(liked = false) }
                             makeToast(getString(Res.string.unsubscribed_netease_playlist))
+                            mutationBus.send(LibraryMutation.PlaylistRemoved(id))
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))
                         }
@@ -274,6 +300,8 @@ class PlaylistViewModel(
                                     Success(state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)))
                             }
                             makeToast(getString(Res.string.removed_from_playlist))
+                            // 库页红心歌单行计数 -1(本地回写)
+                            mutationBus.send(LibraryMutation.NeteaseHeartCountChanged(-1))
                         } else {
                             makeToast(getString(Res.string.remove_from_playlist_failed))
                         }

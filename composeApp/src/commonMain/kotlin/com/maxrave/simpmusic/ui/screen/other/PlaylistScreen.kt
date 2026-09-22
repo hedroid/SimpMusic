@@ -160,6 +160,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.delete_playlist_message
+import simpmusic.composeapp.generated.resources.delete_youtube_playlist_message
 import simpmusic.composeapp.generated.resources.delete_playlist_title
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
 import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
@@ -1359,16 +1360,30 @@ fun PlaylistScreen(
                     )
                 }
                 if (showDeletePlaylistDialog) {
+                    // 自建歌单删除确认:网易/YT 各用本源文案(2026-09-22 YT 自建补齐入口)
+                    val isNeteasePlaylist = data.id.toLongOrNull() != null
                     AlertDialog(
                         containerColor = rememberSurfaceDarkColors().container,
                         titleContentColor = rememberSurfaceDarkColors().content,
                         textContentColor = rememberSurfaceDarkColors().content,
                         title = { Text(text = stringResource(Res.string.delete_playlist_title)) },
-                        text = { Text(text = stringResource(Res.string.delete_playlist_message, data.title)) },
+                        text = {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (isNeteasePlaylist) Res.string.delete_playlist_message else Res.string.delete_youtube_playlist_message,
+                                        data.title,
+                                    ),
+                            )
+                        },
                         onDismissRequest = { showDeletePlaylistDialog = false },
                         confirmButton = {
                             TextButton(onClick = {
-                                viewModel.deleteNeteasePlaylist()
+                                if (isNeteasePlaylist) {
+                                    viewModel.deleteNeteasePlaylist()
+                                } else {
+                                    viewModel.deleteYouTubePlaylist()
+                                }
                                 showDeletePlaylistDialog = false
                                 navController.navigateUp()
                             }) {
@@ -1456,7 +1471,11 @@ fun PlaylistScreen(
                                 null
                             },
                         onDeletePlaylist =
-                            if (data.id.toLongOrNull() != null && neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                            // 自建歌单露删除:网易自建(非红心)+ YT 自建(非系统/电台)——
+                            // 2026-09-22 对齐库页长按,自建歌单详情页也能删(用户点名)
+                            if ((data.id.toLongOrNull() != null && neteaseOwnPlaylist && !neteaseLikedPlaylist) ||
+                                (data.id.toLongOrNull() == null && isYourYouTubePlaylist && !data.isRadio)
+                            ) {
                                 { showDeletePlaylistDialog = true }
                             } else {
                                 null

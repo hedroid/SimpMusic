@@ -9,6 +9,7 @@ import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
@@ -89,6 +90,7 @@ class LibraryViewModel(
     private val accountRepository: AccountRepository,
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
+    private val mutationBus: LibraryMutationBus by inject()
 
     private val _currentScreen: MutableStateFlow<LibraryChipType> = MutableStateFlow(LibraryChipType.YOUR_LIBRARY)
     val currentScreen: StateFlow<LibraryChipType> get() = _currentScreen.asStateFlow()
@@ -219,6 +221,10 @@ class LibraryViewModel(
     val localTrackingEnabled = dataStoreManager.localTrackingEnabled.mapLatest { it == DataStoreManager.TRUE }
 
     init {
+        // 库页本地回写:子页(艺人/歌单/播放页)写操作成功后原地更新分区,不触发网络刷新
+        viewModelScope.launch {
+            mutationBus.mutations.collect { applyMutation(it) }
+        }
         viewModelScope.launch {
             val currentScreenJob =
                 launch {
@@ -467,7 +473,100 @@ class LibraryViewModel(
         }
     }
 
-    /** 取消收藏网易歌单(/playlist/subscribe t=0),成功后 force 刷新"您的网易云"三分区 */
+    /**
+     * 库页本地回写:写操作成功后原地更新对应分区(2026-09-22 定案,替代返回时网络刷新)。
+     * VM 已销毁时事件丢失无妨——冷启动首拉走网络,数据本就是新的。
+     */
+    private fun applyMutation(mutation: LibraryMutation) {
+        when (mutation) {
+            is LibraryMutation.PlaylistRemoved -> {
+                (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
+                    _neteasePlaylist.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.id == mutation.playlistId })
+                }
+                (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
+                    _youTubePlaylist.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.playlistId })
+                }
+                (_youTubeLikedPlaylists.value as? LocalResource.Success)?.let { state ->
+                    _youTubeLikedPlaylists.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.playlistId })
+                }
+                // 创建者缓存同步剔除,防止"创建的歌单"分区判断残留
+                _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value - mutation.playlistId
+            }
+
+            is LibraryMutation.NeteaseHeartCountChanged -> {
+                (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
+                    _neteasePlaylist.value =
+                        LocalResource.Success(
+                            state.data.orEmpty().map { entity ->
+                                if (entity.id == neteaseLikedPlaylistId.value) {
+                                    entity.copy(trackCount = (entity.trackCount + mutation.delta).coerceAtLeast(0))
+                                } else {
+                                    entity
+                                }
+                            },
+                        )
+                }
+            }
+
+            is LibraryMutation.YouTubePlaylistCreated -> {
+                (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
+                    _youTubePlaylist.value =
+                        LocalResource.Success(
+                            state.data.orEmpty() +
+                                PlaylistsResult(
+                                    author = "",
+                                    browseId = mutation.playlistId,
+                                    category = "",
+                                    itemCount = "",
+                                    resultType = "",
+                                    thumbnails = listOf(),
+                                    title = mutation.title,
+                                ),
+                        )
+                }
+            }
+
+            is LibraryMutation.NeteasePlaylistCreated -> {
+                (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
+                    _neteasePlaylist.value =
+                        LocalResource.Success(
+                            state.data.orEmpty() +
+                                PlaylistEntity(
+                                    id = mutation.playlistId,
+                                    source = MusicSource.NETEASE.name,
+                                    title = mutation.title,
+                                    trackCount = 0,
+                                ),
+                        )
+                    // 新建即自建,创建区判断即刻生效
+                    _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value + mutation.playlistId
+                }
+            }
+
+            is LibraryMutation.ArtistUnfollowed -> {
+                (_subscribedArtists.value as? LocalResource.Success)?.let { state ->
+                    _subscribedArtists.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.artistId })
+                }
+                (_followedYTArtists.value as? LocalResource.Success)?.let { state ->
+                    _followedYTArtists.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.artistId })
+                }
+            }
+
+            is LibraryMutation.AlbumUnsubscribed -> {
+                (_starredAlbums.value as? LocalResource.Success)?.let { state ->
+                    _starredAlbums.value =
+                        LocalResource.Success(state.data.orEmpty().filterNot { it.browseId == mutation.albumId })
+                }
+            }
+        }
+    }
+
+    /** 取消收藏网易歌单(/playlist/subscribe t=0),成功后本地移除三分区条目 */
     fun unsubscribeNeteasePlaylist(playlistId: String) {
         viewModelScope.launch {
             neteaseRepository
@@ -476,7 +575,7 @@ class LibraryViewModel(
                     onSuccess = {
                         if (it) {
                             makeToast(getString(Res.string.unsubscribed_netease_playlist))
-                            getNeteaseLibrary(force = true)
+                            applyMutation(LibraryMutation.PlaylistRemoved(playlistId))
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))
                         }
@@ -486,7 +585,7 @@ class LibraryViewModel(
         }
     }
 
-    /** 删除自己的网易歌单(/playlist/delete,不可逆;UI 层已强确认),成功后 force 刷新三分区 */
+    /** 删除自己的网易歌单(/playlist/delete,不可逆;UI 层已强确认),成功后本地移除 */
     fun deleteNeteasePlaylist(playlistId: String) {
         viewModelScope.launch {
             neteaseRepository
@@ -495,7 +594,7 @@ class LibraryViewModel(
                     onSuccess = { ok ->
                         if (ok) {
                             makeToast(getString(Res.string.deleted_playlist))
-                            getNeteaseLibrary(force = true)
+                            applyMutation(LibraryMutation.PlaylistRemoved(playlistId))
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))
                         }
@@ -505,7 +604,7 @@ class LibraryViewModel(
         }
     }
 
-    /** 取消收藏网易专辑(/album/sub t=0),成功后 force 刷新"您的网易云"三分区 */
+    /** 取消收藏网易专辑(/album/sub t=0),成功后本地移除 */
     fun unsubscribeNeteaseAlbum(albumId: String) {
         viewModelScope.launch {
             neteaseRepository
@@ -514,7 +613,7 @@ class LibraryViewModel(
                     onSuccess = {
                         if (it) {
                             makeToast(getString(Res.string.unsubscribed_netease_album))
-                            getNeteaseLibrary(force = true)
+                            applyMutation(LibraryMutation.AlbumUnsubscribed(albumId))
                         } else {
                             makeToast(getString(Res.string.netease_action_failed))
                         }
@@ -524,52 +623,58 @@ class LibraryViewModel(
         }
     }
 
-    /** 库页"创建的歌单"分区新建入口(网易):建隐私歌单,成功 toast+静默刷新三分区 */
+    /** 库页"创建的歌单"分区新建入口(网易):建隐私歌单,成功 toast+本地插入创建区 */
     fun createNeteasePlaylistInLibrary(name: String) {
         viewModelScope.launch {
             neteaseRepository
                 .createNeteasePlaylist(name)
                 .fold(
-                    onSuccess = {
+                    onSuccess = { id ->
                         makeToast(getString(Res.string.created_playlist))
-                        getNeteaseLibrary(force = true)
+                        applyMutation(LibraryMutation.NeteasePlaylistCreated(id, name))
                     },
-                    onFailure = { makeToast(getString(Res.string.could_not_create_playlist)) },
+                    onFailure = {
+                        // 失败透传原因(用户实测"创建歌单失败"无细节,风控/网络一眼可辨)
+                        makeToast(
+                            getString(Res.string.could_not_create_playlist) +
+                                (it.message?.takeIf { m -> m.isNotBlank() }?.let { m -> ": $m" } ?: ""),
+                        )
+                    },
                 )
         }
     }
 
-    /** 库页"创建的歌单"分区新建入口(YT):建空歌单,成功 toast+静默刷新 */
+    /** 库页"创建的歌单"分区新建入口(YT):建空歌单,成功 toast+本地插入(不网络刷新) */
     fun createYouTubePlaylistInLibrary(name: String) {
         viewModelScope.launch {
             val id = playlistRepository.createYouTubePlaylistWithTracks(name, emptyList())
             if (id != null) {
                 makeToast(getString(Res.string.created_playlist))
-                getYouTubeLibrary(force = true)
+                applyMutation(LibraryMutation.YouTubePlaylistCreated(id, name))
             } else {
                 makeToast(getString(Res.string.could_not_create_playlist))
             }
         }
     }
 
-    /** 取消收藏他人 YT 歌单(playlist/delete,服务端移出资料库),成功 toast+静默刷新 */
+    /** 取消收藏他人 YT 歌单(playlist/delete,服务端移出资料库),成功 toast+本地移除 */
     fun unsubscribeYouTubePlaylist(playlistId: String) {
         viewModelScope.launch {
             if (playlistRepository.deleteYouTubePlaylist(playlistId)) {
                 makeToast(getString(Res.string.unsubscribed_youtube_playlist))
-                getYouTubeLibrary(force = true)
+                applyMutation(LibraryMutation.PlaylistRemoved(playlistId))
             } else {
                 makeToast(getString(Res.string.netease_action_failed))
             }
         }
     }
 
-    /** 删除自建 YT 歌单(playlist/delete,不可逆;UI 层已强确认),成功 toast+静默刷新 */
+    /** 删除自建 YT 歌单(playlist/delete,不可逆;UI 层已强确认),成功 toast+本地移除 */
     fun deleteYouTubePlaylist(playlistId: String) {
         viewModelScope.launch {
             if (playlistRepository.deleteYouTubePlaylist(playlistId)) {
                 makeToast(getString(Res.string.deleted_playlist))
-                getYouTubeLibrary(force = true)
+                applyMutation(LibraryMutation.PlaylistRemoved(playlistId))
             } else {
                 makeToast(getString(Res.string.netease_action_failed))
             }

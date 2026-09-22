@@ -691,6 +691,51 @@ icon,只有 BOOKMARK toggle;加歌后菜单恢复、自动归位创建区)——
 弹窗里的歌单名再确认——本轮 CDN 截图通道两度串图/幻觉,险些误判**(弹窗按钮坐标也必须从
 dump bounds 取,目测两次全偏)。
 
+## 五点用户反馈修复:shuffle 物理化/本地回写/假成功/端点形状/静音评估(2026-09-22)
+
+用户真机反馈五组问题,一次落地(模拟器实测通过):
+
+- **随机播放整体重做(NeriPlayer 同款物理洗牌,Android 端)**:旧行为只切 adapter 的
+  shuffleModeEnabled flag,播放层随机其实通,但 queueData 靠 id 匹配重排同步
+  (reorderShuffledQueue)——重复 videoId 的队列(红心/加队场景)静默失配=「网易随机
+  没生效」,开关瞬间全列表换序=「歌曲跳一下」,再叠加返回自动刷新的重组=偶发崩溃。
+  新方案:**handler 层物理洗牌**——PlayerEvent.Shuffle 开=快照原序+当前曲置首+其余
+  随机,关=按当前曲恢复快照;新增 MediaPlayerInterface.reorderQueueByMediaIds(默认空
+  实现,CrossfadeExoPlayerAdapter 实现消费式重排+当前索引重定位+precache 刷新,不打断
+  播放);恢复/保存/队列点歌(currentOrderIndex/playMediaItemInMediaSource)全部改读
+  handler 哨兵 shuffleRestoreListTracks;load() 尾部对"随机开着+新装载"洗牌;
+  reorderShuffledQueue 同步修成消费式匹配(重复 id 不再整次放弃)。实测:21 首队列开关
+  各一次重排日志、播放 position 连续、下一首随机前进、恢复原序、无崩溃。
+  **jvm 端(JvmMediaPlayerHandlerImpl)未动仍走 flag 旧路**——桌面无反馈,后续要对称再改。
+- **撤"返回自动刷新",全面改本地回写(用户定案:刷新体验差)**:LibraryScreen 的
+  LaunchedEffect 恢复"空数据才拉";新建 LibraryMutationBus(Koin single 事件总线,
+  composeApp)——PlaylistRemoved/NeteaseHeartCountChanged/YouTubePlaylistCreated/
+  NeteasePlaylistCreated/ArtistUnfollowed/AlbumUnsubscribed 六事件;子页写点发事件:
+  ArtistViewModel.updateFollowed(取消关注)、PlaylistViewModel(歌单页取消收藏/
+  删除网易+YT 歌单/红心歌单移歌 unlikeNeteaseSong+removeTrackFromLikedPlaylist 计数
+  -1)、库页 VM 自己的写操作直接调 applyMutation。红心歌单页对播放页取消红心的既有
+  B1 机制(sharedViewModel.liked 下降沿)顺链带上库页计数。VM 已销毁时事件丢失无妨
+  (冷启动首拉走网络)。**实测:YT 建单本地插入即刻可见,删除后本地移除,全程零刷新**。
+- **取消关注假成功真凶**:ArtistRepositoryImpl.setRemoteFollowedStatus 判
+  `.isSuccess`——netease endpoint 对业务 code!=200 返回 success(false),isSuccess
+  把"服务端拒绝"读成成功(toast 成功、云端没动)。修为 getOrDefault(false)。
+- **YT playlist/delete 失败真凶**:playlistId 剥了 VL 前缀——Metrolist/YTM 网页都
+  原样透传(含 VL),剥前缀被服务端拒。修为原样传;实测删自建歌单成功(本地移除仅在
+  HTTP 成功分支执行,移除出现=端点真成功)。
+- **网易建单失败**:endpoint 判定严格(code+id 双校验),模拟器通过;真机失败原因待
+  复现,已把失败 message 透传进 toast(下次一眼可辨风控/网络)。
+- **YT 自建歌单详情页"更多"菜单补删除**(与网易自建对齐):PlaylistScreen 的
+  onDeletePlaylist 条件扩到 YT 自建(非电台/系统),确认弹窗双源文案。
+- **94493a7(缓存歌静音二次修复)评估结论:保留,非历史遗留专用**。旧代码对"整首已
+  缓存"的歌 subrange 截 5MiB——Media3 把读满声明长度当流结束,**任何 >5MiB 缓存歌
+  (网易 320k/flac 全部)回放必在 45-70s 静音**,与是否"历史缓存"无关,下载功能存在
+  即持续触发。代价:缓存歌回放多一次轻量取流(URL 解析);收益:LRU 驱逐透明回退网络
+  (旧裸 id 路径驱逐即死)。灰歌(取不到 URL 但已缓存)保留裸 id 不封顶兜底。
+- **遗留记录**:①模拟器 ANR 一次,trace=主线程 runBlocking 阻塞在
+  MediaServiceHandlerImpl.mayBeSavePlaybackState(:2633,onIsPlayingChanged→切歌路径,
+  上游既有)——真机若见"切歌卡死几秒"即此,待专项修;②shuffle 崩溃未在模拟器复现
+  (物理方案重做了整条路径,旧竞态源头已消失);③弹窗重拉起修复(d0a83a31)后用户未再报。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，

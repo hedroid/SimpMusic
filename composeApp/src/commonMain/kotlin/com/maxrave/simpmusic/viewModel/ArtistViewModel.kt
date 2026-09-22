@@ -25,6 +25,7 @@ import com.maxrave.simpmusic.viewModel.ArtistScreenState.Error
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Loading
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Success
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import org.koin.core.component.inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,8 @@ class ArtistViewModel(
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val dataStoreManager: DataStoreManager,
 ) : BaseViewModel() {
+    private val mutationBus: LibraryMutationBus by inject()
+
     // It is dynamic and can be changed by the user, so separate it from the ArtistScreenData
     private var _canvasUrl: MutableStateFlow<Pair<String, SongEntity>?> = MutableStateFlow(null)
     var canvasUrl: StateFlow<Pair<String, SongEntity>?> = _canvasUrl
@@ -192,6 +195,10 @@ class ArtistViewModel(
                 _remoteFollowed.value = target
                 artistRepository.setFollowedLocal(channelId, target)
                 makeToast(getString(if (target) Res.string.followed_toast else Res.string.unfollowed_toast))
+                if (!target) {
+                    // 库页本地回写:取消关注成功 → 关注分区原地移除(不做返回网络刷新)
+                    mutationBus.send(LibraryMutation.ArtistUnfollowed(channelId))
+                }
             } else {
                 _followed.value = !target
                 makeToast(

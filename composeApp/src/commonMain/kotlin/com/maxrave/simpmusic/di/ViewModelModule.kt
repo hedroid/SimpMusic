@@ -9,6 +9,7 @@ import com.maxrave.simpmusic.viewModel.ArtistViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.ImportViewModel
 import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
+import com.maxrave.simpmusic.viewModel.LibraryMutationBus
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LogInViewModel
@@ -34,6 +35,8 @@ import org.koin.dsl.module
 
 val viewModelModule =
     module {
+        // 库页本地回写事件总线:子页写操作成功 → 库页原地更新(不做返回网络刷新)
+        single { LibraryMutationBus() }
         single {
             SharedViewModel(
                 get(),

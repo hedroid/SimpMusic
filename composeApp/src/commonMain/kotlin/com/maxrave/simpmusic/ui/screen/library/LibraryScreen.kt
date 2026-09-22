@@ -222,17 +222,24 @@ fun LibraryScreen(
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                // 分区并行(系统/自建/收藏歌单/专辑/关注歌手)。本屏是导航 destination,
-                // 从子页(歌单/歌手/播放页)返回会重组 → 本 effect 重跑:首拉整页 spinner,
-                // 已有数据时 VM 内部转**静默 force 刷新**——移除操作/红心曲目数无需手动下拉
-                viewModel.getYouTubeLibrary(force = true)
+                // 分区并行(系统/自建/收藏歌单/专辑/关注歌手),空数据才拉。子页写操作的
+                // 回显走 LibraryMutationBus 本地更新(2026-09-22 定案),不再返回时网络刷新
+                if (youTubePlaylist.data.isNullOrEmpty() &&
+                    youTubeLikedPlaylists.data.isNullOrEmpty() &&
+                    youTubeAutoPlaylists.data.isNullOrEmpty() &&
+                    youTubeAlbums.data.isNullOrEmpty() &&
+                    followedYTArtists.data.isNullOrEmpty()
+                ) {
+                    viewModel.getYouTubeLibrary()
+                }
             }
 
-            // "您的网易云"三分区(歌单/关注的歌手/收藏的专辑)。同上:重进本 tab 静默 force
-            // 刷新(歌单数/关注/收藏原地回写,绕过艺人/专辑 10min 行缓存);登出回落由 VM 的
-            // neteaseCookie collect 负责,这里不会停在无数据的分区上。
+            // "您的网易云"三分区(歌单/关注的歌手/收藏的专辑):空数据才拉;子页动作本地回写。
+            // 登出回落由 VM 的 neteaseCookie collect 负责,这里不会停在无数据的分区上。
             LibraryChipType.NETEASE_PLAYLIST -> {
-                viewModel.getNeteaseLibrary(force = true)
+                if (neteasePlaylist !is LocalResource.Success) {
+                    viewModel.getNeteaseLibrary()
+                }
             }
 
             // Mix for you has its own nav tab now. The filter is persisted, so a build upgraded
