@@ -220,39 +220,23 @@ fun NowPlayingScreenContent(
         }
     }
 
-    // ① Player → Pager: animate to new track when player advances.
+    // ① Player → Pager: follow track changes.
     //
-    // Keyed on the track ALONE. It used to be keyed on the queue SIZE as well, and a changing key
-    // cancels the running effect — including the animateScrollToPage in flight. A cancelled scroll
-    // simply stops where it is; nothing snaps it to a page afterwards, because snapping belongs to
-    // the gesture path, not to a programmatic scroll. Turning on the radio appends to the queue
-    // repeatedly, so the size changed again and again and cut the animation short each time,
-    // leaving the pager parked between two pages. The size is still read below — just as a value,
-    // not as a trigger; ③ handles the case where the queue shrinks under the current page.
-    //
-    // Same track, new position (shuffle reorder) snaps instead of animating: animateScrollToPage
-    // would sweep the pager across every page in between — flashing other covers on the way to
-    // the same song — which reads as "the cover glitched to another song and back".
-    var lastAnimatedTrackId by remember { mutableStateOf<String?>(null) }
+    // Deliberately a SNAP (scrollToPage), never animateScrollToPage: the rest of the player
+    // (title/artist) switches to the new track the moment the transition fires, so a sliding
+    // pager keeps the OLD artwork visible for the duration of the sweep — and sweeps across
+    // every page in between when the jump is far (radio appends, shuffle). Both read as
+    // "the previous song's cover flashes". The cover must change in the same frame as the
+    // text. User-swipe page turning is untouched — that gesture owns its own animation.
+    // Keyed on the track ALONE for the re-entrancy reasons documented below.
     LaunchedEffect(currentOrderIndex) {
         val target = currentOrderIndex
-        val trackChanged = lastAnimatedTrackId != nowPlayingVideoId
-        lastAnimatedTrackId = nowPlayingVideoId
         if (!isUserDraggingActive &&
             artworkQueue.isNotEmpty() &&
             target in 0 until artworkQueue.size &&
             target != artworkPagerState.currentPage
         ) {
-            if (trackChanged) {
-                isAnimatingFromPlayer = true
-                try {
-                    artworkPagerState.animateScrollToPage(target)
-                } finally {
-                    isAnimatingFromPlayer = false
-                }
-            } else {
-                artworkPagerState.scrollToPage(target)
-            }
+            runCatching { artworkPagerState.scrollToPage(target) }
         }
     }
 
