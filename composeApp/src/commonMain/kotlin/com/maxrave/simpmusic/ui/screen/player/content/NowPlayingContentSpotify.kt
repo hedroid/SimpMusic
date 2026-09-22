@@ -326,10 +326,7 @@ fun NowPlayingContentSpotify(
                             .fillMaxWidth(),
                     beyondViewportPageCount = 1,
                     userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    key = { idx ->
-                        val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                        "artwork_${vid}_$idx"
-                    },
+                    key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex

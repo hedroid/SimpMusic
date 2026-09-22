@@ -171,6 +171,18 @@ fun NowPlayingScreenContent(
     val artworkQueue by remember {
         derivedStateOf { queueDataState?.data?.listTracks ?: emptyList() }
     }
+    // 稳定页 key(见 NowPlayingContentState.artworkPageKeys 注释):重排/洗牌时页面按歌
+    // 复用而不是按位置换内容,当前页不会闪成别的歌
+    val artworkPageKeys by remember {
+        derivedStateOf {
+            val counts = HashMap<String, Int>()
+            artworkQueue.map { track ->
+                val n = counts.getOrDefault(track.videoId, 0)
+                counts[track.videoId] = n + 1
+                "artwork_${track.videoId}#$n"
+            }
+        }
+    }
     // ⚠️ Use track.videoId (already prefix-stripped at MediaServiceHandlerImpl.kt:386).
     // Do NOT use mediaItem.mediaId — it carries the "Video" prefix for video items.
     val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId
@@ -680,6 +692,7 @@ fun NowPlayingScreenContent(
                 },
             isUserLoggedIn = isUserLoggedIn,
             artworkQueue = artworkQueue,
+            artworkPageKeys = artworkPageKeys,
             currentOrderIndex = currentOrderIndex,
             artworkPagerState = artworkPagerState,
             startColor = startColor,

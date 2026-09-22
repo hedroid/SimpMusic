@@ -422,10 +422,7 @@ private fun AppleMusicMainView(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-            key = { idx ->
-                val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                "appleMusicArtwork_${vid}_$idx"
-            },
+            key = { idx -> state.artworkPageKeys.getOrElse(idx) { "appleMusicArtwork$idx" } },
         ) { page ->
             AppleMusicArtworkPage(
                 state = state,

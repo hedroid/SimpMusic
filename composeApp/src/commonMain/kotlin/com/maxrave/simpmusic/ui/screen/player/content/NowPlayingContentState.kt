@@ -98,6 +98,12 @@ class NowPlayingContentState(
     val remoteLikeState: RemoteSongLikeState,
     val isUserLoggedIn: Boolean,
     val artworkQueue: List<Track>,
+    /**
+     * 每页的稳定 key(videoId + 同 id 出现序号)。不能直接用 videoId(队列可含重复歌,
+     * Compose key 必须唯一),更不能掺 index(重排后 key 变=页面销毁重建=封面闪一下
+     * 别的歌)。出现序号在重排后可能互换,但同 id 两首内容相同,视觉无差。
+     */
+    val artworkPageKeys: List<String> = emptyList(),
     val currentOrderIndex: Int,
     val artworkPagerState: PagerState,
     val startColor: Animatable<Color, AnimationVector4D>,
