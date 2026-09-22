@@ -1110,9 +1110,11 @@ fun QueueBottomSheet(
         remember {
             derivedStateOf {
                 val layoutInfo = lazyListState.layoutInfo
+                // 布局未就绪/滚动中的瞬时空列表不算"到底":这里曾返回 true,快速甩动队列时
+                // 空布局伪触发 loadMore,把才滑到中段的歌单队列提前转成无尽电台
                 val lastVisibleItem =
                     layoutInfo.visibleItemsInfo.lastOrNull()
-                        ?: return@derivedStateOf true
+                        ?: return@derivedStateOf false
 
                 lastVisibleItem.index >= layoutInfo.totalItemsCount - 3 && layoutInfo.totalItemsCount > 0
             }
@@ -1120,11 +1122,24 @@ fun QueueBottomSheet(
 
     // Convert the state into a cold flow and collect
     LaunchedEffect(shouldLoadMore) {
-        snapshotFlow { shouldLoadMore.value }
-            .collect {
+        // 触发键必须带上 queueState 和总条数,只看布尔值会丢触发:到尾瞬间若批次还在
+        // INITIALIZING,唯一的 true 边沿被消费掉,落批后布尔不变就不再发射——用户得滑走
+        // 再滑回才能续下一批(网易批次去重后常只剩 3-6 首必中;YT 批 25 首掩盖了同一竞态)。
+        // prev 边沿判定:无增量的 loadMore(电台见底)不重复开火,防空转循环。
+        var prevMore = false
+        var prevCount = -1
+        snapshotFlow {
+            Triple(shouldLoadMore.value, loadMoreState, lazyListState.layoutInfo.totalItemsCount)
+        }.collect { (more, state, count) ->
+            if (more && state == QueueData.StateSource.STATE_INITIALIZED &&
+                (more != prevMore || count != prevCount)
+            ) {
                 // if should load more, then invoke loadMore
-                if (it && loadMoreState == QueueData.StateSource.STATE_INITIALIZED) musicServiceHandler.loadMore()
+                musicServiceHandler.loadMore()
             }
+            prevMore = more
+            prevCount = count
+        }
     }
 
     LaunchedEffect(queue) {

@@ -178,13 +178,25 @@ internal fun AppleMusicQueueView(
         val shouldLoadMore by remember {
             derivedStateOf {
                 val layoutInfo = lazyListState.layoutInfo
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+                // 布局未就绪/滚动中的瞬时空列表不算"到底"(曾返回 true,快速甩动会伪触发
+                // loadMore 把中段歌单提前转成无尽电台)
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
                 lastVisibleItem.index >= layoutInfo.totalItemsCount - 3 && layoutInfo.totalItemsCount > 0
             }
         }
         LaunchedEffect(Unit) {
-            snapshotFlow { shouldLoadMore }
-                .collect { if (it && loadMoreState == QueueData.StateSource.STATE_INITIALIZED) musicServiceHandler.loadMore() }
+            // 键带上 queueState/总条数防丢触发(到尾瞬间批次 INITIALIZING 会吃掉唯一的 true
+            // 边沿,落批后需靠 state/count 边沿补射);prev 边沿防无增量空转。同 QueueBottomSheet。
+            var prevMore = false
+            var prevCount = -1
+            snapshotFlow { Triple(shouldLoadMore, loadMoreState, lazyListState.layoutInfo.totalItemsCount) }
+                .collect { (more, state, count) ->
+                    if (more && state == QueueData.StateSource.STATE_INITIALIZED &&
+                        (more != prevMore || count != prevCount)
+                    ) musicServiceHandler.loadMore()
+                    prevMore = more
+                    prevCount = count
+                }
         }
         var overscrollJob by remember { mutableStateOf<Job?>(null) }
 
