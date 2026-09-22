@@ -200,7 +200,6 @@ class ArtistViewModel(
                     mutationBus.send(LibraryMutation.ArtistUnfollowed(channelId))
                 }
             } else {
-                println("QQQ updateFollowed FAILED: source=${if (channelId.toLongOrNull() != null) "NETEASE" else "YOUTUBE"} channelId=$channelId target=$target")
                 _followed.value = !target
                 makeToast(
                     getString(
