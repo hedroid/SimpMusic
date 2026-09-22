@@ -239,6 +239,7 @@ class PlaylistViewModel(
         viewModelScope.launch {
             if (playlistRepository.deleteYouTubePlaylist(id)) {
                 makeToast(getString(Res.string.deleted_playlist))
+                println("QQQ sending PlaylistRemoved(YouTube): $id")
                 mutationBus.send(LibraryMutation.PlaylistRemoved(id))
             } else {
                 makeToast(getString(Res.string.netease_action_failed))

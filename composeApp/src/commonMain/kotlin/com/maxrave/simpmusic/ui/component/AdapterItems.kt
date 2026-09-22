@@ -436,6 +436,14 @@ fun HomeItemContentPlaylist(
                                 )
                             }
 
+                            is PlaylistsResult -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
+
                             is ChartItem -> {
                                 painterPlaylistThumbnail(
                                     data.name,
@@ -448,6 +456,16 @@ fun HomeItemContentPlaylist(
                             // deterministic title tile reads as a playlist where the grey holder
                             // reads as a failed load.
                             is MonthlyRecapItem -> {
+                                painterPlaylistThumbnail(
+                                    data.title,
+                                    style = typo().bodySmall,
+                                    thumbSize * 0.9f to thumbSize * 0.9f,
+                                )
+                            }
+
+                            // 网络行封面缺席(建单本地插入的占位行/搜索缺图):标题字 tile
+                            // 比灰占位框更接近真实歌单行的观感(2026-09-22 建单不网络刷新)
+                            is PlaylistsResult -> {
                                 painterPlaylistThumbnail(
                                     data.title,
                                     style = typo().bodySmall,

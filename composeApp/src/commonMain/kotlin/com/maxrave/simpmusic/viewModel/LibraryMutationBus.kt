@@ -40,7 +40,25 @@ class LibraryMutationBus {
     private val _mutations = MutableSharedFlow<LibraryMutation>(extraBufferCapacity = 32)
     val mutations: SharedFlow<LibraryMutation> = _mutations.asSharedFlow()
 
+    /**
+     * 库页 VM 不在(冷启动后没进过库 tab,从其它入口进了歌单/艺人页操作)时的事件暂存:
+     * VM 创建并在首拉完成后 drainPending 补放。VM 在线(subscriptionCount>0)则只走 flow,
+     * 不暂存——避免同一次变更被 flow 与 pending 双发。
+     */
+    private val pending = java.util.concurrent.ConcurrentLinkedQueue<LibraryMutation>()
+
     fun send(mutation: LibraryMutation) {
+        if (_mutations.subscriptionCount.value == 0) {
+            pending.add(mutation)
+        }
         _mutations.tryEmit(mutation)
+    }
+
+    fun drainPending(): List<LibraryMutation> {
+        val drained = mutableListOf<LibraryMutation>()
+        while (true) {
+            drained += pending.poll() ?: break
+        }
+        return drained
     }
 }

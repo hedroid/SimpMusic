@@ -222,14 +222,11 @@ fun LibraryScreen(
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                // 分区并行(系统/自建/收藏歌单/专辑/关注歌手),空数据才拉。子页写操作的
-                // 回显走 LibraryMutationBus 本地更新(2026-09-22 定案),不再返回时网络刷新
-                if (youTubePlaylist.data.isNullOrEmpty() &&
-                    youTubeLikedPlaylists.data.isNullOrEmpty() &&
-                    youTubeAutoPlaylists.data.isNullOrEmpty() &&
-                    youTubeAlbums.data.isNullOrEmpty() &&
-                    followedYTArtists.data.isNullOrEmpty()
-                ) {
+                // 未加载过才拉(与网易侧同口径):不看"空"——删除唯一自建歌单后 created
+                // 分区为空,YTM 服务端删除是异步的(~1min),按空重拉会把还没删掉的歌单
+                // 又拉回来,读作"删除后返回列表还残留"。子页写操作走 LibraryMutationBus
+                // 本地回写(2026-09-22 定案),不依赖返回时刷新。
+                if (youTubePlaylist !is LocalResource.Success) {
                     viewModel.getYouTubeLibrary()
                 }
             }

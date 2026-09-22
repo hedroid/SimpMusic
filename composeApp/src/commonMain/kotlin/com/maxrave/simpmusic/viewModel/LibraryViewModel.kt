@@ -220,7 +220,16 @@ class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val localTrackingEnabled = dataStoreManager.localTrackingEnabled.mapLatest { it == DataStoreManager.TRUE }
 
+    /** 账号名缓存:建单本地插入的占位行 author 用它,保持与网络行样式一致 */
+    @Volatile
+    private var accountName: String = ""
+
     init {
+        viewModelScope.launch {
+            dataStoreManager.getString("AccountName").collect { name ->
+                accountName = name.orEmpty()
+            }
+        }
         // 库页本地回写:子页(艺人/歌单/播放页)写操作成功后原地更新分区,不触发网络刷新
         viewModelScope.launch {
             mutationBus.mutations.collect { applyMutation(it) }
@@ -425,6 +434,7 @@ class LibraryViewModel(
                 }
             }
             _youTubeRefreshing.value = false
+            mutationBus.drainPending().forEach { applyMutation(it) }
         }
     }
 
@@ -470,6 +480,9 @@ class LibraryViewModel(
                 }
             }
             _neteaseRefreshing.value = false
+            // VM 不在期间发生的变更(冷启动直接进子页操作)补放:此刻首拉数据已就位,
+            // 过滤/插入能落到真实列表上
+            mutationBus.drainPending().forEach { applyMutation(it) }
         }
     }
 
@@ -478,6 +491,7 @@ class LibraryViewModel(
      * VM 已销毁时事件丢失无妨——冷启动首拉走网络,数据本就是新的。
      */
     private fun applyMutation(mutation: LibraryMutation) {
+        println("QQQ applyMutation: $mutation")
         when (mutation) {
             is LibraryMutation.PlaylistRemoved -> {
                 // YT 歌单 id 的 VL 前缀在两处形状可能不同(库页 tile/详情页),归一化匹配
@@ -487,7 +501,7 @@ class LibraryViewModel(
                         LocalResource.Success(state.data.orEmpty().filterNot { it.id == mutation.playlistId })
                 }
                 (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
-                    _youTubePlaylist.value =
+                                _youTubePlaylist.value =
                         LocalResource.Success(
                             state.data.orEmpty().filterNot { it.browseId.removePrefix("VL") == removedId },
                         )
@@ -525,7 +539,7 @@ class LibraryViewModel(
                         LocalResource.Success(
                             listOf(
                                 PlaylistsResult(
-                                    author = "",
+                                    author = accountName,
                                     browseId = mutation.playlistId,
                                     category = "",
                                     itemCount = "",
@@ -548,6 +562,7 @@ class LibraryViewModel(
                                 PlaylistEntity(
                                     id = mutation.playlistId,
                                     source = MusicSource.NETEASE.name,
+                                    author = accountName,
                                     title = mutation.title,
                                     trackCount = 0,
                                 ),
