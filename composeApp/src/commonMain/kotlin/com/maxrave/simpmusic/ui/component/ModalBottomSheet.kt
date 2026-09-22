@@ -2037,7 +2037,10 @@ fun NowPlayingBottomSheet(
                         }
                     }
                     CheckBoxActionButton(
-                        defaultChecked = uiState.songUIState.liked,
+                        // 云端态优先(登录时拉取,~几百 ms 到):本地 Room 的 liked 可能过期
+                        // (YT 红心歌单里本地未赞、云端已赞,读作"状态不对");云端未到/未登录
+                        // 退回本地值。checkbox 以 defaultChecked 为 key,云端晚到会重置显示
+                        defaultChecked = cloudLikedForGate ?: uiState.songUIState.liked,
                         isHeartIcon = true,
                         enable = cloudLikedForGate != null,
                         onChangeListener = { liked ->
@@ -2294,7 +2297,9 @@ fun CheckBoxActionButton(
     enable: Boolean = true,
     onChangeListener: (checked: Boolean) -> Unit,
 ) {
-    var stateChecked by remember { mutableStateOf(defaultChecked) }
+    // key 上 defaultChecked:菜单存活期间云端点赞态晚到(本地过期值先显示)时重置为真值;
+    // 用户已手动切换后云端不会再发新值,不会被覆盖
+    var stateChecked by remember(defaultChecked) { mutableStateOf(defaultChecked) }
     Box(
         modifier =
             Modifier
