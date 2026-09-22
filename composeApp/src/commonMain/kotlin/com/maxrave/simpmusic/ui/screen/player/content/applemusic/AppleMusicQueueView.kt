@@ -72,6 +72,10 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -184,18 +188,52 @@ internal fun AppleMusicQueueView(
                 lastVisibleItem.index >= layoutInfo.totalItemsCount - 3 && layoutInfo.totalItemsCount > 0
             }
         }
+        // 一次到尾只拉一批:布尔边沿触发,INITIALIZING 窗口里的边沿等就绪补射一次
+        // (pending);不按落批链式追加(曾一次连灌几十首、指示器连转多圈)。
+        // 手势兜底:批次太小(≤2 首)时布尔无边沿可用,手势停止后复核一次;
+        // drop(1) 跳过初始未滚动发射,两路共享 2s 抑制窗防同手势双批。同 QueueBottomSheet。
+        var lastLoadMoreAt by remember { mutableStateOf(0L) }
         LaunchedEffect(Unit) {
-            // 键带上 queueState/总条数防丢触发(到尾瞬间批次 INITIALIZING 会吃掉唯一的 true
-            // 边沿,落批后需靠 state/count 边沿补射);prev 边沿防无增量空转。同 QueueBottomSheet。
             var prevMore = false
-            var prevCount = -1
-            snapshotFlow { Triple(shouldLoadMore, loadMoreState, lazyListState.layoutInfo.totalItemsCount) }
-                .collect { (more, state, count) ->
-                    if (more && state == QueueData.StateSource.STATE_INITIALIZED &&
-                        (more != prevMore || count != prevCount)
-                    ) musicServiceHandler.loadMore()
+            var pending = false
+            snapshotFlow { shouldLoadMore to loadMoreState }
+                .collect { (more, state) ->
+                    when {
+                        more && !prevMore -> {
+                            if (state == QueueData.StateSource.STATE_INITIALIZED) {
+                                lastLoadMoreAt = System.currentTimeMillis()
+                                musicServiceHandler.loadMore()
+                            } else {
+                                pending = true
+                            }
+                        }
+
+                        more && pending && state == QueueData.StateSource.STATE_INITIALIZED -> {
+                            pending = false
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        }
+                    }
+                    if (!more) pending = false
                     prevMore = more
-                    prevCount = count
+                }
+        }
+        LaunchedEffect(Unit) {
+            snapshotFlow { lazyListState.isScrollInProgress }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest { scrolling ->
+                    if (!scrolling) {
+                        delay(250)
+                        if (!lazyListState.isScrollInProgress &&
+                            shouldLoadMore &&
+                            loadMoreState == QueueData.StateSource.STATE_INITIALIZED &&
+                            System.currentTimeMillis() - lastLoadMoreAt > 2_000
+                        ) {
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        }
+                    }
                 }
         }
         var overscrollJob by remember { mutableStateOf<Job?>(null) }

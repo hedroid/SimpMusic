@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -429,7 +429,7 @@ private fun FmSongRow(
 }
 
 /** 红心电台入口卡:红心随机 30 首起播,播完接私人FM(心动模式端点已死,本地替代方案)。
- *  红心队列处于活动态时整行点击=暂停/恢复,尾图标随播放态切 Pause/PlayArrow。 */
+ *  播放/暂停**只**作用在尾部播放按钮上(用户定案),整行不响应点击防误触。 */
 @Composable
 private fun HeartRadioCard(
     loading: Boolean,
@@ -445,7 +445,6 @@ private fun HeartRadioCard(
                 .padding(horizontal = 15.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .clickable(onClick = if (isHeartActive) onToggle else onClick)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -484,17 +483,20 @@ private fun HeartRadioCard(
                 strokeWidth = 2.dp,
             )
         } else {
-            Icon(
-                imageVector = if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                contentDescription = null,
-                tint = if (isHeartActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            IconButton(onClick = if (isHeartActive) onToggle else onClick) {
+                Icon(
+                    imageVector = if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
+                    contentDescription = null,
+                    tint = if (isHeartActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
 
 /** FM hero 大卡:首曲封面铺底 + 暗部渐变 + 标题/副标题/收听按钮。
- *  FM 队列处于活动态时按钮/整卡点击=暂停/恢复(开始收听→暂停/继续收听),否则起播 FM 批次。 */
+ *  播放/暂停**只**作用在收听按钮上(用户定案):FM 队列活动态按钮=暂停/继续收听,
+ *  整卡(含封面)不响应点击,防误触。 */
 @Composable
 private fun FmHeroCard(
     content: Content,
@@ -510,8 +512,7 @@ private fun FmHeroCard(
                 .fillMaxWidth()
                 .padding(horizontal = 15.dp)
                 .height(300.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = cardAction),
+                .clip(RoundedCornerShape(16.dp)),
     ) {
         AsyncImage(
             model = content.thumbnails.lastOrNull()?.url,

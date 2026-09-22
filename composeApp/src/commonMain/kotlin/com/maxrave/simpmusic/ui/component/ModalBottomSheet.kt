@@ -182,6 +182,10 @@ import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -1120,26 +1124,57 @@ fun QueueBottomSheet(
             }
         }
 
-    // Convert the state into a cold flow and collect
+    // 一次到尾只拉一批(用户口径"有下拉动作时追加几首"):布尔边沿=到达尾部,触发一次;
+    // 边沿若落在批次 INITIALIZING 窗口里,等就绪补射一次(pending)防丢触发。
+    // 不做落批链式追加——曾按总条数边沿续射,一次下拉能连灌几十首、指示器连转多圈。
+    // 两路开火共享 2s 抑制窗:同一次手势里"到尾边沿"+"手势停止兜底"只算一次。
+    var lastLoadMoreAt by remember { mutableStateOf(0L) }
     LaunchedEffect(shouldLoadMore) {
-        // 触发键必须带上 queueState 和总条数,只看布尔值会丢触发:到尾瞬间若批次还在
-        // INITIALIZING,唯一的 true 边沿被消费掉,落批后布尔不变就不再发射——用户得滑走
-        // 再滑回才能续下一批(网易批次去重后常只剩 3-6 首必中;YT 批 25 首掩盖了同一竞态)。
-        // prev 边沿判定:无增量的 loadMore(电台见底)不重复开火,防空转循环。
         var prevMore = false
-        var prevCount = -1
-        snapshotFlow {
-            Triple(shouldLoadMore.value, loadMoreState, lazyListState.layoutInfo.totalItemsCount)
-        }.collect { (more, state, count) ->
-            if (more && state == QueueData.StateSource.STATE_INITIALIZED &&
-                (more != prevMore || count != prevCount)
-            ) {
-                // if should load more, then invoke loadMore
-                musicServiceHandler.loadMore()
+        var pending = false
+        snapshotFlow { shouldLoadMore.value to loadMoreState }
+            .collect { (more, state) ->
+                when {
+                    more && !prevMore -> {
+                        if (state == QueueData.StateSource.STATE_INITIALIZED) {
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        } else {
+                            pending = true
+                        }
+                    }
+
+                    more && pending && state == QueueData.StateSource.STATE_INITIALIZED -> {
+                        pending = false
+                        lastLoadMoreAt = System.currentTimeMillis()
+                        musicServiceHandler.loadMore()
+                    }
+                }
+                if (!more) pending = false
+                prevMore = more
             }
-            prevMore = more
-            prevCount = count
-        }
+    }
+
+    // 手势兜底:批次太小(≤2 首)时追加后"近尾"布尔可能一直为 true,没有边沿可用;
+    // 一次滚动手势完全停止后复核一次。drop(1) 跳过初始未滚动的发射(否则弹窗一开就
+    // 多打一枪,单曲队列曾一次追加两批),抑制窗内不重复开火。
+    LaunchedEffect(Unit) {
+        snapshotFlow { lazyListState.isScrollInProgress }
+            .distinctUntilChanged()
+            .drop(1)
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    delay(250)
+                    if (!lazyListState.isScrollInProgress &&
+                        shouldLoadMore.value &&
+                        loadMoreState == QueueData.StateSource.STATE_INITIALIZED &&
+                        System.currentTimeMillis() - lastLoadMoreAt > 2_000
+                    ) {
+                        lastLoadMoreAt = System.currentTimeMillis()
+                        musicServiceHandler.loadMore()
+                    }
+                }
+            }
     }
 
     LaunchedEffect(queue) {
