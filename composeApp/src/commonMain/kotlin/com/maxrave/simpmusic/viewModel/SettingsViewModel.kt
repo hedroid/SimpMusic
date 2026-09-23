@@ -1869,11 +1869,47 @@ class SettingsViewModel(
         ) { values -> values }.collect { state ->
             _neteaseLogIn.value = (state[0] as String).isNotEmpty()
             _neteaseAccountName.value = state[1] as String
-            _neteaseQuality.value = state[2] as String
-            _neteaseDownloadQuality.value = state[3] as String
+            _neteaseQuality.value = normalizeNeteaseQuality(state[2] as String)
+            _neteaseDownloadQuality.value =
+                normalizeNeteaseQuality(state[3] as String, default = NETEASE_DOWNLOAD_QUALITY_DEFAULT)
             _neteasePlayReport.value = (state[4] as String) == DataStoreManager.TRUE
-            _neteaseUnavailableAction.value = state[5] as String
+            _neteaseUnavailableAction.value = normalizeNeteaseUnavailableAction(state[5] as String)
         }
+    }
+
+    /**
+     * 网易音质/无版权动作的读取侧归一:DataStore 里残留旧版本枚举名或损坏值时回落默认,
+     * UI(设置页副标题)与消费端永远拿到合法值——裸 key 不再有机会透出到界面。
+     * 存储值本身不重写(懒迁移,与 YT QUALITY.normalize 同款语义)。
+     */
+    private fun normalizeNeteaseQuality(
+        saved: String,
+        default: String = NETEASE_QUALITY_DEFAULT,
+    ): String =
+        listOf(
+            "JYMASTER",
+            "SKY",
+            "JYEFFECT",
+            "HIRES",
+            "LOSSLESS",
+            "EXHIGH",
+            "HIGHER",
+            "STANDARD",
+        ).firstOrNull { it == saved } ?: default
+
+    private fun normalizeNeteaseUnavailableAction(saved: String): String =
+        when (saved) {
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_PAUSE,
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SWITCH_YT,
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP,
+            -> saved
+
+            else -> DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP
+        }
+
+    companion object {
+        private const val NETEASE_QUALITY_DEFAULT = "EXHIGH"
+        private const val NETEASE_DOWNLOAD_QUALITY_DEFAULT = "LOSSLESS"
     }
 
     fun setNeteaseQuality(quality: String) {

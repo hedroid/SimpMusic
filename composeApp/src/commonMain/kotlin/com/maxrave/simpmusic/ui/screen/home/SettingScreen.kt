@@ -1370,7 +1370,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.quality),
                     subtitle =
                         neteaseQualityOptions[neteaseQuality]?.let { stringResource(it) }
-                            ?: neteaseQuality,
+                            ?: stringResource(Res.string.netease_quality_exhigh),
                     smallSubtitle = true,
                     isEnable = neteaseLoggedIn,
                     onClick = {
@@ -1399,7 +1399,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.download_quality),
                     subtitle =
                         neteaseQualityOptions[neteaseDownloadQuality]?.let { stringResource(it) }
-                            ?: neteaseDownloadQuality,
+                            ?: stringResource(Res.string.netease_quality_lossless),
                     smallSubtitle = true,
                     isEnable = neteaseLoggedIn,
                     onClick = {
@@ -1442,7 +1442,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.netease_unavailable_action),
                     subtitle =
                         neteaseUnavailableActionOptions[neteaseUnavailableAction]?.let { stringResource(it) }
-                            ?: neteaseUnavailableAction,
+                            ?: stringResource(Res.string.netease_unavailable_action_skip),
                     smallSubtitle = true,
                     onClick = {
                         viewModel.setAlertData(
