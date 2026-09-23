@@ -200,16 +200,20 @@ fun rememberThrottledLottieProgress(
 ): () -> Float {
     val progress = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
+        // last 只在真正推一格时重置:它是"距上次推进"的基准,逐帧刷新会让 dtMs 恒等于
+        // 一帧间隔(~8ms)、永远够不到节流阈值,动画冻在 progress=0——首版就冻在这
         var last = -1L
         while (true) {
             withFrameNanos { now ->
-                if (last > 0) {
+                if (last < 0) {
+                    last = now
+                } else {
                     val dtMs = (now - last) / 1_000_000f
                     if (dtMs >= 1000f / fps) {
                         progress.floatValue = (progress.floatValue + dtMs / durationMs) % 1f
+                        last = now
                     }
                 }
-                last = now
             }
         }
     }
