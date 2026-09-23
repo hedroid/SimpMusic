@@ -317,8 +317,10 @@ import simpmusic.composeapp.generated.resources.netease_quality
 import simpmusic.composeapp.generated.resources.netease_download_quality
 import simpmusic.composeapp.generated.resources.netease_play_report
 import simpmusic.composeapp.generated.resources.netease_play_report_description
-import simpmusic.composeapp.generated.resources.netease_auto_switch
-import simpmusic.composeapp.generated.resources.netease_auto_switch_description
+import simpmusic.composeapp.generated.resources.netease_unavailable_action
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_pause
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_skip
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_switch
 import simpmusic.composeapp.generated.resources.netease_quality_standard
 import simpmusic.composeapp.generated.resources.netease_quality_higher
 import simpmusic.composeapp.generated.resources.netease_quality_exhigh
@@ -580,6 +582,7 @@ fun SettingScreen(
     val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
+    val neteaseUnavailableAction by viewModel.neteaseUnavailableAction.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -1430,9 +1433,46 @@ fun SettingScreen(
                     switch = (neteasePlayReport to { viewModel.setNeteasePlayReport(it) }),
                     isEnable = neteaseLoggedIn,
                 )
-                // TODO(NETEASE_M9): "无版权音乐自动切换音源"当前无任何运行时逻辑消费
-                // (StreamRepositoryImpl 的灰歌回退还是 TODO),开关先隐藏以免误导;
-                // M9 实现后恢复此 SettingItem(neteaseAutoSwitch 状态与 setter 均保留)。
+                // 播放遇到无版权/取不到流的网易歌时的动作(NETEASE_M9 灰歌处理):
+                // 自动跳过(默认,网易官方行为)/ 暂停 / 跨源回退 YouTube Music 同名曲
+                val neteaseUnavailableActionOptions =
+                    mapOf(
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP to Res.string.netease_unavailable_action_skip,
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_PAUSE to Res.string.netease_unavailable_action_pause,
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SWITCH_YT to Res.string.netease_unavailable_action_switch,
+                    )
+                SettingItem(
+                    title = stringResource(Res.string.netease_unavailable_action),
+                    subtitle =
+                        neteaseUnavailableActionOptions[neteaseUnavailableAction]?.let { stringResource(it) }
+                            ?: neteaseUnavailableAction,
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_unavailable_action) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseUnavailableActionOptions.entries.map { (key, res) ->
+                                                (key == neteaseUnavailableAction) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val labelToKey =
+                                            neteaseUnavailableActionOptions.entries.associate { (key, res) ->
+                                                runBlocking { getString(res) } to key
+                                            }
+                                        labelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseUnavailableAction(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
             }
         }
         if (getPlatform() == Platform.Android) {

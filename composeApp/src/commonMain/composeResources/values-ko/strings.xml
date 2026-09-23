@@ -627,6 +627,14 @@
     <!-- Listen Together -->
     <string name="download_management">다운로드 관리</string>
     <string name="song_unavailable">현재 소스에서 재생할 수 없습니다(VIP 또는 저작권 문제일 수 있음)</string>
+    <string name="netease_unavailable_action">재생할 수 없는 곡</string>
+    <string name="netease_unavailable_action_skip">자동 건너뛰기</string>
+    <string name="netease_unavailable_action_pause">일시정지</string>
+    <string name="netease_unavailable_action_switch">YouTube Music으로 전환</string>
+    <string name="unavailable_song_skipped">재생할 수 없는 곡을 건너뛰었어요</string>
+    <string name="unavailable_song_switched">YouTube Music 버전을 재생하는 중이에요</string>
+    <string name="unavailable_song_switch_failed">YouTube Music 버전을 찾지 못해 건너뛰었어요</string>
+    <string name="unavailable_song_queue_exhausted">대기열에 재생 가능한 곡이 없어요</string>
     <string name="cloud_action_failed_netease">NetEase 계정을 업데이트하지 못했습니다</string>
     <string name="need_login_toast">로그인 후 이용할 수 있습니다</string>
     <string name="liked_toast">좋아요함</string>

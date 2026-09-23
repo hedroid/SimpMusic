@@ -41,7 +41,7 @@
 | M6 | 专辑/歌手页路由 | ✅ 完成（2026-09-14：两页数字 ID 同页路由 + 关注/取关 + 搜索专辑 tab/艺人卡跳转解锁 + 主页热门歌手/新碟上架两行） |
 | M7 | 歌曲评论区 | ❌ UI 未开始（core 端点+repo 方法已验证；播放页 Spotify 主题详情卡已展示前 2 热评，缺独立评论页） |
 | M8 | 云盘页 | ❌ UI 未开始（cloudDisk 端点已封装于 NeteaseEndpoints，repo 映射+UI 未接） |
-| M9 | 关注同步 + 无版权自动切源 | ❌ 未开始。注：设置开关"无版权音乐自动切换音源"已于 2026-09-15 隐藏（死设置，运行时零消费），M9 落地时随 StreamRepositoryImpl 灰歌回退一起恢复 |
+| M9 | 关注同步 + 无版权自动切源 | ✅ 完成（2026-09-22：灰歌三件套——①songDetail/v6 detail 合并顶层 privileges(st/fee) 落 isAvailable,歌单页 SongFullWidthItems 置灰(标题/艺人/封面 0.4 alpha);②设置"无版权歌曲"三选一(neteaseUnavailableAction: 自动跳过[默认]/暂停/切换到 YouTube Music);③播放失败探针分流(probeNeteasePlayable,songDetail privilege)后按设置动作执行,回退 YT= title+artist 搜 YT 首页+时长±4s+标题归一择优,replaceMediaItem 原位换曲续播;防循环护栏=连续不可播达队列长度即停。旧 neteaseAutoSwitch 布尔键已删,换新键 netease_unavailable_action |
 | M10 | 网易歌曲下载管线 | ❌ 单独评估（SimpleCache→文件改造） |
 
 ## 已落地的网易主页细节
@@ -777,14 +777,12 @@ dump bounds 取,目测两次全偏)。
 
 | 项 | 现状资产 | 规模 |
 |---|---|---|
-| M9 灰歌自动切源 | `getNeteaseStream` 降级链现成，缺 title+artist 搜 YT 回退；设置开关已藏待恢复 | 中 |
 | 相似歌曲独立页 | simiSong 端点/电台队列/`NETEASE_RADIO_` 哨兵全现成，缺列表页 UI | 小（纯 UI） |
 | M7 评论页 | songComments 分页端点+repo 方法现成，详情卡已在用前 2 热评 | 中 |
 | M8 云盘页 | cloudDisk 端点已封装，repo 映射+UI 未接；云盘歌可播不可缓存下载 | 中 |
 | 网易播客 | 搜索 type=1004/1009 通道已知；dj 生态端点与播放链路待调研（节目音频是否同走取流）；UI 候选复用库页播客分区或并入"您的网易云" | 中（含调研） |
 | 跨源歌词供应商（YT 歌用网易/QQ 词库） | 接入点全现成（getLyricsFromFormat/LyricsProvider），Lyrico 匹配算法待移植 | 中偏大 |
 | 网易 MV | 搜索 type=1004 现隐藏；需打破 isVideo 恒 false 的管线假设（取流/追踪/watchtime/详情卡），走 /mv/detail + /mv/url | 中偏大 |
-| M9 灰歌跨源回退 | 关注同步已完成；仅剩无版权歌曲自动切到 YT | 中 |
 | M10 离线下载管线 | SimpleCache→文件式改造；公共 Download 导出路径已通（AGENTS.md 调研） | 大 |
 | Listen Together 混源过滤 | 需协议层设计（数字 ID 会发给 Metrolist 客户端） | 待设计 |
 | AI 三件 / 歌曲导出改造 | 调研结论在 AGENTS.md | 大 / 另评估 |
@@ -819,7 +817,7 @@ dump bounds 取,目测两次全偏)。
 
 ### 下一步建议顺序
 
-**M9 灰歌回退**（体验痛点最大，被隐藏的开关也等着恢复）→ **相似歌曲独立页 / M7 评论页**
+**相似歌曲独立页 / M7 评论页**（M9 灰歌回退已于 2026-09-22 完成）
 （资产全现成，纯 UI 活）→ M8 云盘 → 其余按需。
 （原序首项"库页分区+迁库页"已随 M2 完成，移出。）
 

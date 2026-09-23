@@ -185,6 +185,14 @@
     <string name="added_to_netease_playlist">已加入網易雲播放清單</string>
     <string name="download_management">下載管理</string>
     <string name="song_unavailable">該歌曲在當前音源無法播放（可能需 VIP 或無版權）</string>
+    <string name="netease_unavailable_action">無版權歌曲</string>
+    <string name="netease_unavailable_action_skip">自動跳過</string>
+    <string name="netease_unavailable_action_pause">暫停播放</string>
+    <string name="netease_unavailable_action_switch">切換到 YouTube Music 播放</string>
+    <string name="unavailable_song_skipped">已自動跳過無法播放的歌曲</string>
+    <string name="unavailable_song_switched">正在播放 YouTube Music 版本</string>
+    <string name="unavailable_song_switch_failed">未找到 YouTube Music 版本，已跳過</string>
+    <string name="unavailable_song_queue_exhausted">佇列中沒有可播放的歌曲了</string>
     <string name="cloud_action_failed_netease">網易雲帳號操作失敗</string>
     <string name="need_login_toast">登入後才能使用收藏</string>
     <string name="liked_toast">已喜歡</string>

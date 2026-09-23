@@ -73,7 +73,12 @@ import simpmusic.composeapp.generated.resources.explicit_content_blocked
 import simpmusic.composeapp.generated.resources.open_app
 import simpmusic.composeapp.generated.resources.open_miniplayer
 import simpmusic.composeapp.generated.resources.quit_app
+import simpmusic.composeapp.generated.resources.song_unavailable
 import simpmusic.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
+import simpmusic.composeapp.generated.resources.unavailable_song_queue_exhausted
+import simpmusic.composeapp.generated.resources.unavailable_song_skipped
+import simpmusic.composeapp.generated.resources.unavailable_song_switch_failed
+import simpmusic.composeapp.generated.resources.unavailable_song_switched
 
 /**
  * Any `scheme://…` command-line argument. RFC 3986 §3.1 allows ALPHA followed by
@@ -222,6 +227,26 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
 
                 is ToastType.PlayerError -> {
                     runBlocking { getString(Res.string.time_out_check_internet_connection_or_change_piped_instance_in_settings, type.error) }
+                }
+
+                ToastType.UnavailableSongPaused -> {
+                    runBlocking { getString(Res.string.song_unavailable) }
+                }
+
+                ToastType.UnavailableSongSkipped -> {
+                    runBlocking { getString(Res.string.unavailable_song_skipped) }
+                }
+
+                ToastType.UnavailableSongSwitched -> {
+                    runBlocking { getString(Res.string.unavailable_song_switched) }
+                }
+
+                ToastType.UnavailableSongSwitchFailed -> {
+                    runBlocking { getString(Res.string.unavailable_song_switch_failed) }
+                }
+
+                ToastType.UnavailableQueueExhausted -> {
+                    runBlocking { getString(Res.string.unavailable_song_queue_exhausted) }
                 }
             },
         )

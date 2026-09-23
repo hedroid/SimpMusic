@@ -503,6 +503,14 @@
     <!-- Listen Together -->
     <string name="download_management">ダウンロード管理</string>
     <string name="song_unavailable">この曲は現在のソースで再生できません（VIP または權利の問題の可能性）</string>
+    <string name="netease_unavailable_action">再生できない曲</string>
+    <string name="netease_unavailable_action_skip">自動的にスキップ</string>
+    <string name="netease_unavailable_action_pause">一時停止</string>
+    <string name="netease_unavailable_action_switch">YouTube Music に切り替える</string>
+    <string name="unavailable_song_skipped">再生できない曲をスキップしました</string>
+    <string name="unavailable_song_switched">YouTube Music のバージョンを再生しています</string>
+    <string name="unavailable_song_switch_failed">YouTube Music のバージョンが見つからず、スキップしました</string>
+    <string name="unavailable_song_queue_exhausted">キューに再生できる曲がありません</string>
     <string name="cloud_action_failed_netease">NetEase アカウントを更新できませんでした</string>
     <string name="need_login_toast">ログインすると利用できます</string>
     <string name="liked_toast">「いいね」しました</string>

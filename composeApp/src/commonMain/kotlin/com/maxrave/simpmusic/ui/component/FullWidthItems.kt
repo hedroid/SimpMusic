@@ -140,6 +140,12 @@ fun SongFullWidthItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
+    // 无版权/下架(网易灰歌,privilege.st 判定):标题+艺人整体降透明度;行保留可点——
+    // 点击仍会尝试播放,失败由"无版权歌曲动作"设置接管(跳过/暂停/回退 YT)
+    val unavailable =
+        songEntity?.isAvailable == false || (songEntity == null && track?.isAvailable == false)
+    val titleColor = if (unavailable) contentColor.copy(alpha = 0.4f) else contentColor
+    val dimmedSubtitleColor = if (unavailable) subtitleColor.copy(alpha = 0.4f) else subtitleColor
     val maxOffset = 360f
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -313,6 +319,7 @@ fun SongFullWidthItems(
                                     error = rememberHolderPainter(),
                                     contentDescription = null,
                                     contentScale = ContentScale.FillWidth,
+                                    alpha = if (unavailable) 0.4f else 1f,
                                     modifier =
                                         Modifier
                                             .fillMaxSize()
@@ -360,7 +367,7 @@ fun SongFullWidthItems(
                         text = track?.title ?: songEntity?.title ?: "",
                         style = typo().titleSmall,
                         maxLines = 1,
-                        color = contentColor,
+                        color = titleColor,
                         modifier =
                             Modifier
                                 .fillMaxWidth()
@@ -410,7 +417,7 @@ fun SongFullWidthItems(
                                 ) ?: "",
                             style = typo().bodySmall,
                             maxLines = 1,
-                            color = subtitleColor,
+                            color = dimmedSubtitleColor,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()

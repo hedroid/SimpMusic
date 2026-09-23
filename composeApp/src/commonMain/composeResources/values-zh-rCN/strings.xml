@@ -918,6 +918,14 @@
     <string name="added_to_netease_playlist">已添加到网易云歌单</string>
     <string name="download_management">下载管理</string>
     <string name="song_unavailable">该歌曲在当前音源不可播放（可能需 VIP 或无版权）</string>
+    <string name="netease_unavailable_action">无版权歌曲</string>
+    <string name="netease_unavailable_action_skip">自动跳过</string>
+    <string name="netease_unavailable_action_pause">暂停播放</string>
+    <string name="netease_unavailable_action_switch">切换到 YouTube Music 播放</string>
+    <string name="unavailable_song_skipped">已自动跳过不可播放的歌曲</string>
+    <string name="unavailable_song_switched">正在播放 YouTube Music 版本</string>
+    <string name="unavailable_song_switch_failed">未找到 YouTube Music 版本，已跳过</string>
+    <string name="unavailable_song_queue_exhausted">队列中没有可播放的歌曲了</string>
     <string name="cloud_action_failed_netease">网易云账号操作失败</string>
     <string name="need_login_toast">登录后才能使用收藏</string>
     <string name="liked_toast">已喜欢</string>
@@ -935,8 +943,6 @@
     <string name="your_youtube_music">您的 YouTube Music</string>
     <string name="youtube_collection_sync">歌单与专辑收藏同步到 YouTube Music</string>
     <string name="youtube_collection_sync_description">在 SimpMusic 收藏或取消收藏歌单、专辑时，同步到 YouTube Music 账号；关闭后仅修改本地</string>
-    <string name="netease_auto_switch">无版权音乐自动切换音源</string>
-    <string name="netease_auto_switch_description">网易云歌曲无版权或仅 VIP 试听时，自动切换到 YouTube Music 播放</string>
     <string name="netease_login_qr">扫码</string>
     <string name="netease_login_phone">手机号</string>
     <string name="netease_login_web">网页</string>

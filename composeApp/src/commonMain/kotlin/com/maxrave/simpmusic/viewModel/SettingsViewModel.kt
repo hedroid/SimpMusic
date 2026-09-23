@@ -1848,8 +1848,10 @@ class SettingsViewModel(
     private var _neteasePlayReport: MutableStateFlow<Boolean> = MutableStateFlow(true)
     val neteasePlayReport: StateFlow<Boolean> = _neteasePlayReport
 
-    private var _neteaseAutoSwitch: MutableStateFlow<Boolean> = MutableStateFlow(true)
-    val neteaseAutoSwitch: StateFlow<Boolean> = _neteaseAutoSwitch
+    /** 无版权歌曲动作(SKIP/PAUSE/SWITCH_YT,DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_*) */
+    private var _neteaseUnavailableAction: MutableStateFlow<String> =
+        MutableStateFlow(DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP)
+    val neteaseUnavailableAction: StateFlow<String> = _neteaseUnavailableAction
 
     fun getNeteaseLogIn() {
         viewModelScope.launch {
@@ -1862,7 +1864,7 @@ class SettingsViewModel(
                 dataStoreManager.neteaseQuality,
                 dataStoreManager.neteaseDownloadQuality,
                 dataStoreManager.neteasePlayReport,
-                dataStoreManager.neteaseAutoSwitch,
+                dataStoreManager.neteaseUnavailableAction,
             )
         }
     }
@@ -1874,7 +1876,7 @@ class SettingsViewModel(
         quality: kotlinx.coroutines.flow.Flow<String>,
         downloadQuality: kotlinx.coroutines.flow.Flow<String>,
         playReport: kotlinx.coroutines.flow.Flow<String>,
-        autoSwitch: kotlinx.coroutines.flow.Flow<String>,
+        unavailableAction: kotlinx.coroutines.flow.Flow<String>,
     ) {
         kotlinx.coroutines.flow.combine(
             cookie,
@@ -1882,14 +1884,14 @@ class SettingsViewModel(
             quality,
             downloadQuality,
             playReport,
-            autoSwitch,
+            unavailableAction,
         ) { values -> values }.collect { state ->
             _neteaseLogIn.value = (state[0] as String).isNotEmpty()
             _neteaseAccountName.value = state[1] as String
             _neteaseQuality.value = state[2] as String
             _neteaseDownloadQuality.value = state[3] as String
             _neteasePlayReport.value = (state[4] as String) == DataStoreManager.TRUE
-            _neteaseAutoSwitch.value = (state[5] as String) == DataStoreManager.TRUE
+            _neteaseUnavailableAction.value = state[5] as String
         }
     }
 
@@ -1905,8 +1907,8 @@ class SettingsViewModel(
         viewModelScope.launch { dataStoreManager.setNeteasePlayReport(enabled) }
     }
 
-    fun setNeteaseAutoSwitch(enabled: Boolean) {
-        viewModelScope.launch { dataStoreManager.setNeteaseAutoSwitch(enabled) }
+    fun setNeteaseUnavailableAction(action: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseUnavailableAction(action) }
     }
 
     fun getAllNeteaseAccounts() {

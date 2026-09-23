@@ -946,6 +946,14 @@
     <string name="added_to_netease_playlist">Added to NetEase Cloud Music playlist</string>
     <string name="download_management">Downloads</string>
     <string name="song_unavailable">This song can't be played from the current source (may need VIP or be unavailable)</string>
+    <string name="netease_unavailable_action">Unavailable songs</string>
+    <string name="netease_unavailable_action_skip">Auto skip</string>
+    <string name="netease_unavailable_action_pause">Pause</string>
+    <string name="netease_unavailable_action_switch">Switch to YouTube Music</string>
+    <string name="unavailable_song_skipped">Unavailable song skipped</string>
+    <string name="unavailable_song_switched">Playing the YouTube Music version</string>
+    <string name="unavailable_song_switch_failed">No YouTube Music version found, skipped</string>
+    <string name="unavailable_song_queue_exhausted">No playable songs left in the queue</string>
     <string name="cloud_action_failed_netease">Couldn't update your NetEase account</string>
     <string name="need_login_toast">Sign in to use favorites</string>
     <string name="liked_toast">Liked</string>
@@ -965,8 +973,6 @@
     <string name="your_youtube_music">Your YouTube Music</string>
     <string name="youtube_collection_sync">Sync playlists and albums with YouTube Music</string>
     <string name="youtube_collection_sync_description">Mirror playlist and album favorite changes made in SimpMusic to your YouTube Music account; when off, changes stay local</string>
-    <string name="netease_auto_switch">Auto-switch source for unavailable songs</string>
-    <string name="netease_auto_switch_description">Fall back to YouTube Music when a NetEase song has no license or is VIP-only</string>
     <string name="netease_login_qr">QR code</string>
     <string name="netease_login_phone">Phone</string>
     <string name="netease_login_web">Web</string>

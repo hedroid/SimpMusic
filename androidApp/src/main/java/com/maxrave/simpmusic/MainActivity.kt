@@ -292,12 +292,28 @@ class MainActivity : AppCompatActivity() {
 
                     is ToastType.PlayerError -> {
                         runBlocking {
-                            if (type.unavailable) {
-                                ComposeResUtils.getResString(ComposeResUtils.StringType.SONG_UNAVAILABLE)
-                            } else {
-                                ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error)
-                            }
+                            ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error)
                         }
+                    }
+
+                    ToastType.UnavailableSongPaused -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.SONG_UNAVAILABLE) }
+                    }
+
+                    ToastType.UnavailableSongSkipped -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SKIPPED) }
+                    }
+
+                    ToastType.UnavailableSongSwitched -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SWITCHED) }
+                    }
+
+                    ToastType.UnavailableSongSwitchFailed -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SWITCH_FAILED) }
+                    }
+
+                    ToastType.UnavailableQueueExhausted -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_QUEUE_EXHAUSTED) }
                     }
                 },
             )

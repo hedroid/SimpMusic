@@ -8,6 +8,10 @@ import simpmusic.composeapp.generated.resources.new_singles
 import simpmusic.composeapp.generated.resources.song_unavailable
 import simpmusic.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import simpmusic.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
+import simpmusic.composeapp.generated.resources.unavailable_song_queue_exhausted
+import simpmusic.composeapp.generated.resources.unavailable_song_skipped
+import simpmusic.composeapp.generated.resources.unavailable_song_switch_failed
+import simpmusic.composeapp.generated.resources.unavailable_song_switched
 
 object ComposeResUtils {
     suspend fun getResString(
@@ -38,6 +42,22 @@ object ComposeResUtils {
             StringType.SONG_UNAVAILABLE -> {
                 getString(Res.string.song_unavailable)
             }
+
+            StringType.UNAVAILABLE_SONG_SKIPPED -> {
+                getString(Res.string.unavailable_song_skipped)
+            }
+
+            StringType.UNAVAILABLE_SONG_SWITCHED -> {
+                getString(Res.string.unavailable_song_switched)
+            }
+
+            StringType.UNAVAILABLE_SONG_SWITCH_FAILED -> {
+                getString(Res.string.unavailable_song_switch_failed)
+            }
+
+            StringType.UNAVAILABLE_SONG_QUEUE_EXHAUSTED -> {
+                getString(Res.string.unavailable_song_queue_exhausted)
+            }
         }
 
     enum class StringType {
@@ -47,5 +67,9 @@ object ComposeResUtils {
         NEW_SINGLES,
         NEW_ALBUMS,
         SONG_UNAVAILABLE,
+        UNAVAILABLE_SONG_SKIPPED,
+        UNAVAILABLE_SONG_SWITCHED,
+        UNAVAILABLE_SONG_SWITCH_FAILED,
+        UNAVAILABLE_SONG_QUEUE_EXHAUSTED,
     }
 }
