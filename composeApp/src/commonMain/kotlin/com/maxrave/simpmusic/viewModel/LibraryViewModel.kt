@@ -540,96 +540,72 @@ class LibraryViewModel(
             }
 
             is LibraryMutation.YouTubePlaylistCreated -> {
-                (_youTubePlaylist.value as? LocalResource.Success)?.let { state ->
-                    // 插入分区首位(用户新建单应排最前,与 YTM 官方行为一致);事件载荷是
-                    // 建单体回读的权威行,与下次网络拉回的行同构(样式不跳变)
-                    _youTubePlaylist.value =
-                        LocalResource.Success(
-                            insertDeduped(
-                                state.data.orEmpty(),
-                                mutation.playlist,
-                                keyOf = { it.browseId.removePrefix("VL") },
-                            ),
-                        )
-                }
+                // 空库账号 split 发 null、分区停在 Loading——插入行来自权威回读,
+                // 直接以单行 Success 起步,不等下一次拉取
+                val current = (_youTubePlaylist.value as? LocalResource.Success)?.data.orEmpty()
+                _youTubePlaylist.value =
+                    LocalResource.Success(
+                        insertDeduped(current, mutation.playlist) { it.browseId.removePrefix("VL") },
+                    )
             }
 
             is LibraryMutation.NeteasePlaylistCreated -> {
-                (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
-                    _neteasePlaylist.value =
-                        LocalResource.Success(
-                            // 网易 userPlaylists 服务端序=新建置顶,本地插入同样放最前;
-                            // 红心歌单由排序兜底仍居首——插在红心行之后而非整个列表头,
-                            // 否则下次拉回红心复位会造成"跳一下"
-                            insertAfterHeartPlaylist(
-                                state.data.orEmpty(),
-                                mutation.playlist,
-                            ),
-                        )
-                    // 新建即自建,创建区判断即刻生效
-                    _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value + mutation.playlist.id
-                }
+                val current = (_neteasePlaylist.value as? LocalResource.Success)?.data.orEmpty()
+                _neteasePlaylist.value =
+                    LocalResource.Success(
+                        // 网易 userPlaylists 服务端序=新建置顶,本地插入同样放最前;
+                        // 红心歌单由排序兜底仍居首——插在红心行之后而非整个列表头,
+                        // 否则下次拉回红心复位会造成"跳一下"
+                        insertAfterHeartPlaylist(current, mutation.playlist),
+                    )
+                // 新建即自建,创建区判断即刻生效
+                _ownNeteasePlaylistIds.value = _ownNeteasePlaylistIds.value + mutation.playlist.id
             }
 
             is LibraryMutation.PlaylistFavorited -> {
                 if (mutation.playlist.id.toLongOrNull() != null) {
                     // 网易收藏:同一歌单分区(自建+收藏混排),服务端 userPlaylists 先自建组后
                     // 收藏组、新收藏在收藏组最前——插在自建组之后,下次拉回位置不跳
-                    (_neteasePlaylist.value as? LocalResource.Success)?.let { state ->
-                        _neteasePlaylist.value =
-                            LocalResource.Success(
-                                insertAfterOwnPlaylists(state.data.orEmpty(), mutation.playlist),
-                            )
-                    }
+                    val current = (_neteasePlaylist.value as? LocalResource.Success)?.data.orEmpty()
+                    _neteasePlaylist.value =
+                        LocalResource.Success(insertAfterOwnPlaylists(current, mutation.playlist))
                 } else {
-                    // YT 收藏的他人歌单:详情页实体转库行形状(网络行解析同构),
-                    // 已在任一分区(含自建——红心自己的歌单)则不重复插入
+                    // YT 收藏的他人歌单:详情页实体转库行形状(字段对齐 parseLibraryPlaylist
+                    // 的网络行),已在任一分区(含自建——红心自己的歌单)则不重复插入
                     val exists =
                         hasPlaylistWithBrowseId(_youTubePlaylist.value, mutation.playlist.id) ||
                             hasPlaylistWithBrowseId(_youTubeLikedPlaylists.value, mutation.playlist.id)
                     if (!exists) {
-                        (_youTubeLikedPlaylists.value as? LocalResource.Success)?.let { state ->
-                            val entity = mutation.playlist
-                            _youTubeLikedPlaylists.value =
-                                LocalResource.Success(
-                                    insertDeduped(
-                                        state.data.orEmpty(),
-                                        // 字段形状对齐 parseLibraryPlaylist 的网络行(category/itemCount/resultType 恒空串)
-                                        PlaylistsResult(
-                                            author = entity.author ?: "",
-                                            browseId = entity.id,
-                                            category = "",
-                                            itemCount = "",
-                                            resultType = "",
-                                            thumbnails =
-                                                entity.thumbnails.takeIf { it.isNotBlank() }
-                                                    ?.let { listOf(Thumbnail(height = 544, url = it, width = 544)) }
-                                                    ?: listOf(),
-                                            title = entity.title,
-                                        ),
-                                        keyOf = { it.browseId.removePrefix("VL") },
-                                    ),
-                                )
-                        }
+                        val entity = mutation.playlist
+                        val row =
+                            PlaylistsResult(
+                                author = entity.author ?: "",
+                                browseId = entity.id,
+                                category = "",
+                                itemCount = "",
+                                resultType = "",
+                                thumbnails =
+                                    entity.thumbnails.takeIf { it.isNotBlank() }
+                                        ?.let { listOf(Thumbnail(height = 544, url = it, width = 544)) }
+                                        ?: listOf(),
+                                title = entity.title,
+                            )
+                        val current = (_youTubeLikedPlaylists.value as? LocalResource.Success)?.data.orEmpty()
+                        _youTubeLikedPlaylists.value =
+                            LocalResource.Success(insertDeduped(current, row) { it.browseId.removePrefix("VL") })
                     }
                 }
             }
 
             is LibraryMutation.AlbumFavorited -> {
                 if (mutation.album.browseId.toLongOrNull() != null) {
-                    (_starredAlbums.value as? LocalResource.Success)?.let { state ->
-                        _starredAlbums.value =
-                            LocalResource.Success(
-                                insertDeduped(state.data.orEmpty(), mutation.album) { it.browseId },
-                            )
-                    }
+                    val current = (_starredAlbums.value as? LocalResource.Success)?.data.orEmpty()
+                    _starredAlbums.value =
+                        LocalResource.Success(insertDeduped(current, mutation.album) { it.browseId })
                 } else {
-                    (_youTubeAlbums.value as? LocalResource.Success)?.let { state ->
-                        _youTubeAlbums.value =
-                            LocalResource.Success(
-                                insertDeduped(state.data.orEmpty(), mutation.album) { it.browseId },
-                            )
-                    }
+                    val current = (_youTubeAlbums.value as? LocalResource.Success)?.data.orEmpty()
+                    _youTubeAlbums.value =
+                        LocalResource.Success(insertDeduped(current, mutation.album) { it.browseId })
                 }
             }
 
@@ -646,19 +622,13 @@ class LibraryViewModel(
 
             is LibraryMutation.ArtistFollowed -> {
                 if (mutation.artist.browseId.toLongOrNull() != null) {
-                    (_subscribedArtists.value as? LocalResource.Success)?.let { state ->
-                        _subscribedArtists.value =
-                            LocalResource.Success(
-                                insertDeduped(state.data.orEmpty(), mutation.artist) { it.browseId },
-                            )
-                    }
+                    val current = (_subscribedArtists.value as? LocalResource.Success)?.data.orEmpty()
+                    _subscribedArtists.value =
+                        LocalResource.Success(insertDeduped(current, mutation.artist) { it.browseId })
                 } else {
-                    (_followedYTArtists.value as? LocalResource.Success)?.let { state ->
-                        _followedYTArtists.value =
-                            LocalResource.Success(
-                                insertDeduped(state.data.orEmpty(), mutation.artist) { it.browseId },
-                            )
-                    }
+                    val current = (_followedYTArtists.value as? LocalResource.Success)?.data.orEmpty()
+                    _followedYTArtists.value =
+                        LocalResource.Success(insertDeduped(current, mutation.artist) { it.browseId })
                 }
             }
 
