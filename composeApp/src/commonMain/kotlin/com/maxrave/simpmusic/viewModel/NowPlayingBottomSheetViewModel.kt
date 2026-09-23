@@ -290,11 +290,13 @@ class NowPlayingBottomSheetViewModel(
                             youtubePlaylistId = ev.browseId,
                             videoId = songUIState.videoId,
                         ).collectLatestResource(
+                            // Success 载荷是响应里的状态枚举名("STATUS_SUCCEEDED"),不是给人读的文案,
+                            // 曾被直接 toast 出裸 key;失败载荷同理是仓库写死的 "FAILED"
                             onSuccess = {
-                                makeToast(it)
+                                makeToast(getString(Res.string.added_to_youtube_playlist))
                             },
                             onError = {
-                                makeToast(it)
+                                makeToast(getString(Res.string.error_occurred))
                             },
                         )
                 }
