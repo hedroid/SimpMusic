@@ -338,6 +338,28 @@ class PlaylistViewModel(
         }
     }
 
+    /** 从 YT 自建歌单移除一首歌(拉齐网易 removeTrackFromNeteasePlaylist):云端删成功后
+     *  内存列表原位剔掉+表头计数-1,不整刷网络(防闪)。移除条目需要 setVideoId,仓储层
+     *  缓存 miss 会整单拉一次;仅自建歌单有权限,入口已按 isYourYouTubePlaylist 门控。 */
+    fun removeTrackFromYouTubePlaylist(videoId: String) {
+        val id = (uiState.value as? Success)?.data?.id ?: return
+        if (id.toLongOrNull() != null) return
+        viewModelScope.launch {
+            if (playlistRepository.removeTrackFromYouTubePlaylist(id, videoId)) {
+                _tracks.update { list -> list.filterNot { it.videoId == videoId } }
+                (uiState.value as? Success)?.data?.let { state ->
+                    _uiState.value =
+                        Success(
+                            state.copy(trackCount = (state.trackCount - 1).coerceAtLeast(0)),
+                        )
+                }
+                makeToast(getString(Res.string.removed_from_playlist))
+            } else {
+                makeToast(getString(Res.string.remove_from_playlist_failed))
+            }
+        }
+    }
+
     private var _tracksListState = MutableStateFlow<ListState>(ListState.IDLE)
     val tracksListState: StateFlow<ListState> = _tracksListState
 

@@ -404,12 +404,17 @@ fun PlaylistScreen(
         )
     }
 //    Box {
+    // target 只取状态"类型":Success 是普通 class(引用相等),实例级 target 会让任何
+    // 内容性重写(移除歌曲后的 trackCount-1、元数据刷新)触发整屏淡出淡入——即"移除后
+    // 列表来回闪"。按类型切换只保留 Loading↔Success↔Error 的过场;内容更新在
+    // Success 分支内读 uiState 原地重组,不再动画。
     Crossfade(
-        targetState = uiState,
-    ) { state ->
-        Logger.w(tag, "State hash: ${state.hashCode()}")
-        when (state) {
-            is PlaylistUIState.Success -> {
+        targetState = uiState::class,
+    ) { stateClass ->
+        Logger.w(tag, "State hash: ${stateClass.hashCode()}")
+        when (stateClass) {
+            PlaylistUIState.Success::class -> {
+                val state = uiState as Success
                 val data = state.data
                 Logger.d(tag, "data: $data")
                 if (data == null) return@Crossfade
@@ -1447,9 +1452,12 @@ fun PlaylistScreen(
                         navController = navController,
                         song = track,
                         onRemoveFromPlaylist =
-                            // 红心歌单不露(与红心按钮功能重复,红心即入口);其余自建歌单露出
+                            // 红心歌单不露(与红心按钮功能重复,红心即入口);其余自建歌单露出。
+                            // YT 自建(非电台)拉齐网易,云端 edit_playlist 移除条目
                             if (neteaseOwnPlaylist && !neteaseLikedPlaylist) {
                                 { viewModel.removeTrackFromNeteasePlaylist(track.videoId) }
+                            } else if (isYourYouTubePlaylist && !data.isRadio) {
+                                { viewModel.removeTrackFromYouTubePlaylist(track.videoId) }
                             } else {
                                 null
                             },
@@ -1564,7 +1572,7 @@ fun PlaylistScreen(
                 }
             }
 
-            is PlaylistUIState.Loading -> {
+            PlaylistUIState.Loading::class -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -1575,7 +1583,8 @@ fun PlaylistScreen(
                 }
             }
 
-            is PlaylistUIState.Error -> {
+            PlaylistUIState.Error::class -> {
+                val state = uiState as Error
                 viewModel.makeToast("Error: ${state.message}")
                 navController.navigateUp()
             }
