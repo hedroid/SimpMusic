@@ -978,4 +978,8 @@
 
     <string name="downloaded_songs_tab">歌曲</string>
     <string name="no_downloaded_songs">暂无已下载歌曲</string>
+    <string name="haptic_feedback">触感反馈</string>
+    <string name="haptic_feedback_light">轻柔</string>
+    <string name="haptic_feedback_medium">标准</string>
+    <string name="haptic_feedback_strong">强烈</string>
 </resources>

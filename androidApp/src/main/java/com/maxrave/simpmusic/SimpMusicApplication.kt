@@ -21,6 +21,7 @@ import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.di.viewModelModule
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.service.backup.AutoBackupScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,9 @@ class SimpMusicApplication :
         applicationScope.launch {
             autoBackupScheduler.observeAndSchedule()
         }
+
+        // 触感反馈:订阅设置档位(播放控件振动),系统层未初始化前调用安全空跑
+        HapticFeedback.initialize(this, dataStoreManager, applicationScope)
 
         CaocConfig.Builder
             .create()

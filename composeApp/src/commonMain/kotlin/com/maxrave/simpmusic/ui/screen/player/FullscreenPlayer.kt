@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.maxrave.common.Config.MAIN_PLAYER
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
 import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.formatDuration
@@ -441,6 +442,7 @@ fun FullscreenPlayer(
                                             CircleShape,
                                         ),
                                 onClick = {
+                                    HapticFeedback.tap()
                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                 },
                             ) {

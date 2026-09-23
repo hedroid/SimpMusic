@@ -519,4 +519,8 @@
     <string name="unfollowed_toast">フォロー解除しました</string>
     <string name="synced_n_of_m">%2$d 件中 %1$d 件を「いいね」</string>
     <string name="cloud_action_failed_youtube">YouTube Music アカウントを更新できませんでした</string>
+    <string name="haptic_feedback">触覚フィードバック</string>
+    <string name="haptic_feedback_light">弱い</string>
+    <string name="haptic_feedback_medium">標準</string>
+    <string name="haptic_feedback_strong">強い</string>
 </resources>

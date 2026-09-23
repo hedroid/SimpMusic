@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -49,6 +50,9 @@ fun PlayPauseButton(
         },
         modifier = modifier,
         tint = tint,
-        onClick = onClick,
+        onClick = {
+            HapticFeedback.tap()
+            onClick()
+        },
     )
 }

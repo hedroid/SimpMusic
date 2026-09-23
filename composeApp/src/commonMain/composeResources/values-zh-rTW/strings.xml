@@ -677,4 +677,8 @@
     <!-- Listen Together -->
     <string name="downloaded_songs_tab">歌曲</string>
     <string name="no_downloaded_songs">暫無已下載歌曲</string>
+    <string name="haptic_feedback">觸感回饋</string>
+    <string name="haptic_feedback_light">輕柔</string>
+    <string name="haptic_feedback_medium">標準</string>
+    <string name="haptic_feedback_strong">強烈</string>
 </resources>

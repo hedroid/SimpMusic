@@ -14,10 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -37,7 +36,6 @@ fun Modifier.sourceSwitchGesture(
     onLongPress: () -> Unit,
     onTap: () -> Unit,
 ): Modifier {
-    val haptic = LocalHapticFeedback.current
     return pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown()
@@ -58,7 +56,9 @@ fun Modifier.sourceSwitchGesture(
                 if (event == null) {
                     if (!longPressed && !moved) {
                         longPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        // 与播放控件同源的档位化触感(取代原 LocalHapticFeedback.LongPress,
+                        // 受设置"触感反馈"与系统触摸振动开关共同管控)
+                        HapticFeedback.tap()
                         onLongPress()
                     }
                     continue

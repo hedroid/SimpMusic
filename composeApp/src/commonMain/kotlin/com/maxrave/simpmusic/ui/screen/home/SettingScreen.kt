@@ -111,6 +111,8 @@ import com.maxrave.domain.repository.ImportProgress
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.HapticFeedback
+import com.maxrave.simpmusic.expect.HapticFeedbackLevel
 import com.maxrave.simpmusic.expect.ui.directoryPickerResult
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
 import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
@@ -268,6 +270,10 @@ import simpmusic.composeapp.generated.resources.follow_app_language_current
 import simpmusic.composeapp.generated.resources.free_space
 import simpmusic.composeapp.generated.resources.gemini
 import simpmusic.composeapp.generated.resources.guest
+import simpmusic.composeapp.generated.resources.haptic_feedback
+import simpmusic.composeapp.generated.resources.haptic_feedback_light
+import simpmusic.composeapp.generated.resources.haptic_feedback_medium
+import simpmusic.composeapp.generated.resources.haptic_feedback_strong
 import simpmusic.composeapp.generated.resources.http
 import simpmusic.composeapp.generated.resources.import_data
 import simpmusic.composeapp.generated.resources.import_data_intro
@@ -581,6 +587,7 @@ fun SettingScreen(
     val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
     val neteaseUnavailableAction by viewModel.neteaseUnavailableAction.collectAsStateWithLifecycle()
+    val hapticFeedbackLevel by viewModel.hapticFeedbackLevel.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -936,6 +943,56 @@ fun SettingScreen(
                         smallSubtitle = true,
                         switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
                         isEnable = getPlatform() == Platform.Android,
+                    )
+                    // 触感反馈三档(轻/标准/强):弹窗里选中选项即刻按该档震一下,
+                    // 用户确认前就能逐档试出手感;确认才落库。
+                    val hapticLevelLabels =
+                        listOf(
+                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_LIGHT to Res.string.haptic_feedback_light,
+                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_MEDIUM to Res.string.haptic_feedback_medium,
+                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_STRONG to Res.string.haptic_feedback_strong,
+                        )
+                    SettingItem(
+                        title = stringResource(Res.string.haptic_feedback),
+                        subtitle =
+                            hapticLevelLabels.firstOrNull { it.first == hapticFeedbackLevel }?.second
+                                ?.let { stringResource(it) }
+                                ?: stringResource(Res.string.haptic_feedback_medium),
+                        smallSubtitle = true,
+                        onClick = {
+                            viewModel.setAlertData(
+                                SettingAlertState(
+                                    title = runBlocking { getString(Res.string.haptic_feedback) },
+                                    selectOne =
+                                        SettingAlertState.SelectData(
+                                            listSelect =
+                                                hapticLevelLabels.map { (key, res) ->
+                                                    (key == hapticFeedbackLevel) to runBlocking { getString(res) }
+                                                },
+                                            onOptionSelected = { label ->
+                                                // 选中即按该档震一下(预览);label 是弹窗里的本地化文本
+                                                val labelToKey =
+                                                    hapticLevelLabels.associate { (key, res) ->
+                                                        runBlocking { getString(res) } to key
+                                                    }
+                                                labelToKey[label]?.let { HapticFeedback.tap(HapticFeedbackLevel.parseOr(it)) }
+                                            },
+                                        ),
+                                    confirm =
+                                        runBlocking { getString(Res.string.change) } to { state ->
+                                            val selected = state.selectOne?.getSelected()
+                                            val labelToKey =
+                                                hapticLevelLabels.associate { (key, res) ->
+                                                    runBlocking { getString(res) } to key
+                                                }
+                                            labelToKey[selected]?.let {
+                                                viewModel.setHapticFeedbackLevel(it)
+                                            }
+                                        },
+                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                ),
+                            )
+                        },
                     )
                 }
             }
@@ -3432,6 +3489,7 @@ fun SettingScreen(
                     ) {
                         items(alertState.selectOne.listSelect) { item ->
                             val onSelect = {
+                                alertState.selectOne.onOptionSelected?.invoke(item.second)
                                 viewModel.setAlertData(
                                     alertState.copy(
                                         selectOne =

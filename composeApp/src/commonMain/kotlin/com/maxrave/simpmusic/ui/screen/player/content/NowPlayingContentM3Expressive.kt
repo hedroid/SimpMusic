@@ -83,6 +83,7 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.rememberDynamicColorScheme
 import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.isPlatformCastAvailable
 import com.maxrave.simpmusic.extension.formatDuration
@@ -816,6 +817,7 @@ private fun ExpressiveTrackInfoRow(
                 enabled = state.likeEnabled,
                 onCheckedChange = {
                     if (!state.controllerState.isLiked) likeBurst.fire()
+                    HapticFeedback.tap()
                     actions.onUIEvent(UIEvent.ToggleLike)
                 },
                 shape = CircleShape,
