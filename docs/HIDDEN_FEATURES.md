@@ -62,6 +62,9 @@
 - 同步类设置（同步债方向等）——全删，DataStore 键留无消费；toast 文案中性化。
 - 云心手动按钮、YT"加入已喜欢"按钮及契约层 likeStatus 等字段——终稿删除（播放页只剩单一红心）。
 - "Slowed + Reverb"一键预设——绕过播放页 speed/pitch 锁被要求移除（见 CLAUDE.md 音效节）。
+- 设置项"保持服务活动状态"（`keep_service_alive`）——**死开关**：只写 DataStore、全仓无任何消费者
+  （播放服务是标准 Media3 前台服务，行为不受它影响），2026-09-23 用户定案删除。
+  UI 行/VM 状态/setter/五语言 strings 已删；DataStore 键按惯例留无消费（core 未动）。
 
 ## 维护规则
 

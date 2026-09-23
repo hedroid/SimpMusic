@@ -180,7 +180,7 @@
     <string name="delete_playlist_title">刪除該播放清單？</string>
     <string name="delete_playlist_message">播放清單「%1$s」將從你的網易雲帳號中永久刪除，且無法復原。</string>
     <string name="netease_play_report">發送播放數據到網易雲</string>
-    <string name="netease_play_report_description">把播放記錄上報到你的網易雲帳號，優化每日推薦和年度報告，但有觸發風控的風險</string>
+    <string name="netease_play_report_description">將您的聽歌歷史上傳到網易雲伺服器，優化您的網易雲推薦系統，但有觸發風控的風險</string>
     <string name="your_netease_playlists">您的網易雲播放清單</string>
     <string name="added_to_netease_playlist">已加入網易雲播放清單</string>
     <string name="download_management">下載管理</string>
@@ -620,8 +620,6 @@
     <string name="lastfm_paste_callback_confirm">透過此連結繼續</string>
     <string name="logged_in_as">已登入為 %1$s</string>
     <string name="youtube_liked_music">YouTube 喜歡的音樂</string>
-    <string name="keep_service_alive">保持服務正常運行</string>
-    <string name="keep_service_alive_description">保持音樂播放器服務運行，避免被系統終止</string>
     <string name="keep_your_youtube_playlist_offline">離線時繼續顯示您的 YouTube 播放清單</string>
     <string name="keep_your_youtube_playlist_offline_description">將您的 YouTube 播放清單儲存到本地，以便在離線時查看</string>
     <string name="this_year">今年</string>

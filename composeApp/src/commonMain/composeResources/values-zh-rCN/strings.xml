@@ -561,8 +561,6 @@
     <string name="lastfm_paste_callback_confirm">继续使用此链接</string>
     <string name="logged_in_as">已登入为 %1$s</string>
     <string name="youtube_liked_music">YouTube喜欢的音乐</string>
-    <string name="keep_service_alive">保持服务活动状态</string>
-    <string name="keep_service_alive_description">保持音乐播放器服务活跃，以免被系统关闭</string>
     <string name="keep_your_youtube_playlist_offline">离线时继续展示您的 YouTube 播放列表</string>
     <string name="keep_your_youtube_playlist_offline_description">将您的 YT 播放列表保存到本地并在离线时保持显示</string>
     <string name="this_year">今年</string>
@@ -913,7 +911,7 @@
     <string name="delete_playlist_title">删除该歌单？</string>
     <string name="delete_playlist_message">歌单“%1$s”将从你的网易云音乐账号中永久删除，且无法恢复。</string>
     <string name="netease_play_report">发送播放数据到网易云</string>
-    <string name="netease_play_report_description">把播放记录上报到你的网易云账号，优化每日推荐和年度报告，但有触发风控的风险</string>
+    <string name="netease_play_report_description">将您的听歌历史上传到网易云服务器，优化您的网易云推荐系统，但有触发风控的风险</string>
     <string name="your_netease_playlists">您的网易云歌单</string>
     <string name="added_to_netease_playlist">已添加到网易云歌单</string>
     <string name="download_management">下载管理</string>

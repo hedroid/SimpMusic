@@ -141,7 +141,7 @@
     <string name="youtube_url">YouTube URL</string>
     <string name="netease_url">NetEase URL</string>
     <string name="netease_play_report">재생 데이터를 NetEase에 전송</string>
-    <string name="netease_play_report_description">재생 기록을 NetEase 계정에 전송해 추천과 연간 리포트를 개선하지만, 리스크 관리가 발동될 위험이 있습니다</string>
+    <string name="netease_play_report_description">청취 기록을 NetEase 서버에 업로드해 NetEase 추천 시스템을 개선하지만, 리스크 관리가 발동될 위험이 있습니다</string>
     <string name="fans_count">팬 %1$s명</string>
     <string name="comments_count">댓글 %1$s개</string>
     <string name="likes_count">좋아요 %1$s개</string>
@@ -553,8 +553,6 @@
     <string name="lastfm_paste_callback_confirm">이 링크로 계속하기</string>
     <string name="logged_in_as">%1$s로 로그인됨</string>
     <string name="youtube_liked_music">YouTube 좋아요 표시한 음악</string>
-    <string name="keep_service_alive">서비스 활성 유지</string>
-    <string name="keep_service_alive_description">시스템이 종료하지 않도록 음악 플레이어 서비스를 활성 상태로 유지합니다</string>
     <string name="keep_your_youtube_playlist_offline">오프라인일 때도 YouTube 재생목록 표시</string>
     <string name="keep_your_youtube_playlist_offline_description">YouTube 재생목록을 로컬에 저장한 뒤 오프라인일 때 표시합니다</string>
     <string name="this_year">올해</string>

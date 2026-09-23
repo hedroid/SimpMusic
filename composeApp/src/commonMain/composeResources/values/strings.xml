@@ -673,8 +673,6 @@
     <string name="lastfm_paste_callback_confirm">Continue with this link</string>
     <string name="logged_in_as">Logged in as %1$s</string>
     <string name="youtube_liked_music">YouTube Liked Music</string>
-    <string name="keep_service_alive">Keep service alive</string>
-    <string name="keep_service_alive_description">Keep music player service alive to avoid being killed by system</string>
     <string name="keep_your_youtube_playlist_offline">Keep showing your YouTube playlist when offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Save your YT playlist to local and keep to show when offline</string>
     <string name="this_year">This year</string>
@@ -941,7 +939,7 @@
     <string name="delete_playlist_title">Delete this playlist?</string>
     <string name="delete_playlist_message">The playlist \"%1$s\" will be permanently deleted from your NetEase account. This cannot be undone.</string>
     <string name="netease_play_report">Send playback data to NetEase</string>
-    <string name="netease_play_report_description">Report plays to your NetEase account for better recommendations and yearly reports, at the risk of triggering NetEase risk control</string>
+    <string name="netease_play_report_description">Uploads your listening history to NetEase Cloud servers to improve your NetEase recommendations, at the risk of triggering NetEase risk control</string>
     <string name="your_netease_playlists">Your NetEase Cloud Music playlists</string>
     <string name="added_to_netease_playlist">Added to NetEase Cloud Music playlist</string>
     <string name="download_management">Downloads</string>
