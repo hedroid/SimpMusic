@@ -998,7 +998,9 @@ fun SettingScreen(
                                     }
                                 },
                                 valueRange = 0f..2f,
-                                steps = 2,
+                                // steps 是端点之间的中间刻度数,总档位=steps+2;
+                                // 三档(0/1/2 恰好整数对齐 roundToInt)必须用 1,写成 2 会变 4 档
+                                steps = 1,
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
