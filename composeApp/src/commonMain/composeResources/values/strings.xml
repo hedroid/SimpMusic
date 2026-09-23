@@ -1007,6 +1007,7 @@
     <string name="netease_quality_jymaster">Ultra master (VIP)</string>
 
     <string name="haptic_feedback">Haptic feedback</string>
+    <string name="haptic_feedback_description">Vibration on taps</string>
     <string name="haptic_feedback_light">Light</string>
     <string name="haptic_feedback_medium">Medium</string>
     <string name="haptic_feedback_strong">Strong</string>

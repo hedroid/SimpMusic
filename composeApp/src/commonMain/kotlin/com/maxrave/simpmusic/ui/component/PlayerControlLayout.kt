@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.domain.mediaservice.handler.RepeatState
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PauseCircle
 import com.maxrave.simpmusic.ui.icon.PlayArrow
@@ -112,7 +111,6 @@ fun PlayerControlLayout(
                         )
                         .clickable {
                             if (controllerState.isPreviousAvailable) {
-                                HapticFeedback.tap()
                                 onUIEvent(UIEvent.Previous)
                             }
                         },
@@ -137,7 +135,6 @@ fun PlayerControlLayout(
                             CircleShape,
                         )
                         .clickable {
-                            HapticFeedback.tap()
                             onUIEvent(UIEvent.PlayPause)
                         },
                 contentAlignment = Alignment.Center,
@@ -173,7 +170,6 @@ fun PlayerControlLayout(
                         )
                         .clickable {
                             if (controllerState.isNextAvailable) {
-                                HapticFeedback.tap()
                                 onUIEvent(UIEvent.Next)
                             }
                         },

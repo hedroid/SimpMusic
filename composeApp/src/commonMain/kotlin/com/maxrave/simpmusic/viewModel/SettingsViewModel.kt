@@ -304,6 +304,7 @@ class SettingsViewModel(
         getNormalizeVolume()
         getSkipSilent()
         getHapticFeedbackLevel()
+        getHapticEnabled()
         getSavedPlaybackState()
         getSendBackToGoogle()
         getSaveRecentSongAndQueue()
@@ -1483,6 +1484,10 @@ class SettingsViewModel(
         MutableStateFlow(DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_MEDIUM)
     val hapticFeedbackLevel: StateFlow<String> = _hapticFeedbackLevel
 
+    /** 触感反馈总开关,默认关 */
+    private val _hapticEnabled = MutableStateFlow<Boolean>(false)
+    val hapticEnabled: StateFlow<Boolean> = _hapticEnabled
+
     fun getHapticFeedbackLevel() {
         viewModelScope.launch {
             dataStoreManager.hapticFeedbackLevel.collect { _hapticFeedbackLevel.emit(it) }
@@ -1492,6 +1497,18 @@ class SettingsViewModel(
     fun setHapticFeedbackLevel(level: String) {
         viewModelScope.launch {
             dataStoreManager.setHapticFeedbackLevel(level)
+        }
+    }
+
+    fun getHapticEnabled() {
+        viewModelScope.launch {
+            dataStoreManager.hapticEnabled.collect { _hapticEnabled.emit(it == DataStoreManager.TRUE) }
+        }
+    }
+
+    fun setHapticEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setHapticEnabled(enabled)
         }
     }
 
@@ -2342,9 +2359,6 @@ data class SettingAlertState(
     data class SelectData(
         // Selected / Data
         val listSelect: List<Pair<Boolean, String>>,
-        // 选项被点选时的回调,入参为该选项的显示文本。触感强度弹窗用来"选中即预览该档震感",
-        // 其余弹窗不传保持原行为。
-        val onOptionSelected: ((String) -> Unit)? = null,
     ) {
         fun getSelected(): String = listSelect.firstOrNull { it.first }?.second ?: ""
 

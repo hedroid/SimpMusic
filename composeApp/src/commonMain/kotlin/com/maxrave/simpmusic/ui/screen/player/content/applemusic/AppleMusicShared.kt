@@ -73,7 +73,6 @@ import coil3.request.crossfade
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.simpmusic.Platform
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.ui.DeviceVolumeController
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.isPlatformCastAvailable
@@ -321,7 +320,6 @@ internal fun AppleMusicHeaderActions(
                         .clip(CircleShape)
                         .clickable(enabled = state.likeEnabled) {
                             if (!state.controllerState.isLiked) likeBurst.fire()
-                            HapticFeedback.tap()
                             actions.onUIEvent(UIEvent.ToggleLike)
                         },
                 contentAlignment = Alignment.Center,
@@ -606,7 +604,6 @@ internal fun AppleMusicTransportRow(
         IconButton(
             onClick = {
                 if (controllerState.isPreviousAvailable) {
-                    HapticFeedback.tap()
                     onUIEvent(UIEvent.Previous)
                 }
             },
@@ -628,10 +625,7 @@ internal fun AppleMusicTransportRow(
                     .appleMusicPressInflate()
                     .size(76.dp)
                     .clip(CircleShape)
-                    .clickable {
-                        HapticFeedback.tap()
-                        onUIEvent(UIEvent.PlayPause)
-                    },
+                    .clickable { onUIEvent(UIEvent.PlayPause) },
             contentAlignment = Alignment.Center,
         ) {
             Crossfade(targetState = controllerState.isPlaying, label = "appleMusicPlayPauseIcon") { isPlaying ->
@@ -646,7 +640,6 @@ internal fun AppleMusicTransportRow(
         IconButton(
             onClick = {
                 if (controllerState.isNextAvailable) {
-                    HapticFeedback.tap()
                     onUIEvent(UIEvent.Next)
                 }
             },

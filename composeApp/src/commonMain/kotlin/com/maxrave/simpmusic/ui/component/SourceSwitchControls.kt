@@ -56,8 +56,8 @@ fun Modifier.sourceSwitchGesture(
                 if (event == null) {
                     if (!longPressed && !moved) {
                         longPressed = true
-                        // 与播放控件同源的档位化触感(取代原 LocalHapticFeedback.LongPress,
-                        // 受设置"触感反馈"与系统触摸振动开关共同管控)
+                        // 长按专属即时震感(全局点击观察器按时长排除了长按,这里不受双重振动影响;
+                        // 取代原 LocalHapticFeedback.LongPress,受设置"触感反馈"与系统触摸振动开关共同管控)
                         HapticFeedback.tap()
                         onLongPress()
                     }

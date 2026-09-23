@@ -17,6 +17,9 @@ import kotlinx.coroutines.launch
  * 未初始化的调用(如测试)安全空跑。
  */
 actual object HapticFeedback {
+    /** 总开关(默认关),关闭时强度设置保留但不生效 */
+    @Volatile private var enabled: Boolean = false
+
     @Volatile private var level: HapticFeedbackLevel = HapticFeedbackLevel.MEDIUM
 
     @Volatile private var vibrator: Vibrator? = null
@@ -30,13 +33,23 @@ actual object HapticFeedback {
         vibrator = context.getSystemService(Vibrator::class.java)
         hasAmplitudeControl = vibrator?.hasAmplitudeControl() == true
         scope.launch {
+            dataStoreManager.hapticEnabled.collect { enabled = it == DataStoreManager.TRUE }
+        }
+        scope.launch {
             dataStoreManager.hapticFeedbackLevel.collect { level = HapticFeedbackLevel.parseOr(it) }
         }
     }
 
-    actual fun tap() = tap(level)
+    actual fun tap() {
+        if (!enabled) return
+        performVibration(level)
+    }
 
-    actual fun tap(level: HapticFeedbackLevel) {
+    // 不检查 enabled:显式档位的调用点全在设置页(开关确认/滑动条预览),
+    // 开关确认若走 enabled 门会被"写入→collect 传播"的毫秒级竞态拦掉
+    actual fun tap(level: HapticFeedbackLevel) = performVibration(level)
+
+    private fun performVibration(level: HapticFeedbackLevel) {
         val context = appContext ?: return
         val vib = vibrator ?: return
         // 系统关闭触感反馈时静默(Settings 读取是 Provider 缓存快路径,点击频率下无感)

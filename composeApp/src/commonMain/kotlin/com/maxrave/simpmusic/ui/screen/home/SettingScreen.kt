@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -171,6 +172,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -271,6 +273,7 @@ import simpmusic.composeapp.generated.resources.free_space
 import simpmusic.composeapp.generated.resources.gemini
 import simpmusic.composeapp.generated.resources.guest
 import simpmusic.composeapp.generated.resources.haptic_feedback
+import simpmusic.composeapp.generated.resources.haptic_feedback_description
 import simpmusic.composeapp.generated.resources.haptic_feedback_light
 import simpmusic.composeapp.generated.resources.haptic_feedback_medium
 import simpmusic.composeapp.generated.resources.haptic_feedback_strong
@@ -588,6 +591,7 @@ fun SettingScreen(
     val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
     val neteaseUnavailableAction by viewModel.neteaseUnavailableAction.collectAsStateWithLifecycle()
     val hapticFeedbackLevel by viewModel.hapticFeedbackLevel.collectAsStateWithLifecycle()
+    val hapticEnabled by viewModel.hapticEnabled.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -944,56 +948,79 @@ fun SettingScreen(
                         switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
                         isEnable = getPlatform() == Platform.Android,
                     )
-                    // 触感反馈三档(轻/标准/强):弹窗里选中选项即刻按该档震一下,
-                    // 用户确认前就能逐档试出手感;确认才落库。
-                    val hapticLevelLabels =
-                        listOf(
-                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_LIGHT to Res.string.haptic_feedback_light,
-                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_MEDIUM to Res.string.haptic_feedback_medium,
-                            DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_STRONG to Res.string.haptic_feedback_strong,
-                        )
+                    // 触感反馈:总开关(默认关)+ 开启后三档强度滑动条。
+                    // 常规点击的震感由 App 根布局的 hapticTapFeedback 观察器统一提供;
+                    // 这里只有两处专属调用——打开开关的确认(见下)与滑动条刻度预览。
+                    // 确认震感必须走显式档位的 tap(level)(不受总开关门控)——观察器
+                    // 的 Initial 通道先于 onClick 执行,而开关自己刚翻开,enabled 标志
+                    // 要等 DataStore 写入→collect 传播,无参 tap() 会被尚未翻转的门拦掉。
                     SettingItem(
                         title = stringResource(Res.string.haptic_feedback),
-                        subtitle =
-                            hapticLevelLabels.firstOrNull { it.first == hapticFeedbackLevel }?.second
-                                ?.let { stringResource(it) }
-                                ?: stringResource(Res.string.haptic_feedback_medium),
+                        subtitle = stringResource(Res.string.haptic_feedback_description),
                         smallSubtitle = true,
-                        onClick = {
-                            viewModel.setAlertData(
-                                SettingAlertState(
-                                    title = runBlocking { getString(Res.string.haptic_feedback) },
-                                    selectOne =
-                                        SettingAlertState.SelectData(
-                                            listSelect =
-                                                hapticLevelLabels.map { (key, res) ->
-                                                    (key == hapticFeedbackLevel) to runBlocking { getString(res) }
-                                                },
-                                            onOptionSelected = { label ->
-                                                // 选中即按该档震一下(预览);label 是弹窗里的本地化文本
-                                                val labelToKey =
-                                                    hapticLevelLabels.associate { (key, res) ->
-                                                        runBlocking { getString(res) } to key
-                                                    }
-                                                labelToKey[label]?.let { HapticFeedback.tap(HapticFeedbackLevel.parseOr(it)) }
-                                            },
-                                        ),
-                                    confirm =
-                                        runBlocking { getString(Res.string.change) } to { state ->
-                                            val selected = state.selectOne?.getSelected()
-                                            val labelToKey =
-                                                hapticLevelLabels.associate { (key, res) ->
-                                                    runBlocking { getString(res) } to key
-                                                }
-                                            labelToKey[selected]?.let {
-                                                viewModel.setHapticFeedbackLevel(it)
-                                            }
-                                        },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
-                                ),
-                            )
-                        },
+                        switch =
+                            (hapticEnabled to { enabled ->
+                                viewModel.setHapticEnabled(enabled)
+                                if (enabled) HapticFeedback.tap(HapticFeedbackLevel.parseOr(hapticFeedbackLevel))
+                            }),
                     )
+                    AnimatedVisibility(visible = hapticEnabled) {
+                        val hapticStepLabels =
+                            listOf(
+                                Res.string.haptic_feedback_light,
+                                Res.string.haptic_feedback_medium,
+                                Res.string.haptic_feedback_strong,
+                            )
+                        val savedStep =
+                            HapticFeedbackLevel.parseOr(hapticFeedbackLevel).ordinal
+                        var draftStep by remember { mutableStateOf<Int?>(null) }
+                        LaunchedEffect(hapticFeedbackLevel) { draftStep = null }
+                        val shownStep = draftStep ?: savedStep
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                        ) {
+                            Slider(
+                                value = shownStep.toFloat(),
+                                onValueChange = { raw ->
+                                    val step = raw.roundToInt().coerceIn(0, 2)
+                                    if (step != draftStep) {
+                                        draftStep = step
+                                        // 滑过刻度即时预览该档震感(枚举序=LIGHT/MEDIUM/STRONG)
+                                        HapticFeedback.tap(HapticFeedbackLevel.entries[step])
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    draftStep?.let { step ->
+                                        viewModel.setHapticFeedbackLevel(HapticFeedbackLevel.entries[step].name)
+                                    }
+                                },
+                                valueRange = 0f..2f,
+                                steps = 2,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                hapticStepLabels.forEachIndexed { index, label ->
+                                    Text(
+                                        text = stringResource(label),
+                                        style = typo().bodySmall,
+                                        color =
+                                            if (index == shownStep) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3489,7 +3516,6 @@ fun SettingScreen(
                     ) {
                         items(alertState.selectOne.listSelect) { item ->
                             val onSelect = {
-                                alertState.selectOne.onOptionSelected?.invoke(item.second)
                                 viewModel.setAlertData(
                                     alertState.copy(
                                         selectOne =

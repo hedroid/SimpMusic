@@ -65,6 +65,7 @@ import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.Orientation
 import com.maxrave.simpmusic.expect.currentOrientation
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
@@ -476,6 +477,9 @@ fun App(
         val desktopPanel =
             if (isLightScheme) MaterialTheme.colorScheme.surfaceContainer else desktopPanelDark
         Scaffold(
+            // 全局点击触感:根布局旁观所有主窗口点击(Initial 通道不消费事件),
+            // 弹窗/底部菜单是独立 Android 窗口,不经这里。详见 hapticTapFeedback。
+            modifier = Modifier.hapticTapFeedback(),
             containerColor =
                 if (isDesktopShell) desktopWindow else MaterialTheme.colorScheme.background,
             bottomBar = {

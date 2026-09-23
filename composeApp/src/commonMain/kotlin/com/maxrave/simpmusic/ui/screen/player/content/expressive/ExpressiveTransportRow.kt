@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.mediaservice.handler.ControlState
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.SimpIcons
@@ -106,7 +105,6 @@ fun ExpressiveTransportRow(
         Surface(
             onClick = {
                 if (controllerState.isPreviousAvailable) {
-                    HapticFeedback.tap()
                     onUIEvent(UIEvent.Previous)
                 }
             },
@@ -134,7 +132,6 @@ fun ExpressiveTransportRow(
         Surface(
             onClick = {
                 if (!loading) {
-                    HapticFeedback.tap()
                     onUIEvent(UIEvent.PlayPause)
                 }
             },
@@ -188,7 +185,6 @@ fun ExpressiveTransportRow(
         Surface(
             onClick = {
                 if (controllerState.isNextAvailable) {
-                    HapticFeedback.tap()
                     onUIEvent(UIEvent.Next)
                 }
             },

@@ -133,7 +133,6 @@ import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.logger.Logger
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.copyToClipboard
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.expect.ui.persistPickedImage
@@ -2433,7 +2432,6 @@ fun HeartCheckBox(
                     // tap — not from watching `checked` — is what keeps a track change onto an
                     // already-liked song from celebrating a like nobody gave.
                     if (!checked) burstState.fire()
-                    HapticFeedback.tap()
                     onStateChange?.invoke()
                 },
     ) {
