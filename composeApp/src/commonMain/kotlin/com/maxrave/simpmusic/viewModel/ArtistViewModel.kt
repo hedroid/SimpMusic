@@ -11,6 +11,8 @@ import com.maxrave.domain.data.model.browse.artist.ArtistLogo
 import com.maxrave.domain.data.model.browse.artist.Related
 import com.maxrave.domain.data.model.browse.artist.ResultPlaylist
 import com.maxrave.domain.data.model.browse.artist.Singles
+import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.data.model.streams.YouTubeWatchEndpoint
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.PlaylistType
@@ -181,7 +183,8 @@ class ArtistViewModel(
 
     /**
      * 关注点击的唯一路径:直接切换云端账号关注。成功后镜像本地缓存(artist.followed,
-     * 供库页关注的歌手分区),失败 toast。
+     * 供库页关注的歌手分区),失败 toast。双向都发库页本地回写:取消关注→移除;
+     * 关注→插入完整行(艺人页上下文即权威数据,与网络拉回的行同构)。
      */
     fun updateFollowed(
         followed: Int,
@@ -195,7 +198,9 @@ class ArtistViewModel(
                 _remoteFollowed.value = target
                 artistRepository.setFollowedLocal(channelId, target)
                 makeToast(getString(if (target) Res.string.followed_toast else Res.string.unfollowed_toast))
-                if (!target) {
+                if (target) {
+                    mutationBus.send(LibraryMutation.ArtistFollowed(followedArtistsResult(channelId)))
+                } else {
                     // 库页本地回写:取消关注成功 → 关注分区原地移除(不做返回网络刷新)
                     mutationBus.send(LibraryMutation.ArtistUnfollowed(channelId))
                 }
@@ -209,6 +214,23 @@ class ArtistViewModel(
             }
             log("updateFollowed: ${_followed.value}, ok: $ok")
         }
+    }
+
+    /** 关注事件的载荷:从页面状态构造完整艺人行(字段对齐库页 YT 艺人行的转换形状) */
+    private fun followedArtistsResult(channelId: String): ArtistsResult {
+        val data = (artistScreenState.value as? Success)?.data
+        return ArtistsResult(
+            artist = data?.title ?: "",
+            browseId = channelId,
+            category = "",
+            radioId = "",
+            resultType = "artist",
+            shuffleId = "",
+            thumbnails =
+                data?.imageUrl.takeIf { !it.isNullOrBlank() }
+                    ?.let { listOf(Thumbnail(height = 560, url = it, width = 560)) }
+                    ?: emptyList(),
+        )
     }
 
     /** Explicit source-account action; never mutates the SimpMusic-local follow flag. */

@@ -6,7 +6,9 @@ import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.artist.ResultAlbum
+import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.songs.Artist
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
@@ -55,6 +57,7 @@ class AlbumViewModel(
     private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
     private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
     private val dataStoreManager: DataStoreManager by inject()
+    private val mutationBus: LibraryMutationBus by inject()
 
     /** 专辑页"更多"菜单取消收藏网易专辑(/album/sub t=0),云端成功后 toast;本地 liked 同步熄灭 */
     fun unsubscribeNeteaseAlbum(albumId: String) {
@@ -69,6 +72,10 @@ class AlbumViewModel(
                                 if (ok) Res.string.unsubscribed_netease_album else Res.string.netease_action_failed,
                             ),
                         )
+                        if (ok) {
+                            // 库页收藏专辑分区原地移除(本地回写,与库页长按路径对齐)
+                            mutationBus.send(LibraryMutation.AlbumUnsubscribed(albumId))
+                        }
                     },
                     onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
                 )
@@ -225,7 +232,8 @@ class AlbumViewModel(
         }
     }
 
-    /** 收藏心点击的唯一路径:直接切换云端账号收藏;成功镜像本地行+中性 toast。 */
+    /** 收藏心点击的唯一路径:直接切换云端账号收藏;成功镜像本地行+中性 toast。
+     *  双向都发库页本地回写:取消收藏→移除;收藏→插入完整行(页面上下文即权威数据)。 */
     fun setRemoteSaved(saved: Boolean) {
         viewModelScope.launch {
             val isNeteaseId = uiState.value.browseId.toLongOrNull() != null
@@ -246,10 +254,38 @@ class AlbumViewModel(
             if (ok) {
                 albumRepository.updateAlbumLiked(uiState.value.browseId, if (saved) 1 else 0)
                 makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
+                if (saved) {
+                    favoritedAlbumsResult()?.let { album ->
+                        mutationBus.send(LibraryMutation.AlbumFavorited(album))
+                    }
+                } else {
+                    mutationBus.send(LibraryMutation.AlbumUnsubscribed(uiState.value.browseId))
+                }
             } else {
                 makeToast(getString(if (isNeteaseId) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube))
             }
         }
+    }
+
+    /** 收藏事件的载荷:从页面状态构造完整专辑行(字段对齐 netease toAlbumsResult 形状) */
+    private fun favoritedAlbumsResult(): AlbumsResult? {
+        val state = uiState.value
+        if (state.browseId.isBlank() || state.title.isBlank()) return null
+        return AlbumsResult(
+            artists = listOf(Artist(id = state.artist.id, name = state.artist.name)),
+            browseId = state.browseId,
+            category = "Album",
+            duration = Unit,
+            isExplicit = false,
+            resultType = "Album",
+            thumbnails =
+                state.thumbnail?.takeIf { it.isNotBlank() }
+                    ?.let { listOf(Thumbnail(height = 544, url = it, width = 544)) }
+                    ?: emptyList(),
+            title = state.title,
+            type = "album",
+            year = state.year,
+        )
     }
 
     private fun getAlbumFlow(browseId: String) {

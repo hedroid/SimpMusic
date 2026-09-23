@@ -155,6 +155,8 @@ class PlaylistViewModel(
     /**
      * 收藏心点击的唯一路径:直接切换云端账号收藏。成功后镜像本地缓存行并给中性 toast,
      * 失败按平台 toast。自建网易歌单无"收藏"概念,心已在 UI 隐藏不会走到这里。
+     * 双向都发库页本地回写:取消收藏→移除;收藏→插入完整行(收藏发生时正在看这个歌单,
+     * 实体数据现成在手,库页插入的行与网络拉回的同构,无占位跳变)。
      */
     fun setRemoteSaved(saved: Boolean) {
         val id = (uiState.value as? Success)?.data?.id ?: return
@@ -168,8 +170,12 @@ class PlaylistViewModel(
                 playlistRepository.updatePlaylistLiked(id, if (saved) 1 else 0)
                 _playlistEntity.update { it?.copy(liked = saved) }
                 makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
-                if (!saved) {
-                    // 取消收藏成功 → 库页歌单分区原地移除(本地回写;收藏方向下次拉取自然出现)
+                if (saved) {
+                    favoritedPlaylistEntity()?.let { entity ->
+                        mutationBus.send(LibraryMutation.PlaylistFavorited(entity))
+                    }
+                } else {
+                    // 取消收藏成功 → 库页歌单分区原地移除(本地回写)
                     mutationBus.send(LibraryMutation.PlaylistRemoved(id))
                 }
             } else {
@@ -180,6 +186,19 @@ class PlaylistViewModel(
             }
             _remoteSavePending.value = false
         }
+    }
+
+    /** 收藏事件的载荷:详情页完整实体;Room 行缺席时从页面状态兜底构造 */
+    private fun favoritedPlaylistEntity(): com.maxrave.domain.data.entities.PlaylistEntity? {
+        _playlistEntity.value?.let { return it }
+        val state = (uiState.value as? Success)?.data ?: return null
+        return com.maxrave.domain.data.entities.PlaylistEntity(
+            id = state.id,
+            author = state.author?.name,
+            thumbnails = state.thumbnail.orEmpty(),
+            title = state.title,
+            trackCount = state.trackCount,
+        )
     }
 
     /**
