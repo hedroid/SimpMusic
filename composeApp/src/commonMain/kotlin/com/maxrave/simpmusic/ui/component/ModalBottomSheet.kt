@@ -120,10 +120,13 @@ import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.data.io.readLocalImageBytes
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
+import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.model.download.DownloadProgress
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.model.searchResult.songs.Artist
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
@@ -139,6 +142,8 @@ import com.maxrave.simpmusic.expect.ui.persistPickedImage
 import com.maxrave.simpmusic.expect.ui.photoPickerResult
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.greyScale
+import com.maxrave.simpmusic.viewModel.LibraryMutation
+import com.maxrave.simpmusic.viewModel.LibraryMutationBus
 import com.maxrave.simpmusic.ui.icon.AccessAlarm
 import com.maxrave.simpmusic.ui.icon.Add
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
@@ -186,6 +191,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -2961,6 +2967,7 @@ fun AddToPlaylistModalBottomSheet(
     dataStoreManager: DataStoreManager = koinInject(),
     playlistRepository: PlaylistRepository = koinInject(),
     neteaseRepository: NeteaseRepositoryImpl = koinInject(),
+    mutationBus: LibraryMutationBus = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
@@ -2975,79 +2982,122 @@ fun AddToPlaylistModalBottomSheet(
             }
         }
 
-    // 新建歌单弹窗:云端(网易=隐私歌单+塞歌两步;YT=建单接口原生支持初始曲目)
+    // 新建歌单弹窗:云端(网易=隐私歌单+塞歌两步;YT=建单接口原生支持初始曲目)。
+    // 居中 AlertDialog(与库页 CreatePlaylistDialog 同款形态):原底部 sheet 弹窗实测
+    // popup 内拿不到 IME inset(imePadding/contentWindowInsets(ime) 都抬不动),键盘
+    // 直接压住输入框;居中窗口天然避开。
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var creatingPlaylist by remember { mutableStateOf(false) }
     if (showCreatePlaylistDialog) {
         var newPlaylistName by remember { mutableStateOf("") }
         val createFailedText = stringResource(Res.string.could_not_create_playlist)
-        val createPlaylistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
+        AlertDialog(
             onDismissRequest = { if (!creatingPlaylist) showCreatePlaylistDialog = false },
-            sheetState = createPlaylistSheetState,
-            containerColor = Color.Transparent,
-            contentColor = Color.Transparent,
-            dragHandle = null,
-            scrimColor = Color.Black.copy(alpha = .5f),
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.height(5.dp))
-                    Card(
-                        modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
-                        shape = RoundedCornerShape(50),
-                    ) {}
-                    Spacer(modifier = Modifier.height(5.dp))
-                    OutlinedTextField(
-                        value = newPlaylistName,
-                        onValueChange = { s -> newPlaylistName = s },
-                        label = { Text(text = stringResource(Res.string.playlist_name)) },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        enabled = !creatingPlaylist,
-                    )
-                    Spacer(modifier = Modifier.height(5.dp))
-                    TextButton(
-                        enabled = !creatingPlaylist && newPlaylistName.isNotBlank(),
-                        onClick = {
-                            val name = newPlaylistName.trim()
-                            val songId = videoId ?: return@TextButton
-                            if (name.isEmpty()) return@TextButton
-                            creatingPlaylist = true
-                            coroutineScope.launch {
-                                val ok =
-                                    runCatching {
-                                        if (songId.toLongOrNull() != null) {
-                                            neteaseRepository.createNeteasePlaylist(name).getOrNull()
-                                                ?.let { id ->
-                                                    neteaseRepository.addTracksToNeteasePlaylist(id, listOf(songId)).getOrDefault(false)
-                                                } ?: false
-                                        } else {
-                                            playlistRepository.createYouTubePlaylistWithTracks(name, listOf(songId)) != null
+            containerColor = rememberSurfaceDarkColors().container,
+            titleContentColor = rememberSurfaceDarkColors().content,
+            textContentColor = rememberSurfaceDarkColors().content,
+            title = { Text(text = stringResource(Res.string.create_new_playlist)) },
+            text = {
+                OutlinedTextField(
+                    value = newPlaylistName,
+                    onValueChange = { s -> newPlaylistName = s },
+                    label = { Text(text = stringResource(Res.string.playlist_name)) },
+                    singleLine = true,
+                    enabled = !creatingPlaylist,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !creatingPlaylist && newPlaylistName.isNotBlank(),
+                    onClick = {
+                        val name = newPlaylistName.trim()
+                        val songId = videoId ?: return@TextButton
+                        if (name.isEmpty()) return@TextButton
+                        creatingPlaylist = true
+                        coroutineScope.launch {
+                            // 建单成功后单体回读权威行(封面/作者,与库页网络行同构)再发
+                            // 库页本地回写事件——从多深的入口建单,库页都能立即出现新歌单;
+                            // 回读失败退占位行(建单已成功,不为展示重试)
+                            val mutation =
+                                runCatching {
+                                    if (songId.toLongOrNull() != null) {
+                                        neteaseRepository.createNeteasePlaylist(name).getOrNull()
+                                            ?.let { id ->
+                                                if (neteaseRepository.addTracksToNeteasePlaylist(id, listOf(songId)).getOrDefault(false)) {
+                                                    val accountName =
+                                                        dataStoreManager.getString("AccountName").first().orEmpty()
+                                                    val row =
+                                                        neteaseRepository.getNeteasePlaylistAsLibraryRow(id)
+                                                            ?: PlaylistEntity(
+                                                                id = id,
+                                                                source = MusicSource.NETEASE.name,
+                                                                author = accountName,
+                                                                title = name,
+                                                                trackCount = 1,
+                                                            )
+                                                    LibraryMutation.NeteasePlaylistCreated(row)
+                                                } else {
+                                                    null
+                                                }
+                                            }
+                                    } else {
+                                        playlistRepository.createYouTubePlaylistWithTracks(name, listOf(songId))?.let { id ->
+                                            val accountName =
+                                                dataStoreManager.getString("AccountName").first().orEmpty()
+                                            val readback = playlistRepository.getYouTubePlaylistAsLibraryRow(id)
+                                            var row =
+                                                readback
+                                                    ?: PlaylistsResult(
+                                                        author = accountName,
+                                                        browseId = id,
+                                                        category = "",
+                                                        itemCount = "",
+                                                        resultType = "",
+                                                        thumbnails = listOf(),
+                                                        title = name,
+                                                    )
+                                            // 服务端给新建歌单生成封面是异步的,建单回读常拿不到封面
+                                            // (实测:回读行无缩略图,刷新后网络行带首曲封面→tile 跳变)。
+                                            // 单曲建单的封面=该曲缩略图,直接补齐(通知栏兜底同款
+                                            // ytimg 可推导地址;hqdefault 对任意视频恒存在)
+                                            if (row.thumbnails.isEmpty()) {
+                                                row =
+                                                    row.copy(
+                                                        thumbnails =
+                                                            listOf(
+                                                                Thumbnail(
+                                                                    height = 544,
+                                                                    url = "https://i.ytimg.com/vi/$songId/hqdefault.jpg",
+                                                                    width = 544,
+                                                                ),
+                                                            ),
+                                                    )
+                                            }
+                                            LibraryMutation.YouTubePlaylistCreated(row)
                                         }
-                                    }.getOrDefault(false)
-                                creatingPlaylist = false
-                                if (ok) {
-                                    showCreatePlaylistDialog = false
-                                    hideModalBottomSheet()
-                                } else {
-                                    showToast(createFailedText, ToastGravity.Bottom)
-                                }
+                                    }
+                                }.getOrNull()
+                            creatingPlaylist = false
+                            if (mutation != null) {
+                                mutationBus.send(mutation)
+                                showCreatePlaylistDialog = false
+                                hideModalBottomSheet()
+                            } else {
+                                showToast(createFailedText, ToastGravity.Bottom)
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth().align(Alignment.CenterHorizontally),
-                    ) {
-                        Text(text = stringResource(Res.string.create))
-                    }
-                    EndOfModalBottomSheet()
+                        }
+                    },
+                ) {
+                    Text(text = stringResource(Res.string.create))
                 }
-            }
-        }
+            },
+            dismissButton = {
+                TextButton(onClick = { if (!creatingPlaylist) showCreatePlaylistDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
     }
 
     if (isBottomSheetVisible) {
