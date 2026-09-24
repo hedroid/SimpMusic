@@ -68,6 +68,9 @@ fun Modifier.sourceSwitchGesture(
                 lastEventUptime = change.uptimeMillis
                 if (!change.pressed) {
                     if (!longPressed && !moved) {
+                        // 点击路径必须消费 UP:全局触感观察器按"UP 被消费=命中交互控件"判震,
+                        // 不消费的话这个按钮的点击震感会被当死区丢掉
+                        change.consume()
                         onTap()
                     }
                     break

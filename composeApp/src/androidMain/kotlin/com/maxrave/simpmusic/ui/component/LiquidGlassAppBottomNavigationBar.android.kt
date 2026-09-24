@@ -48,6 +48,7 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
@@ -241,6 +242,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
     }
 
     fun selectTab(index: Int) {
+        // 底栏 tab 点击震感:根观察器事件链到不了 bottomBar slot,回调里直接震
+        HapticFeedback.tap()
         val screen = bottomNavScreens.find { it.ordinal == index } ?: return
         if (selectedIndex == index) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {

@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.expect.HapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -102,6 +103,9 @@ fun AppBottomNavigationBar(
             ?.let { selectedIndex = it.ordinal }
     }
     val selectTab: (BottomNavScreen) -> Unit = { screen ->
+        // 底栏 tab 的点击震感:根触感观察器的事件链到不了 bottomBar slot(实测既有边界),
+        // 直接在选中回调里震(用户点击专用路径,程序化导航不走这里,不会误震)
+        HapticFeedback.tap()
         if (selectedIndex == screen.ordinal) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {
                     it.hasRoute(screen.destination::class)
@@ -307,6 +311,9 @@ fun AppNavigationRail(
     }
     // 与 AppBottomNavigationBar.selectTab 同一套选中/导航语义,reload 逻辑也一致。
     val selectTab: (BottomNavScreen) -> Unit = { screen ->
+        // 底栏 tab 的点击震感:根触感观察器的事件链到不了 bottomBar slot(实测既有边界),
+        // 直接在选中回调里震(用户点击专用路径,程序化导航不走这里,不会误震)
+        HapticFeedback.tap()
         if (selectedIndex == screen.ordinal) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {
                     it.hasRoute(screen.destination::class)
