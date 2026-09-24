@@ -789,21 +789,28 @@ dump bounds 取,目测两次全偏)。
 
 ### 可做（小成本快赢）
 
-- **写端点 405 频控的用户可见反馈**：订阅/取消收藏/红心同步失败目前静默（只刷 logcat），
-  405 时 toast"操作过于频繁，请稍后再试"。
+> **2026-09-24 一轮清空六项**（core d3c70a1/3f04f02/c736d70 + 主仓 25e31f51/67b1c81e/39c6a78a）：
+> ①RYD 短路（SongRepositoryImpl.getSongInfo 数字 ID 直读本地缓存,覆盖 handler 4 处白打点）;
+> ②官方罗马音 romalrc 接入（getNeteaseLyricsData 返回三元组,LyricsData.romanizedLyrics 槽,
+>   LyricsView 官方按时间对齐优先/本地引擎兜底,罗马音总开关仍是唯一门控）;
+> ③405 频控 toast（NeteaseClient.post 抛 NeteaseRateLimitException,neteaseWriteErrorString 分流
+>   netease_rate_limited 文案,setRemoteLikeStatus 改 Result<Boolean> 透传异常,批量点赞首 405 即停防戳续窗口）;
+> ④艺人"全部歌曲"页（MoreSongsScreen:/v1/artist/songs order=hot/time+分页,人气区"更多"网易分支解锁;
+>   实测:排序切换生效、点歌整队起播）;
+> ⑤搜索 SONGS tab 无限滚动（getSearchDataSongPage:YT=continuation/网易=offset: 令牌,双源对称;
+>   其余 tab/ALL 维持一次拉完）;
+> ⑥播放页粉丝数排查定案=非 bug（端点/解析/渲染全链健康,实测"许美静 17.5万 粉丝"正常渲染;
+>   2026-09-14 的"未见渲染"系当时瞬时失败或未及刷新）。
+> 模拟器实测注意:AM/M3E 播放页 below-the-fold 详情卡要滚过全部歌词区(歌词跟歌回弹,fling 追不上,
+> 慢滚+逐次 dump)；设置入口只在 YT 主页顶栏(网易主页无)。
+
 - **haze 顶栏闪烁修复推广**：库页四宫格页已修（底色兜底+fade 转场，065f3ca1），同款玻璃顶栏
   的高频页（歌单/专辑详情等）可照搬两步修法。
 - 无限队列网易尾曲续播：**已打通（2026-09-20）**——无尽钩子按 ID 形状分流（YT=RDAMVM+getRelated，
   网易=NETEASE_RADIO_ 哨兵+simiSong 首批），simiSong 见底后以当前尾曲换种子续链
   （种子没变即整批撞重则停，防循环）；android+jvm 双端。详见"播放队列页增强"小节。
-- RYD/SponsorBlock 对数字 ID 短路：去 logcat 噪音，和 songInfo 短路同款改法。
-- 官方罗马音 romalrc：M1 遗留增强项，渲染端本地引擎现成。
 - 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"定稿相悖已过时）；MusicSourceProvider
   C_TIER（评论/艺人详情已实现，只剩云盘与播客）。
-- 搜索 offset 翻页、播放页艺人卡粉丝数渲染排查。
-- 网易艺人"全部歌曲"页：人气区「更多」因网易无对应歌单页已隐藏（2026-09-17，原点击报错）；
-  如需恢复，`/v1/artist/songs` 原生支持 order/limit/offset 分页，加一个列表页即可，
-  热门 50 首之外还能带"按时间排序"切换。
 
 ### 可优化
 
