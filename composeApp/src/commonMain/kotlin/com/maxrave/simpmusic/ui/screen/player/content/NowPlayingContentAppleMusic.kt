@@ -23,6 +23,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Row
@@ -223,7 +224,13 @@ fun NowPlayingContentAppleMusic(
     // loop that crashes the RuntimeShader.
     val panelBackdrop = rememberBackdrop(Color.Black)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    // This style was designed for the portrait full-screen sheet (~411x892dp). In landscape the
+    // player becomes a ~268x411dp SIDE PANEL (App.kt's isTabletLandscape branch) — half the width,
+    // less than half the height — where the fixed 58dp transport gaps clip prev/next off the panel
+    // and the ~378dp bottom cluster alone overflows the height, crushing Lyrics/Queue to nothing.
+    // Every body below reads this one flag; portrait and Desktop never trip it.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        val isCompact = maxWidth < 320.dp || maxHeight < 450.dp
         Box(modifier = Modifier.matchParentSize().layerBackdrop(panelBackdrop)) {
             // Apple frosts the COVER ART into the page background — the colour and the soft blotches
             // of the artwork stay visible through it. A flat tinted gradient, which is what this used
@@ -288,6 +295,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
 
                 AppleMusicView.LYRICS ->
@@ -300,6 +308,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
 
                 AppleMusicView.QUEUE ->
@@ -312,6 +321,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
             }
         }
@@ -395,6 +405,7 @@ private fun AppleMusicMainView(
     activePillContainer: Color,
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
+    isCompact: Boolean = false,
 ) {
     val screenInfo = getScreenSizeInfo()
     val localDensity = LocalDensity.current
@@ -427,8 +438,11 @@ private fun AppleMusicMainView(
     // remember, not rememberSaveable: a measured height must not survive a rotation, or a portrait
     // cluster height is paired with a landscape screen height for a frame. Seeded near its real
     // value so the FIRST frame doesn't draw a full-screen artwork that then snaps up.
-    var bottomContentHeightDp by remember { mutableIntStateOf(330) }
-    val artworkZoneHeightDp = (screenInfo.hDP - bottomContentHeightDp).coerceAtLeast(200)
+    var bottomContentHeightDp by remember { mutableIntStateOf(if (isCompact) 230 else 330) }
+    // Compact (side panel): a 200dp floor eats half of a ~411dp panel before the cluster even
+    // starts; 140dp leaves the title row real breathing room under the grabber.
+    val artworkZoneHeightDp =
+        (screenInfo.hDP - bottomContentHeightDp).coerceAtLeast(if (isCompact) 140 else 200)
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
@@ -533,9 +547,9 @@ private fun AppleMusicMainView(
                                 with(localDensity) { coords.size.height.toDp().value.toInt() }
                         },
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(if (isCompact) 12.dp else 20.dp))
                 AppleMusicMainTitleRow(state = state, actions = actions, typography = typography)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(if (isCompact) 10.dp else 16.dp))
                 AppleMusicBottomCluster(
                     state = state,
                     actions = actions,
@@ -545,6 +559,7 @@ private fun AppleMusicMainView(
                     activePillContainer = activePillContainer,
                     activePillContent = activePillContent,
                     deviceVolumeController = deviceVolumeController,
+                    compact = isCompact,
                 )
             }
             // Idle overlay — replaces the (now invisible) title row + cluster while canvas/video

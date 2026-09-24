@@ -109,6 +109,7 @@ internal fun AppleMusicQueueView(
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
     musicServiceHandler: MediaPlayerHandler = koinInject(),
 ) {
@@ -136,16 +137,17 @@ internal fun AppleMusicQueueView(
         Spacer(
             modifier =
                 Modifier.height(
-                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } + 20.dp,
+                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } +
+                        if (isCompact) 8.dp else 20.dp,
                 ),
         )
-        AppleMusicCompactHeader(state = state, actions = actions, typography = typography)
+        AppleMusicCompactHeader(state = state, actions = actions, typography = typography, compact = isCompact)
         AppleMusicQueuePillsRow(
             state = state,
             actions = actions,
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
-            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = if (isCompact) 8.dp else 20.dp),
         )
         val queueDataState by musicServiceHandler.queueData.collectAsStateWithLifecycle()
         // 到尾触发协程的"重武装"键:开关翻转(尤其关→开)要重启边沿判定,否则弹窗打开时
@@ -153,17 +155,22 @@ internal fun AppleMusicQueueView(
         val endlessQueueEnabledForRearm by remember(dataStoreManager) {
             dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }
         }.collectAsStateWithLifecycle(initialValue = false)
-        AppleMusicContinuePlayingHeader(
-            state = state,
-            dataStoreManager = dataStoreManager,
-            typography = typography,
-            activePillContainer = activePillContainer,
-            activePillContent = activePillContent,
-            // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
-            isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
-            onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
+        // Compact (landscape side panel) drops the "Continue Playing" section header: between the
+        // compact header, the pills and the transport-only cluster there is no room for it, and
+        // its endless toggle stays reachable in portrait and in the queue bottom sheet.
+        if (!isCompact) {
+            AppleMusicContinuePlayingHeader(
+                state = state,
+                dataStoreManager = dataStoreManager,
+                typography = typography,
+                activePillContainer = activePillContainer,
+                activePillContent = activePillContent,
+                // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
+                isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
+                onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
 
         // Start already anchored on the current track (no top-of-list flash on entry), then
         // follow track changes: the scroll offset does not move on its own, so a queue the user
@@ -360,6 +367,11 @@ internal fun AppleMusicQueueView(
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
             deviceVolumeController = deviceVolumeController,
+            compact = isCompact,
+            // Compact queue keeps transport + dock only: this list has no tap-to-toggle surface
+            // the way the lyrics page does, so the cluster is always in-flow — the full block
+            // (slider/times/volume) left the list under ~90dp in the side panel.
+            transportOnly = isCompact,
         )
     }
 }

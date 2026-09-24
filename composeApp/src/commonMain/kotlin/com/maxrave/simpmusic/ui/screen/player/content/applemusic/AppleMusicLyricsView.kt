@@ -92,6 +92,7 @@ internal fun AppleMusicLyricsView(
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
 ) {
     val localDensity = LocalDensity.current
@@ -108,7 +109,13 @@ internal fun AppleMusicLyricsView(
     // Apple hands the whole page to the lyrics once you stop touching it, and brings the transport
     // back the moment you touch it again. rememberSaveable so a rotation does not yank the
     // controls back into view.
-    var showCluster by rememberSaveable { mutableStateOf(true) }
+    //
+    // Compact (landscape side panel): START hidden. The cluster is in-flow, and header+cluster
+    // already fill a ~411dp panel — starting it shown gave the lyrics a ~90dp slice (mostly
+    // dissolved by the edge fades) while the dock fell off the bottom of the screen, which is
+    // exactly "the page never opens". Hidden first, the lyrics get the whole panel; a tap on the
+    // page still summons the cluster exactly like portrait.
+    var showCluster by rememberSaveable { mutableStateOf(!isCompact) }
     var showShareSheet by rememberSaveable { mutableStateOf(false) }
     // Bumped on every interaction, and keyed into the timer below, so ANY touch restarts the
     // countdown. Without it a scroll while the cluster is already shown leaves showCluster
@@ -148,10 +155,11 @@ internal fun AppleMusicLyricsView(
         Spacer(
             modifier =
                 Modifier.height(
-                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } + 20.dp,
+                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } +
+                        if (isCompact) 8.dp else 20.dp,
                 ),
         )
-        AppleMusicCompactHeader(state = state, actions = actions, typography = typography)
+        AppleMusicCompactHeader(state = state, actions = actions, typography = typography, compact = isCompact)
 
         Box(
             modifier =
@@ -296,6 +304,7 @@ internal fun AppleMusicLyricsView(
                 activePillContainer = activePillContainer,
                 activePillContent = activePillContent,
                 deviceVolumeController = deviceVolumeController,
+                compact = isCompact,
             )
         }
     }
