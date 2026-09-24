@@ -750,13 +750,28 @@ dump bounds 取,目测两次全偏)。
   2. B 收口:盘点结论=全部云端写点已有"回写镜像+LibraryMutationBus 事件"(歌单四写/艺人取关/
      添加方向全量实体事件 2026-09-23 那轮覆盖;批量红心成功即 setLikedLocal)。
   3. 验收:待一次"网页端取消收藏→app 库页自动消失"的真机走查。
-- **中期:id 规范化专项** —— 源头已做(65bed42 艺人页写行用 canonical),**对账别名跳过未做
-  (计划原文:除非别名问题再现否则不做)**。
-- **长期:状态字段退役(E,随迭代分摊)** —— 未开始。
-  每次动到一个功能就把它的状态显示切云端直读(会话内存缓存),Room 的 liked/followed 停止
-  读取(写入保留一段兼容期,最终移除)。切换清单:艺人页关注(已基本云端)、歌单收藏心(已有
-  remoteSaved)、库页分区(短期对账保障)、歌曲红心(菜单已云端优先,剩播放页 controlState)。
-  镜像字段无人读后,连同 local_playlist 表一起在下次 Room 大版本清理。
+- **中期:id 规范化专项** —— 2026-09-24 探测后**降级关闭**(不做防护,除非再现):
+  源头已做(65bed42 艺人页写行用 canonical,新写入恒 canonical);模拟器实测 17 个 followed UC 行、
+  对账运行过并清过一批("unfollowing absent from cloud")无异常报告;**库页 YT 关注分区的显示源
+  已是云端真源(getLibraryArtists,2026-09-21)**,别名行存亡不影响 UI 显示;误杀可见场景收窄到
+  "关注了但从未在 app 内浏览过艺人页+历史别名行",且用户下次拉取仍会从云端回来。
+  **再现代号**:真机取关 400 failedPrecondition / 关注艺人反复消失 —— 出现时按上方原方案做
+  (浏览信号跳过 or 页面 API 换 canonical 迁移行),彻底方案(写入侧全量换 canonical)仍不做。
+- **长期:状态字段退役(E,随迭代分摊)** —— 2026-09-24 盘点成**执行地图**(全仓读取点核查结果):
+  - 艺人页关注按钮:✅ 已云端(setRemoteFollowedStatus+remoteFollowed);
+  - 歌单收藏心(详情页):✅ 已云端(remoteSaved);
+  - **播放页红心(原"剩 controlState"一项)**:✅ 实为 stale-while-revalidate 目标形态——
+    切歌先显本地(song.liked,SharedViewModel:500)→refreshRemoteSongLike 云端快照校正
+    (写 _liked+mediaPlayerHandler.like→controlState,通知栏图标同链),三主题 UI 全读
+    controllerState.isLiked。**无需再改**,留观察;
+  - 批量点赞去重(SongSelectionViewModel:161 filterNot{it.liked}):读本地,无害(stale 顶多
+    把已红心的再点一次幂等),删列前顺手换 _cloudLiked 缓存;
+  - 菜单红心(NowPlayingBottomSheetViewModel:236):本地初值+cloudLiked 覆盖(6f01e718),✅;
+  - **DAO 系统消费(删列时的连带改造点)**:getFollowedArtists SQL(followed=1,现在主要供
+    对账/兜底)、通知差集三条(DatabaseDao:1134/1150/154——NotifyWork 本就 12h 云端拉取驱动,
+    followed 行是它的本地快照)、"喜欢的歌曲"分区/红心歌单行(本地镜像,云端主源在两云端 tab);
+  - **删列步骤(将来一次做)**:上述消费点全部切云端源后,Room 大版本把 artist.followed/
+    song.liked/playlist.liked 列连同 local_playlist 表一起迁移删除。
 
 ## 剩余工作盘点（2026-09-16 重整）
 
