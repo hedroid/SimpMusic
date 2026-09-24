@@ -3247,9 +3247,14 @@ fun AddToPlaylistModalBottomSheet(
                             }
                         Text(
                             text =
-                                stringResource(
-                                    if (loggedIn) Res.string.no_playlist_found else Res.string.login_required_short,
-                                ),
+                                if (loggedIn) {
+                                    stringResource(Res.string.no_playlist_found)
+                                } else {
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (selectedLibrary == 2) stringResource(Res.string.netease) else "YouTube Music",
+                                    )
+                                },
                             style = typo().labelSmall,
                             modifier = Modifier.padding(20.dp),
                             color = rememberSurfaceDarkColors().disabled,

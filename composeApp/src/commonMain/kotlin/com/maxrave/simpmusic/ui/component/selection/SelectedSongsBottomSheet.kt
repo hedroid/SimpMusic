@@ -55,6 +55,7 @@ import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.mixed_source_selection
+import simpmusic.composeapp.generated.resources.netease
 import simpmusic.composeapp.generated.resources.login_required_short
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.remove_download_message
@@ -200,9 +201,15 @@ fun SelectedSongsBottomSheet(
                                             .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
                                 )
 
-                            2 ->
+                            2 -> {
+                                // 同源选中(混源已被上一档挡),未登录的源至多一个;带源名提示
+                                val loggedOutNetease = selectionIds.any { it.toLongOrNull() != null }
                                 Text(
-                                    text = stringResource(Res.string.login_required_short),
+                                    text =
+                                        stringResource(
+                                            Res.string.login_required_short,
+                                            if (loggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                        ),
                                     style = typo().labelSmall,
                                     color = colors.disabled,
                                     modifier =
@@ -210,6 +217,7 @@ fun SelectedSongsBottomSheet(
                                             .fillMaxWidth()
                                             .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
                                 )
+                            }
                         }
                     }
                     if (allDownloaded && onRemoveDownload != null) {
