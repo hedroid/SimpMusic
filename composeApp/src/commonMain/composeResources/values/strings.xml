@@ -639,6 +639,7 @@
     <string name="auto_backup_failed">Auto backup failed</string>
     <string name="no_playlist_found">No playlists found — create one first</string>
     <string name="login_required_short">Log in to %1$s to use this</string>
+    <string name="login_netease_first">Please log in to NetEase Music first</string>
     <string name="list_all_cookies_of_this_page">List all cookies of this page</string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="update_channel">Update channel</string>
@@ -758,6 +759,8 @@
     <string name="key">Key</string>
     <string name="scale">Scale</string>
     <string name="home_offline_title">Can't connect</string>
+    <string name="home_login_required_title">Log in to YouTube Music</string>
+    <string name="home_login_required_subtitle">The home feed is only available with a signed-in account. Guest browsing is no longer served by YouTube Music.</string>
     <string name="home_offline_subtitle">Check your internet connection and try again, or listen to your downloaded music.</string>
     <string name="listen_to_downloaded">Listen to downloaded music</string>
     <string name="playing_on_device">Playing on %1$s</string>

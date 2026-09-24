@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.maxrave.simpmusic.ui.icon.CloudOff
+import com.maxrave.simpmusic.ui.icon.YouTubeMusic
 import com.maxrave.simpmusic.ui.icon.Download
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
@@ -32,6 +33,9 @@ import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.home_offline_subtitle
 import simpmusic.composeapp.generated.resources.home_offline_title
+import simpmusic.composeapp.generated.resources.log_in
+import simpmusic.composeapp.generated.resources.home_login_required_subtitle
+import simpmusic.composeapp.generated.resources.home_login_required_title
 import simpmusic.composeapp.generated.resources.listen_to_downloaded
 import simpmusic.composeapp.generated.resources.retry
 
@@ -51,6 +55,9 @@ fun OfflineErrorState(
     contentPadding: PaddingValues = PaddingValues(),
     onRetry: () -> Unit,
     onOpenDownloaded: () -> Unit,
+    // 非空=登录引导形态(YT 未登录时主页的空数据不是网络错误——YTM 服务端不吐游客
+    // browse 内容,别再显示"无法连接"误导;主按钮换成去登录)
+    onLogIn: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
@@ -67,28 +74,34 @@ fun OfflineErrorState(
                 .padding(horizontal = 24.dp),
         ) {
             Icon(
-                imageVector = SimpIcons.CloudOff,
+                imageVector = if (onLogIn != null) SimpIcons.YouTubeMusic else SimpIcons.CloudOff,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
                 modifier = Modifier.size(80.dp),
             )
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = stringResource(Res.string.home_offline_title),
+                text =
+                    stringResource(
+                        if (onLogIn != null) Res.string.home_login_required_title else Res.string.home_offline_title,
+                    ),
                 style = typo().titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(Res.string.home_offline_subtitle),
+                text =
+                    stringResource(
+                        if (onLogIn != null) Res.string.home_login_required_subtitle else Res.string.home_offline_subtitle,
+                    ),
                 style = typo().bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(28.dp))
             Button(
-                onClick = onRetry,
+                onClick = if (onLogIn != null) onLogIn else onRetry,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
@@ -97,7 +110,10 @@ fun OfflineErrorState(
                 ),
             ) {
                 Text(
-                    text = stringResource(Res.string.retry),
+                    text =
+                        stringResource(
+                            if (onLogIn != null) Res.string.log_in else Res.string.retry,
+                        ),
                     color = MaterialTheme.colorScheme.background,
                 )
             }

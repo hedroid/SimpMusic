@@ -226,6 +226,7 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
     val isScrollingUp by scrollState.isScrollingUp()
+    val dataStoreManager: com.maxrave.domain.manager.DataStoreManager = koinInject()
     val accountInfo by viewModel.accountInfo.collectAsStateWithLifecycle()
     val homeData by viewModel.homeItemList.collectAsStateWithLifecycle()
     val newRelease by viewModel.newRelease.collectAsStateWithLifecycle()
@@ -483,6 +484,9 @@ fun HomeScreen(
             Crossfade(targetState = loading, label = "Home Shimmer") { loading ->
                 if (!loading) {
                     if (homeData.isEmpty()) {
+                        // YT 未登录:主页空数据是服务端不给游客 browse(实测四端点全空壳),
+                        // 显示登录引导而非"无法连接"
+                        val ytLoggedOut by dataStoreManager.cookie.collectAsStateWithLifecycle("")
                         OfflineErrorState(
                             onRetry = onRefresh,
                             onOpenDownloaded = {
@@ -492,6 +496,12 @@ fun HomeScreen(
                                     ),
                                 )
                             },
+                            onLogIn =
+                                if (ytLoggedOut.isEmpty()) {
+                                    { navController.navigate(LoginDestination) }
+                                } else {
+                                    null
+                                },
                         )
                         return@Crossfade
                     }

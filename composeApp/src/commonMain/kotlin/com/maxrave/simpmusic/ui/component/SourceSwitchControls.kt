@@ -110,7 +110,8 @@ fun SourceSwitchMenu(
             trailingIcon = {
                 if (selectedSource == MusicSource.NETEASE) Icon(SimpIcons.Check, null)
             },
-            enabled = neteaseLoggedIn,
+            // 未登录仍可点:统一在 switchSource 里 toast 提示(2026-09-25 用户定案,
+            // 此前 enabled=false 点了毫无反应)
             onClick = {
                 onSourceSelected(MusicSource.NETEASE)
                 onDismiss()

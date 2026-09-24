@@ -107,6 +107,7 @@ import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
+import simpmusic.composeapp.generated.resources.login_netease_first
 import simpmusic.composeapp.generated.resources.added_to_youtube_liked
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
@@ -166,7 +167,16 @@ class SharedViewModel(
      */
     fun switchSource(source: com.maxrave.domain.source.MusicSource) {
         if (selectedSource.value == source.name) return
-        setSelectedSource(source)
+        viewModelScope.launch {
+            // 网易未登录选网易源:不切换,toast 引导登录(菜单项保持可点,别毫无反应)
+            if (source == com.maxrave.domain.source.MusicSource.NETEASE &&
+                dataStoreManager.neteaseCookie.first().isBlank()
+            ) {
+                makeToast(getString(Res.string.login_netease_first))
+                return@launch
+            }
+            setSelectedSource(source)
+        }
     }
 
     var isFirstLiked: Boolean = false
