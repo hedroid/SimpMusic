@@ -723,6 +723,7 @@ fun SearchScreen(
                                     MoodCategoryCard(
                                         title = item.title,
                                         artworkUrl = moodArtwork[item.params],
+                                        source = if (isNeteaseSource) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC,
                                     ) {
                                         if (isNeteaseSource) {
                                             // 分类卡点击与主页同源同页:进 NeteaseTagScreen(两列网格),

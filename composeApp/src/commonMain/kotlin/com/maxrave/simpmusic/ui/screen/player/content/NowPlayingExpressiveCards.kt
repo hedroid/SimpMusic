@@ -92,6 +92,8 @@ import com.maxrave.simpmusic.ui.component.LyricsView
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.Forward5
 import com.maxrave.simpmusic.ui.icon.Fullscreen
@@ -519,6 +521,25 @@ internal fun ExpressiveArtworkCardPage(
                         placeholder = rememberHolderPainter(),
                         error = rememberHolderPainter(),
                         modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                // 卡片右上角的源品牌角标(网易/YTM);canvas 模式随卡片 alpha 一起隐去,
+                // 当前页播视频时与封面图同条件隐藏(相邻页静态卡恒显)
+                artworkBadgeSource(
+                    pageTrackVideoId = pageTrack?.videoId,
+                    isCurrentPage = isCurrentArtworkPage,
+                    isNeteaseSong = state.isNeteaseSong,
+                )?.let { badgeSource ->
+                    SourceBadge(
+                        source = badgeSource,
+                        size = 24.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .alpha(
+                                    if (!isCurrentArtworkPage || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
+                                ),
                     )
                 }
             }

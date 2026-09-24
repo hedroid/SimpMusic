@@ -115,7 +115,8 @@ private class PlaylistThumbnailPainter(
     private val size: Size,
     private val title: String,
     private val textLayoutResult: TextLayoutResult,
-    private val iconPainter: Painter
+    private val iconPainter: Painter,
+    private val showAppBadge: Boolean = true,
 ): Painter() {
     override val intrinsicSize: Size
         get() = size
@@ -142,6 +143,7 @@ private class PlaylistThumbnailPainter(
         ))
         Logger.d("PlaylistThumbnailPainter", "Drawing icon $title")
         Logger.d("PlaylistThumbnailPainter", "Colors: ${colors.map { it.toArgb() }}")
+        if (!showAppBadge) return
         val centerX = size.width * 0.9f
         val centerY = size.height * 0.1f
         val circleRadius = size.width * 0.1f / 2
@@ -191,6 +193,8 @@ fun painterPlaylistThumbnail(
     title: String,
     style: TextStyle,
     sizeDp: Pair<Dp, Dp>,
+    // false=不画右上角的 app 图标白圆(改由调用处以 SourceBadge 品牌角标叠印时用)
+    showAppBadge: Boolean = true,
 ): Painter {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
@@ -221,6 +225,7 @@ fun painterPlaylistThumbnail(
         ),
         title = title,
         textLayoutResult = textLayoutResult,
-        iconPainter = painterRes
+        iconPainter = painterRes,
+        showAppBadge = showAppBadge,
     )
 }

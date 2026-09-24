@@ -83,6 +83,8 @@ import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicBottomCluster
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicHeaderActions
@@ -794,6 +796,22 @@ private fun AppleMusicArtworkPage(
                             .alpha(if (pageShowsCanvasOrVideo) 0f else 1f)
                             .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
                 )
+                // 封面右上角的源品牌角标(网易/YTM);canvas/视频背景时随封面一起隐去
+                artworkBadgeSource(
+                    pageTrackVideoId = pageTrack?.videoId,
+                    isCurrentPage = isCurrentPage,
+                    isNeteaseSong = state.isNeteaseSong,
+                )?.let { badgeSource ->
+                    SourceBadge(
+                        source = badgeSource,
+                        size = 24.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .alpha(if (pageShowsCanvasOrVideo) 0f else 1f),
+                    )
+                }
             }
             if (pageShowsCanvasOrVideo) {
                 if (isVideoBackdrop) {
@@ -981,6 +999,21 @@ private fun AppleMusicArtworkPage(
                     error = rememberHolderPainter(),
                     modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
                 )
+                // 相邻页封面同样标源(队列可混源,逐页各自判)
+                artworkBadgeSource(
+                    pageTrackVideoId = pageTrack?.videoId,
+                    isCurrentPage = false,
+                    isNeteaseSong = state.isNeteaseSong,
+                )?.let { badgeSource ->
+                    SourceBadge(
+                        source = badgeSource,
+                        size = 24.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp),
+                    )
+                }
             }
         }
     }

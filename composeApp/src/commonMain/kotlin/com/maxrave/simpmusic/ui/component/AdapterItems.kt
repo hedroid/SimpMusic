@@ -449,6 +449,9 @@ fun HomeItemContentPlaylist(
                                     data.name,
                                     style = typo().bodySmall,
                                     thumbSize * 0.9f to thumbSize * 0.9f,
+                                    // 排行榜 tile 的右上角改叠 YTM 品牌角标(showSourceBadge),
+                                    // 不再画 painter 内置的 app 图标白圆
+                                    showAppBadge = false,
                                 )
                             }
 
@@ -492,6 +495,7 @@ fun HomeItemContentPlaylist(
                                     data.name,
                                     style = typo().bodySmall,
                                     thumbSize * 0.9f to thumbSize * 0.9f,
+                                    showAppBadge = false,
                                 )
                             }
 

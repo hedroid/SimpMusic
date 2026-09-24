@@ -456,6 +456,8 @@ fun LibraryScreen(
                     chartPlaylists,
                     emptyText = Res.string.no_charts_found,
                     onScrolling = onScrolling,
+                    // 排行榜 tile 封面右上角标 YTM 品牌角标(替代原 SimpMusic 图标)
+                    showSourceBadge = true,
                 ) {
                     viewModel.getChartPlaylists()
                 }

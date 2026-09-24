@@ -129,6 +129,8 @@ import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.PlayerControlLayout
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
@@ -581,6 +583,25 @@ fun NowPlayingContentSpotify(
                                                         if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
                                                     ),
                                         )
+
+                                    // 封面右上角的源品牌角标(网易/YTM);canvas/视频模式随封面一起隐去
+                                    artworkBadgeSource(
+                                        pageTrackVideoId = pageTrack?.videoId,
+                                        isCurrentPage = isCurrentArtworkPage,
+                                        isNeteaseSong = state.isNeteaseSong,
+                                    )?.let { badgeSource ->
+                                        SourceBadge(
+                                            source = badgeSource,
+                                            size = 24.dp,
+                                            modifier =
+                                                Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(10.dp)
+                                                    .alpha(
+                                                        if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
+                                                    ),
+                                        )
+                                    }
                                     }
 
                                     // Inline video player (current page + isVideo + shouldShowVideo).
@@ -788,6 +809,21 @@ fun NowPlayingContentSpotify(
                                                     .aspectRatio(1f)
                                                     .clip(RoundedCornerShape(8.dp)),
                                         )
+                                        // 相邻页封面同样标源(队列可混源,逐页各自判)
+                                        artworkBadgeSource(
+                                            pageTrackVideoId = pageTrack?.videoId,
+                                            isCurrentPage = false,
+                                            isNeteaseSong = state.isNeteaseSong,
+                                        )?.let { badgeSource ->
+                                            SourceBadge(
+                                                source = badgeSource,
+                                                size = 24.dp,
+                                                modifier =
+                                                    Modifier
+                                                        .align(Alignment.TopEnd)
+                                                        .padding(10.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
