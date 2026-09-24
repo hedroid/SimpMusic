@@ -1,5 +1,7 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.foundation.ScrollState
@@ -47,6 +49,18 @@ internal fun NowPlayingScreenData.LyricsData?.canVote(): Boolean {
 // near-black surface instead. Used for the gradient's end colour, the fade-to target and the
 // area below the gradient so all three match exactly and leave no seam.
 internal val PlayerBackdropColor = Color(0xFF121212)
+
+/**
+ * 封面 pager 的落位弹簧(用户 2026-09-24 要求"橡皮筋效果更强"):中低刚度+可见回弹,
+ * 松手后页面冲过头再弹回来 —— "拉断橡皮筋"的弹性落位感。默认 spring(无回弹)读作
+ * 平移到位,没有弹的感觉。三主题的 pager 落位共用它(shell 的 snapAnimationSpec +
+ * 各 HorizontalPager 的 flingBehavior);播放器跟歌的 scrollToPage 是直跳,不经此弹簧。
+ */
+internal val ArtworkSnapSpring: AnimationSpec<Float> =
+    spring(
+        dampingRatio = 0.38f, // MediumBouncy(0.5)弹幅约 12px 偏含蓄;0.38 弹感明显(用户点名"更强")
+        stiffness = 700f, // 落位 ~250ms:弹得干脆,不拖沓
+    )
 
 private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")
 private val WHITESPACE_REGEX = Regex("""\s+""")

@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -272,6 +273,12 @@ private fun NowPlayingM3ExpressiveLayout(
                             .fillMaxWidth(),
                     beyondViewportPageCount = 1,
                     userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
+                    // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
+                    flingBehavior =
+                        PagerDefaults.flingBehavior(
+                            state = state.artworkPagerState,
+                            snapAnimationSpec = ArtworkSnapSpring,
+                        ),
                     key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     ExpressiveArtworkCardPage(

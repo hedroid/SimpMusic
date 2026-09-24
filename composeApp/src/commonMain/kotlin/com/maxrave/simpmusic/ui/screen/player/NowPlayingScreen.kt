@@ -203,7 +203,8 @@ fun NowPlayingScreenContent(
     }
     // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
     // background and the centered square thumbnail in each page, so we don't need two
-    // pagers + state mirroring.
+    // pagers + state mirroring. 橡皮筋落位弹簧在各主题 HorizontalPager 的 flingBehavior
+    // (PagerDefaults.flingBehavior + ArtworkSnapSpring);跟歌的 scrollToPage 直跳不受影响。
     val artworkPagerState =
         rememberPagerState(
             initialPage = currentOrderIndex.coerceAtLeast(0),
@@ -289,14 +290,8 @@ fun NowPlayingScreenContent(
                 if (settled !in 0 until queueSize) return@collect
                 if (settled == orderIndex) return@collect
 
-                val action = computeSeekAction(settled, orderIndex)
-                if (action == ArtworkSeekAction.NoOp) return@collect
-                // 滑动落定、即将切歌:一次确认震感(受触感反馈设置门控)。全局点击观察器
-                // 按位移排除滑动,不会双重震动;自动连播不经 pendingUserSwipe 守卫,不会误震。
-                HapticFeedback.tap()
-
                 runCatching {
-                    when (action) {
+                    when (val action = computeSeekAction(settled, orderIndex)) {
                         ArtworkSeekAction.Next -> {
                             sharedViewModel.onUIEvent(UIEvent.Next)
                         }
@@ -319,7 +314,25 @@ fun NowPlayingScreenContent(
             }
     }
 
-    // ③ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
+    // ③ "拉断橡皮筋"震感:用户拖动中页面跨越一半(currentPage 跳变,松手必翻页)的那一刻
+    // 震一次,受触感设置门控。替代原先"落定完成后"的时点——那在松手后 ~300ms,真机上与
+    // 手势脱节,用户读作"震动没起作用"(真机 vibrator 日志实证震动确实发了,纯时点问题)。
+    // 信号选型(实测):currentPageOffsetFraction/targetPage 都不是 snapshot state,拖动中
+    // snapshotFlow 看不见它们变化;**currentPage 是 mutableStateOf 且跨半即时跳变**——
+    // 拖动中与 settledPage(整个拖动期间恒为起点页)比较即可。拖回起点不震、再拉再震、
+    // 多页拖动每跨一页震一次;自动连播/程序化 snap 不经 isUserDraggingActive,不会误震;
+    // 全局点击观察器按位移排除拖动,无双重震动。
+    LaunchedEffect(artworkPagerState) {
+        snapshotFlow { if (isUserDraggingActive) artworkPagerState.currentPage else null }
+            .distinctUntilChanged()
+            .collect { page ->
+                if (page != null && page != artworkPagerState.settledPage) {
+                    HapticFeedback.tap()
+                }
+            }
+    }
+
+    // ④ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
     // to avoid IndexOutOfBoundsException during recomposition.
     LaunchedEffect(artworkQueue.size) {
         if (artworkQueue.isNotEmpty() && artworkPagerState.currentPage >= artworkQueue.size) {
