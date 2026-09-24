@@ -234,11 +234,35 @@ fun SelectedSongsBottomSheet(
                         ) { hideThen(onDownload) }
                     }
                     if (onAddToFavorite != null) {
-                        // 文案与单曲三点菜单一致("点赞");favorite="收藏"易误读成本地收藏
+                        // 文案与单曲三点菜单一致("点赞");favorite="收藏"易误读成本地收藏。
+                        // 未登录置灰+带源名提示(2026-09-25 与"添加到歌单"对齐);混源不挡——
+                        // 红心按各源分别调云端,混选可全做,无歌单的源互斥问题
                         ActionButton(
                             icon = SimpIcons.Favorite,
                             text = Res.string.like,
+                            enable = !loggedOutSource,
                         ) { hideThen(onAddToFavorite) }
+                        if (loggedOutSource && selectionIds.isNotEmpty()) {
+                            val firstLoggedOutNetease =
+                                selectionIds
+                                    .firstOrNull { id ->
+                                        (id.toLongOrNull() != null && neteaseCookie.isBlank()) ||
+                                            (id.toLongOrNull() == null && ytLoggedIn != com.maxrave.domain.manager.DataStoreManager.TRUE)
+                                    }?.toLongOrNull() != null
+                            Text(
+                                text =
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (firstLoggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                    ),
+                                style = typo().labelSmall,
+                                color = colors.disabled,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                            )
+                        }
                     }
                     extraActions.forEach { action ->
                         ActionButton(
