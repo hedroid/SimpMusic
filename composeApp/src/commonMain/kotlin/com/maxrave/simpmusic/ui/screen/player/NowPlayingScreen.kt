@@ -12,8 +12,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,10 +48,11 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
+import com.maxrave.simpmusic.expect.HapticFeedback
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.hsvToColor
 import com.maxrave.simpmusic.extension.rememberIsInPipMode
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsSheet
 import com.maxrave.simpmusic.ui.component.InfoPlayerBottomSheet
@@ -315,13 +318,11 @@ fun NowPlayingScreenContent(
     }
 
     // ③ "拉断橡皮筋"震感:用户拖动中页面跨越一半(currentPage 跳变,松手必翻页)的那一刻
-    // 震一次,受触感设置门控。替代原先"落定完成后"的时点——那在松手后 ~300ms,真机上与
-    // 手势脱节,用户读作"震动没起作用"(真机 vibrator 日志实证震动确实发了,纯时点问题)。
-    // 信号选型(实测):currentPageOffsetFraction/targetPage 都不是 snapshot state,拖动中
-    // snapshotFlow 看不见它们变化;**currentPage 是 mutableStateOf 且跨半即时跳变**——
-    // 拖动中与 settledPage(整个拖动期间恒为起点页)比较即可。拖回起点不震、再拉再震、
-    // 多页拖动每跨一页震一次;自动连播/程序化 snap 不经 isUserDraggingActive,不会误震;
-    // 全局点击观察器按位移排除拖动,无双重震动。
+    // 震一次,受触感设置门控。信号选型(实测):currentPageOffsetFraction/targetPage 都不是
+    // snapshot state,拖动中 snapshotFlow 看不见它们变化;currentPage 是 mutableStateOf
+    // 且跨半即时跳变——拖动中与 settledPage(整个拖动期间恒为起点页)比较即可。拖回起点
+    // 不震、再拉再震、多页拖动每跨一页震一次;自动连播/程序化 snap 不经 isUserDraggingActive,
+    // 不会误震;全局点击观察器按位移排除拖动,无双重震动。
     LaunchedEffect(artworkPagerState) {
         snapshotFlow { if (isUserDraggingActive) artworkPagerState.currentPage else null }
             .distinctUntilChanged()
@@ -800,23 +801,34 @@ fun NowPlayingScreenContent(
                 mediaPlayerHandler.removeMediaItem(index)
             },
         )
-    when (nowPlayingStyle) {
-        DataStoreManager.NOW_PLAYING_STYLE_M3_EXPRESSIVE ->
-            NowPlayingContentM3Expressive(
-                state = state,
-                actions = actions,
-            )
+    // 播放页是 ModalBottomSheet(独立 Android 窗口),App 根布局的全局点击观察器看不到
+    // 它里面的任何点击 —— 这里把同一套 hapticTapFeedback 旁观观察器挂到播放页根布局,
+    // 三主题的播放/暂停/切歌/红心等所有按钮的点击震感由此覆盖(拖动/滑动仍按位移排除,
+    // 与根观察器行为一致)。播放页内再弹出的 sheet(队列/信息等)又是新窗口,仍不覆盖。
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .hapticTapFeedback(),
+    ) {
+        when (nowPlayingStyle) {
+            DataStoreManager.NOW_PLAYING_STYLE_M3_EXPRESSIVE ->
+                NowPlayingContentM3Expressive(
+                    state = state,
+                    actions = actions,
+                )
 
-        DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC ->
-            NowPlayingContentAppleMusic(
-                state = state,
-                actions = actions,
-            )
+            DataStoreManager.NOW_PLAYING_STYLE_APPLE_MUSIC ->
+                NowPlayingContentAppleMusic(
+                    state = state,
+                    actions = actions,
+                )
 
-        else ->
-            NowPlayingContentSpotify(
-                state = state,
-                actions = actions,
-            )
+            else ->
+                NowPlayingContentSpotify(
+                    state = state,
+                    actions = actions,
+                )
+        }
     }
 }
