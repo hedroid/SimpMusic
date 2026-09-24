@@ -2999,6 +2999,19 @@ fun AddToPlaylistModalBottomSheet(
     // 直接压住输入框;居中窗口天然避开。
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var creatingPlaylist by remember { mutableStateOf(false) }
+    // 选中集合的合成源判定(单曲看 videoId,批量按 id 形状聚合)与当前选中分区:
+    // 提升到 sheet 外——"新建歌单"对话框(在 ModalBottomSheet 之前组合)也要读它们
+    val selectionHasNetease =
+        videoId?.toLongOrNull() != null || videoIds.any { it.toLongOrNull() != null }
+    val selectionHasYouTube =
+        (videoId != null && videoId.toLongOrNull() == null) ||
+            videoIds.any { it.toLongOrNull() == null }
+    // 0 = SimpMusic local(已下线,常量门控), 1 = YouTube Music account, 2 = NetEase account.
+    var selectedLibrary by remember {
+        mutableStateOf(
+            if (selectionHasNetease && !selectionHasYouTube) 2 else if (SHOW_LOCAL_PLAYLIST_SECTION && !selectionHasNetease && !selectionHasYouTube) 0 else 1,
+        )
+    }
     if (showCreatePlaylistDialog) {
         var newPlaylistName by remember { mutableStateOf("") }
         val createFailedText = stringResource(Res.string.could_not_create_playlist)
@@ -3035,6 +3048,10 @@ fun AddToPlaylistModalBottomSheet(
                         if (name.isEmpty()) return@TextButton
                         val songs = videoIds.ifEmpty { listOfNotNull(videoId) }
                         val songId = songs.firstOrNull() ?: return@TextButton
+                        // 建哪个源的歌单:单曲按歌判源;多选跟随当前选中分区(混选时 chip 上
+                        // 看得见,别让"第一首的顺序"替用户决定)
+                        val createAsNetease =
+                            if (videoIds.isNotEmpty()) selectedLibrary == 2 else songId.toLongOrNull() != null
                         creatingPlaylist = true
                         coroutineScope.launch {
                             // 建单成功后单体回读权威行(封面/作者,与库页网络行同构)再发
@@ -3042,7 +3059,7 @@ fun AddToPlaylistModalBottomSheet(
                             // 回读失败退占位行(建单已成功,不为展示重试)
                             val mutation =
                                 runCatching {
-                                    if (songId.toLongOrNull() != null) {
+                                    if (createAsNetease) {
                                         neteaseRepository.createNeteasePlaylist(name).getOrNull()
                                             ?.let { id ->
                                                 if (neteaseRepository.addTracksToNeteasePlaylist(id, songs.filter { it.toLongOrNull() != null }).getOrDefault(false)) {
@@ -3156,21 +3173,15 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
 
                     val chipRowState = rememberScrollState()
-                    // 0 = SimpMusic local(已下线,常量门控), 1 = YouTube Music account, 2 = NetEase account.
-                    var selectedLibrary by remember {
-                        mutableStateOf(
-                            if (videoId?.toLongOrNull() != null) 2 else if (SHOW_LOCAL_PLAYLIST_SECTION) 0 else 1,
-                        )
-                    }
-                    // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败),YT 分区整段不亮
+                    // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败):只有选中含 YT 曲目才亮
                     val visibleYouTubePlaylists =
-                        if (videoId?.toLongOrNull() != null || youtubeLoggedIn != DataStoreManager.TRUE) {
+                        if (!selectionHasYouTube || youtubeLoggedIn != DataStoreManager.TRUE) {
                             emptyList()
                         } else {
                             listYouTubePlaylist
                         }
                     val visibleNeteasePlaylists =
-                        if (videoId?.toLongOrNull() != null && neteaseCookie.isNotBlank()) {
+                        if (selectionHasNetease && neteaseCookie.isNotBlank()) {
                             listNeteasePlaylist
                         } else {
                             emptyList()
