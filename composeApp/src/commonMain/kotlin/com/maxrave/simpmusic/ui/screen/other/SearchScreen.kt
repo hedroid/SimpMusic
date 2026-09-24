@@ -43,6 +43,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -818,6 +819,24 @@ fun SearchScreen(
                                                     SearchType.PODCASTS -> searchScreenState.searchPodcastsResult
                                                 }
 
+                                            // SONGS tab 分页:近底(剩 6 行)自动追加下一页;
+                                            // 其余 tab 一次拉完(token 恒 null,触发器自然静默)
+                                            val songsPagingActive =
+                                                searchScreenState.searchType == SearchType.SONGS &&
+                                                    searchScreenState.songsNextPageToken != null
+                                            if (songsPagingActive) {
+                                                val nearEnd by remember {
+                                                    derivedStateOf {
+                                                        resultsState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+                                                            ?.let { last ->
+                                                                last >= resultsState.layoutInfo.totalItemsCount - 6
+                                                            } == true
+                                                    }
+                                                }
+                                                LaunchedEffect(nearEnd) {
+                                                    if (nearEnd) searchViewModel.loadMoreSongs()
+                                                }
+                                            }
                                             Crossfade(targetState = currentResults.isNotEmpty()) {
                                                 if (it) {
                                                     LazyColumn(
@@ -955,6 +974,22 @@ fun SearchScreen(
                                                                             }
                                                                         },
                                                                     )
+                                                                }
+                                                            }
+                                                        }
+                                                        // SONGS tab 追加下一页时的尾部指示行
+                                                        if (searchScreenState.searchType == SearchType.SONGS &&
+                                                            searchScreenState.songsLoadingMore
+                                                        ) {
+                                                            item {
+                                                                Box(
+                                                                    modifier =
+                                                                        Modifier
+                                                                            .fillMaxWidth()
+                                                                            .padding(vertical = 12.dp),
+                                                                    contentAlignment = Alignment.Center,
+                                                                ) {
+                                                                    CircularProgressIndicator(strokeWidth = 2.5.dp)
                                                                 }
                                                             }
                                                         }

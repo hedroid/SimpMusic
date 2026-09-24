@@ -56,6 +56,9 @@ data class SearchScreenState(
     val searchPodcastsResult: List<PlaylistsResult> = emptyList(),
     val suggestQueries: List<String> = emptyList(),
     val suggestYTItems: List<SearchResultType> = emptyList(),
+    // SONGS tab 分页:下一页令牌(null=没有更多)+追加中标记;其余 tab 一次拉完无分页
+    val songsNextPageToken: String? = null,
+    val songsLoadingMore: Boolean = false,
 )
 
 // Loại tìm kiếm
@@ -219,15 +222,23 @@ class SearchViewModel(
         }
     }
 
+    /** 最近一次提交的搜索词(SONGS tab 加载更多要带着它续页) */
+    private var lastQuery: String = ""
+
     fun searchSongs(query: String) {
+        lastQuery = query
         _searchScreenUIState.value = SearchScreenUIState.Loading
         viewModelScope.launch {
-            searchRepository.getSearchDataSong(query).collect { values ->
+            searchRepository.getSearchDataSongPage(query, null).collect { values ->
                 when (values) {
                     is Resource.Success -> {
-                        values.data?.let { songsList ->
+                        values.data?.let { (songsList, nextToken) ->
                             _searchScreenState.update { state ->
-                                state.copy(searchSongsResult = songsList)
+                                state.copy(
+                                    searchSongsResult = songsList,
+                                    songsNextPageToken = nextToken,
+                                    songsLoadingMore = false,
+                                )
                             }
                         }
                         _searchScreenUIState.value = SearchScreenUIState.Success
@@ -235,6 +246,35 @@ class SearchViewModel(
 
                     is Resource.Error -> {
                         _searchScreenUIState.value = SearchScreenUIState.Error
+                    }
+                }
+            }
+        }
+    }
+
+    /** SONGS tab 滚动近底追加下一页;失败静默保留已加载内容(token 不动,再滚可重试) */
+    fun loadMoreSongs() {
+        val state = _searchScreenState.value
+        val token = state.songsNextPageToken ?: return
+        if (state.songsLoadingMore || state.searchType != SearchType.SONGS) return
+        _searchScreenState.update { it.copy(songsLoadingMore = true) }
+        viewModelScope.launch {
+            searchRepository.getSearchDataSongPage(lastQuery, token).collect { values ->
+                when (values) {
+                    is Resource.Success -> {
+                        values.data?.let { (more, nextToken) ->
+                            _searchScreenState.update { s ->
+                                s.copy(
+                                    searchSongsResult = s.searchSongsResult + more,
+                                    songsNextPageToken = nextToken,
+                                    songsLoadingMore = false,
+                                )
+                            }
+                        }
+                    }
+
+                    is Resource.Error -> {
+                        _searchScreenState.update { it.copy(songsLoadingMore = false) }
                     }
                 }
             }
