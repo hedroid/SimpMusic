@@ -416,7 +416,8 @@ fun MiniPlayer(
                                                     val target = offsetX.value + dragAmount * 2
                                                     if (snapHapticArmed && (target > 200 || target < -120)) {
                                                         snapHapticArmed = false
-                                                        HapticFeedback.tap()
+                                                        // 比当前档位高一档的强调震动:拉断切歌是关键动作,要更突出(用户 2026-09-24)
+                                                        HapticFeedback.tapEmphasized()
                                                     } else if (!snapHapticArmed && target >= -120f && target <= 200f) {
                                                         snapHapticArmed = true
                                                     }

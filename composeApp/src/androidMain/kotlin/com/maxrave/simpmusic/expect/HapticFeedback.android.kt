@@ -49,6 +49,17 @@ actual object HapticFeedback {
     // 开关确认若走 enabled 门会被"写入→collect 传播"的毫秒级竞态拦掉
     actual fun tap(level: HapticFeedbackLevel) = performVibration(level)
 
+    actual fun tapEmphasized() {
+        if (!enabled) return
+        performVibration(
+            when (level) {
+                HapticFeedbackLevel.LIGHT -> HapticFeedbackLevel.MEDIUM
+                HapticFeedbackLevel.MEDIUM -> HapticFeedbackLevel.STRONG
+                HapticFeedbackLevel.STRONG -> HapticFeedbackLevel.STRONG
+            },
+        )
+    }
+
     private fun performVibration(level: HapticFeedbackLevel) {
         val context = appContext ?: return
         val vib = vibrator ?: return

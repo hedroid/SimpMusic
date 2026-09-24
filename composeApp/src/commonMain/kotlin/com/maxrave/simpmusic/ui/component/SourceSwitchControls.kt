@@ -57,8 +57,9 @@ fun Modifier.sourceSwitchGesture(
                     if (!longPressed && !moved) {
                         longPressed = true
                         // 长按专属即时震感(全局点击观察器按时长排除了长按,这里不受双重振动影响;
-                        // 取代原 LocalHapticFeedback.LongPress,受设置"触感反馈"与系统触摸振动开关共同管控)
-                        HapticFeedback.tap()
+                        // 取代原 LocalHapticFeedback.LongPress,受设置"触感反馈"与系统触摸振动开关共同管控)。
+                        // 比当前档位高一档的强调震动:长按弹菜单是低频关键动作,要更突出(用户 2026-09-24)
+                        HapticFeedback.tapEmphasized()
                         onLongPress()
                     }
                     continue

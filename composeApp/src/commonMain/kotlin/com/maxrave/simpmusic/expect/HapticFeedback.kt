@@ -33,6 +33,13 @@ expect object HapticFeedback {
      * 不能等 DataStore 写入→collect 传播完成,否则会被尚未翻转的开关门自己拦掉。
      */
     fun tap(level: HapticFeedbackLevel)
+
+    /**
+     * 比当前设置档位高一档的"强调"震动(仍受总开关门控,已是最强档则保持最强):
+     * 给需要比普通点击更突出的动作——长按弹音源菜单、迷你条拉断切歌(用户 2026-09-24
+     * 定案:"这两种动作更突出")。
+     */
+    fun tapEmphasized()
 }
 
 /**

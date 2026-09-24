@@ -5,4 +5,6 @@ actual object HapticFeedback {
     actual fun tap() {}
 
     actual fun tap(level: HapticFeedbackLevel) {}
+
+    actual fun tapEmphasized() {}
 }
