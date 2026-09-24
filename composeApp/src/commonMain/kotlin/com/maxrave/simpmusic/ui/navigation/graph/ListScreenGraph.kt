@@ -11,12 +11,14 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.MoreSongsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.screen.library.LocalPlaylistScreen
 import com.maxrave.simpmusic.ui.screen.other.AlbumScreen
 import com.maxrave.simpmusic.ui.screen.other.ArtistScreen
 import com.maxrave.simpmusic.ui.screen.other.MoreAlbumsScreen
+import com.maxrave.simpmusic.ui.screen.other.MoreSongsScreen
 import com.maxrave.simpmusic.ui.screen.other.PlaylistScreen
 import com.maxrave.simpmusic.ui.screen.other.PodcastScreen
 import com.maxrave.simpmusic.ui.theme.ForceDarkContent
@@ -61,6 +63,15 @@ fun NavGraphBuilder.listScreenGraph(
             navController = navController,
             type = data.type,
             id = data.id,
+        )
+    }
+    composable<MoreSongsDestination> { entry ->
+        val data = entry.toRoute<MoreSongsDestination>()
+        MoreSongsScreen(
+            innerPadding = innerPadding,
+            navController = navController,
+            id = data.artistId,
+            artistName = data.artistName,
         )
     }
     composable<PlaylistDestination> { entry ->

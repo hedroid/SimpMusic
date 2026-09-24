@@ -119,6 +119,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.MoreSongsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
@@ -764,13 +765,22 @@ private fun ArtistSections(
                         color = Color.White,
                         modifier = Modifier.weight(1f),
                     )
-                    // 网易艺人热门歌曲一次性给全（songs.browseId=null，无"更多"页），只在有跳转目标时露出按钮
-                    if (state.data.listSongParam != null) {
+                    // YT:人气区"更多"=playlistId 目标页;网易:无对应歌单页,走"全部歌曲"
+                    // 分页页(2026-09-24 新增,热门 50 之外全量+按时间排序)
+                    val neteaseArtistIdForMore = state.data.channelId?.takeIf { it.toLongOrNull() != null }
+                    if (state.data.listSongParam != null || neteaseArtistIdForMore != null) {
                         TextButton(
                             onClick = {
                                 val id = state.data.listSongParam
                                 if (id != null) {
                                     navController.navigate(PlaylistDestination(id))
+                                } else if (neteaseArtistIdForMore != null) {
+                                    navController.navigate(
+                                        MoreSongsDestination(
+                                            artistId = neteaseArtistIdForMore,
+                                            artistName = state.data.title ?: "",
+                                        ),
+                                    )
                                 }
                             },
                             colors =

@@ -36,6 +36,7 @@
     <string name="unsubscribe_from_library">取消收藏</string>
     <string name="netease_action_failed">操作失敗，請重試</string>
     <string name="netease_rate_limited">操作過於頻繁，帳號被暫時限制，請稍後再試</string>
+    <string name="sort_by_newest">最新</string>
     <string name="unsubscribed_netease_album">已取消收藏專輯</string>
     <string name="removed_from_playlist">已從播放清單移除</string>
     <string name="remove_from_playlist_failed">無法從播放清單移除該歌曲</string>
