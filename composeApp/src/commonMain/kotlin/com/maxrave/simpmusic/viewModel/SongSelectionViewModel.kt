@@ -31,6 +31,7 @@ import simpmusic.composeapp.generated.resources.need_login_toast
 import kotlinx.coroutines.flow.first
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
+import simpmusic.composeapp.generated.resources.all_songs_already_liked
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
@@ -237,14 +238,21 @@ class SongSelectionViewModel(
             // 未登录置灰同哲学);全部源已登录才执行
             val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
             val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
-            val candidates = songsOf(videoIds).filterNot { it.liked }
+            val songs = songsOf(videoIds)
+            // 登录门控按全量选中判(含已赞的歌——它挡的是"这个源没登录",与赞没赞无关)
             val blocked =
-                candidates.any { song ->
+                songs.any { song ->
                     (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
                         (song.videoId.toLongOrNull() == null && !ytLoggedIn)
                 }
             if (blocked) {
                 makeToast(getString(Res.string.need_login_toast))
+                return@launch
+            }
+            val candidates = songs.filterNot { it.liked }
+            if (candidates.isEmpty()) {
+                // 全是已赞的歌:没有动作发生,但仍给一句确认(2026-09-24 用户要求)
+                makeToast(getString(Res.string.all_songs_already_liked))
                 return@launch
             }
             // 本地行随结果镜像,失败计入汇总

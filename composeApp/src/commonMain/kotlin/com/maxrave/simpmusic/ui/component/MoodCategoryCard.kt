@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -52,12 +53,15 @@ fun MoodCategoryCard(
                     degrees = 45f,
                 ).clickable(onClick = onClick),
     ) {
+        // 2026-09-24 用户反馈:搜索分类卡角标缩小+降透明(默认 22dp 太抢)
         SourceBadge(
             source = source,
+            size = 16.dp,
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp),
+                    .padding(10.dp)
+                    .alpha(0.65f),
         )
         if (artworkUrl != null) {
             AsyncImage(

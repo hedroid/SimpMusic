@@ -124,6 +124,8 @@ fun RecentlySongsScreen(
                         val recentlyAddedString = stringResource(Res.string.recently_added)
                         SongFullWidthItems(
                             songEntity = item,
+                            // 混源列表试点:歌名后跟品牌图标(2026-09-24 用户观察效果)
+                            titleSourceBadge = true,
                             isPlaying = playingTrack?.videoId == item.videoId && isPlaying,
                             onClickListener = { videoId ->
                                 val firstQueue = item.toTrack()

@@ -936,6 +936,7 @@
     <string name="followed_toast">已关注</string>
     <string name="unfollowed_toast">已取消关注</string>
     <string name="synced_n_of_m">已添加 %1$d 首到喜欢</string>
+    <string name="all_songs_already_liked">所选歌曲均已在喜欢中</string>
     <string name="cloud_action_failed_youtube">YouTube Music 账号操作失败</string>
     <string name="liked_songs">喜欢的歌曲</string>
     <string name="library_podcasts">播客</string>

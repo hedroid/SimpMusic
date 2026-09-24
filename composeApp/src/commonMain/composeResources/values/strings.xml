@@ -964,6 +964,7 @@
     <string name="followed_toast">Following</string>
     <string name="unfollowed_toast">Unfollowed</string>
     <string name="synced_n_of_m">Added %1$d songs to favorites</string>
+    <string name="all_songs_already_liked">All selected songs are already in favorites</string>
     <string name="cloud_action_failed_youtube">Couldn't update your YouTube Music account</string>
     <string name="liked_songs">Liked songs</string>
     <string name="library_podcasts">Podcasts</string>

@@ -518,6 +518,7 @@
     <string name="followed_toast">フォローしました</string>
     <string name="unfollowed_toast">フォロー解除しました</string>
     <string name="synced_n_of_m">%1$d件をお気に入りに追加</string>
+    <string name="all_songs_already_liked">選曲はすべていいね済みです</string>
     <string name="cloud_action_failed_youtube">YouTube Music アカウントを更新できませんでした</string>
     <string name="haptic_feedback">触覚フィードバック</string>
     <string name="haptic_feedback_description">タップ時の振動フィードバック</string>

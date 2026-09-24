@@ -137,6 +137,9 @@ fun SongFullWidthItems(
     forceDark: Boolean = LocalForceDarkText.current,
     // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
     showSourceBadge: Boolean = false,
+    // 歌名后内联源图标(混源列表试点,2026-09-24 用户点名"最近添加"观察效果)——与封面角标
+    // showSourceBadge(缩略图右上)是两个位置,互不联动
+    titleSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -363,21 +366,53 @@ fun SongFullWidthItems(
                         .align(Alignment.CenterVertically),
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    Text(
-                        text = track?.title ?: songEntity?.title ?: "",
-                        style = typo().titleSmall,
-                        maxLines = 1,
-                        color = titleColor,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(align = Alignment.CenterVertically)
-                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
-                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                ).focusable(),
-                    )
+                    if (titleSourceBadge) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = track?.title ?: songEntity?.title ?: "",
+                                style = typo().titleSmall,
+                                maxLines = 1,
+                                color = titleColor,
+                                modifier =
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .wrapContentHeight(align = Alignment.CenterVertically)
+                                        // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
+                                        // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
+                                        .basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                        ).focusable(),
+                            )
+                            val titleSrc =
+                                contentSource(songEntity)
+                                    ?: track?.videoId?.let {
+                                        if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
+                                    }
+                            titleSrc?.let {
+                                SourceBadge(
+                                    source = it,
+                                    size = 14.dp,
+                                    modifier = Modifier.padding(start = 4.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = track?.title ?: songEntity?.title ?: "",
+                            style = typo().titleSmall,
+                            maxLines = 1,
+                            color = titleColor,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
+                                    // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
+                                    .basicMarquee(
+                                        iterations = Int.MAX_VALUE,
+                                    ).focusable(),
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AnimatedVisibility(
                             visible =

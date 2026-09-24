@@ -162,31 +162,22 @@ fun SelectedSongsBottomSheet(
                         ) { hideThen(onAddToQueue) }
                     }
                     if (onAddToPlaylist != null) {
-                        // 混源提示放在按钮同一行末尾(短文案,各语言一排放得下)
+                        ActionButton(
+                            icon = SimpIcons.PlaylistAdd,
+                            text = Res.string.add_to_a_playlist,
+                            enable = !mixedSources,
+                        ) { hideThen(onAddToPlaylist) }
+                        // 混源提示:按钮下方第二排短文案(一排内,各语言放得下)
                         if (mixedSources) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Box(Modifier.weight(1f)) {
-                                    ActionButton(
-                                        icon = SimpIcons.PlaylistAdd,
-                                        text = Res.string.add_to_a_playlist,
-                                        enable = false,
-                                    ) { }
-                                }
-                                Text(
-                                    text = stringResource(Res.string.mixed_source_selection),
-                                    style = typo().labelSmall,
-                                    color = colors.subtitle.copy(alpha = 0.85f),
-                                    modifier = Modifier.padding(end = 20.dp),
-                                )
-                            }
-                        } else {
-                            ActionButton(
-                                icon = SimpIcons.PlaylistAdd,
-                                text = Res.string.add_to_a_playlist,
-                            ) { hideThen(onAddToPlaylist) }
+                            Text(
+                                text = stringResource(Res.string.mixed_source_selection),
+                                style = typo().labelSmall,
+                                color = colors.subtitle.copy(alpha = 0.85f),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 2.dp),
+                            )
                         }
                     }
                     if (allDownloaded && onRemoveDownload != null) {
