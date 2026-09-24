@@ -257,6 +257,7 @@ import simpmusic.composeapp.generated.resources.extract_source
 import simpmusic.composeapp.generated.resources.itag
 import simpmusic.composeapp.generated.resources.key
 import simpmusic.composeapp.generated.resources.like
+import simpmusic.composeapp.generated.resources.login_required_short
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.liked
 import simpmusic.composeapp.generated.resources.list_all_cookies_of_this_page
@@ -3237,8 +3238,18 @@ fun AddToPlaylistModalBottomSheet(
                         (listNeteasePlaylist != null && visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
                     ) && !canCreateInSelectedLibrary
                     ) {
+                        // !canCreate 在云端分区=该源未登录:说"登录后可用",别说"未找到歌单"
+                        val loggedIn =
+                            when (selectedLibrary) {
+                                1 -> youtubeLoggedIn == DataStoreManager.TRUE
+                                2 -> neteaseCookie.isNotBlank()
+                                else -> false
+                            }
                         Text(
-                            text = stringResource(Res.string.no_playlist_found),
+                            text =
+                                stringResource(
+                                    if (loggedIn) Res.string.no_playlist_found else Res.string.login_required_short,
+                                ),
                             style = typo().labelSmall,
                             modifier = Modifier.padding(20.dp),
                             color = rememberSurfaceDarkColors().disabled,
