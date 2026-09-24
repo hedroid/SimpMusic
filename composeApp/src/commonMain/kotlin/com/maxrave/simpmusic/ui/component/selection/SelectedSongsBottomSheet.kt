@@ -167,16 +167,16 @@ fun SelectedSongsBottomSheet(
                             text = Res.string.add_to_a_playlist,
                             enable = !mixedSources,
                         ) { hideThen(onAddToPlaylist) }
-                        // 混源提示:按钮下方第二排短文案(一排内,各语言放得下)
+                        // 混源提示:按钮下方第二排,首字与按钮文字左对齐(20+48+10=78dp,ActionButton 同款起点),置灰
                         if (mixedSources) {
                             Text(
                                 text = stringResource(Res.string.mixed_source_selection),
                                 style = typo().labelSmall,
-                                color = colors.subtitle.copy(alpha = 0.85f),
+                                color = colors.disabled,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 2.dp),
+                                        .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
                             )
                         }
                     }
