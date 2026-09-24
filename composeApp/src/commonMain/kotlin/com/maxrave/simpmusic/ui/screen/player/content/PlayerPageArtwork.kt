@@ -22,6 +22,7 @@ import coil3.request.crossfade
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import kotlinx.coroutines.flow.collectLatest
 
 /**
@@ -29,13 +30,9 @@ import kotlinx.coroutines.flow.collectLatest
  *
  * 为什么不直接用 `screenData.thumbnailURL`(mediaItem.artworkUri):那是给通知栏/迷你条/55dp
  * 小头像消费的,构建时被钉在 w544/param=500 的小档;播放页封面槽位在 1080p 设备上约 960
- * 物理像素,直接用会被上采样 ~1.8 倍(“封面很模糊”的根因)。这里在请求侧把两源统一升到
- * 1080:YT googleusercontent `=wNNN-hNNN` → `=w1080-h1080`,网易 `?param=NNNyNNN` →
- * `?param=1080y1080`。列表/小图路径不受影响。
+ * 物理像素,直接用会被上采样 ~1.8 倍(“封面很模糊”的根因)。尺寸升档统一走
+ * [toHiResArtworkUrl](ui/utils/HiResArtwork.kt,详情页头图同款)。列表/小图路径不受影响。
  */
-private val YT_SIZE_PARAM = Regex("=w\\d+-h\\d+")
-private val NETEASE_SIZE_PARAM = Regex("param=\\d+y\\d+")
-
 internal fun Track?.playerArtworkUrl(): String? {
     if (this == null) return null
     val best =
@@ -43,9 +40,7 @@ internal fun Track?.playerArtworkUrl(): String? {
             // 网易数字 id 不可能命中 i.ytimg,别给它们造假 URL
             ?: videoId?.takeIf { it.isNotEmpty() && it.toLongOrNull() == null }
                 ?.let { "https://i.ytimg.com/vi/$it/maxresdefault.jpg" }
-    return best
-        ?.replace(YT_SIZE_PARAM, "=w1080-h1080")
-        ?.replace(NETEASE_SIZE_PARAM, "param=1080y1080")
+    return best.toHiResArtworkUrl()
 }
 
 /** 页内自判视频轨:取最大缩略图,宽高非正方形即按 16:9 摆(镜像 handler 的 isSong 判定)。 */

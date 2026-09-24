@@ -121,6 +121,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.viewModel.ArtistScreenState
 import com.maxrave.simpmusic.viewModel.ArtistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -299,15 +300,18 @@ fun ArtistScreen(
                                     Box(modifier = Modifier.fillMaxSize().clipToBounds().layerBackdrop(artworkBackdrop)) {
                                         // Media layer (artwork + canvas) — Haze SOURCE for the bottom blur.
                                         Box(modifier = Modifier.fillMaxSize().hazeSource(headerHaze)) {
+                                            // 头图槽位 ~1080px:网易 500/YT 方形 617 请求侧升 1080;
+                                            // YT 横屏宽 banner(w2880-h1200 档)本就够大,helper 不动它。
+                                            val hiResHeaderUrl = headerImageUrl.toHiResArtworkUrl()
                                             AsyncImage(
                                                 model =
                                                     ImageRequest
                                                         .Builder(LocalPlatformContext.current)
-                                                        .data(headerImageUrl)
+                                                        .data(hiResHeaderUrl)
                                                         .diskCachePolicy(CachePolicy.ENABLED)
                                                         .memoryCachePolicy(CachePolicy.ENABLED)
-                                                        .diskCacheKey(headerImageUrl)
-                                                        .memoryCacheKey(headerImageUrl)
+                                                        .diskCacheKey(hiResHeaderUrl)
+                                                        .memoryCacheKey(hiResHeaderUrl)
                                                         .crossfade(false)
                                                         .build(),
                                                 placeholder = rememberHolderPainter(),
