@@ -205,6 +205,8 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.create
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
 import simpmusic.composeapp.generated.resources.create_new_playlist
 import simpmusic.composeapp.generated.resources.could_not_create_playlist
 import simpmusic.composeapp.generated.resources.playlist_name
@@ -2991,6 +2993,15 @@ fun AddToPlaylistModalBottomSheet(
     if (showCreatePlaylistDialog) {
         var newPlaylistName by remember { mutableStateOf("") }
         val createFailedText = stringResource(Res.string.could_not_create_playlist)
+        // 成功文案对齐"加到已有歌单"路径:用户意图是把歌加进歌单,歌单是新建的
+        val addedToPlaylistText =
+            stringResource(
+                if (videoId?.toLongOrNull() != null) {
+                    Res.string.added_to_netease_playlist
+                } else {
+                    Res.string.added_to_youtube_playlist
+                },
+            )
         AlertDialog(
             onDismissRequest = { if (!creatingPlaylist) showCreatePlaylistDialog = false },
             containerColor = rememberSurfaceDarkColors().container,
@@ -3083,6 +3094,7 @@ fun AddToPlaylistModalBottomSheet(
                                 mutationBus.send(mutation)
                                 showCreatePlaylistDialog = false
                                 hideModalBottomSheet()
+                                showToast(addedToPlaylistText, ToastGravity.Bottom)
                             } else {
                                 showToast(createFailedText, ToastGravity.Bottom)
                             }
