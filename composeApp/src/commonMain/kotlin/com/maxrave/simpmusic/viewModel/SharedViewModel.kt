@@ -528,6 +528,12 @@ class SharedViewModel(
                                 _timeline.update { it.copy(loading = true) }
                             }
 
+                            SimpleMediaState.Stopped -> {
+                                // 错误/灰歌动作后的闲置:停转圈,进度现场原样冻结——
+                                // 灰歌暂停后 player 停在 IDLE,走 Initial 会永远转圈
+                                _timeline.update { it.copy(loading = false) }
+                            }
+
                             SimpleMediaState.Ended -> {
                                 // Park at the end of the track rather than at -1. The only formatter
                                 // for these fields renders any negative as "NA:NA", and nothing here
