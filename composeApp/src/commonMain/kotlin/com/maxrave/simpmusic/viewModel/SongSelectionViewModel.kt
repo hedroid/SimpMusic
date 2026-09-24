@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.synced_n_of_m
+import simpmusic.composeapp.generated.resources.netease_rate_limited
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
@@ -160,7 +161,13 @@ class SongSelectionViewModel(
                 .filterNot { it.liked }
                 .forEach { song ->
                     attempted++
-                    if (songRepository.setRemoteLikeStatus(song.videoId, true)) {
+                    val result = songRepository.setRemoteLikeStatus(song.videoId, true)
+                    if (result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException) {
+                        // 405 频控窗口内整批都会失败,别把 N 条全戳一遍(重试会续期窗口)
+                        makeToast(getString(Res.string.netease_rate_limited))
+                        return@launch
+                    }
+                    if (result.getOrDefault(false)) {
                         songRepository.setLikedLocal(song.videoId, 1)
                         succeeded++
                     }

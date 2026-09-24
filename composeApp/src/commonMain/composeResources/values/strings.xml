@@ -393,6 +393,7 @@
     <string name="created_playlist">Playlist created</string>
     <string name="unsubscribe_from_library">Remove from favorites</string>
     <string name="netease_action_failed">Action failed. Please try again.</string>
+    <string name="netease_rate_limited">Too many requests. NetEase has temporarily limited this account, please try later.</string>
     <string name="unsubscribed_netease_album">Removed from starred albums</string>
     <string name="removed_from_playlist">Removed from the playlist</string>
     <string name="remove_from_playlist_failed">Couldn\'t remove the song from the playlist</string>

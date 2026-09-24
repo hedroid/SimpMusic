@@ -24,6 +24,7 @@ import simpmusic.composeapp.generated.resources.intro
 import simpmusic.composeapp.generated.resources.month_s_ago
 import simpmusic.composeapp.generated.resources.music_off_topic
 import simpmusic.composeapp.generated.resources.na_na
+import simpmusic.composeapp.generated.resources.netease_rate_limited
 import simpmusic.composeapp.generated.resources.newer_first
 import simpmusic.composeapp.generated.resources.older_first
 import simpmusic.composeapp.generated.resources.outro
@@ -270,3 +271,10 @@ fun SponsorBlockType.displayString(): String =
         SponsorBlockType.SELF_PROMOTION -> stringResource(Res.string.self_promotion)
         SponsorBlockType.SPONSOR -> stringResource(Res.string.sponsor)
     }
+/** 网易写操作失败的文案分流:405(端点频控/账号风控窗口,重试会续期)给"操作过于频繁"
+ *  专属提示,其余失败维持各调用点原兜底文案。仅对 onFailure 异常判型——业务 code!=200
+ *  被 repo 折叠成 success(false) 的路径拿不到异常,继续走笼统文案。 */
+fun neteaseWriteErrorString(
+    error: Throwable?,
+    fallback: StringResource,
+): StringResource = if (error is com.maxrave.netease.NeteaseRateLimitException) Res.string.netease_rate_limited else fallback

@@ -33,6 +33,7 @@ import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Error
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Loading
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.SharedViewModel
@@ -222,7 +223,7 @@ class PlaylistViewModel(
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
          } }
     }
@@ -288,7 +289,7 @@ class PlaylistViewModel(
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
          } }
     }
@@ -314,7 +315,7 @@ class PlaylistViewModel(
                             makeToast(getString(Res.string.remove_from_playlist_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.remove_from_playlist_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.remove_from_playlist_failed))) },
                 )
         }
     }
@@ -352,7 +353,7 @@ class PlaylistViewModel(
                             makeToast(getString(Res.string.remove_from_playlist_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.remove_from_playlist_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.remove_from_playlist_failed))) },
                 )
         }
     }

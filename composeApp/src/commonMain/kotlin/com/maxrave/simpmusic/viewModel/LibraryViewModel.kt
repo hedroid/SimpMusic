@@ -34,6 +34,7 @@ import com.maxrave.domain.utils.LocalResource
 import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.isRadioPlaylistId
 import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
@@ -701,7 +702,7 @@ class LibraryViewModel(
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
         }
     }
@@ -720,7 +721,7 @@ class LibraryViewModel(
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
         }
     }
@@ -739,7 +740,7 @@ class LibraryViewModel(
                             makeToast(getString(Res.string.netease_action_failed))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
         }
     }
@@ -765,10 +766,15 @@ class LibraryViewModel(
                         applyMutation(LibraryMutation.NeteasePlaylistCreated(row))
                     },
                     onFailure = {
-                        // 失败透传原因(用户实测"创建歌单失败"无细节,风控/网络一眼可辨)
+                        // 失败透传原因(用户实测"创建歌单失败"无细节,风控/网络一眼可辨);
+                        // 405 频控给专属文案(异常 message 里的 url 不适合直接进 toast)
                         makeToast(
-                            getString(Res.string.could_not_create_playlist) +
-                                (it.message?.takeIf { m -> m.isNotBlank() }?.let { m -> ": $m" } ?: ""),
+                            getString(neteaseWriteErrorString(it, Res.string.could_not_create_playlist)) +
+                                (
+                                    it.message
+                                        ?.takeIf { m -> m.isNotBlank() && it !is com.maxrave.netease.NeteaseRateLimitException }
+                                        ?.let { m -> ": $m" } ?: ""
+                                ),
                         )
                     },
                 )

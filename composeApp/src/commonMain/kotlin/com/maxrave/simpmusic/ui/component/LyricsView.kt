@@ -414,6 +414,20 @@ fun LyricsView(
                 thresholdMs = 1000L,
             )
         }
+    // Official romanization (netease romalrc) aligns the same way the official translation
+    // does: same-source row-level timestamps, matched against the original by time rather than
+    // by index, because row counts legitimately differ (rows the provider leaves out).
+    val syncedRomanizedWordsByLineIndex =
+        remember(
+            lyricsData.lyrics.lines,
+            lyricsData.romanizedLyrics?.first?.lines,
+        ) {
+            buildSyncedTranslatedWordsByLineIndex(
+                originalLines = lyricsData.lyrics.lines.orEmpty(),
+                translatedLines = lyricsData.romanizedLyrics?.first?.lines.orEmpty(),
+                thresholdMs = 1000L,
+            )
+        }
     LaunchedEffect(currentLineIndex, lyricsData.lyrics.syncType, appleStyle) {
         if (currentLineIndex > -1 &&
             (lyricsData.lyrics.syncType == "LINE_SYNCED" || lyricsData.lyrics.syncType == "RICH_SYNCED")
@@ -474,11 +488,22 @@ fun LyricsView(
                         if (romanizationLanguages.isEmpty()) {
                             null
                         } else {
-                            remember(words, romanizationLanguages) {
-                                val source =
-                                    if (lyricsData.lyrics.syncType == "RICH_SYNCED") words.stripRichSyncTimestamps() else words
-                                romanizer.romanize(source, romanizationLanguages)
-                            }
+                            // Official romanization first (provider-grade, same row shape as the
+                            // translation); the local engine only fills the rows the provider left
+                            // out. The toggle above stays the single gate — an user who turned
+                            // romanization off does not want it from any source.
+                            val official =
+                                if (lyricsData.lyrics.syncType == "LINE_SYNCED" || lyricsData.lyrics.syncType == "RICH_SYNCED") {
+                                    syncedRomanizedWordsByLineIndex[index]
+                                } else {
+                                    lyricsData.romanizedLyrics?.first?.lines?.getOrNull(index)?.words
+                                }
+                            official?.takeIf { it.isNotBlank() }
+                                ?: remember(words, romanizationLanguages) {
+                                    val source =
+                                        if (lyricsData.lyrics.syncType == "RICH_SYNCED") words.stripRichSyncTimestamps() else words
+                                    romanizer.romanize(source, romanizationLanguages)
+                                }
                         }
 
                     val renderLine: @Composable () -> Unit = {

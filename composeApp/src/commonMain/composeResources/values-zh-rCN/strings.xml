@@ -669,6 +669,7 @@
     <string name="created_playlist">已创建歌单</string>
     <string name="unsubscribe_from_library">取消收藏</string>
     <string name="netease_action_failed">操作失败，请重试</string>
+    <string name="netease_rate_limited">操作过于频繁，账号被暂时限制，请稍后再试</string>
     <string name="unsubscribed_netease_album">已取消收藏专辑</string>
     <string name="removed_from_playlist">已从歌单移除</string>
     <string name="remove_from_playlist_failed">无法从歌单移除该歌曲</string>

@@ -24,6 +24,7 @@ import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,7 +78,7 @@ class AlbumViewModel(
                             mutationBus.send(LibraryMutation.AlbumUnsubscribed(albumId))
                         }
                     },
-                    onFailure = { makeToast(getString(Res.string.netease_action_failed)) },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
                 )
         }
     }

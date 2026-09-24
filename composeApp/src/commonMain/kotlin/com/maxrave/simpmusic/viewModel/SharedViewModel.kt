@@ -115,6 +115,7 @@ import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
 import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.netease_rate_limited
 import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.liked_toast
 import simpmusic.composeapp.generated.resources.need_login_toast
@@ -719,14 +720,16 @@ class SharedViewModel(
         val song = nowPlayingState.value?.songEntity ?: return
         viewModelScope.launch {
             _remoteSongLikeState.value = _remoteSongLikeState.value.copy(pending = true, failed = false)
-            val ok = songRepository.setRemoteLikeStatus(song.videoId, liked)
+            val result = songRepository.setRemoteLikeStatus(song.videoId, liked)
+            val ok = result.getOrDefault(false)
             if (!ok) {
                 makeToast(
                     getString(
-                        if (song.videoId.toLongOrNull() != null) {
-                            Res.string.cloud_action_failed_netease
-                        } else {
-                            Res.string.cloud_action_failed_youtube
+                        when {
+                            result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException ->
+                                Res.string.netease_rate_limited
+                            song.videoId.toLongOrNull() != null -> Res.string.cloud_action_failed_netease
+                            else -> Res.string.cloud_action_failed_youtube
                         },
                     ),
                 )
@@ -1641,7 +1644,7 @@ class SharedViewModel(
         viewModelScope.launch {
             neteaseRepository.getNeteaseLyricsData(videoId)
                 .fold(
-                    onSuccess = { (lyrics, officialTranslation) ->
+                    onSuccess = { (lyrics, officialTranslation, officialRomanization) ->
                         updateLyrics(
                             videoId,
                             duration,
@@ -1650,6 +1653,16 @@ class SharedViewModel(
                             LyricsProvider.NETEASE,
                         )
                         insertLyrics(lyrics.toLyricsEntity(videoId))
+                        if (officialRomanization != null) {
+                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂
+                            _nowPlayingScreenData.update {
+                                it.copy(
+                                    lyricsData = it.lyricsData?.copy(
+                                        romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
+                                    ),
+                                )
+                            }
+                        }
                         if (officialTranslation != null) {
                             // 官方翻译与原文同源,时间轴天然对齐
                             updateLyrics(
@@ -2484,6 +2497,8 @@ data class NowPlayingScreenData(
     data class LyricsData(
         val lyrics: Lyrics,
         val translatedLyrics: Pair<Lyrics, LyricsProvider>? = null,
+        // 官方罗马音(网易 romalrc,行级与原文同源对齐);null=无官方数据,渲染端回退本地引擎
+        val romanizedLyrics: Pair<Lyrics, LyricsProvider>? = null,
         val lyricsProvider: LyricsProvider,
     )
 

@@ -50,6 +50,8 @@ import simpmusic.composeapp.generated.resources.added_to_netease_playlist
 import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
 import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.netease_rate_limited
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
@@ -302,29 +304,32 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist -> {
-                    val ok =
-                        neteaseRepository
-                            .addTracksToNeteasePlaylist(ev.playlistId, listOf(songUIState.videoId))
-                            .getOrDefault(false)
-                    makeToast(
-                        getString(if (ok) Res.string.added_to_netease_playlist else Res.string.netease_action_failed),
-                    )
+                    neteaseRepository
+                        .addTracksToNeteasePlaylist(ev.playlistId, listOf(songUIState.videoId))
+                        .fold(
+                            onSuccess = { ok ->
+                                makeToast(getString(if (ok) Res.string.added_to_netease_playlist else Res.string.netease_action_failed))
+                            },
+                            onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
+                        )
                 }
 
                 is NowPlayingBottomSheetUIEvent.ToggleLike -> {
                     // 点赞=云端账号红心;成功后镜像本地缓存行(库页"喜欢的歌曲"读它)
                     val target = !(_cloudLiked.value ?: songUIState.liked)
-                    val ok = songRepository.setRemoteLikeStatus(songUIState.videoId, target)
+                    val result = songRepository.setRemoteLikeStatus(songUIState.videoId, target)
+                    val ok = result.getOrDefault(false)
                     if (ok) {
                         _cloudLiked.value = target
                         songRepository.setLikedLocal(songUIState.videoId, if (target) 1 else 0)
                     } else {
                         makeToast(
                             getString(
-                                if (songUIState.videoId.toLongOrNull() != null) {
-                                    Res.string.cloud_action_failed_netease
-                                } else {
-                                    Res.string.cloud_action_failed_youtube
+                                when {
+                                    result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException ->
+                                        Res.string.netease_rate_limited
+                                    songUIState.videoId.toLongOrNull() != null -> Res.string.cloud_action_failed_netease
+                                    else -> Res.string.cloud_action_failed_youtube
                                 },
                             ),
                         )
