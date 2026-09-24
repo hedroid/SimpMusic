@@ -773,6 +773,32 @@ dump bounds 取,目测两次全偏)。
   - **删列步骤(将来一次做)**:上述消费点全部切云端源后,Room 大版本把 artist.followed/
     song.liked/playlist.liked 列连同 local_playlist 表一起迁移删除。
 
+## 多选批量操作云端化 + 登录门控矩阵（2026-09-24/25，主仓 35c5a87e..916fb258 + core cac735d）
+
+用户从"最近添加"页混源多选踩出的一串问题，一轮收口：
+
+- **多选"添加到歌单"此前是断的**：7 个多选调用点只传 localPlaylists+空 YT 列表，而本地分区被
+  SHOW_LOCAL_PLAYLIST_SECTION=false 隐藏——弹窗空白、"新建"行 videoId=null 无反应。已全部接云端
+  分区（组件加 videoIds 批量参数，新建塞歌走批量并跟随当前选中分区；VM 加 loadCloudPlaylists
+  +addToYouTube/NeteasePlaylist 按源过滤；列表参数可空=null 拉取中不闪空态）。
+- **分区判定改合成源**：原基于 videoId 单值（单曲语义），多选 null 时网易分区永不亮；
+  selectionHasNetease/YouTube=videoId 与 videoIds 按 id 形状聚合（**声明必须在 ModalBottomSheet
+  之外**——新建 AlertDialog 在 sheet 前组合）。
+- **门控矩阵（用户逐条定案）**：添加到歌单挡混源（"包含不同音源的歌曲，无法添加"）+未登录
+  （"登录 XXX 后可用"带源名）；点赞/下载只挡未登录（红心/下载按各源各自执行，无互斥）；
+  移除下载/下一首/加队列纯本地不挡。全部=按钮置灰+第二排 caption（首字对齐按钮文字 78dp、
+  disabled 色）。VM 层 need_login toast 保留作防御。
+- **点赞语义**：面板文案 favorite"收藏"→like"点赞"（与单曲菜单一致）；成功 toast
+  "已添加 N 首到喜欢"（5 locale）；全已赞→"所选歌曲均已在喜欢中"（登录门控按全量选中判含已赞）。
+- **空态文案残留**：no_playlist_found 是本地歌单时代文案（唯一消费者=本弹窗），改通用
+  （5 locale 去"本地"）；未登录分区空态给登录提示而非"未找到歌单"。
+- **迷你条灰歌后永远转圈（core cac735d）**：错误后 IDLE→Initial→loading=true 无人清；新增
+  SimpleMediaState.Stopped（双 handler onPlayerError 置 sawPlaybackError、IDLE 分流、READY 清），
+  UI 收 Stopped 冻结时间线。**遗留**：模拟器验证受阻（deeplink 后台不达+QEMU 网络杀不掉），
+  待用户真机日常验证。
+- **杂项**：搜索分类卡角标 22→16dp+65% alpha；歌名后源图标试点（最近添加页）效果不佳已回退，
+  组件能力保留（TODO：混源列表源标识换思路）。
+
 ## 剩余工作盘点（2026-09-16 重整）
 
 > 本节是**索引**（全局视图），刻意精简；接手顺序：项目 `AGENTS.md`（会话自动加载，
