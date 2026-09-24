@@ -49,6 +49,7 @@ import com.maxrave.simpmusic.extension.KeepScreenOn
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.hsvToColor
 import com.maxrave.simpmusic.extension.rememberIsInPipMode
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
 import com.maxrave.simpmusic.ui.component.FullscreenLyricsSheet
 import com.maxrave.simpmusic.ui.component.InfoPlayerBottomSheet
@@ -288,8 +289,14 @@ fun NowPlayingScreenContent(
                 if (settled !in 0 until queueSize) return@collect
                 if (settled == orderIndex) return@collect
 
+                val action = computeSeekAction(settled, orderIndex)
+                if (action == ArtworkSeekAction.NoOp) return@collect
+                // 滑动落定、即将切歌:一次确认震感(受触感反馈设置门控)。全局点击观察器
+                // 按位移排除滑动,不会双重震动;自动连播不经 pendingUserSwipe 守卫,不会误震。
+                HapticFeedback.tap()
+
                 runCatching {
-                    when (val action = computeSeekAction(settled, orderIndex)) {
+                    when (action) {
                         ArtworkSeekAction.Next -> {
                             sharedViewModel.onUIEvent(UIEvent.Next)
                         }
