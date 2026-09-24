@@ -963,6 +963,25 @@ class SharedViewModel(
                     ),
                 )
                 loadMediaItemFromTrack(track, SONG_CLICK)
+            } else if (videoId.toLongOrNull() != null) {
+                // 网易歌本地无行:getFullMetadata 是 YT 管线,数字 id 必抓取失败(分享回流断的
+                // 根因)——按 id 走网易 songDetail 直取,与 YT 分享同构起播
+                val track = neteaseRepository.getNeteaseSongTrack(videoId)
+                if (track != null) {
+                    mediaPlayerHandler.setQueueData(
+                        QueueData.Data(
+                            listTracks = arrayListOf(track),
+                            firstPlayedTrack = track,
+                            playlistId = "RDAMVM$videoId",
+                            playlistName = getString(Res.string.shared),
+                            playlistType = PlaylistType.RADIO,
+                            continuation = null,
+                        ),
+                    )
+                    loadMediaItemFromTrack(track, SONG_CLICK)
+                } else {
+                    makeToast(getString(Res.string.error))
+                }
             } else {
                 streamRepository.getFullMetadata(videoId).collectLatest { response ->
                     val track = response.data

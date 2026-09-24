@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.synced_n_of_m
 import simpmusic.composeapp.generated.resources.netease_rate_limited
+import simpmusic.composeapp.generated.resources.need_login_toast
+import kotlinx.coroutines.flow.first
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
@@ -49,6 +51,8 @@ class SongSelectionViewModel(
     private val downloadUtils: DownloadHandler by inject()
     private val playlistRepository: PlaylistRepository by inject()
     private val albumRepository: AlbumRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
+    private val dataStoreManager: com.maxrave.domain.manager.DataStoreManager by inject()
 
     val listLocalPlaylist: StateFlow<List<LocalPlaylistEntity>> =
         localPlaylistRepository
@@ -154,11 +158,23 @@ class SongSelectionViewModel(
 
     fun addToFavorite(videoIds: List<String>) {
         viewModelScope.launch {
-            // 点赞=云端账号红心;本地行随结果镜像,失败计入汇总
+            // 点赞=云端账号红心;未登录源的歌直接跳过(云端必失败),与单首操作的
+            // 未登录置灰语义对齐——全部被跳过时给统一的"登录后可用"提示
+            val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
+            val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val candidates =
+                songsOf(videoIds).filterNot { it.liked }.filter { song ->
+                    (song.videoId.toLongOrNull() != null && neteaseLoggedIn) ||
+                        (song.videoId.toLongOrNull() == null && ytLoggedIn)
+                }
+            if (candidates.isEmpty()) {
+                makeToast(getString(Res.string.need_login_toast))
+                return@launch
+            }
+            // 本地行随结果镜像,失败计入汇总
             var succeeded = 0
             var attempted = 0
-            songsOf(videoIds)
-                .filterNot { it.liked }
+            candidates
                 .forEach { song ->
                     attempted++
                     val result = songRepository.setRemoteLikeStatus(song.videoId, true)
