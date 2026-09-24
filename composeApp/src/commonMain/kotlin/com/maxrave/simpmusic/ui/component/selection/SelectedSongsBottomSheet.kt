@@ -228,10 +228,33 @@ fun SelectedSongsBottomSheet(
                             iconColor = Color(0xFF00A0CB),
                         ) { showRemoveDownloadDialog = true }
                     } else if (onDownload != null) {
+                        // 未登录置灰(2026-09-25 用户定案:未登录不可下载对应源的歌);混源不挡
                         ActionButton(
                             icon = SimpIcons.Download,
                             text = Res.string.download,
+                            enable = !loggedOutSource,
                         ) { hideThen(onDownload) }
+                        if (loggedOutSource && selectionIds.isNotEmpty()) {
+                            val firstLoggedOutNetease =
+                                selectionIds
+                                    .firstOrNull { id ->
+                                        (id.toLongOrNull() != null && neteaseCookie.isBlank()) ||
+                                            (id.toLongOrNull() == null && ytLoggedIn != com.maxrave.domain.manager.DataStoreManager.TRUE)
+                                    }?.toLongOrNull() != null
+                            Text(
+                                text =
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (firstLoggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                    ),
+                                style = typo().labelSmall,
+                                color = colors.disabled,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                            )
+                        }
                     }
                     if (onAddToFavorite != null) {
                         // 文案与单曲三点菜单一致("点赞");favorite="收藏"易误读成本地收藏。

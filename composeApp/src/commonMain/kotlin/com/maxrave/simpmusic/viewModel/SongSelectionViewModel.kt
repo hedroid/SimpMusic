@@ -195,6 +195,18 @@ class SongSelectionViewModel(
      */
     fun download(videoIds: List<String>) {
         viewModelScope.launch {
+            // 防御:涉及源未登录不下载(面板已置灰;2026-09-25 用户定案)
+            val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
+            val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val loggedOut =
+                songsOf(videoIds).any { song ->
+                    (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
+                        (song.videoId.toLongOrNull() == null && !ytLoggedIn)
+                }
+            if (loggedOut) {
+                makeToast(getString(Res.string.need_login_toast))
+                return@launch
+            }
             val pending =
                 songsOf(videoIds).filter {
                     it.downloadState == DownloadState.STATE_NOT_DOWNLOADED
