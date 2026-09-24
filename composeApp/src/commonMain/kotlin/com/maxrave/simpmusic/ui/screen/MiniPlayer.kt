@@ -115,6 +115,7 @@ import com.maxrave.domain.utils.connectArtists
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.toggleMiniPlayer
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
 import com.maxrave.simpmusic.extension.formatDuration
@@ -128,6 +129,7 @@ import com.maxrave.simpmusic.ui.component.PlayerControlLayout
 import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.screen.player.content.ArtworkSnapSpring
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.PictureInPictureAlt
 import com.maxrave.simpmusic.ui.icon.QueueMusic
@@ -398,6 +400,10 @@ fun MiniPlayer(
                                 Modifier
                                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                                     .pointerInput(Unit) {
+                                        // 拉断橡皮筋震感(用户 2026-09-24):拖动中 offsetX 越过
+                                        // 切歌阈值(200/-120)的瞬间震一次,松手才真正切歌 —— 震在
+                                        // "拉断"那一刻,受触感设置门控。拉回阈值内重新武装,可再次触发。
+                                        var snapHapticArmed = true
                                         detectHorizontalDragGestures(
                                             onDragStart = {
                                             },
@@ -407,7 +413,14 @@ fun MiniPlayer(
                                                 ->
                                                 coroutineScope.launch {
                                                     change.consume()
-                                                    offsetX.animateTo(offsetX.value + dragAmount * 2)
+                                                    val target = offsetX.value + dragAmount * 2
+                                                    if (snapHapticArmed && (target > 200 || target < -120)) {
+                                                        snapHapticArmed = false
+                                                        HapticFeedback.tap()
+                                                    } else if (!snapHapticArmed && target >= -120f && target <= 200f) {
+                                                        snapHapticArmed = true
+                                                    }
+                                                    offsetX.animateTo(target)
                                                     Logger.w("MiniPlayer", "Dragged ${offsetX.value}")
                                                 }
                                             },
@@ -419,7 +432,8 @@ fun MiniPlayer(
                                                     } else if (offsetX.value < -120) {
                                                         sharedViewModel.onUIEvent(UIEvent.Next)
                                                     }
-                                                    offsetX.animateTo(0f)
+                                                    // 橡皮筋回弹:低阻尼弹簧冲过头再弹回(用户要求更强)
+                                                    offsetX.animateTo(0f, ArtworkSnapSpring)
                                                 }
                                             },
                                             onDragEnd = {
@@ -430,7 +444,7 @@ fun MiniPlayer(
                                                     } else if (offsetX.value < -120) {
                                                         sharedViewModel.onUIEvent(UIEvent.Next)
                                                     }
-                                                    offsetX.animateTo(0f)
+                                                    offsetX.animateTo(0f, ArtworkSnapSpring)
                                                 }
                                             },
                                         )
