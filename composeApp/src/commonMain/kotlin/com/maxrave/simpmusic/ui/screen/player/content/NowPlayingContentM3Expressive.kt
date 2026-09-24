@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -15,6 +16,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -73,6 +77,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -761,20 +766,29 @@ private fun ExpressiveTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typo().titleMedium,
-                color = Color.White,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            iterations = Int.MAX_VALUE,
-                            animationMode = MarqueeAnimationMode.Immediately,
-                        ).focusable(),
-            )
+            // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "expressiveTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                Text(
+                    text = title,
+                    style = typo().titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically),
+                )
+            }
             Spacer(modifier = Modifier.height(3.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -788,22 +802,30 @@ private fun ExpressiveTrackInfoRow(
                                 .padding(end = 4.dp),
                     )
                 }
-                Text(
-                    text = state.screenData.artistName,
-                    style = typo().bodyMedium,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .clickable {
-                                actions.onNavigateToArtist()
-                            },
-                )
+                AnimatedContent(
+                    targetState = state.screenData.artistName,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "expressiveArtist",
+                ) { artist ->
+                    // marquee 同上,超长省略号。
+                    Text(
+                        text = artist,
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .clickable {
+                                    actions.onNavigateToArtist()
+                                },
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.size(8.dp))

@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
@@ -9,6 +10,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -168,7 +172,13 @@ fun NowPlayingContentAppleMusic(
     // rather than an imperative ImageLoader.execute(): the pager's AsyncImage demonstrably loads
     // this exact url while the execute() call did not, so this uses the path already proven to
     // work rather than a second one that has to be kept working.
-    var backdropUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
+    // 磨砂背景与 artwork pager 当前页走同一 URL 派生(playerArtworkUrl:统一 1080 档、
+    // 同磁盘 key、同请求尺寸):翻歌时直接命中 pager 刚落好的缓存条目,不再自己另拉一张
+    // 544 小图、也不再因 key 带 "BIGGER" 与 pager 互不复用。
+    val currentArtworkUrl =
+        state.artworkQueue.getOrNull(state.currentOrderIndex)?.playerArtworkUrl()
+            ?: state.screenData.thumbnailURL
+    var backdropUrl by remember(currentArtworkUrl) { mutableStateOf(currentArtworkUrl) }
 
     val paletteColor = state.startColor.value
     val seedColor = if (paletteColor == Color.Black) seed else paletteColor
@@ -238,7 +248,8 @@ fun NowPlayingContentAppleMusic(
                             .Builder(LocalPlatformContext.current)
                             .data(backdropUrl)
                             .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(backdropUrl + "BIGGER")
+                            .diskCacheKey(backdropUrl)
+                            .size(1080)
                             .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
@@ -701,31 +712,49 @@ private fun AppleMusicMainTitleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typography.mainTitle,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                        .focusable(),
-            )
+            // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "appleMusicTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                Text(
+                    text = title,
+                    style = typography.mainTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (state.screenData.isExplicit) {
                     ExplicitBadge(modifier = Modifier.size(20.dp).padding(end = 4.dp))
                 }
-                Text(
-                    text = state.screenData.artistName,
-                    style = typography.mainArtist,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                            .focusable()
-                            .clickable { actions.onNavigateToArtist() },
-                )
+                AnimatedContent(
+                    targetState = state.screenData.artistName,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                    },
+                    label = "appleMusicArtist",
+                ) { artist ->
+                    // marquee 同上,超长省略号。
+                    Text(
+                        text = artist,
+                        style = typography.mainArtist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier =
+                            Modifier
+                                .clickable { actions.onNavigateToArtist() },
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -759,61 +788,49 @@ private fun AppleMusicArtworkPage(
         isCurrentPage && (state.screenData.canvasData != null || (state.screenData.isVideo && state.shouldShowVideo))
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isCurrentPage) {
-            var artworkUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
-            Box(
+        // 统一按页封面(见 Classic 的 PlayerPageArtwork):model 跟着本页 Track 走,
+        // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
+        // "灰占位→crossfade 重绘"。封面在 canvas/视频下保持组合(alpha 0)调色板照常
+        // 馈送,与旧 live 分支同一契约。
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(artworkZoneHeightDp.dp),
+        ) {
+            PlayerPageArtwork(
+                pageTrack = pageTrack,
+                isCurrentPage = isCurrentPage,
+                onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
+                // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
+                // overlay: that overlay had to land on exactly the page gradient's colour at
+                // that Y, and any drift drew a hard horizontal line across the screen.
+                // Masking lets the real background show through — nothing left to match.
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkZoneHeightDp.dp),
-            ) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(artworkUrl)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(artworkUrl + "BIGGER")
-                            .crossfade(550)
-                            .build(),
-                    contentDescription = "",
-                    onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                    onError = {
-                        val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                    },
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
-                    // overlay: that overlay had to land on exactly the page gradient's colour at
-                    // that Y, and any drift drew a hard horizontal line across the screen.
-                    // Masking lets the real background show through — nothing left to match.
+                        .fillMaxSize()
+                        .alpha(if (pageShowsCanvasOrVideo) 0f else 1f)
+                        .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
+            )
+            // 封面右上角的源品牌角标(网易/YTM);canvas/视频背景时随封面一起隐去
+            artworkBadgeSource(
+                pageTrackVideoId = pageTrack?.videoId,
+                isCurrentPage = isCurrentPage,
+                isNeteaseSong = state.isNeteaseSong,
+            )?.let { badgeSource ->
+                SourceBadge(
+                    source = badgeSource,
+                    size = 24.dp,
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .alpha(if (pageShowsCanvasOrVideo) 0f else 1f)
-                            .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .alpha(if (pageShowsCanvasOrVideo) 0f else 1f),
                 )
-                // 封面右上角的源品牌角标(网易/YTM);canvas/视频背景时随封面一起隐去
-                artworkBadgeSource(
-                    pageTrackVideoId = pageTrack?.videoId,
-                    isCurrentPage = isCurrentPage,
-                    isNeteaseSong = state.isNeteaseSong,
-                )?.let { badgeSource ->
-                    SourceBadge(
-                        source = badgeSource,
-                        size = 24.dp,
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .alpha(if (pageShowsCanvasOrVideo) 0f else 1f),
-                    )
-                }
             }
-            if (pageShowsCanvasOrVideo) {
+        }
+        if (pageShowsCanvasOrVideo) {
                 if (isVideoBackdrop) {
                     // Centre the video in the region ABOVE the controls (top → cluster), not in
                     // the whole screen: screen-centred, half of a 16:9 video sat behind the
@@ -975,47 +992,6 @@ private fun AppleMusicArtworkPage(
                     )
                 }
             }
-        } else if (pageTrack != null) {
-            val staticThumb = pageTrack.thumbnails?.maxByOrNull { it.width * it.height }?.url
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkZoneHeightDp.dp),
-            ) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(staticThumb)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(staticThumb)
-                            .crossfade(300)
-                            .build(),
-                    contentDescription = pageTrack.title,
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
-                )
-                // 相邻页封面同样标源(队列可混源,逐页各自判)
-                artworkBadgeSource(
-                    pageTrackVideoId = pageTrack?.videoId,
-                    isCurrentPage = false,
-                    isNeteaseSong = state.isNeteaseSong,
-                )?.let { badgeSource ->
-                    SourceBadge(
-                        source = badgeSource,
-                        size = 24.dp,
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp),
-                    )
-                }
-            }
-        }
     }
 }
 

@@ -3,6 +3,7 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
 import androidx.compose.animation.Animatable
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -18,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -518,71 +520,56 @@ fun NowPlayingContentSpotify(
                                         .alpha(if (pageHasCanvas) 0f else 1f)
                                         .aspectRatio(1f),
                             ) {
-                                if (isCurrentArtworkPage) {
-                                    // Live artwork (drives palette extraction via setBitmap).
-                                    // The artwork URL that is actually loading. `maxresdefault.jpg` —
-                                    // the fallback artworkUri many video tracks carry — only EXISTS
-                                    // for videos with an HD thumbnail; everything else 404s,
-                                    // onSuccess never fires, the palette never generates, and the
-                                    // gradient sits on its fallback for a grey song. On error we
-                                    // retry once with `hqdefault.jpg`, which YouTube guarantees for
-                                    // every video. Song artwork (googleusercontent) never matches
-                                    // the replace, so this is a no-op for it.
-                                    var artworkUrl by remember(state.screenData.thumbnailURL) {
-                                        mutableStateOf(state.screenData.thumbnailURL)
-                                    }
-                                    Box(
-                                        contentAlignment = Alignment.Center,
+                                // ── Unified per-page artwork ──
+                                // ONE data-driven node for every page (PlayerPageArtwork): the
+                                // model comes from THIS page's Track, so the current/adjacent flip
+                                // is a parameter change, not a subtree swap — no placeholder
+                                // round-trip when a swiped page settles. Adjacent pages feed
+                                // their own page-backdrop palette via onArtworkLoaded; the current
+                                // page additionally feeds the global palette, re-firing at the
+                                // flip with the already-decoded bitmap (no reload involved).
+                                val palettePageScope = rememberCoroutineScope()
+                                val pageIsVideoTrack = pageTrack.playerArtworkIsVideo()
+                                val pageHidesArtwork =
+                                    isCurrentArtworkPage &&
+                                        state.screenData.isVideo &&
+                                        state.shouldShowVideo
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.Center)
+                                            .background(Color.Transparent)
+                                            .shadow(
+                                                elevation = 3.dp,
+                                                shape = RoundedCornerShape(8.dp),
+                                                spotColor =
+                                                    if (isCurrentArtworkPage) {
+                                                        state.spotShadowColor.copy(alpha = 0.6f)
+                                                    } else {
+                                                        Color.Black.copy(alpha = 0.4f)
+                                                    },
+                                                ambientColor = Color.Transparent,
+                                            ),
+                                ) {
+                                    PlayerPageArtwork(
+                                        pageTrack = pageTrack,
+                                        isCurrentPage = isCurrentArtworkPage,
+                                        onArtworkLoaded = { bitmap ->
+                                            palettePageScope.launch {
+                                                pagePaletteState.generate(bitmap)
+                                            }
+                                        },
+                                        onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                                         modifier =
                                             Modifier
                                                 .align(Alignment.Center)
-                                                .background(Color.Transparent)
-                                                .shadow(
-                                                    elevation = 3.dp,
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    spotColor =
-                                                        state.spotShadowColor.copy(
-                                                            alpha = 0.6f,
-                                                        ),
-                                                    ambientColor = Color.Transparent,
-                                                ),
-                                    ) {
-                                        AsyncImage(
-                                            model =
-                                                ImageRequest
-                                                    .Builder(LocalPlatformContext.current)
-                                                    .data(artworkUrl)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(artworkUrl + "BIGGER")
-                                                    .crossfade(550)
-                                                    .build(),
-                                            contentDescription = "",
-                                            onSuccess = {
-                                                actions.onArtworkBitmap(
-                                                    it.result.image.toImageBitmap(),
-                                                )
-                                            },
-                                            onError = {
-                                                val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                                                if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                                            },
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = rememberHolderPainter(),
-                                            error = rememberHolderPainter(),
-                                            modifier =
-                                                Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(3.dp)
-                                                    .fillMaxWidth()
-                                                    .background(Color.Transparent)
-                                                    .aspectRatio(
-                                                        if (!state.screenData.isVideo) 1f else 16f / 9,
-                                                    ).clip(
-                                                        RoundedCornerShape(8.dp),
-                                                    ).alpha(
-                                                        if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
-                                                    ),
-                                        )
+                                                .padding(3.dp)
+                                                .fillMaxWidth()
+                                                .aspectRatio(if (pageIsVideoTrack) 16f / 9 else 1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .alpha(if (pageHidesArtwork) 0f else 1f),
+                                    )
 
                                     // 封面右上角的源品牌角标(网易/YTM);canvas/视频模式随封面一起隐去
                                     artworkBadgeSource(
@@ -597,13 +584,12 @@ fun NowPlayingContentSpotify(
                                                 Modifier
                                                     .align(Alignment.TopEnd)
                                                     .padding(10.dp)
-                                                    .alpha(
-                                                        if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
-                                                    ),
+                                                    .alpha(if (pageHidesArtwork) 0f else 1f),
                                         )
                                     }
-                                    }
+                                }
 
+                                if (isCurrentArtworkPage) {
                                     // Inline video player (current page + isVideo + shouldShowVideo).
                                     androidx.compose.animation.AnimatedVisibility(
                                         visible = state.screenData.isVideo && state.shouldShowVideo,
@@ -756,73 +742,6 @@ fun NowPlayingContentSpotify(
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-                                } else if (pageTrack != null) {
-                                    // Adjacent page — static thumbnail from Track.thumbnails.
-                                    val staticThumb =
-                                        pageTrack.thumbnails
-                                            ?.maxByOrNull { it.width * it.height }
-                                            ?.url
-                                    val palettePageScope = rememberCoroutineScope()
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier =
-                                            Modifier
-                                                .align(Alignment.Center)
-                                                .background(Color.Transparent)
-                                                .shadow(
-                                                    elevation = 3.dp,
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    spotColor = Color.Black.copy(alpha = 0.4f),
-                                                    ambientColor = Color.Transparent,
-                                                ),
-                                    ) {
-                                        AsyncImage(
-                                            model =
-                                                ImageRequest
-                                                    .Builder(LocalPlatformContext.current)
-                                                    .data(staticThumb)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(staticThumb)
-                                                    .crossfade(300)
-                                                    .build(),
-                                            contentDescription = pageTrack.title,
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = rememberHolderPainter(),
-                                            error = rememberHolderPainter(),
-                                            // Feed the per-page palette using the SAME bitmap
-                                            // we just rendered so the Layer 0 gradient backdrop
-                                            // matches what the user sees on screen.
-                                            onSuccess = { state ->
-                                                palettePageScope.launch {
-                                                    pagePaletteState.generate(
-                                                        state.result.image.toImageBitmap(),
-                                                    )
-                                                }
-                                            },
-                                            modifier =
-                                                Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(3.dp)
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(1f)
-                                                    .clip(RoundedCornerShape(8.dp)),
-                                        )
-                                        // 相邻页封面同样标源(队列可混源,逐页各自判)
-                                        artworkBadgeSource(
-                                            pageTrackVideoId = pageTrack?.videoId,
-                                            isCurrentPage = false,
-                                            isNeteaseSong = state.isNeteaseSong,
-                                        )?.let { badgeSource ->
-                                            SourceBadge(
-                                                source = badgeSource,
-                                                size = 24.dp,
-                                                modifier =
-                                                    Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .padding(10.dp),
-                                            )
                                         }
                                     }
                                 }
@@ -2032,20 +1951,29 @@ private fun NowPlayingTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typo().titleMedium,
-                maxLines = 1,
-                color = Color.White,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            iterations = Int.MAX_VALUE,
-                            animationMode = MarqueeAnimationMode.Immediately,
-                        ).focusable(),
-            )
+            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 550ms crossfade 不同
+            // 步,读作"闪一下"。Spotify 同款上滑淡入淡出,过渡内文字各自带 marquee。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "nowPlayingTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里:Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把标题渲染成空白。
+                Text(
+                    text = title,
+                    style = typo().titleMedium,
+                    maxLines = 1,
+                    color = Color.White,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically),
+                )
+            }
             Spacer(modifier = Modifier.height(3.dp))
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -2063,22 +1991,29 @@ private fun NowPlayingTrackInfoRow(
                     }
                 }
                 item(state.screenData.artistName) {
-                    Text(
-                        text = state.screenData.artistName,
-                        style = typo().bodyMedium,
-                        maxLines = 1,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(align = Alignment.CenterVertically)
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable()
-                                .clickable {
-                                    actions.onNavigateToArtist()
-                                },
-                    )
+                    AnimatedContent(
+                        targetState = state.screenData.artistName,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        },
+                        label = "nowPlayingArtist",
+                    ) { artist ->
+                        // marquee 同样不进 AnimatedContent(见上方标题注释),超长用省略号。
+                        Text(
+                            text = artist,
+                            style = typo().bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .clickable {
+                                        actions.onNavigateToArtist()
+                                    },
+                        )
+                    }
                 }
             }
         }

@@ -296,60 +296,44 @@ internal fun ExpressiveArtworkCardPage(
                         .clip(ArtworkCardShape)
                         .background(colorScheme.surfaceContainer),
             ) {
-                if (isCurrentArtworkPage) {
-                    // Live artwork — kept composed even under canvas/video (alpha 0) so
-                    // onSuccess keeps feeding the palette that drives the whole scheme.
-                    // The artwork URL that is actually loading. `maxresdefault.jpg` — the fallback
-                    // artworkUri many video tracks carry — only EXISTS for videos with an HD
-                    // thumbnail; everything else 404s, onSuccess never fires, the palette never
-                    // generates, and the whole M3E scheme sits on the app-seed cyan for a grey
-                    // song. On error we retry once with `hqdefault.jpg`, which YouTube guarantees
-                    // for every video. Song artwork (googleusercontent) never matches the replace,
-                    // so this is a no-op for it.
-                    var artworkUrl by remember(state.screenData.thumbnailURL) {
-                        mutableStateOf(state.screenData.thumbnailURL)
-                    }
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(artworkUrl)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(artworkUrl + "BIGGER")
-                                .crossfade(550)
-                                .build(),
-                        contentDescription = "",
-                        onSuccess = {
-                            actions.onArtworkBitmap(
-                                it.result.image.toImageBitmap(),
-                            )
-                        },
-                        onError = {
-                            val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                            if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                        },
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
-                        modifier =
-                            Modifier
-                                .align(Alignment.Center)
-                                .then(
-                                    if (state.screenData.isVideo) {
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(16f / 9)
-                                    } else {
-                                        Modifier.fillMaxSize()
-                                    },
-                                ).alpha(
-                                    if (pageHasCanvas || (state.screenData.isVideo && state.shouldShowVideo)) 0f else 1f,
-                                ),
-                    )
+                // 统一按页封面(见 Classic 的 PlayerPageArtwork):model 跟着本页 Track 走,
+                // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
+                // "灰占位→crossfade 重绘"。卡片在 canvas/视频下保持组合(alpha 0),调色板
+                // 照常馈送(翻转时用已解码位图补发),与旧 live 分支同一契约。
+                PlayerPageArtwork(
+                    pageTrack = pageTrack,
+                    isCurrentPage = isCurrentArtworkPage,
+                    onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
+                    modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .then(
+                                if (pageTrack.playerArtworkIsVideo()) {
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(16f / 9)
+                                } else {
+                                    Modifier.fillMaxSize()
+                                },
+                            ).alpha(
+                                if (pageHasCanvas ||
+                                    (
+                                        isCurrentArtworkPage &&
+                                            state.screenData.isVideo &&
+                                            state.shouldShowVideo
+                                        )
+                                ) {
+                                    0f
+                                } else {
+                                    1f
+                                },
+                            ),
+                )
 
-                    // Inline video player — same condition as Classic, rendered inside the card.
-                    // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility member
-                    // otherwise shadows the top-level overload (same workaround as Classic).
+                // Inline video player — same condition as Classic, rendered inside the card.
+                // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility member
+                // otherwise shadows the top-level overload (same workaround as Classic).
+                if (isCurrentArtworkPage) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = state.screenData.isVideo && state.shouldShowVideo,
                         modifier = Modifier.align(Alignment.Center),
@@ -501,27 +485,6 @@ internal fun ExpressiveArtworkCardPage(
                             }
                         }
                     }
-                } else if (pageTrack != null) {
-                    // Adjacent page — static thumbnail card.
-                    val staticThumb =
-                        pageTrack.thumbnails
-                            ?.maxByOrNull { it.width * it.height }
-                            ?.url
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(staticThumb)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(staticThumb)
-                                .crossfade(300)
-                                .build(),
-                        contentDescription = pageTrack.title,
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
-                        modifier = Modifier.fillMaxSize(),
-                    )
                 }
                 // 卡片右上角的源品牌角标(网易/YTM);canvas 模式随卡片 alpha 一起隐去,
                 // 当前页播视频时与封面图同条件隐藏(相邻页静态卡恒显)

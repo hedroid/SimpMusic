@@ -78,6 +78,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -314,7 +315,10 @@ class SharedViewModel(
                                     getCanvas(nowPlaying.mediaItem.mediaId, (timeline.total / 1000).toInt())
                                 }
                                 nowPlaying.songEntity?.let { song ->
-                                    if (nowPlayingScreenData.value.lyricsData == null) {
+                                    // 判"该不该拉词"看 lyricsVideoId 而非 lyricsData==null:
+                                    // 切歌保留旧词期间 lyricsData 非空但 id 是旧歌的,照样要拉;
+                                    // 真没词的歌 updateLyrics(null) 会把 id 落成当前曲,不会重拉。
+                                    if (nowPlayingScreenData.value.lyricsVideoId != song.videoId) {
                                         Logger.w(tag, "Get lyrics from format")
                                         getLyricsFromFormat(nowPlaying.mediaItem.isVideo(), song, (timeline.total / 1000).toInt())
                                     }
@@ -431,6 +435,11 @@ class SharedViewModel(
                             ?: -1L
                     _timeline.update { it.copy(total = seededTotal) }
                     state.songEntity?.let { track ->
+                        // 歌词 stale-while-revalidate:整包重建时旧词原样保留(lyricsVideoId
+                        // 还是旧歌的 id = "过期"标记),新词由 updateLyrics 落地时整体替换。
+                        // 之前的 `lyricsData = null` 让歌词区/整行歌词先塌掉再重建,就是
+                        // 切歌"歌词闪一下"的根因;拉词触发改为按 lyricsVideoId 判过期。
+                        val previousData = _nowPlayingScreenData.value
                         _nowPlayingScreenData.value =
                             NowPlayingScreenData(
                                 nowPlayingTitle = track.title,
@@ -441,13 +450,26 @@ class SharedViewModel(
                                 isVideo = false,
                                 thumbnailURL = null,
                                 canvasData = null,
-                                lyricsData = null,
+                                lyricsData = previousData.lyricsData,
+                                lyricsVideoId = previousData.lyricsVideoId,
                                 songInfoData = null,
                                 playlistName =
                                     mediaPlayerHandler.queueData.value
                                         ?.data
                                         ?.playlistName ?: "",
                             )
+                        // 兜底:拉词链路若极端失败、始终没调 updateLyrics 落地,保留的旧词
+                        // 不能挂一整首歌 — 10s 后仍是过期词就清空,回到"无词"态。
+                        viewModelScope.launch {
+                            delay(10_000)
+                            if (_nowPlayingState.value?.songEntity?.videoId == track.videoId &&
+                                _nowPlayingScreenData.value.lyricsVideoId != track.videoId
+                            ) {
+                                _nowPlayingScreenData.update {
+                                    it.copy(lyricsData = null, lyricsVideoId = track.videoId)
+                                }
+                            }
+                        }
                     }
                     state.mediaItem.let { now ->
                         _canvas.value = null
@@ -1298,9 +1320,12 @@ class SharedViewModel(
         lyricsProvider: LyricsProvider = LyricsProvider.SIMPMUSIC,
     ) {
         if (inputLyrics == null) {
+            // "这首歌没有词"也是一次落地:把 lyricsVideoId 落成当前曲,拉词触发就此收口
+            // (retained 旧词同时被清掉,不会把上一首的词永远挂在屏上)。
             _nowPlayingScreenData.update {
                 it.copy(
                     lyricsData = null,
+                    lyricsVideoId = videoId,
                 )
             }
             return
@@ -1483,6 +1508,7 @@ class SharedViewModel(
                                     lyrics = lyrics,
                                     lyricsProvider = lyricsProvider,
                                 ),
+                            lyricsVideoId = videoId,
                         )
                     }
                     // Save lyrics to database
@@ -2439,6 +2465,12 @@ data class NowPlayingScreenData(
     val thumbnailURL: String?,
     val canvasData: CanvasData? = null,
     val lyricsData: LyricsData? = null,
+    /**
+     * lyricsData 属于哪首歌。切歌时旧词会被保留(stale-while-revalidate,防歌词区闪空),
+     * 这个标记就是"旧词是不是当前曲的":拉词触发与落地写入都看它,防止旧词被当成新词
+     * 永远留在屏上。
+     */
+    val lyricsVideoId: String? = null,
     val songInfoData: SongInfoEntity? = null,
     /** 网易歌详情卡数据(艺人/专辑/热评),与 songInfoData 按源互斥 */
     val neteaseSongData: NeteaseSongInfoEntity? = null,
