@@ -1,7 +1,9 @@
 package com.maxrave.simpmusic.ui.component.selection
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -160,21 +162,31 @@ fun SelectedSongsBottomSheet(
                         ) { hideThen(onAddToQueue) }
                     }
                     if (onAddToPlaylist != null) {
-                        ActionButton(
-                            icon = SimpIcons.PlaylistAdd,
-                            text = Res.string.add_to_a_playlist,
-                            enable = !mixedSources,
-                        ) { hideThen(onAddToPlaylist) }
+                        // 混源提示放在按钮同一行末尾(短文案,各语言一排放得下)
                         if (mixedSources) {
-                            Text(
-                                text = stringResource(Res.string.mixed_source_selection),
-                                style = typo().labelSmall,
-                                color = colors.subtitle.copy(alpha = 0.8f),
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 2.dp),
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Box(Modifier.weight(1f)) {
+                                    ActionButton(
+                                        icon = SimpIcons.PlaylistAdd,
+                                        text = Res.string.add_to_a_playlist,
+                                        enable = false,
+                                    ) { }
+                                }
+                                Text(
+                                    text = stringResource(Res.string.mixed_source_selection),
+                                    style = typo().labelSmall,
+                                    color = colors.subtitle.copy(alpha = 0.85f),
+                                    modifier = Modifier.padding(end = 20.dp),
+                                )
+                            }
+                        } else {
+                            ActionButton(
+                                icon = SimpIcons.PlaylistAdd,
+                                text = Res.string.add_to_a_playlist,
+                            ) { hideThen(onAddToPlaylist) }
                         }
                     }
                     if (allDownloaded && onRemoveDownload != null) {

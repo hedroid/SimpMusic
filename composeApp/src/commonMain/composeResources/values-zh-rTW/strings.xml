@@ -197,14 +197,14 @@
     <string name="unavailable_song_queue_exhausted">佇列中沒有可播放的歌曲了</string>
     <string name="cloud_action_failed_netease">網易雲帳號操作失敗</string>
     <string name="need_login_toast">登入後才能使用收藏</string>
-    <string name="mixed_source_selection">選中包含不同音源的歌曲，無法添加到歌單，請分音源操作</string>
+    <string name="mixed_source_selection">含不同音源</string>
     <string name="liked_toast">已喜歡</string>
     <string name="unliked_toast">已取消喜歡</string>
     <string name="saved_toast">已收藏</string>
     <string name="unsaved_toast">已取消收藏</string>
     <string name="followed_toast">已關注</string>
     <string name="unfollowed_toast">已取消關注</string>
-    <string name="synced_n_of_m">已喜歡 %1$d/%2$d</string>
+    <string name="synced_n_of_m">已添加 %1$d 首到喜歡</string>
     <string name="cloud_action_failed_youtube">YouTube Music 帳號操作失敗</string>
     <string name="liked_songs">喜歡的歌曲</string>
     <string name="library_podcasts">播客</string>

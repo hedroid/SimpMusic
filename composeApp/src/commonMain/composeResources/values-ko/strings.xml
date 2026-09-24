@@ -641,7 +641,7 @@
     <string name="unsaved_toast">저장 취소</string>
     <string name="followed_toast">팔로우함</string>
     <string name="unfollowed_toast">팔로우 취소</string>
-    <string name="synced_n_of_m">%2$d건 중 %1$d건 좋아요</string>
+    <string name="synced_n_of_m">%1$d개를 좋아요에 추가됨</string>
     <string name="cloud_action_failed_youtube">YouTube Music 계정을 업데이트하지 못했습니다</string>
     <string name="haptic_feedback">햅틱 피드백</string>
     <string name="haptic_feedback_description">탭 햅틱 피드백</string>
