@@ -362,7 +362,10 @@ fun SearchScreen(
                 selectionViewModel.addToQueue(selectedIds)
                 selectionState.exit()
             },
-            onAddToPlaylist = { showSelectionAddToPlaylist = true },
+            onAddToPlaylist = {
+                selectionViewModel.loadCloudPlaylists()
+                showSelectionAddToPlaylist = true
+            },
             onDownload = {
                 selectionViewModel.download(selectedIds)
                 selectionState.exit()
@@ -381,16 +384,26 @@ fun SearchScreen(
     if (showSelectionAddToPlaylist) {
         val selectedIds = selectionState.selected.toList()
         val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+        val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+        val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
         AddToPlaylistModalBottomSheet(
             isBottomSheetVisible = true,
-            listLocalPlaylist = localPlaylists,
-            listYouTubePlaylist = emptyList(),
+            // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
+            // 2026-09-24 多选路径接云端分区,与单曲弹窗同款
+            listLocalPlaylist = emptyList(),
+            listYouTubePlaylist = youTubePlaylists,
+            listNeteasePlaylist = neteasePlaylists,
+            videoIds = selectedIds,
             onDismiss = { showSelectionAddToPlaylist = false },
-            onClick = { playlist ->
-                selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+            onClick = {},
+            onYTPlaylistClick = { playlist ->
+                selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
                 selectionState.exit()
             },
-            onYTPlaylistClick = {},
+            onNeteasePlaylistClick = { playlist ->
+                selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                selectionState.exit()
+            },
         )
     }
     if (showBottomSheet) {

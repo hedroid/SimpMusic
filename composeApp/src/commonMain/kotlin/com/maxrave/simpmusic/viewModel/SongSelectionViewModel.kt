@@ -9,14 +9,18 @@ import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
+import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -58,6 +62,76 @@ class SongSelectionViewModel(
         localPlaylistRepository
             .getAllLocalPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // 云端歌单分区("添加到歌单"弹窗,2026-09-24 多选路径接云端——此前 7 个多选调用点只传
+    // 本地歌单,而本地分区被政策开关(SHOW_LOCAL_PLAYLIST_SECTION)隐藏,弹窗实际是空的):
+    // YT=库歌单(滤 VLLM),网易=自建。
+    private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
+    val youTubePlaylists: StateFlow<List<PlaylistsResult>> = _youTubePlaylists.asStateFlow()
+
+    private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
+    val neteasePlaylists: StateFlow<List<PlaylistsResult>> = _neteasePlaylists.asStateFlow()
+
+    /** 弹窗打开时拉云端歌单列表(两路独立,失败留空) */
+    fun loadCloudPlaylists() {
+        viewModelScope.launch {
+            runCatching {
+                playlistRepository.getLibraryPlaylist().collect { data ->
+                    _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
+                }
+            }
+        }
+        viewModelScope.launch {
+            runCatching {
+                _neteasePlaylists.value = neteaseRepository.getOwnNeteasePlaylists()
+            }
+        }
+    }
+
+    /** 批量加到 YT 歌单(源互斥:只吃 YT 曲目,网易数字 id 会被服务端拒) */
+    fun addToYouTubePlaylist(
+        playlistId: String,
+        videoIds: List<String>,
+    ) {
+        viewModelScope.launch {
+            val ytIds = videoIds.filter { it.toLongOrNull() == null }
+            if (ytIds.isEmpty()) {
+                makeToast(getString(Res.string.error_occurred))
+                return@launch
+            }
+            var ok = 0
+            ytIds.forEach { id ->
+                localPlaylistRepository
+                    .addYouTubePlaylistItem(playlistId, id)
+                    .collectResource(onSuccess = { ok++ }, onError = { })
+            }
+            makeToast(getString(if (ok > 0) Res.string.added_to_youtube_playlist else Res.string.error_occurred))
+        }
+    }
+
+    /** 批量加到网易自建歌单(端点原生批量;只吃网易曲目) */
+    fun addToNeteasePlaylist(
+        playlistId: String,
+        videoIds: List<String>,
+    ) {
+        viewModelScope.launch {
+            val ids = videoIds.filter { it.toLongOrNull() != null }
+            if (ids.isEmpty()) {
+                makeToast(getString(Res.string.error_occurred))
+                return@launch
+            }
+            neteaseRepository
+                .addTracksToNeteasePlaylist(playlistId, ids)
+                .fold(
+                    onSuccess = { ok ->
+                        makeToast(getString(if (ok) Res.string.added_to_netease_playlist else Res.string.error_occurred))
+                    },
+                    onFailure = {
+                        makeToast(getString(neteaseWriteErrorString(it, Res.string.error_occurred)))
+                    },
+                )
+        }
+    }
 
     /**
      * Whether EVERY song in the last checked selection is on disk, recomputed by

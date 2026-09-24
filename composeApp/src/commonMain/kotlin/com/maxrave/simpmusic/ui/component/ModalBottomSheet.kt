@@ -2969,6 +2969,8 @@ fun AddToPlaylistModalBottomSheet(
     listYouTubePlaylist: List<PlaylistsResult>,
     listNeteasePlaylist: List<PlaylistsResult> = emptyList(),
     videoId: String? = null,
+    // 多选批量建单:非空优先于 videoId(单曲路径不传,行为不变)
+    videoIds: List<String> = emptyList(),
     onClick: (LocalPlaylistEntity) -> Unit,
     onYTPlaylistClick: (PlaylistsResult) -> Unit,
     onNeteasePlaylistClick: (PlaylistsResult) -> Unit = {},
@@ -3030,8 +3032,9 @@ fun AddToPlaylistModalBottomSheet(
                     enabled = !creatingPlaylist && newPlaylistName.isNotBlank(),
                     onClick = {
                         val name = newPlaylistName.trim()
-                        val songId = videoId ?: return@TextButton
                         if (name.isEmpty()) return@TextButton
+                        val songs = videoIds.ifEmpty { listOfNotNull(videoId) }
+                        val songId = songs.firstOrNull() ?: return@TextButton
                         creatingPlaylist = true
                         coroutineScope.launch {
                             // 建单成功后单体回读权威行(封面/作者,与库页网络行同构)再发
@@ -3042,7 +3045,7 @@ fun AddToPlaylistModalBottomSheet(
                                     if (songId.toLongOrNull() != null) {
                                         neteaseRepository.createNeteasePlaylist(name).getOrNull()
                                             ?.let { id ->
-                                                if (neteaseRepository.addTracksToNeteasePlaylist(id, listOf(songId)).getOrDefault(false)) {
+                                                if (neteaseRepository.addTracksToNeteasePlaylist(id, songs.filter { it.toLongOrNull() != null }).getOrDefault(false)) {
                                                     val accountName =
                                                         dataStoreManager.getString("AccountName").first().orEmpty()
                                                     val row =
@@ -3052,7 +3055,7 @@ fun AddToPlaylistModalBottomSheet(
                                                                 source = MusicSource.NETEASE.name,
                                                                 author = accountName,
                                                                 title = name,
-                                                                trackCount = 1,
+                                                                trackCount = songs.count { it.toLongOrNull() != null },
                                                             )
                                                     LibraryMutation.NeteasePlaylistCreated(row)
                                                 } else {
@@ -3060,7 +3063,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 }
                                             }
                                     } else {
-                                        playlistRepository.createYouTubePlaylistWithTracks(name, listOf(songId))?.let { id ->
+                                        playlistRepository.createYouTubePlaylistWithTracks(name, songs.filter { it.toLongOrNull() == null })?.let { id ->
                                             val accountName =
                                                 dataStoreManager.getString("AccountName").first().orEmpty()
                                             val readback = playlistRepository.getYouTubePlaylistAsLibraryRow(id)
