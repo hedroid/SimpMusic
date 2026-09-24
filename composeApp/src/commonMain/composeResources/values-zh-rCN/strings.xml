@@ -106,7 +106,7 @@
     <string name="move_down">下移</string>
     <string name="delete_from_queue">从队列移除</string>
     <string name="more">更多</string>
-    <string name="singles">单个</string>
+    <string name="singles">单曲</string>
     <string name="related_artists">相关艺人</string>
     <string name="about">关于</string>
     <string name="let_s_start_with_a_radio">从一个电台开始吧</string>
@@ -166,7 +166,7 @@
     <string name="what_do_you_want_to_listen_to">你想听什么？</string>
     <string name="songs_inArtist">曲目</string>
     <string name="albums_inArtist">专辑</string>
-    <string name="singles_inArtist">单个</string>
+    <string name="singles_inArtist">单曲</string>
     <string name="fans_might_also_like_inArtist">粉丝可能也喜欢</string>
     <string name="crash_log">SimpMusic 崩溃了。很抱歉出现此问题。\n将崩溃日志发给开发人员</string>
     <string name="crash">崩溃</string>
