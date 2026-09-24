@@ -232,16 +232,18 @@ class SongSelectionViewModel(
 
     fun addToFavorite(videoIds: List<String>) {
         viewModelScope.launch {
-            // 点赞=云端账号红心;未登录源的歌直接跳过(云端必失败),与单首操作的
-            // 未登录置灰语义对齐——全部被跳过时给统一的"登录后可用"提示
+            // 点赞=云端账号红心。登录门控(2026-09-24 用户定案):选中集合里任一歌
+            // 所属源未登录 → 整批挡下弹统一提示(宁可不做,不部分执行——与收藏入口
+            // 未登录置灰同哲学);全部源已登录才执行
             val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
             val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
-            val candidates =
-                songsOf(videoIds).filterNot { it.liked }.filter { song ->
-                    (song.videoId.toLongOrNull() != null && neteaseLoggedIn) ||
-                        (song.videoId.toLongOrNull() == null && ytLoggedIn)
+            val candidates = songsOf(videoIds).filterNot { it.liked }
+            val blocked =
+                candidates.any { song ->
+                    (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
+                        (song.videoId.toLongOrNull() == null && !ytLoggedIn)
                 }
-            if (candidates.isEmpty()) {
+            if (blocked) {
                 makeToast(getString(Res.string.need_login_toast))
                 return@launch
             }

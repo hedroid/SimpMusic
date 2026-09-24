@@ -49,7 +49,7 @@ import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.downloaded
-import simpmusic.composeapp.generated.resources.favorite
+import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.remove_download_message
@@ -173,9 +173,10 @@ fun SelectedSongsBottomSheet(
                         ) { hideThen(onDownload) }
                     }
                     if (onAddToFavorite != null) {
+                        // 文案与单曲三点菜单一致("点赞");favorite="收藏"易误读成本地收藏
                         ActionButton(
                             icon = SimpIcons.Favorite,
-                            text = Res.string.favorite,
+                            text = Res.string.like,
                         ) { hideThen(onAddToFavorite) }
                     }
                     extraActions.forEach { action ->
