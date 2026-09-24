@@ -581,9 +581,18 @@ fun App(
                                 navController = navController,
                                 showAnalyticsTab = showAnalyticsTab,
                                 showMixForYouTab = showMixForYouTab,
-                            ) { klass ->
-                                viewModel.reloadDestination(klass)
-                            }
+                                // 横屏 rail 搜索项长按弹音源菜单,与竖屏底栏同款交互(用户 2026-09-24)
+                                selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                neteaseLoggedIn = neteaseLoggedInValue,
+                                onSourceSelected = { source ->
+                                    if (selectedSourceValue != source.name) {
+                                        viewModel.switchSource(source)
+                                    }
+                                },
+                                reloadDestinationIfNeeded = { klass ->
+                                    viewModel.reloadDestination(klass)
+                                },
+                            )
                         }
                         // Desktop only: the content sits in its own rounded panel floating on a
                         // pure black window, Spotify style, while the rail stays flat black

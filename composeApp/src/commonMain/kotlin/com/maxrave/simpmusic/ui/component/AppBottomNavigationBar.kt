@@ -1,7 +1,6 @@
 package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -34,7 +33,6 @@ import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestinatio
 import com.maxrave.simpmusic.ui.navigation.destination.library.MixForYouDestination
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.theme.typo
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.*
 import kotlin.reflect.KClass
@@ -264,6 +262,9 @@ fun AppNavigationRail(
     showAnalyticsTab: Boolean = false,
     showMixForYouTab: Boolean = false,
     reloadDestinationIfNeeded: (KClass<*>) -> Unit = { _ -> },
+    selectedSource: MusicSource = MusicSource.YOUTUBE_MUSIC,
+    neteaseLoggedIn: Boolean = false,
+    onSourceSelected: (MusicSource) -> Unit = { _ -> },
 ) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // See the note in AppBottomNavigationBar: `ordinal` is the tab's identity, not its position.
@@ -304,66 +305,111 @@ fun AppNavigationRail(
             .firstOrNull { screen -> hierarchy.any { it.hasRoute(screen.destination::class) } }
             ?.let { selectedIndex = it.ordinal }
     }
-    NavigationRail {
-        Spacer(Modifier.height(16.dp))
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center,
+    // 与 AppBottomNavigationBar.selectTab 同一套选中/导航语义,reload 逻辑也一致。
+    val selectTab: (BottomNavScreen) -> Unit = { screen ->
+        if (selectedIndex == screen.ordinal) {
+            if (currentBackStackEntry?.destination?.hierarchy?.any {
+                    it.hasRoute(screen.destination::class)
+                } == true
             ) {
-                Image(
-                    painter = painterResource(Res.drawable.mono),
-                    contentDescription = null,
-                    modifier =
-                        Modifier
-                            .height(32.dp)
-                            .clip(CircleShape),
-                )
+                reloadDestinationIfNeeded(screen.destination::class)
+            } else {
+                navController.navigate(screen.destination)
+            }
+        } else {
+            selectedIndex = screen.ordinal
+            navController.navigate(screen.destination) {
+                popUpTo(navController.graph.startDestinationId) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
             }
         }
+    }
+    // 音源菜单状态:横屏 rail 的搜索项长按弹出(与竖屏底栏同款交互,见 sourceSwitchGesture)
+    var showSourceMenu by remember { mutableStateOf(false) }
+    NavigationRail {
+        Spacer(Modifier.height(16.dp))
         Spacer(Modifier.weight(1f))
         bottomNavScreens.forEach { screen ->
-            NavigationRailItem(
-                icon = screen.icon,
-                label = {
-                    Text(
-                        stringResource(screen.title),
-                        style =
-                            if (selectedIndex == screen.ordinal) {
-                                typo().bodySmall
-                            } else {
-                                typo().bodySmall.greyScale()
-                            },
-                    )
-                },
-                selected = selectedIndex == screen.ordinal,
-                onClick = {
-                    if (selectedIndex == screen.ordinal) {
-                        if (currentBackStackEntry?.destination?.hierarchy?.any {
-                                it.hasRoute(screen.destination::class)
-                            } == true
+            if (screen == BottomNavScreen.Search) {
+                // 搜索项:NavigationRailItem 不开放 onLongClick,音源长按菜单挂不进去 ——
+                // 按竖屏底栏同款自绘(sourceSwitchGesture + SourceSwitchMenu),选中态画
+                // secondaryContainer 指示条对齐 NavigationRailItem 的默认观感。
+                val searchSelected = selectedIndex == BottomNavScreen.Search.ordinal
+                Column(
+                    modifier =
+                        Modifier
+                            .width(80.dp)
+                            .sourceSwitchGesture(
+                                onLongPress = { showSourceMenu = true },
+                                onTap = { selectTab(screen) },
+                            ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(width = 56.dp, height = 32.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (searchSelected) {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    } else {
+                                        androidx.compose.ui.graphics.Color.Transparent
+                                    },
+                                ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompositionLocalProvider(
+                            LocalContentColor provides
+                                if (searchSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         ) {
-                            reloadDestinationIfNeeded(
-                                screen.destination::class,
-                            )
-                        } else {
-                            navController.navigate(screen.destination)
-                        }
-                    } else {
-                        selectedIndex = screen.ordinal
-                        navController.navigate(screen.destination) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                            screen.icon()
                         }
                     }
-                },
-            )
+                    Text(
+                        stringResource(screen.title),
+                        style = typo().bodySmall,
+                        color =
+                            if (searchSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        maxLines = 1,
+                    )
+                    SourceSwitchMenu(
+                        expanded = showSourceMenu,
+                        onDismiss = { showSourceMenu = false },
+                        selectedSource = selectedSource,
+                        neteaseLoggedIn = neteaseLoggedIn,
+                        onSourceSelected = onSourceSelected,
+                    )
+                }
+            } else {
+                NavigationRailItem(
+                    icon = screen.icon,
+                    label = {
+                        Text(
+                            stringResource(screen.title),
+                            style =
+                                if (selectedIndex == screen.ordinal) {
+                                    typo().bodySmall
+                                } else {
+                                    typo().bodySmall.greyScale()
+                                },
+                        )
+                    },
+                    selected = selectedIndex == screen.ordinal,
+                    onClick = { selectTab(screen) },
+                )
+            }
         }
         Spacer(Modifier.height(32.dp))
     }
