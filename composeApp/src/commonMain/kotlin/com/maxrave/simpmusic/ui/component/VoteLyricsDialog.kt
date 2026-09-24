@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.ThumbDown
 import com.maxrave.simpmusic.ui.icon.ThumbUp
@@ -46,6 +47,8 @@ fun VoteLyricsDialog(
         titleContentColor = rememberSurfaceDarkColors().content,
         textContentColor = rememberSurfaceDarkColors().content,
         onDismissRequest = onDismiss,
+        // dialog=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(歌词投票弹窗)
+        modifier = Modifier.hapticTapFeedback(),
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {

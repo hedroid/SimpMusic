@@ -93,6 +93,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.data.model.lyrics.RomanizationLanguage
 import com.maxrave.domain.repository.LyricsRomanizerRepository
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
@@ -1208,10 +1209,13 @@ fun FullscreenLyricsSheet(
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
         sheetState = sheetState,
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(全屏歌词);挂在
+        // 已有的 modifier 链上,与"点按显隐控制条"的 clickable 共存
         modifier =
-            Modifier
-                .fillMaxHeight()
-                .clickable(
+        Modifier
+            .fillMaxHeight()
+            .hapticTapFeedback()
+            .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
                 ) {

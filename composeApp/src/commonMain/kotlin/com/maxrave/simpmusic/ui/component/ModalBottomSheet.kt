@@ -136,6 +136,7 @@ import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.copyToClipboard
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.expect.ui.persistPickedImage
@@ -356,7 +357,8 @@ fun InfoPlayerBottomSheet(
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
         sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(信息面板)
+        modifier = Modifier.fillMaxHeight().hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
@@ -1223,7 +1225,8 @@ fun QueueBottomSheet(
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
         sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(队列面板)
+        modifier = Modifier.fillMaxHeight().hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
@@ -1535,6 +1538,8 @@ fun QueueItemBottomSheet(
         contentColor = Color.Transparent,
         dragHandle = null,
         scrimColor = Color.Black.copy(alpha = .5f),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(更多操作面板)
+        modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
         Card(
@@ -1973,6 +1978,8 @@ fun NowPlayingBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -3120,6 +3127,8 @@ fun AddToPlaylistModalBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -3375,6 +3384,8 @@ fun ArtistModalBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -3714,6 +3725,8 @@ fun LocalPlaylistBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -4074,6 +4087,8 @@ fun NeteaseCommentsSheet(
         contentColor = Color.Transparent,
         dragHandle = null,
         scrimColor = Color.Black.copy(alpha = .5f),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(网易评论面板)
+        modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
         Card(
