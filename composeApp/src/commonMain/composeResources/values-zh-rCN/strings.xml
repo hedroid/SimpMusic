@@ -928,6 +928,7 @@
     <string name="unavailable_song_queue_exhausted">队列中没有可播放的歌曲了</string>
     <string name="cloud_action_failed_netease">网易云账号操作失败</string>
     <string name="need_login_toast">登录后才能使用收藏</string>
+    <string name="mixed_source_selection">选中包含不同音源的歌曲，无法添加到歌单，请分音源操作</string>
     <string name="liked_toast">已喜欢</string>
     <string name="unliked_toast">已取消喜欢</string>
     <string name="saved_toast">已收藏</string>

@@ -51,6 +51,7 @@ import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.n_songs_selected
+import simpmusic.composeapp.generated.resources.mixed_source_selection
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
@@ -83,6 +84,9 @@ fun SelectedSongsBottomSheet(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
+    // 当前选中集合的 videoId(按 id 形状判源):混源时"添加到歌单"置灰——歌单按源互斥,
+    // 混选加歌只会丢一半,宁可不做(2026-09-24 用户定案)
+    selectionIds: List<String> = emptyList(),
     onDownload: (() -> Unit)? = null,
     allDownloaded: Boolean = false,
     onRemoveDownload: (() -> Unit)? = null,
@@ -91,6 +95,8 @@ fun SelectedSongsBottomSheet(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val colors = rememberSurfaceDarkColors()
+    val mixedSources =
+        selectionIds.map { it.toLongOrNull() != null }.distinct().size > 1
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Confirmed inside the sheet so the nine call sites only wire state and a callback — none of
     // them has to draw its own dialog for the batch removal.
@@ -157,7 +163,19 @@ fun SelectedSongsBottomSheet(
                         ActionButton(
                             icon = SimpIcons.PlaylistAdd,
                             text = Res.string.add_to_a_playlist,
+                            enable = !mixedSources,
                         ) { hideThen(onAddToPlaylist) }
+                        if (mixedSources) {
+                            Text(
+                                text = stringResource(Res.string.mixed_source_selection),
+                                style = typo().labelSmall,
+                                color = colors.subtitle.copy(alpha = 0.8f),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                     if (allDownloaded && onRemoveDownload != null) {
                         // Same accent blue the single-song menu wears once a track is on disk.

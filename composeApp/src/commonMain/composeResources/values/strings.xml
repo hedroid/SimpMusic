@@ -956,6 +956,7 @@
     <string name="unavailable_song_queue_exhausted">No playable songs left in the queue</string>
     <string name="cloud_action_failed_netease">Couldn't update your NetEase account</string>
     <string name="need_login_toast">Sign in to use favorites</string>
+    <string name="mixed_source_selection">Selection mixes music sources — add one source at a time</string>
     <string name="liked_toast">Liked</string>
     <string name="unliked_toast">Removed from likes</string>
     <string name="saved_toast">Saved</string>
