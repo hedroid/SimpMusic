@@ -2966,8 +2966,9 @@ private const val SHOW_LOCAL_PLAYLIST_SECTION = false
 fun AddToPlaylistModalBottomSheet(
     isBottomSheetVisible: Boolean,
     listLocalPlaylist: List<LocalPlaylistEntity>,
-    listYouTubePlaylist: List<PlaylistsResult>,
-    listNeteasePlaylist: List<PlaylistsResult> = emptyList(),
+    // null=尚未拉取(多选弹窗加载中):不闪"未找到"空态;拉完空列表=真没有,才显示空态
+    listYouTubePlaylist: List<PlaylistsResult>?,
+    listNeteasePlaylist: List<PlaylistsResult>? = null,
     videoId: String? = null,
     // 多选批量建单:非空优先于 videoId(单曲路径不传,行为不变)
     videoIds: List<String> = emptyList(),
@@ -3178,11 +3179,11 @@ fun AddToPlaylistModalBottomSheet(
                         if (!selectionHasYouTube || youtubeLoggedIn != DataStoreManager.TRUE) {
                             emptyList()
                         } else {
-                            listYouTubePlaylist
+                            listYouTubePlaylist ?: emptyList()
                         }
                     val visibleNeteasePlaylists =
                         if (selectionHasNetease && neteaseCookie.isNotBlank()) {
-                            listNeteasePlaylist
+                            listNeteasePlaylist ?: emptyList()
                         } else {
                             emptyList()
                         }
@@ -3232,8 +3233,8 @@ fun AddToPlaylistModalBottomSheet(
                             else -> false
                         }
                     if (((SHOW_LOCAL_PLAYLIST_SECTION && listLocalPlaylist.isEmpty() && selectedLibrary == 0) ||
-                        (visibleYouTubePlaylists.isEmpty() && selectedLibrary == 1) ||
-                        (visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
+                        (listYouTubePlaylist != null && visibleYouTubePlaylists.isEmpty() && selectedLibrary == 1) ||
+                        (listNeteasePlaylist != null && visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
                     ) && !canCreateInSelectedLibrary
                     ) {
                         Text(

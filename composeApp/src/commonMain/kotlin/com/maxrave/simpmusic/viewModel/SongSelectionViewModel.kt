@@ -67,11 +67,12 @@ class SongSelectionViewModel(
     // 云端歌单分区("添加到歌单"弹窗,2026-09-24 多选路径接云端——此前 7 个多选调用点只传
     // 本地歌单,而本地分区被政策开关(SHOW_LOCAL_PLAYLIST_SECTION)隐藏,弹窗实际是空的):
     // YT=库歌单(滤 VLLM),网易=自建。
-    private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
-    val youTubePlaylists: StateFlow<List<PlaylistsResult>> = _youTubePlaylists.asStateFlow()
+    // null=尚未拉取(弹窗加载中,别闪"未找到"空态);拉完(含空列表)=已加载
+    private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
+    val youTubePlaylists: StateFlow<List<PlaylistsResult>?> = _youTubePlaylists.asStateFlow()
 
-    private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>>(emptyList())
-    val neteasePlaylists: StateFlow<List<PlaylistsResult>> = _neteasePlaylists.asStateFlow()
+    private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
+    val neteasePlaylists: StateFlow<List<PlaylistsResult>?> = _neteasePlaylists.asStateFlow()
 
     /** 弹窗打开时拉云端歌单列表(两路独立,失败留空) */
     fun loadCloudPlaylists() {
@@ -80,11 +81,15 @@ class SongSelectionViewModel(
                 playlistRepository.getLibraryPlaylist().collect { data ->
                     _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
                 }
+            }.onFailure {
+                _youTubePlaylists.value = emptyList()
             }
         }
         viewModelScope.launch {
             runCatching {
                 _neteasePlaylists.value = neteaseRepository.getOwnNeteasePlaylists()
+            }.onFailure {
+                _neteasePlaylists.value = emptyList()
             }
         }
     }

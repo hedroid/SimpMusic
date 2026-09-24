@@ -516,7 +516,7 @@
     <string name="never">안 함</string>
     <string name="auto_backup_success">자동 백업을 성공적으로 완료했습니다</string>
     <string name="auto_backup_failed">자동 백업 실패</string>
-    <string name="no_playlist_found">로컬 재생목록이 없습니다. 먼저 하나 만들어 주십시오</string>
+    <string name="no_playlist_found">재생목록이 없습니다. 먼저 하나 만들어 주세요</string>
     <string name="list_all_cookies_of_this_page">이 페이지의 모든 쿠키 나열</string>
     <string name="copied_to_clipboard">클립보드에 복사 완료</string>
     <string name="update_channel">업데이트 채널</string>

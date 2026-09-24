@@ -587,7 +587,7 @@
     <string name="never">從不</string>
     <string name="auto_backup_success">自動備份已完成</string>
     <string name="auto_backup_failed">自動備份失敗</string>
-    <string name="no_playlist_found">沒有本地播放清單，請先創建一個</string>
+    <string name="no_playlist_found">未找到播放清單，先創建一個</string>
     <string name="list_all_cookies_of_this_page">列出本頁面的所有 Cookies</string>
     <string name="copied_to_clipboard">已複製至剪貼簿</string>
     <string name="update_channel">更新頻道</string>
