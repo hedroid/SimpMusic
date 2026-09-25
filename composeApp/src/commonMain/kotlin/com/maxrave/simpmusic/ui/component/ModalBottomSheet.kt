@@ -163,6 +163,7 @@ import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.Lyrics
+import com.maxrave.simpmusic.ui.icon.LibraryMusic
 import com.maxrave.simpmusic.ui.icon.MyLocation
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlayCircle
@@ -179,6 +180,7 @@ import com.maxrave.simpmusic.ui.icon.SyncDisabled
 import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.SimilarSongsDestination
 import com.maxrave.simpmusic.ui.screen.player.deriveOrderIndex
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.seed
@@ -303,6 +305,7 @@ import simpmusic.composeapp.generated.resources.sleep_timer_set_error
 import simpmusic.composeapp.generated.resources.sleep_timer_warning
 import simpmusic.composeapp.generated.resources.sort_by
 import simpmusic.composeapp.generated.resources.start_radio
+import simpmusic.composeapp.generated.resources.similar_songs
 import simpmusic.composeapp.generated.resources.sync
 import simpmusic.composeapp.generated.resources.sync_first
 import simpmusic.composeapp.generated.resources.synced
@@ -2229,6 +2232,23 @@ fun NowPlayingBottomSheet(
                             ),
                         )
                         hideModalBottomSheet()
+                    }
+                    // 网易歌独有:simiSong 相似歌曲列表页(2026-09-25 落地,2026-09-15 曾从
+                    // 详情卡摘除的入口以独立页形态回归);YT 歌的相似=电台,无列表形态
+                    if (uiState.songUIState.videoId.toLongOrNull() != null) {
+                        ActionButton(
+                            icon = SimpIcons.LibraryMusic,
+                            text = Res.string.similar_songs,
+                        ) {
+                            onNavigateToOtherScreen()
+                            navController.navigate(
+                                SimilarSongsDestination(
+                                    songId = uiState.songUIState.videoId,
+                                    songTitle = uiState.songUIState.title,
+                                ),
+                            )
+                            hideModalBottomSheet()
+                        }
                     }
                     // 网易歌歌词恒走 NETEASE 官方专线,供应商选择对其无效 → 入口隐藏;
                     // 仅 YT 歌可选(设置页入口已隐藏,这里是唯一选择处)

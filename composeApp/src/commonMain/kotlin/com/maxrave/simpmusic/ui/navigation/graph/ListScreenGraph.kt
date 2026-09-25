@@ -19,6 +19,8 @@ import com.maxrave.simpmusic.ui.screen.other.AlbumScreen
 import com.maxrave.simpmusic.ui.screen.other.ArtistScreen
 import com.maxrave.simpmusic.ui.screen.other.MoreAlbumsScreen
 import com.maxrave.simpmusic.ui.screen.other.MoreSongsScreen
+import com.maxrave.simpmusic.ui.screen.other.SimilarSongsScreen
+import com.maxrave.simpmusic.ui.navigation.destination.list.SimilarSongsDestination
 import com.maxrave.simpmusic.ui.screen.other.PlaylistScreen
 import com.maxrave.simpmusic.ui.screen.other.PodcastScreen
 import com.maxrave.simpmusic.ui.theme.ForceDarkContent
@@ -72,6 +74,15 @@ fun NavGraphBuilder.listScreenGraph(
             navController = navController,
             id = data.artistId,
             artistName = data.artistName,
+        )
+    }
+    composable<SimilarSongsDestination> { entry ->
+        val data = entry.toRoute<SimilarSongsDestination>()
+        SimilarSongsScreen(
+            innerPadding = innerPadding,
+            navController = navController,
+            id = data.songId,
+            songTitle = data.songTitle,
         )
     }
     composable<PlaylistDestination> { entry ->

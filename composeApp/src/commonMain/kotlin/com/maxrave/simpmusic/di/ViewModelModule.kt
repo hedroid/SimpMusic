@@ -20,6 +20,7 @@ import com.maxrave.simpmusic.viewModel.NeteaseTagViewModel
 import com.maxrave.simpmusic.viewModel.MoodViewModel
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
 import com.maxrave.simpmusic.viewModel.MoreSongsViewModel
+import com.maxrave.simpmusic.viewModel.SimilarSongsViewModel
 import com.maxrave.simpmusic.viewModel.NotificationViewModel
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.PlaylistViewModel
@@ -191,6 +192,12 @@ val viewModelModule =
         }
         viewModel {
             MoreSongsViewModel(
+                get(),
+                get(),
+            )
+        }
+        viewModel {
+            SimilarSongsViewModel(
                 get(),
                 get(),
             )
