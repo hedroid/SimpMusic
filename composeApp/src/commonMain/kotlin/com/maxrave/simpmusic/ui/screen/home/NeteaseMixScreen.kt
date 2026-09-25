@@ -73,6 +73,7 @@ import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -515,7 +516,8 @@ private fun FmHeroCard(
                 .clip(RoundedCornerShape(16.dp)),
     ) {
         AsyncImage(
-            model = content.thumbnails.lastOrNull()?.url,
+            // 300dp 全宽大卡,数据侧只有 param=500(toMixContent)——请求侧升 1080
+            model = content.thumbnails.lastOrNull()?.url?.toHiResArtworkUrl(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
