@@ -1178,6 +1178,11 @@ fun PlaylistScreen(
                         Modifier
                             .fillMaxWidth()
                             .onGloballyPositioned { searchBarHeightPx = it.size.height }
+                            // 不透明兜底底色:haze 2.0 的 hazeBlur 层在覆盖层刚出现时会渲染成
+                            // 未初始化的纯白(实测:开搜索条后 y~355-475 全宽 #FFFFFF 静态白带,
+                            // 滚动触发 haze source 重绘后自愈)。垫上 palette 底色后 blur 失灵
+                            // 最多退化成实色条,不再漏白
+                            .background(mutedPaletteBg)
                             .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     ) {
                         Row(
