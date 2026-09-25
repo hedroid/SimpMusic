@@ -555,9 +555,7 @@ fun LibraryScreen(
     Column(
         Modifier
             .background(Color.Transparent)
-            // 传页面背景色:返回本页时首 1-2 帧 hazeSource 尚无内容,玻璃层显示底色而非
-            // 全透明,消除"透明→磨砂"的顶栏闪烁
-            .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin(MaterialTheme.colorScheme.surface).then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
+            .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
                 topAppBarHeight = with(density) { coordinates.size.height.toDp() }
             },
     ) {

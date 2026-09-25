@@ -666,8 +666,7 @@ fun LibraryDynamicPlaylistScreen(
                 },
                 modifier =
                     Modifier
-                        // 同 LibraryScreen:底色兜底,进入本页的首帧玻璃不透明闪
-                        .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin(MaterialTheme.colorScheme.surface).then { blurEnabled(true) }),
+                        .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }),
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
