@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -167,7 +168,12 @@ fun NeteaseTagScreen(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(current.contents, key = { it.playlistBrowseId }) { content ->
+                            // id 参与但 index 兜底:映射形状缺 id(null)或数据源异常重复时
+                            // 不至于 duplicate/null key 直接崩
+                            itemsIndexed(
+                                current.contents,
+                                key = { index, content -> "${content.playlistBrowseId}-$index" },
+                            ) { _, content ->
                                 HomeItemContentPlaylist(
                                     onClick = {
                                         content.playlistBrowseId?.let { id ->
