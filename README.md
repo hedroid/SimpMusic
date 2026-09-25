@@ -1,236 +1,123 @@
-<div align="center"> <img src="https://raw.githubusercontent.com/maxrave-dev/SimpMusic/dev/fastlane/metadata/android/en-US/images/featureGraphic.png"> <h1>SimpMusic</h1>  
-A FOSS YouTube Music client for Android and Desktop with many features from<br>Spotify, SponsorBlock, ReturnYouTubeDislike using Compose Multiplatform to develop.
-<br> 
-<br>
-<a href="https://github.com/maxrave-dev/SimpMusic/releases"><img src="https://img.shields.io/github/v/release/maxrave-dev/SimpMusic"></a> <a href="https://github.com/maxrave-dev/SimpMusic/releases"><img src="https://img.shields.io/github/downloads/maxrave-dev/SimpMusic/total"></a> <br> <br> <a href="https://trendshift.io/repositories/13482" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13482" alt="maxrave-dev%2FSimpMusic | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-<br>
-<br>
-<a href="https://www.producthunt.com/products/simpmusic/reviews?utm_source=badge-product_rating&utm_medium=badge&utm_source=badge-simpmusic" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/product_rating.svg?product_id=903836&theme=dark" alt="SimpMusic - A&#0032;FOSS&#0032;YouTube&#0032;Music&#0032;client&#0032;for&#0032;Android&#0032;with&#0032;many&#0032;features | Product Hunt" style="width: 242px; height: 108px;" width="242" height="108" /></a>
-<br> 
-<h4>Download</h4>  
-<a href="https://apt.izzysoft.de/packages/com.maxrave.simpmusic/"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" width="200"></a> 
-<a href="https://f-droid.org/en/packages/com.maxrave.simpmusic/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" width="200"></a> 
-<a href="https://www.openapk.net/simpmusic/com.maxrave.simpmusic/"><img src="https://www.openapk.net/images/openapk-badge.png" width="200"></a> 
-<a href="https://github.com/maxrave-dev/SimpMusic/releases"><img src="https://raw.githubusercontent.com/NeoApplications/Neo-Backup/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png" width="200"></a> 
-<h4>Nightly Build</h4>  
-<a href="https://simpmusic.org/nightly-download"><img src="https://github.com/maxrave-dev/SimpMusic/actions/workflows/android.yml/badge.svg"></a><br/> <a href="https://simpmusic.org/nightly-download"><img src="https://raw.githubusercontent.com/NeoApplications/Neo-Backup/034b226cea5c1b30eb4f6a6f313e4dadcbb0ece4/badge_github.png" width="200"></a> 
-</div>  
+<div align="center">
 
-> SimpMusic is available on Desktop now!
->
-> [kotlin-footguns](https://github.com/maxrave-dev/kotlin-footguns) — the Kotlin, Compose Multiplatform and desktop JVM traps this project ran into the hard way. Star it if it saves you a night.
-  
-## Features ✨️    
-- Play music from YouTube Music or YouTube for free, without ads and in the background
-- Three Now Playing styles: Classic, Material 3 Expressive and Apple Music (NEW)
-- Ten-band equalizer with presets and AutoEq headphone profiles, plus Delay and Reverb effects (NEW)
-- SimpMusic Wrapped: your year in music, plus monthly recap playlists (NEW)
-- On-device listening analytics: charts, period history, listening clock (NEW)
-- Word-by-word Apple Music-style lyrics, romanization for 12 languages, share lyrics as an image (NEW)
-- Home screen widgets: turntable, playlists and listening insights (NEW)
-- High quality up-to 256kbps stream (Opus or AAC) for YouTube Music Premium users
-- Browsing Home, Charts, Podcast, Moods & Genre with YouTube Music data at high speed    
-- Search everything on YouTube    
-- Spotify Canvas and Animated Album Art supported (NEW)
-- Power your experience with SimpMusic Chart (https://chart.simpmusic.org/)
-- Play 1080p video option with subtitle    
-- AI song suggestions    
-- Import playlists converted from Spotify and other apps
-- Customize your playlist, synced with YouTube Music
-- Notifications from followed artists    
-- Caching and offline playback support    
-- Crossfade with DJ-style like Apple Music
-- Customizing THEME (Light, Dark, Color, etc)
-- Synced lyrics from SimpMusic Lyrics, LRCLIB, Spotify (require login) and YouTube Transcript - AI lyrics translation (BETA) (\*)  
-- Personalize data (\**) and multi-YouTube-account support    
-- Last.fm scrobbling (Full version)
-- Supports SponsorBlock and Return YouTube Dislike
-- Sleep Timer    
-- Android Auto with online content, feature rich UI/UX
-- Discord Rich Presence support
-- Listen Together: shared rooms that play in sync with friends, compatible with Metrolist (NEW)
-- And many more!    
-  
-> (\*) Use your OpenAI or Gemini API key    
-> (\**) For users who chose "Send back to Google" feature    
-    
-> **Warning**    
- > This app is in the beta stage, so it may have many bugs and make it crash. If you find any bugs,      
-> please create an issue or contact me via email or Discord server.   
-> Because of depending on YouTube Music, the player error will happen and it's normally, please don't ask me about the stable state of this app.
-    
-## Screenshots    
- <p align="center">          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/01.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/02.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/03.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/04.png?raw=true" width="200" /> </p> <p align="center">          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/05.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/06.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/07.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/08.png?raw=true" width="200" /> </p> <p align="center">          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/09.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/10.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/11.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/12.png?raw=true" width="200" /> </p> <p align="center">          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/13.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/14.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/15.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/16.png?raw=true" width="200" /> </p> <p align="center">          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/17.png?raw=true" width="200" />          
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/18.png?raw=true" width="200" /> </p> <p align="center">  
-   <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/screenshot/19.png?raw=true" width="800" />  
+<img src="https://raw.githubusercontent.com/maxrave-dev/SimpMusic/dev/fastlane/metadata/android/en-US/images/featureGraphic.png">
+
+<h1>SimpMusic 双源版</h1>
+
+一个 FOSS 的双音源音乐客户端：在 [SimpMusic](https://github.com/maxrave-dev/SimpMusic)（YouTube Music）的基础上，
+完整接入了 **网易云音乐** 音源，并做了大量播放稳定性、性能与本地体验优化。
+
+<a href="https://github.com/maxrave-dev/SimpMusic"><img src="https://img.shields.io/badge/%E4%B8%8A%E6%B8%B8-maxrave--dev%2FSimpMusic-blue" alt="upstream"></a>
+<a href="https://github.com/hedroid/SimpMusic"><img src="https://img.shields.io/github/stars/hedroid/SimpMusic?style=social" alt="stars"></a>
+<a href="https://github.com/hedroid/NeriPlayer"><img src="https://img.shields.io/badge/%E5%A7%8A%E5%A6%B9%E9%A1%B9%E7%9B%AE-NeriPlayer-orange" alt="NeriPlayer"></a>
+
+</div>
+
+> **相关项目**
+> - 上游原版 SimpMusic（YouTube Music 客户端本体）：**https://github.com/maxrave-dev/SimpMusic**
+> - 本 fork：**https://github.com/hedroid/SimpMusic**（core 子模块在 [hedroid/SimpMusic-Core](https://github.com/hedroid/SimpMusic-Core)）
+> - 姊妹项目 NeriPlayer（同作者的另一款音乐播放器，多源流媒体 + 本地管理 + 自建同步）：**https://github.com/hedroid/NeriPlayer**
+>   本 fork 的播放错误恢复、物理洗牌等多处设计参考了它的实现。
+
+## 截图
+
+<p align="center">
+<img src="docs/screenshots/01-netease-home.png" width="230">
+<img src="docs/screenshots/02-mix-fm-heart-radio.png" width="230">
+<img src="docs/screenshots/03-library-netease.png" width="230">
+</p>
+<p align="center">
+<sub>网易云音乐主页（每日推荐 / 私人雷达） · 混合页（私人 FM / 红心电台-心动模式） · 资料库「您的网易云」三分区</sub>
 </p>
 
- #### More [screenshots](https://photos.app.goo.gl/AbieoXG5ctDrpwzp7) here.
- 
- ## Data    
-- This app uses hidden API from YouTube Music with some tricks to get data from YouTube Music.    
-- Use Spotify Web API and some tricks to get Spotify Canvas and Lyrics    
-- Thanks to [InnerTune](https://github.com/z-huang/InnerTune/) for the idea to get data from YouTube Music. This repo is my inspiration to create this app.    
-- Special thanks to [SmartTube](https://github.com/yuliskov/SmartTube). This repo help me to extract the streaming URL of YouTube Music.    
-- My app is using [SponsorBlock](https://sponsor.ajay.app/) to skip sponsor in YouTube videos.    
-- ReturnYouTubeDislike for getting information on votes 
-- Main lyrics data from SimpMusic Lyrics
-- Alternative lyrics data from LRCLIB. More information [LRCLIB](https://lrclib.net/)    
- 
- ## Privacy    
- SimpMusic doesn't have any tracker or third-party server for collecting user data in FOSS version. If YouTube      
-logged-in users enable "Send back to Google" feature, SimpMusic only uses YouTube Music Tracking API to send listening history and listening record of video to Google for better recommendations and      
-supporting artist or YouTube Creator (For API reference,      
-see [this](https://github.com/maxrave-dev/SimpMusic/blob/main/core/service/kotlinYtmusicScraper/src/commonMain/kotlin/com/maxrave/kotlinytmusicscraper/Ytmusic.kt)).
+<p align="center">
+<img src="docs/screenshots/04-player-classic.png" width="230">
+<img src="docs/screenshots/05-player-lyrics-detail.png" width="230">
+<img src="docs/screenshots/06-queue-endless.png" width="230">
+</p>
+<p align="center">
+<sub>播放页（经典主题） · 歌词 + 网易详情卡（粉丝 / 点赞 / 评论 / 专辑简介 / 罗马音） · 队列（计数 / 定位 / 无尽队列）</sub>
+</p>
 
-We collect crash data in the Full version to improve the app.
-   
-## Full or FOSS version
-I use [Sentry](http://sentry.io) crashlytics to catch all crashes in the Full version. [Sentry](https://github.com/getsentry/sentry) is the open-source project.
- If you don't want to be collected crash data, you must use FOSS version.
- 
-## Desktop app
+<p align="center">
+<img src="docs/screenshots/07-search-netease.png" width="230">
+<img src="docs/screenshots/08-source-switch.png" width="230">
+<img src="docs/screenshots/09-youtube-music-home.png" width="230">
+</p>
+<p align="center">
+<sub>网易搜索（热搜榜） · 长按搜索按钮切换音源（切源不打断播放） · YouTube Music 主页（双源并存）</sub>
+</p>
 
-### Which file should I download?
-- For Windows: Download the `.msix` package and run `install.bat` to install.
-- For macOS: Download the file with extension `.dmg`.
-- For Linux: Download the file with extension `.AppImage` (all Linux distributions)
+## 与上游的核心差异
 
-### Log in guide: https://www.simpmusic.org/blogs/en/how-to-log-in-on-desktop-app
-#### Discord login guide: https://gist.github.com/MarvNC/e601f3603df22f36ebd3102c501116c6
+### 🎵 网易云音乐音源（本 fork 最大的增量）
 
-### Some limitations on Desktop app:
-- Some Linux distributions may have stability issues (upstream JetBrains issue).
-- ARM64 on Windows and Linux: use the x64 build.
+- **双音源并存**：长按底栏搜索按钮随时切换 YouTube Music / 网易云音乐；切源只切数据源，
+  **不打断正在播放的音乐**（播放管线按歌曲 ID 形状路由，混源队列也能连续播放）。
+- **完整浏览链路**：网易主页（每日推荐 / 私人雷达 / 分类歌单）、搜索（热搜榜 + 歌曲/专辑/歌手/歌单分 tab、无限滚动）、
+  歌单 / 专辑 / 歌手详情页、分类页、排行榜、艺人「全部歌曲」页（热门 / 最新排序）、「相似歌曲」独立页。
+- **私人 FM 与红心电台**：红心电台走官方「心动模式」接口（红心歌单个性化推荐），FM 播完自动接续。
+- **歌词专线**：直接使用网易官方歌词（原文 / 人工翻译 / 官方罗马音），翻译质量优于 AI 翻译且不消耗 AI 配额。
+- **收藏全面云端化**：红心 / 收藏歌单专辑 / 关注艺人都是云端账号状态，一处操作全端同步；未登录时按钮置灰引导登录。
+- **灰歌处理**：无版权 / VIP 专属歌曲在列表中置灰显示，播放失败时按设置三档动作：自动跳过 / 暂停 /
+  **自动匹配 YouTube Music 同名曲替换播放**（标题 + 艺人 + 时长择优，含防循环护栏）。
+- **高音质**：网易 320k / 无损 FLAC 流播放，支持导出音频文件（FLAC/MP3 + 封面）到系统下载目录。
+- **无尽队列与电台**：网易普通队列可开启无尽续播（播完自动续相似歌），电台按尾曲续批；
+  队列页有「当前第几首」计数与浮动定位按钮。
+- **本地歌单同步上云**：本地歌单一键同步为网易云端歌单（增量同步），也可以在 app 内新建 / 管理 / 删除云端歌单，
+  所有云端写操作成功后**本地即时回写**（事件总线 + 乐观更新，无需手动刷新）。
+- **多选批量操作**：列表多选后批量点赞、批量添加到歌单、批量下载（双源各自执行，含未登录 / 混源门控提示）。
 
-Please report issues on our Discord server if you find any bugs.
- 
-## Translation    
-[![Crowdin](https://badges.crowdin.net/simpmusic/localized.svg)](https://crowdin.com/project/simpmusic)
-<br/>
-You can help me translate this app into your language by using Crowdin [SimpMusic on Crowdin](https://crowdin.com/project/simpmusic)    
- #### Special thanks to all translators on Crowdin ❤️    
- ## FAQ    
- #### 1. Wrong Lyrics?    
- Lyrics are provided by LRCLIB and other sources. Sometimes lyrics may not match perfectly with the YouTube `videoId` parameter. So I need to use some "String Matcher" and "Duration" to search lyrics. So sometimes, some songs or videos get the wrong lyrics.    
-    
-#### 2. Why the name or brand is "SimpMusic"?    
- Simply, because I love the name. It's a combination of 'Simple' and 'Music'. But SimpMusic is not a simple app, it's all you need for a powerful music streaming app.    
-  
-#### More FAQ, join [my Discord channel](https://discord.com/channels/1136988323819298856/1349800418745778196)  
+### ⚡ 播放稳定性与性能优化
 
-## Contributing
+- **真机发热修复**：列表「正在播放」Lottie 指示条曾以 120Hz 持续重绘（静止页面仍 120+fps、主线程 50%+ 占用），
+  现限帧至 12fps，实测帧率 122fps → 8-13fps；另有 marquee 连滚修复。
+- **播放错误恢复重构**（参考 NeriPlayer）：重试尊重暂停意图、加载完成尊重中途暂停、ERROR 态按播放键原地重载、
+  音频焦点交互计数防「暂停的歌自己复活」、取流失败退避重试。
+- **长音频静音 bug 修复**：分块截断导致 320k/FLAC 大文件只解码前段就静音，现网络流完整装载。
+- **封面与视觉**：播放页 / 详情页封面按 1080px 请求（原先被钉在 544px 导致模糊）；切歌封面零闪烁
+  （pager 按页数据驱动）；歌词 stale-while-revalidate，切歌不再闪空。
+- **数字紧凑格式**：粉丝 / 播放 / 点赞等计数按语言习惯显示（中文万进制「17.5 万」，其它 K/M/B）。
 
-Contributions are welcome — the full guide lives in [CONTRIBUTING.md](CONTRIBUTING.md). The short version:
+### 🎨 UI / UX 细节
 
-1. **Start from an issue.** Every PR needs an accepted issue behind it — open one first so the change is agreed before the code exists.
-2. **Fork and branch from `dev`** (`main` tracks releases), and fill in the whole PR template — one checkbox is machine-checked.
-3. **AI policy.** AI-*assisted* work is welcome; AI-*driven* work is not:
-   - A human must have written or personally reviewed **every line** and be able to answer review comments about it.
-   - Unattended agent submissions (Jules, Devin, and friends) are **closed automatically** by the triage bot, on sight.
-   - Commits carrying AI co-author trailers (`Co-Authored-By: Claude/Copilot/…`) or "Generated with …" markers are rejected the same way — squash them out first.
-   - Repeat offenders are blocked.
-4. **Translations** go through [Crowdin](https://crowdin.com/project/simpmusic), never PRs editing the string files directly.
+- 队列页计数 + 浮动定位按钮（两种主题视图一致）。
+- **物理洗牌**：随机播放 = 队列物理重排（网易官方同款语义），通知栏随机按钮两态图标。
+- 触感反馈全局三档可调（含播放页 sheet、迷你条拉断切歌、封面翻页震感）。
+- Apple Music 主题横屏侧栏（35% 宽面板）compact 适配。
+- 下拉刷新静默化，指示器仅作「手势已受理」确认（≤600ms），不再陪跑全部网络请求。
+- 云端写操作失败有专属文案（如网易频控 405 专属提示，批量操作遇频控立即停止防止续期风控窗口）。
 
-## Legal Disclaimer & Terms of Use
+### 🔇 相对上游隐藏 / 下线的功能
 
-### 1. 100% Free, Open-Source & Strictly Non-Commercial
-SimpMusic is a fully open-source project (FOSS) created purely for educational purposes and personal use. **We do not sell this application, nor do we monetize it in any way.** There are no advertisements, no premium features, no subscriptions, and no hidden fees within the app. This project has absolutely no commercial value or financial intent. 
+出于「双源云端化」的设计取舍，部分上游功能在本 fork 中被隐藏或下线（本地歌单入口改为云端歌单、
+Discord 集成、导入播放列表等），完整清单与恢复方法见 [docs/HIDDEN_FEATURES.md](docs/HIDDEN_FEATURES.md)。
 
-### 2. A Custom Browser with Content Filtering
-SimpMusic acts strictly as a specialized, third-party web browser and client. It simply parses the publicly available website content and APIs of YouTube and YouTube Music, rendering them in a custom user interface. The ad-free experience it provides is fundamentally no different from using a standard web browser (like Chrome, Firefox, or Brave) equipped with a common ad-blocking extension (such as uBlock Origin). 
+## 构建
 
-### 3. Support Content Creators
-We deeply respect the hard work of artists, musicians, and content creators. **We strongly encourage all users to subscribe to [YouTube Premium](https://www.youtube.com/premium).** Purchasing a Premium subscription is the best way to financially support the creators you listen to and ensure the continued growth of the platform. SimpMusic is built as a proof-of-concept for developers and enthusiasts, not to harm creators' revenues.
+```bash
+git clone --recurse-submodules https://github.com/hedroid/SimpMusic.git
+cd SimpMusic
+./gradlew :composeApp:assembleDebug
+```
 
-### 4. No Hosting of Copyrighted Material
-We do not host, upload, distribute, or store any audio, video, or copyrighted media files on our own servers. All content accessed through this application is stored entirely on Google's/YouTube's servers and remains the property of their respective copyright owners. The app merely acts as a conduit to stream publicly accessible links.
+- Android 端为主要适配与验证平台（`com.maxrave.simpmusic.dev` 为 debug 包名）；桌面端沿用上游能力，网易源未做专门验证。
+- core 子模块：[hedroid/SimpMusic-Core](https://github.com/hedroid/SimpMusic-Core)（fork 自 [maxrave-dev/core](https://github.com/maxrave-dev/core)）。
 
-### 5. User Responsibility & Legal Contact
-The software is provided "AS IS", without warranty of any kind. The developers of SimpMusic do not encourage or condone piracy. Users are solely responsible for ensuring their usage of this app complies with their local copyright laws and the Terms of Service of the platforms they access. 
+## 致谢
 
-Because we do not host any media files, we cannot process DMCA takedown requests for audio or video content. However, if you represent a copyright holder or have legal concerns regarding the open-source code itself, please contact us via email at: **ndtminh2608@gmail.com**
+- **[maxrave-dev/SimpMusic](https://github.com/maxrave-dev/SimpMusic)** — 上游原版，本项目的基础。绝大部分功能（三主题播放页、
+  SponsorBlock / Return YouTube Dislike、均衡器、Listen Together、桌面端等）由上游提供，请给上游一个 ⭐。
+- [InnerTune](https://github.com/z-huang/InnerTune/) / [SmartTube](https://github.com/yuliskov/SmartTube) — 上游获取 YouTube Music 数据与流媒体的思路来源。
+- [SponsorBlock](https://sponsor.ajay.app/) / Return YouTube Dislike / [LRCLIB](https://lrclib.net/) — 数据服务。
+- [NeriPlayer](https://github.com/hedroid/NeriPlayer) — 播放稳定性与队列设计的参考实现。
+- 网易云音乐数据来自其公开 Web 接口，本应用仅作个人学习与自用客户端。
 
-  ## Contribute
-We're looking for more contributors, all contributions are welcome!
-See our [CODE OF CONDUCT](https://github.com/maxrave-dev/SimpMusic/blob/main/CODE_OF_CONDUCT.md)
+## 法律声明
 
-Thanks for all my contributors:
+本项目延续上游立场：仅供教育与个人使用的开源项目，不含任何商业行为；应用本身不托管、不上传、不分发任何音频或
+版权内容，所有流媒体内容分别来自 YouTube / YouTube Music 与网易云音乐的公开服务并归其版权方所有。请支持你喜欢的
+音乐人与平台（如订阅 [YouTube Premium](https://www.youtube.com/premium) 或网易云音乐会员）。使用者须自行确保使用方式
+符合当地法律与相关平台的服务条款。
 
-<a href="https://github.com/maxrave-dev/SimpMusic/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=maxrave-dev/SimpMusic" />
-</a>
-
- ## Showcase
-This project is following clean architecture and MVVM pattern (in UI, app module).
-
- ### Dependencies graph
-  <p float="left">        
-  <img src="https://github.com/maxrave-dev/SimpMusic/blob/main/asset/dependencies_graph.svg?raw=true" width="800"> 
-  </p>
-
- ## Support & Donations 
- #### Special thanks to all supporter ❤️    
- <div align="left"> 
- <a href="https://simpmusic.org/"><img alt="Visit the website" height="50" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/documentation/website_vector.svg"></a> &nbsp;        
-<a href="https://discord.gg/Rq5tWVM9Hg"><img alt="Discord Server" height="50" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg"></a> &nbsp;        
-<br> <a href="https://www.buymeacoffee.com/maxrave"><img alt="Buy me a Coffee" height="50" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/donate/buymeacoffee-singular_vector.svg"></a> &nbsp;        
-<a href="https://liberapay.com/maxrave/"><img alt="liberapay" height="50"        
-src="https://raw.githubusercontent.com/liberapay/liberapay.com/master/www/assets/liberapay/logo-v2_black-on-yellow.svg"></a> 
-</div>
-    
- ### MOMO or Vietnamese banking    
- <p float="left">        
- <img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/52770992.jpg?raw=true" width="300"> 
- </p>
-
-## SimpMusic is sponsored by:
-<br />
-<a href="https://crowdin.com">
-<img src="https://support.crowdin.com/assets/logos/plate/png/crowdin-logo-with-plate.png" width="300"/>
-</a>
-<br>
-<a href="https://sentry.io">
-<img src="https://github.com/maxrave-dev/SimpMusic/blob/dev/asset/sentry.svg?raw=true" width="300"/>
-</a>
-<br>
-<br>
-
-Crowdin and Sentry both have a free enterprise plan for Open-source projects. Follow the URLs: 
-- [Open Source License Request Form | Crowdin](https://crowdin.com/page/open-source-project-setup-request)
-- [Sentry for Open Source | Sentry](https://sentry.io/for/open-source/)
-
-## Past sponsored:
-<br />
-<a href="https://vercel.com/oss">
-  <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" />
-</a>
-<br />
-<br />
-
-Check out the Vercel open-source program:
-- https://vercel.com/open-source-program
-
-This project is tested with BrowserStack
-- Checkout BrowserStack now: https://www.browserstack.com/
-
-*This project is a part of SimpMusic.org Open-source project by me [maxrave-dev](https://github.com/maxrave-dev)*
-
-<!-- GitAds-Verify: 9788276LHF131ESPL12SWLJ8LACOJE89 -->
+本项目按上游相同许可发布，详见 [LICENSE](LICENSE)。
