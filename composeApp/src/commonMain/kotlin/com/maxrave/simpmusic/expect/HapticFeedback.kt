@@ -94,4 +94,3 @@ fun Modifier.hapticTapFeedback(): Modifier =
             }
         }
     }
-

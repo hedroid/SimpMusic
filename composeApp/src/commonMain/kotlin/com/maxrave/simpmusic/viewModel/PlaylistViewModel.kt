@@ -209,7 +209,7 @@ class PlaylistViewModel(
     fun deleteNeteasePlaylist() {
         val id = (uiState.value as? Success)?.data?.id ?: return
         if (id.toLongOrNull() == null) return
-        viewModelScope.launch { withContext(NonCancellable) { 
+        viewModelScope.launch { withContext(NonCancellable) {
             neteaseRepository
                 .deleteNeteasePlaylist(id)
                 .fold(
@@ -236,7 +236,7 @@ class PlaylistViewModel(
         val rawId = (uiState.value as? Success)?.data?.id ?: return
         if (rawId.toLongOrNull() != null) return
         val id = if (rawId.startsWith("VL")) rawId else "VL$rawId"
-        viewModelScope.launch { withContext(NonCancellable) { 
+        viewModelScope.launch { withContext(NonCancellable) {
             if (playlistRepository.removeYouTubePlaylistFromLibrary(id)) {
                 _playlistEntity.update { it?.copy(liked = false) }
                 _remoteSaved.value = false
@@ -258,7 +258,7 @@ class PlaylistViewModel(
         // 详情页 id 可能缺 VL 前缀(两个来源形状不一);playlist/delete 要求原样 browseId,
         // 统一补齐(Metrolist 同款透传形状)
         val id = if (rawId.startsWith("VL")) rawId else "VL$rawId"
-        viewModelScope.launch { withContext(NonCancellable) { 
+        viewModelScope.launch { withContext(NonCancellable) {
             if (playlistRepository.deleteYouTubePlaylist(id)) {
                 makeToast(getString(Res.string.deleted_playlist))
                 mutationBus.send(LibraryMutation.PlaylistRemoved(id))
@@ -275,7 +275,7 @@ class PlaylistViewModel(
     fun unsubscribeNeteasePlaylist() {
         val id = (uiState.value as? Success)?.data?.id ?: return
         if (id.toLongOrNull() == null) return
-        viewModelScope.launch { withContext(NonCancellable) { 
+        viewModelScope.launch { withContext(NonCancellable) {
             neteaseRepository
                 .subscribeNeteasePlaylist(id, subscribe = false)
                 .fold(
