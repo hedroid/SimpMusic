@@ -691,4 +691,39 @@
     <string name="haptic_feedback_light">輕柔</string>
     <string name="haptic_feedback_medium">標準</string>
     <string name="haptic_feedback_strong">強烈</string>
+
+    <!-- 上游 v2.2.0 新增：歌詞偏移/首選音軌/等化器類型/登入同步 -->
+    <string name="lyrics_offset">歌詞時間偏移</string>
+    <string name="lyrics_offset_message">將每一行歌詞整體前移或後移這麼多毫秒。戴著藍牙耳機時聲音通常比歌詞晚到，用正數；想讓歌詞更早出現則用負數。</string>
+    <string name="lyrics_offset_value">%1$s 毫秒</string>
+    <string name="preferred_audio_language">首選音軌語言</string>
+    <string name="preferred_audio_language_message">部分影片（多為 Podcast）帶多條不同語言的音軌。填一個語言代碼（如 zh、vi，兩位字母），存在該音軌時優先播放；留空則始終播放原聲。</string>
+    <string name="original_audio">原聲</string>
+    <string name="equalizer_type">等化器類型</string>
+    <string name="equalizer_type_built_in">內建</string>
+    <string name="equalizer_type_system">系統</string>
+    <string name="login_sync_section">裝置</string>
+    <string name="login_sync_android_title">傳送登入狀態到桌面版</string>
+    <string name="login_sync_android_description">掃描電腦上 SimpMusic 顯示的 QR Code，把手機上已登入的帳號傳送過去</string>
+    <string name="login_sync_desktop_title">從手機端登入</string>
+    <string name="login_sync_desktop_description">用 Android 版 SimpMusic 掃描 QR Code，把登入狀態帶到桌面版</string>
+    <string name="login_sync_scan_hint">將相機對準電腦上的 QR Code</string>
+    <string name="login_sync_connecting">正在連線你的電腦…</string>
+    <string name="login_sync_trust_title">信任這台電腦？</string>
+    <string name="login_sync_trust_message">%1$s（%2$s）正在請求你的登入狀態。僅在你面前的這台電腦時才繼續。</string>
+    <string name="login_sync_trust">信任</string>
+    <string name="login_sync_choose_title">選擇要傳送的內容</string>
+    <string name="login_sync_send">傳送</string>
+    <string name="login_sync_sending">傳送中…</string>
+    <string name="login_sync_sent">已在 %1$s 上登入：%2$s</string>
+    <string name="login_sync_nothing_signed_in">你還沒有登入任何服務。</string>
+    <string name="login_sync_camera_needed">SimpMusic 僅在掃描電腦上顯示的 QR Code 時使用相機。</string>
+    <string name="login_sync_allow_camera">允許使用相機</string>
+    <string name="login_sync_camera_blocked">SimpMusic 的相機權限已被關閉。請在系統設定中開啟後再掃碼。</string>
+    <string name="login_sync_open_settings">開啟設定</string>
+    <string name="login_sync_no_camera">沒有可用的相機來掃描 QR Code。</string>
+    <string name="login_sync_unreachable">無法連線到電腦。請確認手機與電腦在同一網路（或 Tailscale）後重試。</string>
+    <string name="login_sync_code_expired">電腦上的 QR Code 已過期。請重新出示後再掃。</string>
+    <string name="login_sync_failed">出現錯誤，請重試。</string>
+    <string name="login_sync_new_code">換一個碼</string>
 </resources>
