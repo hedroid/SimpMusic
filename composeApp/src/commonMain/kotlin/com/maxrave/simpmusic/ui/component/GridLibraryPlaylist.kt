@@ -41,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -335,19 +334,6 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             showSourceBadge = showSourceBadge,
                             fillMaxWidth = true,
                             onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
-                        )
-                    }
-
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        val uriHandler = LocalUriHandler.current
-                        SimpMusicChartButton(
-                            modifier =
-                                Modifier.wrapContentWidth().padding(
-                                    vertical = 16.dp,
-                                ),
-                            onClick = {
-                                uriHandler.openUri("https://chart.simpmusic.org")
-                            },
                         )
                     }
 

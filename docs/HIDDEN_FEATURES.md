@@ -23,6 +23,7 @@
 | "设备"分区（登录同步：扫码把登录态发到桌面端） | `SHOW_LOGIN_SYNC_SETTINGS = false` | `SettingScreen.kt`（常量区，紧随 SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE） | 2026-09-25 | 常量改 `true`。loginSync 模块/弹窗/QrScanner/双 VM 全保留；注意同步范围只有 YT/Spotify/Discord/Lastfm，无网易 cookie |
 | 歌词罗马音弹窗长尾语言（印地/旁遮普/俄/乌/塞/保/白俄/吉尔吉斯/马其顿，共 9 项） | 弹窗选择列表精简为日/韩/中三项；副标题名单仍用全量映射 | `SettingScreen.kt` 的 `romanizationChoices` | 2026-09-25 | 列表加回对应 enum 项即可；enum/罗马音引擎/DataStore 全保留，已选长尾语言的老用户不受影响（confirm 保留未列出项） |
 | 上游开屏推广弹窗 ×3（分享歌词权限请求 1/15/45 次开启、作者博客推广 5 次、kotlin-footguns 求星 6/16/26/36/46 次） | 删除（触发链恢复 fork 原版只留 review 评分弹窗；三个 Dialog 组件文件物理删除） | `HomeScreen.kt` 的 `LaunchedEffect(openAppTime)`；组件原在 `ui/component/{ShareSavedLyricsDialog,BlogPromoDialog,FootgunsStarDialog}.kt` | 2026-09-25, 上游 v2.2.0 合并后 | 回溯上游合并提交重取三个组件文件+触发链；字符串/`SharedViewModel.shareSavedLyrics` 状态保留未动 |
+| "Introducing SimpMusic Chart" 推广胶囊（排行榜网格底部，外链 chart.simpmusic.org） | 删除（`GridLibraryPlaylist.kt` 的 item 块 + 组件文件 `SimpMusicChart.kt` 物理删除，恢复 fork 合并前状态） | `ui/component/GridLibraryPlaylist.kt`；组件原在 `ui/component/SimpMusicChart.kt` | fork 早期删除；**2026-09-25 上游合并曾带回（当时漏登记本表，收尾清理只删了三个弹窗漏了它），9月25日二轮复检再删** | 回上游历史重取组件文件+item 块 |
 
 ## 二、库页 chip 下线（路由保留）
 
