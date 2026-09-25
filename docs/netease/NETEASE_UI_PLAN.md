@@ -854,11 +854,10 @@ dump bounds 取,目测两次全偏)。
 
 > 逐条对照实现状态核实过；"应清理"= 注释描述已被后续实现/定案覆盖，删注释不影响行为。
 
-- **应清理（已被实现覆盖）**：`NowPlayingScreen.kt:711` TODO(NETEASE_NEXT) 三项全部过时——
-  ①歌词专线 M1 已落地（getLyrics yrc/tlyric/romalrc 直喂现有管线）；②Canvas 定案"按名搜降级"
-  保留而非隐藏；③艺人跳转数字 ID 路由已通（M6）。`LibraryViewModel.kt:990` TODO(NETEASE_NEXT)
-  ——本地 Room 统计天然覆盖网易（2026-09-14 分析页适配结论=无需适配），仅剩**可选增强**：
-  交叉 /user/record 账号级听歌排行校准，降为可选项记录、不再是 TODO。
+- **已清理（2026-09-26 删除注释，均被实现覆盖）**：`NowPlayingScreen.kt` 原 :711
+  TODO(NETEASE_NEXT)（歌词专线 M1 已落地/Canvas 定案按名搜降级保留/艺人跳转数字路由已通，
+  三项全过时）；`LibraryViewModel.kt` 原 :990 TODO(NETEASE_NEXT)（本地 Room 统计天然覆盖网易，
+  仅剩可选增强——交叉 /user/record 账号级听歌排行校准，做 Wrapped/分析页数据交叉校准时再考虑）。
 - **真实剩余**：iOS 平台 `TODO("Not yet implemented")` 多处——BrotliEncoder/Hmac/
   ExpectMediaHandler/SpotifyTotp 各 ios source set（未支持的 iOS 平台能力，fork 无 iOS 发布
   计划则长期搁置）；`BetterShuffleOrder.kt:69-70`（"Fix scuffed hacky logic"+Play Next 顺序

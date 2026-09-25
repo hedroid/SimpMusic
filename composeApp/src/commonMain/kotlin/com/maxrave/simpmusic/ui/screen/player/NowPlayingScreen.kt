@@ -708,11 +708,6 @@ fun NowPlayingScreenContent(
             },
             onShowNeteaseComments = { showNeteaseComments = true },
             onNavigateToArtist = {
-            // TODO(NETEASE_NEXT): 播放页数据适配 ——
-            // 1) 歌词:source==NETEASE 时走 NeteaseRepositoryImpl.getLyrics()(yrc 逐字/
-            //    tlyric 官方翻译/romalrc 罗马音),直接喂现有歌词管线,AI 翻译/本地罗马音降为兜底;
-            // 2) Canvas:网易云无对应物,隐藏该开关;
-            // 3) 艺人跳转:C 档歌手详情打通前 artistId 为空,点击静默无效(现状即如此)。
                 val song = sharedViewModel.nowPlayingState.value?.songEntity
                 (
                     song?.artistId?.firstOrNull()?.takeIf { it.isNotEmpty() }

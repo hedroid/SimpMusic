@@ -986,9 +986,6 @@ class LibraryViewModel(
      * ranking query followed by a song lookup.
      */
     fun getMonthlyRecaps() {
-
-        // TODO(NETEASE_NEXT): 听歌分析基于本地 Room 统计,网易云歌曲落库(source 列)后自动
-        // 被覆盖;可选增强:交叉 /user/record 账号级听歌排行做校准。无需结构性改动。
         _monthlyRecaps.value = LocalResource.Loading()
         viewModelScope.launch {
             val today = now().date
