@@ -1,7 +1,9 @@
 # SimpMusic 上游差异代码审查
 
-审查日期：2026-09-25  
-审查基线：主仓 `ea3bee56`，core `8719cf6`  
+审查日期：2026-09-25
+
+审查基线：主仓 `ea3bee56`，core `8719cf6`
+
 审查范围：当前分支相对上游的功能改造，重点检查逻辑正确性、并发、数据一致性、资源释放、UI 卡顿、后台耗电和发热风险。
 
 ## 总结
@@ -24,10 +26,10 @@
 |---|---|---|
 | CR-01 FM 三连发 | **已修** | `return@repeat` 只跳过当次迭代，首批成功后仍固定 3 次请求且后批覆盖前批。改 `for`+`break`，android+jvm 双端。core `25361c4` |
 | CR-03 红心假成功 | **已修** | `getOrDefault(false)`，与 setRemoteFollowedStatus 同款教训。全仓 grep 确认这是唯一中招点。core `6a28091` |
-| CR-09 分页不退出 | **已修** | 改可 break 循环；highQuality"游标不前进重拉同页"的重复数据源已堵住，另加 `distinctBy { it.id }` 防御。core `a98f2af` |
-| CR-11 cookie 锁外持久化 | **已修** | `cookieSaver` 挪进 `cookieMutex` 锁内，持久化顺序与合并顺序一致。core `dc7330f` |
+| CR-09 分页不退出 | **部分修** | `return@repeat` 已改成可 break 循环，null 游标能停止，另加 `distinctBy { it.id }` 防御；但服务端返回与当前值相同的**非空游标**时仍会重复请求同页。core `a98f2af` |
+| CR-11 cookie 锁外持久化 | **部分修** | 响应合并路径 `mergeSetCookies` 已把 `cookieSaver` 挪进 `cookieMutex`；但 `replaceCookies`/logout 仍先解锁再持久化，与在途响应并发时旧快照仍可能后写覆盖新快照。core `dc7330f` |
 | CR-05 事件总线 | **小修（定案）** | 不做 actor 重构（过度设计）。`drainPending(source)` 按来源分侧消费，`owner()` 判据=纯数字 id（与全仓路由约定一致）。复核发现：本单所述"check 后上线双发/下线丢失"竞态实际不可达——send 与订阅收集都在 Main 线程，check-then-emit 原子；真问题只有跨源清空丢事件。主仓 `8ff63997` |
-| CR-08 自动备份 | **不修（定案）** | 不考虑旧安卓用户，minSdk 26→31（Android 12，`b3b5ffcc`）。NewApi error 随之消除：lint 4→3 error（剩 3 个为上游 widget preview tint，非本批引入），warnings 50→42。复核备注：API 26-28 上并非崩溃而是备份静默失败——`external_primary` 卷不存在导致查不到行，`EXTERNAL_CONTENT_URI` 那行实际不可达 |
+| CR-08 自动备份 | **部分修** | minSdk 26→31（Android 12，`b3b5ffcc`）已消除旧系统 API 兼容问题；但两条保存路径在 `openOutputStream()==null` 时仍返回成功，且插入/查询使用 `MediaStore.Files`、删除却使用 `MediaStore.Downloads`，假成功与旧备份清理风险尚未修复。 |
 | CR-02 Room 迁移绕过 | **不修（定案）** | 没有历史包袱。短路路径理论存在（Room BFS 选最短路径），但受影响设备=装过 v26/27 dev 构建且跳级直升 30+，实际不存在：自有设备均逐版本升级，3.0.0 发布版用户落地即 v29。JVM/iOS 补注册反而引入新路径问题 |
 | CR-04 通知快照先写后发 | **不修（定案）** | 触发条件=WorkManager 执行中被杀（12h 一次、单次跑几十秒），概率低，接受小概率漏发；重发去重闸（历史通知行 browseId 并集）不受影响 |
 | CR-12 播放回调 runBlocking | **不修** | `list.size > 3` 先短路，`runBlocking` 仅队列 ≤3 首的小队列才执行，DataStore 热读为内存命中（微秒级）。已知 ANR 根因在 mayBeSavePlaybackState（另行专项），与本处无关 |
@@ -39,6 +41,7 @@
 | CR-07 歌词竞态 | **顺延下一轮** | 主歌词/空结果分支有 `lyricsVideoId != song.videoId` 自愈（错写会触发重拉）；真问题仅罗马音分支无校验写入且不触发重拉。局部加 videoId 校验即可，不必做统一 lyricsJob 大改 |
 | CR-10 QR client 泄漏 | **顺延下一轮** | 属实（每 HttpClient 独立 OkHttp 引擎，onCleared 只取消轮询），但仅反复进出登录页才积累，Closeable+close 很便宜 |
 | CR-14 通知差集 | **顺延下一轮** | O(n²) 绝对量小（每艺人几十项）；真实问题是"空快照=从未有发行的艺人第一张专辑漏通知"，随循环外预计算一并重构 |
+| CR-18 网易发行扫描重复分页 | **待修** | NotifyWork 的 ALBUM/SINGLE 两条 flow 各自调用同一全量分页端点，拉完相同发行列表后才按 type 拆分；每位艺人最多并发两套×10 页请求。应一次拉取后同时返回专辑/单曲两组。 |
 
 另：`PlaylistViewModel.kt` 4 处尾随空格与 3 处文件尾空行已清理（`8232f405`）。
 
@@ -140,33 +143,38 @@
 
 建议：使用一个可替换的 `lyricsJob`，切歌时取消旧任务；所有主歌词、空结果、翻译、罗马音和延迟清理写入都必须检查当前 `videoId` 或 generation。
 
-### CR-08 自动备份不兼容 Android 8/9，且可能假成功【不修·定案：minSdk 升 31（b3b5ffcc）】
+### CR-08 自动备份兼容与假成功【部分修：minSdk 升 31；假成功与清理 URI 待修】
 
 - 自定义目录写入：`androidApp/src/main/java/com/maxrave/simpmusic/service/backup/AutoBackupWorker.kt:172`
 - MediaStore 插入：`androidApp/src/main/java/com/maxrave/simpmusic/service/backup/AutoBackupWorker.kt:196`
 - 旧备份删除：`androidApp/src/main/java/com/maxrave/simpmusic/service/backup/AutoBackupWorker.kt:269`
 
-项目 `minSdk` 为 26，但代码使用 API 29 才存在的 `MediaStore.VOLUME_EXTERNAL_PRIMARY` 和 `MediaStore.Downloads.EXTERNAL_CONTENT_URI`。lint 已将删除位置判为 error。
+项目已把 `minSdk` 从 26 提升到 31，因此 API 29 字段的兼容问题和对应 lint error 已消除。
 
-另外，自定义目录和 MediaStore 分支在 `openOutputStream()` 返回 null 时仍可能记录成功并返回 true，导致最后备份时间被更新，但文件实际没有写出。
+仍未解决的逻辑问题：
+
+- 自定义目录和 MediaStore 分支在 `openOutputStream()` 返回 null 时仍记录成功并返回 true，导致最后备份时间被更新，但文件实际没有写出。
+- 插入和查询使用 `MediaStore.Files.getContentUri(VOLUME_EXTERNAL_PRIMARY)`，删除旧文件却拼接 `MediaStore.Downloads.EXTERNAL_CONTENT_URI`，collection 不一致，旧备份可能无法删除。
 
 建议：
 
-- API 29+ 使用 scoped storage；API 26-28 使用兼容路径或 SAF。
 - 只有输出流成功打开且复制完整后才返回 true。
 - 写入失败时删除已经创建的空 MediaStore/Document 条目。
-- 增加 API 26、28、29、最新版四档测试。
+- 删除时复用查询所对应的 `MediaStore.Files` URI。
+- 增加 null output stream 与超过保留数量后的清理测试。
 
 ## P2：建议进入下一轮修复
 
-### CR-09 两个网易分页封装无法提前退出【已修 core a98f2af】
+### CR-09 两个网易分页封装无法提前退出【部分修 core a98f2af】
 
 - `core/service/netease/src/commonMain/kotlin/com/maxrave/netease/NeteaseEndpoints.kt:399`
 - `core/service/netease/src/commonMain/kotlin/com/maxrave/netease/NeteaseEndpoints.kt:452`
 
 同样误用了 `return@repeat`。没有下一页或请求失败后仍继续循环；高质量歌单在没有新游标时还可能重复请求同一页并追加重复数据。
 
-建议改为可 `break` 的循环，失败、无更多数据、游标不前进时立即停止，并对 browseId 去重作为防御。
+`return@repeat`、失败和 null 游标已经修复，并增加了结果去重。剩余问题是服务端返回相同的非空 `nextBefore` 时游标仍未前进，循环会继续请求同一页；历史上已经观察过服务端游标重复。
+
+建议取出 `next` 后，在 `next == null || next == cursor` 时立即停止，再更新 cursor。
 
 ### CR-10 扫码登录专用 HttpClient 未关闭【顺延下一轮】
 
@@ -177,13 +185,13 @@
 
 建议让 session 实现 `Closeable`/显式 `close()`，在 `onCleared()` 中取消请求并关闭 client。
 
-### CR-11 Cookie 持久化存在旧快照覆盖新快照的竞争【已修 core dc7330f】
+### CR-11 Cookie 持久化存在旧快照覆盖新快照的竞争【部分修 core dc7330f】
 
 - 位置：`core/service/netease/src/commonMain/kotlin/com/maxrave/netease/NeteaseClient.kt:273`
 
-cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。两个并发响应可能先后得到新旧快照，却以相反顺序完成 DataStore 写入，最终让旧快照覆盖新快照。
+响应 cookie 合并路径已经把 `cookieSaver` 移到 mutex 内，两个响应之间的持久化顺序已稳定。但 `replaceCookies()` 仍然先在锁内替换内存值，释放锁后才调用 saver；logout/登录替换与在途响应并发时，仍可能用旧快照覆盖响应刚写入的新快照。
 
-建议使用单写者队列或版本号；合并和持久化顺序必须一致。读取 `sessionCookies` 的路径也应使用同一种同步策略。
+建议 `replaceCookies()` 也在同一个 `cookieMutex.withLock` 中完成内存替换和持久化，保证所有写路径遵守同一顺序。读取 `sessionCookies` 的路径也应使用同一种同步策略。
 
 ### CR-12 播放器回调中同步读取 DataStore【不修】
 
@@ -250,18 +258,33 @@ cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。�
 - 页面关闭或不再需要时清理 ViewModel 中的位图引用。
 - 使用内存 profiler 验证连续切歌 50～100 次后的 retained bitmap 数量。
 
+### CR-18 网易发行扫描对同一艺人执行两次完整分页【待修】
+
+- 调用位置：`androidApp/src/main/java/com/maxrave/simpmusic/service/test/notification/NotifyWork.kt:51`
+- 分页实现：`core/data/src/commonMain/kotlin/com/maxrave/data/repository/NeteaseRepositoryImpl.kt:1732`
+
+NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入网易分支后，都会独立调用 `getArtistMoreAlbums()`，分别把该艺人的同一份发行列表最多翻 10 页，最后才按 `type` 过滤成专辑或单曲。
+
+影响：
+
+- 每位网易艺人最多产生两套并发的 10 页请求。
+- 放大 405 风控、后台网络唤醒和耗电。
+- 延长快照写入到最终通知投递之间的时间，也会放大 CR-04 的进程终止漏发窗口。
+
+建议新增一次请求返回 `(albums, singles)` 的仓库方法，NotifyWork 对每位网易艺人只做一次全量分页，再在内存中拆成两个不相交集合。艺人详情页若同时加载两组，也应复用同一份结果或 single-flight 缓存。
+
 ## 工程质量与验证结果
 
 执行 `./gradlew androidApp:lintDebug --console=plain`：
 
-- lint 结果为 4 个 error、50 个 warning。
-- 其中一个 error 是本分支自动备份使用 API 29 字段，见 CR-08。
-- 另外三个 `android:tint` error 来自上游 widget preview 资源，不是本批改造新增。
+- 当前结果为 **0 error、36 warning，BUILD SUCCESSFUL**。
+- widget preview 的 `android:tint` 已通过有依据的 `tools:ignore` 保留平台 inflater 所需行为。
+- adaptive icon 继续保留在 `mipmap-anydpi-v26`；对应一条 lint warning 属于已验证不能照改的打包例外。
 
 执行 `git diff --check upstream/dev...HEAD` 发现：
 
-- `PlaylistViewModel.kt` 有 4 处尾随空格。
-- 少数文件存在新增 EOF 空行。
+- 原先 `PlaylistViewModel.kt` 的尾随空格和源文件 EOF 空行已经清理。
+- 当前源文件与本文档均无 trailing whitespace，`git diff --check` 可通过。
 
 这些不影响运行，但建议在合并前清理。
 
@@ -273,7 +296,9 @@ cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。�
 - 通知快照和 outbox 一致性。
 - LibraryMutation 并发收发。
 - 搜索、歌词在快速切换场景下的 generation 隔离。
-- 自动备份在 API 26～29 的兼容行为。
+- 自动备份 null output stream 与 MediaStore 清理行为。
+- Cookie replace/logout 与响应合并的并发顺序。
+- 网易发行列表单次分页后拆分专辑/单曲。
 
 ## 推荐整改顺序
 
@@ -283,8 +308,8 @@ cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。�
 
 - [x] CR-01 FM 三次请求。（core `25361c4`）
 - [x] CR-03 红心假成功缓存。（core `6a28091`）
-- [x] CR-09 分页无法提前退出。（core `a98f2af`）
-- [x] CR-08 自动备份兼容与假成功。（定案不修代码，minSdk 26→31 从根上消除，主仓 `b3b5ffcc`）
+- [ ] CR-09 重复非空游标停止。（基础循环已修，core `a98f2af`；相同非空 cursor 仍待处理）
+- [ ] CR-08 自动备份假成功与清理 URI。（minSdk 31 已解决兼容问题；逻辑问题待修）
 
 第二批，处理数据一致性：
 
@@ -297,13 +322,14 @@ cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。�
 
 - [ ] CR-06 搜索 generation。（顺延下一轮；复核：仅显式提交触发，非逐键）
 - [ ] CR-07 歌词 generation。（顺延下一轮；复核：主分支有 lyricsVideoId 自愈，仅罗马音分支需校验）
-- [x] CR-11 Cookie 单写者。（core `dc7330f`：saver 挪锁内）
+- [ ] CR-11 Cookie 全写路径串行化。（响应合并已修，core `dc7330f`；`replaceCookies`/logout 待修）
 
 第四批，做资源和性能收口：
 
 - [ ] CR-10 关闭扫码 client。（顺延下一轮）
 - [~] CR-12 移除播放热路径 `runBlocking`。（不修：被 list.size>3 短路，仅小队列触发）
 - [ ] CR-14 优化通知差集。（顺延下一轮）
+- [ ] CR-18 网易发行只分页一次并拆分两组。
 - [~] CR-15 真正懒加载网易仓库。（不修：毫秒级，有实测数据再动）
 - [~] CR-16 拆分分类封面锁。（不修：刻意的 405 频控设计）
 - [x] CR-17 位图内存压测。（B2 已修 11984ce1；B1 降采样不做；模拟器实测 150 切：Bitmap 计数 74→71 持平=LRU 有界非泄漏，关播放页 74→46 实证释放——2026-09-25 完成）
