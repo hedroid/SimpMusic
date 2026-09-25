@@ -39,7 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +68,6 @@ import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.PodcastsEntity
 import com.maxrave.domain.data.entities.SongEntity
-import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
@@ -80,21 +78,16 @@ import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.simpmusic.ui.icon.Add
-import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.DragHandle
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PushPin
 import com.maxrave.simpmusic.ui.icon.QueueMusic
-import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -135,20 +128,9 @@ fun SongFullWidthItems(
     modifier: Modifier,
     rightView: @Composable (() -> Unit)? = null,
     forceDark: Boolean = LocalForceDarkText.current,
-    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
-    showSourceBadge: Boolean = false,
-    // 歌名后内联源图标(混源列表试点,2026-09-24 用户点名"最近添加"观察效果)——与封面角标
-    // showSourceBadge(缩略图右上)是两个位置,互不联动
-    titleSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-    // 无版权/下架(网易灰歌,privilege.st 判定):标题+艺人整体降透明度;行保留可点——
-    // 点击仍会尝试播放,失败由"无版权歌曲动作"设置接管(跳过/暂停/回退 YT)
-    val unavailable =
-        songEntity?.isAvailable == false || (songEntity == null && track?.isAvailable == false)
-    val titleColor = if (unavailable) contentColor.copy(alpha = 0.4f) else contentColor
-    val dimmedSubtitleColor = if (unavailable) subtitleColor.copy(alpha = 0.4f) else subtitleColor
     val maxOffset = 360f
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -157,14 +139,6 @@ fun SongFullWidthItems(
         .getSongAsFlow(songEntity?.videoId ?: track?.videoId ?: "")
         .mapNotNull { it?.downloadState }
         .collectAsState(initial = DownloadState.STATE_NOT_DOWNLOADED)
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/audio_playing_animation.json").decodeToString(),
-        )
-    }
-    // 当前曲指示符的三态判据之一:播放器真实播放/暂停(isPlaying 参数只表示"这行是当前曲")
-    val sharedViewModel: SharedViewModel = koinInject()
-    val playerIsPlaying = sharedViewModel.controllerState.collectAsStateWithLifecycle().value.isPlaying
     val offsetX = remember { Animatable(initialValue = 0f) }
     var heightDp by remember { mutableStateOf(0.dp) }
 
@@ -290,71 +264,37 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Crossfade(isPlaying to playerIsPlaying) { (isCurrent, isPlayerPlaying) ->
-                        when {
-                            isCurrent && isPlayerPlaying -> Image(
-                                painter =
-                                    rememberLottiePainter(
-                                        composition = composition,
-                                        progress = rememberThrottledLottieProgress(),
-                                    ),
-                                contentDescription = "Lottie animation",
+                    Crossfade(isPlaying) {
+                        if (it) {
+                            AudioPlayingIndicator(
+                                modifier = Modifier.fillMaxSize(),
                             )
-                            // 当前曲但已暂停:静态暂停符号,和动画区分播放/暂停状态
-                            isCurrent -> Icon(
-                                imageVector = SimpIcons.Pause,
+                        } else if (index == null) {
+                            val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
+                            AsyncImage(
+                                model =
+                                    ImageRequest
+                                        .Builder(LocalPlatformContext.current)
+                                        .data(thumb)
+                                        .diskCachePolicy(CachePolicy.ENABLED)
+                                        .diskCacheKey(thumb)
+                                        .crossfade(true)
+                                        .build(),
+                                placeholder = rememberHolderPainter(),
+                                error = rememberHolderPainter(),
                                 contentDescription = null,
-                                tint = contentColor,
-                                modifier = Modifier.size(28.dp),
-                            )
-                            index == null -> {
-                                val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
-                                AsyncImage(
-                                    model =
-                                        ImageRequest
-                                            .Builder(LocalPlatformContext.current)
-                                            .data(thumb)
-                                            .diskCachePolicy(CachePolicy.ENABLED)
-                                            .diskCacheKey(thumb)
-                                            .crossfade(true)
-                                            .build(),
-                                    placeholder = rememberHolderPainter(),
-                                    error = rememberHolderPainter(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillWidth,
-                                    alpha = if (unavailable) 0.4f else 1f,
-                                    modifier =
-                                        Modifier
-                                            .fillMaxSize()
-                                            .clip(RoundedCornerShape(4.dp)),
-                                )
-                            }
-
-                            else ->
-                                Text(
-                                    text = (index + 1).toString(),
-                                    color = contentColor,
-                                    style = typo().titleMedium,
-                                    modifier = Modifier.align(Alignment.Center),
-                                )
-                        }
-                    }
-                    // 必须画在 Crossfade 之后:后组合的子项在上层,放前面会被封面盖住
-                    if (showSourceBadge) {
-                        // songEntity 有 source 列优先;track 形状按 videoId 数字判源
-                        val src =
-                            contentSource(songEntity)
-                                ?: track?.videoId?.let {
-                                    if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
-                                }
-                        src?.let {
-                            SourceBadge(
-                                source = it,
-                                size = 16.dp,
+                                contentScale = ContentScale.FillWidth,
                                 modifier =
                                     Modifier
-                                        .align(Alignment.TopEnd)
-                                            .padding(2.dp),
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(4.dp)),
+                            )
+                        } else {
+                            Text(
+                                text = (index + 1).toString(),
+                                color = contentColor,
+                                style = typo().titleMedium,
+                                modifier = Modifier.align(Alignment.Center),
                             )
                         }
                     }
@@ -366,53 +306,20 @@ fun SongFullWidthItems(
                         .align(Alignment.CenterVertically),
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    if (titleSourceBadge) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = track?.title ?: songEntity?.title ?: "",
-                                style = typo().titleSmall,
-                                maxLines = 1,
-                                color = titleColor,
-                                modifier =
-                                    Modifier
-                                        .weight(1f, fill = false)
-                                        .wrapContentHeight(align = Alignment.CenterVertically)
-                                        // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
-                                        // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
-                                        .basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                        ).focusable(),
-                            )
-                            val titleSrc =
-                                contentSource(songEntity)
-                                    ?: track?.videoId?.let {
-                                        if (it.toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
-                                    }
-                            titleSrc?.let {
-                                SourceBadge(
-                                    source = it,
-                                    size = 14.dp,
-                                    modifier = Modifier.padding(start = 4.dp),
-                                )
-                            }
-                        }
-                    } else {
-                        Text(
-                            text = track?.title ?: songEntity?.title ?: "",
-                            style = typo().titleSmall,
-                            maxLines = 1,
-                            color = titleColor,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .wrapContentHeight(align = Alignment.CenterVertically)
-                                    // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
-                                    // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
-                                    .basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                    ).focusable(),
-                        )
-                    }
+                    Text(
+                        text = track?.title ?: songEntity?.title ?: "",
+                        style = typo().titleSmall,
+                        maxLines = 1,
+                        color = contentColor,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable(),
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AnimatedVisibility(
                             visible =
@@ -452,13 +359,14 @@ fun SongFullWidthItems(
                                 ) ?: "",
                             style = typo().bodySmall,
                             maxLines = 1,
-                            color = dimmedSubtitleColor,
+                            color = subtitleColor,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
                                     .wrapContentHeight(align = Alignment.CenterVertically)
                                     .basicMarquee(
                                         iterations = Int.MAX_VALUE,
+                                        animationMode = MarqueeAnimationMode.Immediately,
                                     ).focusable(),
                         )
                     }
@@ -500,13 +408,6 @@ fun SuggestItems(
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/audio_playing_animation.json").decodeToString(),
-        )
-    }
-    val sharedViewModel: SharedViewModel = koinInject()
-    val playerIsPlaying = sharedViewModel.controllerState.collectAsStateWithLifecycle().value.isPlaying
     Box(
         modifier =
             Modifier
@@ -523,45 +424,32 @@ fun SuggestItems(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(modifier = Modifier.size(40.dp)) {
-                Crossfade(isPlaying to playerIsPlaying) { (isCurrent, isPlayerPlaying) ->
-                    when {
-                        isCurrent && isPlayerPlaying -> Image(
-                            painter =
-                                rememberLottiePainter(
-                                    composition = composition,
-                                    progress = rememberThrottledLottieProgress(),
-                                ),
-                            contentDescription = "Lottie animation",
+                Crossfade(isPlaying) {
+                    if (it) {
+                        AudioPlayingIndicator(
+                            modifier = Modifier.fillMaxSize(),
                         )
-                        // 当前曲但已暂停:静态暂停符号,和动画区分播放/暂停状态
-                        isCurrent -> Icon(
-                            imageVector = SimpIcons.Pause,
+                    } else {
+                        val thumb = track.thumbnails?.lastOrNull()?.url
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(thumb)
+                                    .diskCachePolicy(CachePolicy.ENABLED)
+                                    .diskCacheKey(thumb)
+                                    .crossfade(true)
+                                    .build(),
+                            placeholder = rememberHolderPainter(),
+                            error = rememberHolderPainter(),
                             contentDescription = null,
-                            tint = contentColor,
-                            modifier = Modifier.size(24.dp),
+                            contentScale = ContentScale.FillWidth,
+                            modifier =
+                                Modifier
+                                    .wrapContentHeight()
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp)),
                         )
-                        else -> {
-                            val thumb = track.thumbnails?.lastOrNull()?.url
-                            AsyncImage(
-                                model =
-                                    ImageRequest
-                                        .Builder(LocalPlatformContext.current)
-                                        .data(thumb)
-                                        .diskCachePolicy(CachePolicy.ENABLED)
-                                        .diskCacheKey(thumb)
-                                        .crossfade(true)
-                                        .build(),
-                                placeholder = rememberHolderPainter(),
-                                error = rememberHolderPainter(),
-                                contentDescription = null,
-                                contentScale = ContentScale.FillWidth,
-                                modifier =
-                                    Modifier
-                                        .wrapContentHeight()
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(4.dp)),
-                            )
-                        }
                     }
                 }
             }
@@ -621,8 +509,6 @@ fun PlaylistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
-    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
-    showSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -718,18 +604,6 @@ fun PlaylistFullWidthItems(
                             .fillMaxSize()
                             .clip(RoundedCornerShape(4.dp)),
                 )
-                if (showSourceBadge) {
-                    contentSource(data)?.let { src ->
-                        SourceBadge(
-                            source = src,
-                            size = 16.dp,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                            .padding(2.dp),
-                        )
-                    }
-                }
             }
             Column(
                 Modifier
@@ -773,10 +647,9 @@ fun PlaylistFullWidthItems(
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
-                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
-                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
                                 ).focusable(),
                     )
                 }
@@ -791,10 +664,9 @@ fun PlaylistFullWidthItems(
                             Modifier
                                 .fillMaxWidth()
                                 .wrapContentHeight(align = Alignment.CenterVertically)
-                                // 不带 animationMode=Immediately:Immediately 模式滚动无间隔,
-                                // 超宽标题行=连续全帧率动画(发热);默认模式滚完停 1.2s 再滚
                                 .basicMarquee(
                                     iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
                                 ).focusable(),
                     )
                 }
@@ -813,8 +685,6 @@ fun ArtistFullWidthItems(
     rightView: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     forceDark: Boolean = LocalForceDarkText.current,
-    // 混源列表(库页最近添加行)里标记来源的双品牌角标;其余调用点不传。
-    showSourceBadge: Boolean = false,
 ) {
     val contentColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val subtitleColor = if (forceDark) Color(0xC4FFFFFF) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -856,18 +726,6 @@ fun ArtistFullWidthItems(
                             .fillMaxSize()
                             .clip(CircleShape),
                 )
-                if (showSourceBadge) {
-                    contentSource(data)?.let { src ->
-                        SourceBadge(
-                            source = src,
-                            size = 16.dp,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                            .padding(2.dp),
-                        )
-                    }
-                }
             }
             Column(
                 Modifier

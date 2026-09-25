@@ -29,6 +29,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -147,6 +148,20 @@ fun NowPlayingContentM3Expressive(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
 ) {
+    NowPlayingExpressiveTheme(state = state) {
+        NowPlayingM3ExpressiveLayout(state = state, actions = actions)
+    }
+}
+
+/**
+ * This style's colour system, shared with the fullscreen lyrics landscape layout, which renders
+ * this style's track row and playback controls and must colour them the same way.
+ */
+@Composable
+internal fun NowPlayingExpressiveTheme(
+    state: NowPlayingContentState,
+    content: @Composable () -> Unit,
+) {
     // === 1. Color system: full dark scheme derived from the artwork ===
     // startColor is animated by the shell from Color.Black (initial) to the palette color;
     // fall back to the app seed while it still sits on the initial black.
@@ -168,7 +183,7 @@ fun NowPlayingContentM3Expressive(
             style = PaletteStyle.Vibrant,
         )
     MaterialExpressiveTheme(colorScheme = derivedScheme) {
-        NowPlayingM3ExpressiveLayout(state = state, actions = actions)
+        content()
     }
 }
 
@@ -486,115 +501,13 @@ private fun NowPlayingM3ExpressiveLayout(
                             ) {
                                 ExpressiveTrackInfoRow(state = state, actions = actions)
                                 if (getPlatform() == Platform.Android) {
-                                    Box(
-                                        Modifier
-                                            .padding(
-                                                top = 15.dp,
-                                            ).padding(horizontal = 20.dp)
-                                            .isElementVisible {
+                                    ExpressivePlaybackControls(
+                                        state = state,
+                                        actions = actions,
+                                        sliderModifier =
+                                            Modifier.isElementVisible {
                                                 actions.onToolbarVisibilityChange(!it && state.isExpanded && state.mainScrollState.value > 0)
                                             },
-                                    ) {
-                                        WavySeekBar(
-                                            progressFraction = state.sliderValue / 100f,
-                                            isPlaying = state.controllerState.isPlaying,
-                                            // Classic swaps the slider color to the rainbow while
-                                            // crossfading (state.sliderTrackColor); tonal primary
-                                            // otherwise.
-                                            activeColor =
-                                                if (state.timelineState.isCrossfading) {
-                                                    state.sliderTrackColor
-                                                } else {
-                                                    colorScheme.primary
-                                                },
-                                            trackColor = colorScheme.secondaryContainer,
-                                            thumbColor = colorScheme.primary,
-                                            onSliderChange = actions.onSliderChange,
-                                            onSliderChangeFinished = actions.onSliderChangeFinished,
-                                        )
-                                    }
-                                    // Time row — same math and negative guard as Classic
-                                    // (formatDuration renders any negative as NA:NA).
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            // Drawn 8dp closer to the wave without shrinking the
-                                            // seekbar's 40dp touch target or moving the layout slot:
-                                            // the same 8dp visually opens the gap to the transport
-                                            // row below (owner: times sat too far from the slider,
-                                            // too close to the controls).
-                                            .offset(y = (-8).dp)
-                                            .padding(horizontal = 20.dp),
-                                    ) {
-                                        Text(
-                                            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
-                                            style = typo().bodyMedium,
-                                            modifier = Modifier.weight(1f),
-                                            textAlign = TextAlign.Left,
-                                        )
-                                        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
-                                        // unconditionally: behind the crossfade check it would
-                                        // restart from zero each time the label appears (same
-                                        // rationale as the desktop MiniPlayer's crossfadeSweep).
-                                        val sweepTransition = rememberInfiniteTransition(label = "m3eCrossfadeSweep")
-                                        val crossfadeSweep by sweepTransition.animateFloat(
-                                            initialValue = 0f,
-                                            targetValue = 1f,
-                                            animationSpec =
-                                                infiniteRepeatable(
-                                                    animation = tween(3200, easing = LinearEasing),
-                                                    repeatMode = RepeatMode.Restart,
-                                                ),
-                                            label = "m3eSweepHead",
-                                        )
-                                        AnimatedVisibility(
-                                            enter = fadeIn(),
-                                            exit = fadeOut(),
-                                            visible = state.timelineState.isCrossfading,
-                                        ) {
-                                            // Same effect as the desktop MiniPlayer label: a
-                                            // highlight sweeping through the glyphs via a text
-                                            // brush — no overlay, no clipping.
-                                            val shimmerSpan = 140f
-                                            val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
-                                            val labelColor = typo().bodyMedium.color
-                                            Text(
-                                                text = stringResource(Res.string.crossfading),
-                                                style =
-                                                    typo().bodyMedium.copy(
-                                                        brush =
-                                                            Brush.horizontalGradient(
-                                                                0f to labelColor.copy(alpha = 0.45f),
-                                                                // The sweep head is PURE white, not the resting label colour — the label
-                                                                // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
-                                                                0.5f to Color.White,
-                                                                1f to labelColor.copy(alpha = 0.45f),
-                                                                startX = shimmerHead,
-                                                                endX = shimmerHead + shimmerSpan,
-                                                                tileMode = TileMode.Clamp,
-                                                            ),
-                                                    ),
-                                                textAlign = TextAlign.Center,
-                                            )
-                                        }
-                                        Text(
-                                            text = formatDuration(state.timelineState.total),
-                                            style = typo().bodyMedium,
-                                            modifier = Modifier.weight(1f),
-                                            textAlign = TextAlign.Right,
-                                        )
-                                    }
-                                    Spacer(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .height(8.dp),
-                                    )
-                                    ExpressiveTransportRow(
-                                        controllerState = state.controllerState,
-                                        loading = state.timelineState.loading,
-                                        onUIEvent = actions.onUIEvent,
-                                        modifier = Modifier.padding(horizontal = 20.dp),
                                     )
                                 } else {
                                     Spacer(Modifier.height(16.dp))
@@ -733,9 +646,10 @@ private fun NowPlayingM3ExpressiveLayout(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ExpressiveTrackInfoRow(
+internal fun ExpressiveTrackInfoRow(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
+    showCanvasThumbnail: Boolean = true,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Row(
@@ -746,8 +660,9 @@ private fun ExpressiveTrackInfoRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // While a canvas hides the big artwork, a small thumbnail joins the row — Classic
-        // verbatim (its shared NowPlayingTrackInfoRow does exactly this).
-        AnimatedVisibility(state.screenData.canvasData != null) {
+        // verbatim (its shared NowPlayingTrackInfoRow does exactly this). Switched off by the
+        // fullscreen lyrics landscape layout, which shows the full artwork right above the row.
+        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -867,6 +782,131 @@ private fun ExpressiveTrackInfoRow(
         }
         }
     }
+}
+
+/**
+ * Wavy seek bar + time row + transport — the playback half of the info block, shared with the
+ * fullscreen lyrics landscape layout. Must be composed inside [NowPlayingExpressiveTheme]. Emits
+ * straight into the caller's Column: isElementVisible (passed in through [sliderModifier]) compares
+ * the seek bar against its PARENT layout, so a wrapper here would change what it compares against.
+ */
+@Composable
+internal fun ColumnScope.ExpressivePlaybackControls(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    sliderModifier: Modifier = Modifier,
+    showShuffleAndRepeat: Boolean = false,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .padding(
+                top = 15.dp,
+            ).padding(horizontal = 20.dp)
+            .then(sliderModifier),
+    ) {
+        WavySeekBar(
+            progressFraction = state.sliderValue / 100f,
+            isPlaying = state.controllerState.isPlaying,
+            // Classic swaps the slider color to the rainbow while
+            // crossfading (state.sliderTrackColor); tonal primary
+            // otherwise.
+            activeColor =
+                if (state.timelineState.isCrossfading) {
+                    state.sliderTrackColor
+                } else {
+                    colorScheme.primary
+                },
+            trackColor = colorScheme.secondaryContainer,
+            thumbColor = colorScheme.primary,
+            onSliderChange = actions.onSliderChange,
+            onSliderChangeFinished = actions.onSliderChangeFinished,
+        )
+    }
+    // Time row — same math and negative guard as Classic
+    // (formatDuration renders any negative as NA:NA).
+    Row(
+        Modifier
+            .fillMaxWidth()
+            // Drawn 8dp closer to the wave without shrinking the
+            // seekbar's 40dp touch target or moving the layout slot:
+            // the same 8dp visually opens the gap to the transport
+            // row below (owner: times sat too far from the slider,
+            // too close to the controls).
+            .offset(y = (-8).dp)
+            .padding(horizontal = 20.dp),
+    ) {
+        Text(
+            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Left,
+        )
+        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
+        // unconditionally: behind the crossfade check it would
+        // restart from zero each time the label appears (same
+        // rationale as the desktop MiniPlayer's crossfadeSweep).
+        val sweepTransition = rememberInfiniteTransition(label = "m3eCrossfadeSweep")
+        val crossfadeSweep by sweepTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(3200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "m3eSweepHead",
+        )
+        AnimatedVisibility(
+            enter = fadeIn(),
+            exit = fadeOut(),
+            visible = state.timelineState.isCrossfading,
+        ) {
+            // Same effect as the desktop MiniPlayer label: a
+            // highlight sweeping through the glyphs via a text
+            // brush — no overlay, no clipping.
+            val shimmerSpan = 140f
+            val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
+            val labelColor = typo().bodyMedium.color
+            Text(
+                text = stringResource(Res.string.crossfading),
+                style =
+                    typo().bodyMedium.copy(
+                        brush =
+                            Brush.horizontalGradient(
+                                0f to labelColor.copy(alpha = 0.45f),
+                                // The sweep head is PURE white, not the resting label colour — the label
+                                // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
+                                0.5f to Color.White,
+                                1f to labelColor.copy(alpha = 0.45f),
+                                startX = shimmerHead,
+                                endX = shimmerHead + shimmerSpan,
+                                tileMode = TileMode.Clamp,
+                            ),
+                    ),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            text = formatDuration(state.timelineState.total),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Right,
+        )
+    }
+    Spacer(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(8.dp),
+    )
+    ExpressiveTransportRow(
+        controllerState = state.controllerState,
+        loading = state.timelineState.loading,
+        onUIEvent = actions.onUIEvent,
+        modifier = Modifier.padding(horizontal = 20.dp),
+        showShuffleAndRepeat = showShuffleAndRepeat,
+    )
 }
 
 /**

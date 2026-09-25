@@ -217,7 +217,7 @@ internal fun LibraryYouTubeTab(
                                 )
                             },
                             data = playlist,
-                            fillWidth = true,
+                            fillMaxWidth = true,
                             onLongClick = { deletePlaylistTarget = playlist },
                         )
                     }
@@ -234,7 +234,7 @@ internal fun LibraryYouTubeTab(
                                     )
                                 },
                                 data = playlist,
-                                fillWidth = true,
+                                fillMaxWidth = true,
                                 onLongClick = { unsubscribePlaylistTarget = playlist },
                             )
                         }

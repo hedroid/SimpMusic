@@ -5,7 +5,6 @@ import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.domain.data.entities.AlbumEntity
@@ -71,6 +72,34 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.create
+import kotlin.math.roundToInt
+
+/**
+ * Columns for every grid built on [GridLibraryPlaylist] — the Library tabs, Wrapped and Mix for you.
+ *
+ * The count is whichever brings the artwork closest to 150dp, so every cell on a page is the same
+ * size and a wider window adds columns instead of stretching them. `Adaptive(minSize = 120.dp)`
+ * treated 120 as a floor instead, which on a 1404dp window meant eleven columns of ~108dp artwork.
+ *
+ * Never fewer than three: the column count must follow the window, not the device's density, and a
+ * 360–412dp phone would otherwise round down to two. Below 480dp this gives exactly the three columns
+ * `Adaptive(120.dp)` did, so phones keep the grid they have.
+ */
+internal object LibraryGridCells : GridCells {
+    // The artwork plus the 10dp start + 10dp end padding every item in these grids carries.
+    private val TargetCellWidth = 150.dp + 20.dp
+
+    override fun Density.calculateCrossAxisCellSizes(
+        availableSize: Int,
+        spacing: Int,
+    ): List<Int> {
+        val target = TargetCellWidth.roundToPx() + spacing
+        val count = ((availableSize + spacing).toFloat() / target).roundToInt().coerceAtLeast(3)
+        // The same split GridCells.Fixed makes: leftover pixels go one each to the first columns.
+        val usable = availableSize - spacing * (count - 1)
+        return List(count) { usable / count + if (it < usable % count) 1 else 0 }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -304,8 +333,21 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             data = item,
                             thumbSize = LibraryGridDefaults.minTileSize,
                             showSourceBadge = showSourceBadge,
-                            fillWidth = true,
+                            fillMaxWidth = true,
                             onLongClick = onRemoveDownload?.let { callback -> { callback(item) } },
+                        )
+                    }
+
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        val uriHandler = LocalUriHandler.current
+                        SimpMusicChartButton(
+                            modifier =
+                                Modifier.wrapContentWidth().padding(
+                                    vertical = 16.dp,
+                                ),
+                            onClick = {
+                                uriHandler.openUri("https://chart.simpmusic.org")
+                            },
                         )
                     }
 

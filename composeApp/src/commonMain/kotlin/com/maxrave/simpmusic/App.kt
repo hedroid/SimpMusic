@@ -89,6 +89,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestinat
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.navigation.graph.AppNavigationGraph
 import com.maxrave.simpmusic.ui.screen.MiniPlayer
+import com.maxrave.simpmusic.ui.screen.other.UnofficialBuildScreen
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreen
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreenContent
 import com.maxrave.simpmusic.ui.theme.AppTheme
@@ -103,9 +104,7 @@ import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
@@ -152,7 +151,6 @@ fun App(
     val intent by viewModel.intent.collectAsStateWithLifecycle()
     val showNotificationPermissionDialog by viewModel.showNotificationPermissionDialog.collectAsStateWithLifecycle()
 
-    val isTranslucentBottomBar by viewModel.getTranslucentBottomBar().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     val selectedSourceValue by viewModel.selectedSource.collectAsStateWithLifecycle()
     val neteaseLoggedInValue by viewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     val isLiquidGlassEnabled by viewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
@@ -171,6 +169,7 @@ fun App(
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_SYSTEM)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    val isOfficialBuild by viewModel.isOfficialBuild.collectAsStateWithLifecycle()
     // MiniPlayer visibility: derived, never stored.
     //
     // This used to be a rememberSaveable Boolean written by a LaunchedEffect. Two things went
@@ -207,9 +206,7 @@ fun App(
     }
 
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     LaunchedEffect(intent) {
         val intent = intent ?: return@LaunchedEffect
@@ -465,6 +462,10 @@ fun App(
         // Desktop capsule player is glass by design. Same rule as MiniPlayer's useGlassSurface.
         liquidGlassEnabled = isLiquidGlassEnabled == TRUE || getPlatform() == Platform.Desktop,
     ) {
+        if (!isOfficialBuild) {
+            UnofficialBuildScreen()
+            return@AppTheme
+        }
         // Backdrop base must match the theme: white page → white glass, dark/AMOLED → black glass.
         // Read inside AppTheme so MaterialTheme reflects the resolved scheme (light background is #FFFFFF).
         val isLightScheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -497,10 +498,12 @@ fun App(
                             ) {
                                 MiniPlayer(
                                     Modifier
-                                        .height(56.dp)
+                                        // 56dp card + the 4dp gap below.
+                                        .height(60.dp)
                                         .fillMaxWidth()
                                         .padding(
-                                            horizontal = 12.dp,
+                                            // The bottom bar's own 16dp, so both edges line up.
+                                            horizontal = 16.dp,
                                         ).padding(
                                             bottom = 4.dp,
                                         ),
@@ -541,7 +544,6 @@ fun App(
                             } else {
                                 AppBottomNavigationBar(
                                     navController = navController,
-                                    isTranslucentBackground = isTranslucentBottomBar == TRUE,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
                                     selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
@@ -661,7 +663,8 @@ fun App(
                                 MiniPlayer(
                                     if (getPlatform() == Platform.Android) {
                                         Modifier
-                                            .height(56.dp)
+                                            // Glass keeps its 52dp card; the flat one is 56dp.
+                                            .height(if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp)
                                             .fillMaxWidth(0.8f)
                                             .padding(
                                                 horizontal = 12.dp,
@@ -692,6 +695,11 @@ fun App(
                                     onClose = {
                                         viewModel.stopPlayer()
                                         viewModel.isServiceRunning = false
+                                    },
+                                    // The page lives in the Now Playing panel, so the panel opens with it.
+                                    onOpenFullscreenLyrics = {
+                                        viewModel.requestFullscreenLyrics()
+                                        isShowNowPlaylistScreen = true
                                     },
                                 )
                             }

@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.BrowseDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.LocalPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreSongsDestination
@@ -17,6 +18,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.screen.library.LocalPlaylistScreen
 import com.maxrave.simpmusic.ui.screen.other.AlbumScreen
 import com.maxrave.simpmusic.ui.screen.other.ArtistScreen
+import com.maxrave.simpmusic.ui.screen.other.BrowseScreen
 import com.maxrave.simpmusic.ui.screen.other.MoreAlbumsScreen
 import com.maxrave.simpmusic.ui.screen.other.MoreSongsScreen
 import com.maxrave.simpmusic.ui.screen.other.SimilarSongsScreen
@@ -83,6 +85,16 @@ fun NavGraphBuilder.listScreenGraph(
             navController = navController,
             id = data.songId,
             songTitle = data.songTitle,
+        )
+    }
+    composable<BrowseDestination> { entry ->
+        val data = entry.toRoute<BrowseDestination>()
+        BrowseScreen(
+            innerPadding = innerPadding,
+            navController = navController,
+            browseId = data.browseId,
+            params = data.params,
+            title = data.title,
         )
     }
     composable<PlaylistDestination> { entry ->

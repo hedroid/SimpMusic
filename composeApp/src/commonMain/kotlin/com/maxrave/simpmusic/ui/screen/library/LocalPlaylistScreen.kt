@@ -49,6 +49,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.simpmusic.ui.icon.Search
 import com.maxrave.simpmusic.ui.icon.Close
 import androidx.compose.runtime.CompositionLocalProvider
@@ -119,7 +121,7 @@ import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkTextScrimBrush
+import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
@@ -148,7 +150,6 @@ import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.painterPlaylistThumbnail
 import com.maxrave.simpmusic.ui.component.playlistTitleGradient
 import com.maxrave.simpmusic.ui.component.rememberDragDropState
-import com.maxrave.simpmusic.ui.component.rememberThrottledLottieProgress
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
@@ -159,7 +160,6 @@ import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Sort
 import com.maxrave.simpmusic.ui.icon.TipsAndUpdates
-import com.maxrave.simpmusic.ui.icon.Remove
 import com.maxrave.simpmusic.ui.theme.LocalIsDarkTheme
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
@@ -168,14 +168,10 @@ import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -195,19 +191,13 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.cancel_download_title
-import simpmusic.composeapp.generated.resources.cancel_download_message
-import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.created_at
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.reload
-import simpmusic.composeapp.generated.resources.remove_download_message
-import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.remove_from_playlist
 import simpmusic.composeapp.generated.resources.sort_by
 import simpmusic.composeapp.generated.resources.suggest
@@ -225,7 +215,6 @@ private const val TAG = "LocalPlaylistScreen"
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoroutinesApi::class,
-    ExperimentalHazeMaterialsApi::class,
 )
 @Composable
 fun LocalPlaylistScreen(
@@ -234,11 +223,6 @@ fun LocalPlaylistScreen(
     viewModel: LocalPlaylistViewModel = koinViewModel(),
     navController: NavController,
 ) {
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/downloading_animation.json").decodeToString(),
-        )
-    }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -283,10 +267,6 @@ fun LocalPlaylistScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
-    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
-    LaunchedEffect(showSelectionSheet) {
-        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
-    }
     var shouldShowSuggestButton by rememberSaveable { mutableStateOf(false) }
 
     val playingTrack by sharedViewModel.nowPlayingState
@@ -306,8 +286,6 @@ fun LocalPlaylistScreen(
     val suggestionsLoading by viewModel.loading.collectAsStateWithLifecycle()
     var showSyncAlertDialog by rememberSaveable { mutableStateOf(false) }
     var showUnsyncAlertDialog by rememberSaveable { mutableStateOf(false) }
-    var showRemoveDownloadDialog by rememberSaveable { mutableStateOf(false) }
-    var showCancelDownloadDialog by rememberSaveable { mutableStateOf(false) }
     var firstTimeGetLocalPlaylist by rememberSaveable {
         mutableStateOf(false)
     }
@@ -389,7 +367,7 @@ fun LocalPlaylistScreen(
         shouldHideTopBar = !firstItemVisible
     }
     val paletteState = rememberPaletteState()
-    val hazeState = rememberHazeState(blurEnabled = true)
+    val hazeState = rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
@@ -583,14 +561,14 @@ fun LocalPlaylistScreen(
                                     )
                                     // Scrim spans 70% of the artwork (not a fixed 200dp): the shorter the
                                     // ramp, the steeper the alpha, and a steep ramp is what makes the fade
-                                    // read as an edge. See artworkTextScrimBrush for the curve itself.
+                                    // read as an edge. See artworkScrimBrush for the curve itself.
                                     Box(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
                                                 .height((screenInfo.hDP * 0.35f).dp)
                                                 .align(Alignment.BottomCenter)
-                                                .background(artworkTextScrimBrush(mutedPaletteBg)),
+                                                .background(artworkScrimBrush(mutedPaletteBg)),
                                     )
                                     Column(
                                         modifier =
@@ -911,7 +889,9 @@ fun LocalPlaylistScreen(
                                                                         Modifier
                                                                             .fillMaxSize()
                                                                             .clickable {
-                                                                                showRemoveDownloadDialog = true
+                                                                                viewModel.makeToast(
+                                                                                    runBlocking { getString(Res.string.downloaded) },
+                                                                                )
                                                                             },
                                                                     contentAlignment = Alignment.Center,
                                                                 ) {
@@ -930,17 +910,13 @@ fun LocalPlaylistScreen(
                                                                         Modifier
                                                                             .fillMaxSize()
                                                                             .clickable {
-                                                                                showCancelDownloadDialog = true
+                                                                                viewModel.makeToast(
+                                                                                    runBlocking { getString(Res.string.downloading) },
+                                                                                )
                                                                             },
                                                                     contentAlignment = Alignment.Center,
                                                                 ) {
-                                                                    Image(
-                                                                        painter =
-                                                                            rememberLottiePainter(
-                                                                                composition = composition,
-                                                                                progress = rememberThrottledLottieProgress(),
-                                                                            ),
-                                                                        contentDescription = "Lottie animation",
+                                                                    DownloadingIndicator(
                                                                         modifier = Modifier.size(28.dp),
                                                                     )
                                                                 }
@@ -1160,7 +1136,9 @@ fun LocalPlaylistScreen(
                                                                 Modifier
                                                                     .fillMaxSize()
                                                                     .clickable {
-                                                                        showRemoveDownloadDialog = true
+                                                                        viewModel.makeToast(
+                                                                            runBlocking { getString(Res.string.downloaded) },
+                                                                        )
                                                                     },
                                                             contentAlignment = Alignment.Center,
                                                         ) {
@@ -1179,17 +1157,13 @@ fun LocalPlaylistScreen(
                                                                 Modifier
                                                                     .fillMaxSize()
                                                                     .clickable {
-                                                                        showCancelDownloadDialog = true
+                                                                        viewModel.makeToast(
+                                                                            runBlocking { getString(Res.string.downloading) },
+                                                                        )
                                                                     },
                                                             contentAlignment = Alignment.Center,
                                                         ) {
-                                                            Image(
-                                                                painter =
-                                                                    rememberLottiePainter(
-                                                                        composition = composition,
-                                                                        progress = rememberThrottledLottieProgress(),
-                                                                    ),
-                                                                contentDescription = "Lottie animation",
+                                                            DownloadingIndicator(
                                                                 modifier = Modifier.size(28.dp),
                                                             )
                                                         }
@@ -1475,12 +1449,7 @@ fun LocalPlaylistScreen(
             },
             onOpenActions = { showSelectionSheet = true },
             modifier =
-                Modifier.hazeEffect(hazeState) {
-                    blurEnabled = true
-                    blurRadius = 24.dp
-                    backgroundColor = mutedPaletteBg
-                    tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                },
+                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
         )
     }
     if (showSelectionSheet) {
@@ -1502,11 +1471,6 @@ fun LocalPlaylistScreen(
                 selectionViewModel.download(selectedIds)
                 selectionState.exit()
             },
-            allDownloaded = allSelectedDownloaded,
-            onRemoveDownload = {
-                selectionViewModel.removeDownload(selectedIds)
-                selectionState.exit()
-            },
             onAddToFavorite = {
                 selectionViewModel.addToFavorite(selectedIds)
                 selectionState.exit()
@@ -1514,8 +1478,7 @@ fun LocalPlaylistScreen(
             extraActions =
                 listOf(
                     SongSelectionAction(
-                        // 减号=从歌单移除;垃圾桶只留给"删除"
-                        icon = SimpIcons.Remove,
+                        icon = SimpIcons.Delete,
                         label = removeLabel,
                         tint = Color.Red,
                     ) {
@@ -1636,54 +1599,6 @@ fun LocalPlaylistScreen(
             },
         )
     }
-    if (showCancelDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.cancel_download_title)) },
-            text = { Text(text = stringResource(Res.string.cancel_download_message)) },
-            onDismissRequest = { showCancelDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.cancelDownloadingPlaylist()
-                    showCancelDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel_download_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelDownloadDialog = false }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRemoveDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.remove_download_title)) },
-            text = { Text(text = stringResource(Res.string.remove_download_message)) },
-            onDismissRequest = { showRemoveDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.removeDownloadedPlaylist()
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
     // A sibling of the paged list, not a branch inside it. The paged reader carries drag
     // reordering, in-place removal and its own scroll state; searching has none of that, and
     // threading a second data source through it would put all of that at risk for a feature that
@@ -1707,12 +1622,7 @@ fun LocalPlaylistScreen(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .hazeEffect(hazeState) {
-                        blurEnabled = true
-                        blurRadius = 24.dp
-                        backgroundColor = mutedPaletteBg
-                        tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                    },
+                    .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
             ) {
                 Row(
                     modifier =
@@ -1836,12 +1746,7 @@ fun LocalPlaylistScreen(
                     containerColor = Color.Transparent,
                 ),
             modifier =
-                Modifier.hazeEffect(hazeState) {
-                    blurEnabled = true
-                    blurRadius = 24.dp
-                    backgroundColor = mutedPaletteBg
-                    tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                },
+                Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
         )
     }
 }

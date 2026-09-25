@@ -253,6 +253,9 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.getLocation()
 
+        // Fork: upstream's repackaging block (checkOfficialBuild + UnofficialBuildScreen) is
+        // disabled here — this fork ships its own signing key under the same applicationId, and
+        // the F-Droid key pin would brick every fork release build.
         setContent {
             App(viewModel)
         }

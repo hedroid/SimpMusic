@@ -77,6 +77,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -134,6 +136,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
+import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SearchScreenUIState
 import com.maxrave.simpmusic.viewModel.SearchType
@@ -141,10 +144,10 @@ import com.maxrave.simpmusic.viewModel.SearchViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.toStringRes
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.painterResource
@@ -170,7 +173,7 @@ import simpmusic.composeapp.generated.resources.song
 import simpmusic.composeapp.generated.resources.videos
 import simpmusic.composeapp.generated.resources.what_do_you_want_to_listen_to
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     searchViewModel: SearchViewModel = koinInject(),
@@ -214,7 +217,7 @@ fun SearchScreen(
     val isMobilePortrait = getPlatform() == Platform.Android && screenInfo.wDP < screenInfo.hDP
     val moodGridColumns = if (isMobilePortrait) 2 else 4
 
-    val hazeState = rememberHazeState(blurEnabled = true)
+    val hazeState = rememberHazeState()
     val suggestionsState = rememberLazyListState()
     val historyState = rememberLazyListState()
     val moodGridState = rememberLazyGridState()
@@ -347,6 +350,22 @@ fun SearchScreen(
             } else {
                 SearchUIType.SEARCH_RESULTS
             }
+    }
+
+    //On search icon click while on search screen, open keyboard. Android only feature
+    if (getPlatform() == Platform.Android) {
+        val reloadDestination by sharedViewModel.reloadDestination.collectAsStateWithLifecycle()
+        val keyboardController = LocalSoftwareKeyboardController.current
+        LaunchedEffect(reloadDestination) {
+            if (reloadDestination == SearchDestination::class) {
+                if (!selectionState.isActive && searchUIType == SearchUIType.EMPTY) {
+                    isExpanded = true
+                    focusRequester.requestFocus()
+                    keyboardController?.show()
+                }
+                sharedViewModel.reloadDestinationDone()
+            }
+        }
     }
 
     if (showSelectionSheet) {
@@ -1093,9 +1112,7 @@ fun SearchScreen(
                             if (atTop) {
                                 Modifier.background(Color.Transparent)
                             } else {
-                                Modifier.hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                                    blurEnabled = true
-                                }
+                                Modifier.hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) })
                             },
                         ).windowInsetsPadding(WindowInsets.statusBars)
                         .padding(vertical = 10.dp),

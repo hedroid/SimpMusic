@@ -353,7 +353,7 @@ private fun NeteasePlaylistTile(
                 playlist.id != likedPlaylistId -> onDelete
                 else -> null
             },
-        fillWidth = true,
+        fillMaxWidth = true,
     )
 }
 

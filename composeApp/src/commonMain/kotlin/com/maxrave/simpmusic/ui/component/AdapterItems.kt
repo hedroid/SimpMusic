@@ -68,6 +68,7 @@ import com.maxrave.domain.data.model.browse.artist.ResultPlaylist
 import com.maxrave.domain.data.model.browse.artist.ResultSingle
 import com.maxrave.domain.data.model.home.Content
 import com.maxrave.domain.data.model.home.HomeItem
+import com.maxrave.domain.data.model.home.HomeItem.MoreEndpoint
 import com.maxrave.domain.data.model.home.chart.ItemArtist
 import com.maxrave.domain.data.model.home.chart.ItemVideo
 import com.maxrave.domain.data.model.mood.genre.ItemsPlaylist
@@ -90,11 +91,13 @@ import com.maxrave.simpmusic.expect.ui.HorizontalScrollBar
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.BrowseDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.HomeViewModel
+import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -141,6 +144,13 @@ fun HomeItem(
                         ),
                     )
                 }
+            } ?: data.moreEndpoint?.let { endpoint ->
+                // No channel of its own: the section title opens the section's page, as on the web.
+                { navController.navigateToMoreEndpoint(endpoint, data.title) }
+            },
+        onMoreClick =
+            data.moreEndpoint?.let { endpoint ->
+                { navController.navigateToMoreEndpoint(endpoint, data.title) }
             },
     ) {
         items(data.contents) { temp ->
@@ -348,7 +358,145 @@ fun MediaRow(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                 scrollState = lazyListState,
+                flingBehavior = snapperFlingBehavior,
             )
+        }
+    }
+}
+
+/**
+ * One shelf item, drawn as the card its ids call for, with Home's click handling: a song or video
+ * starts its radio, anything else opens its page. Shared by Home's rows and the "More" page, so an
+ * item behaves the same in both.
+ */
+@Composable
+fun HomeContentCard(
+    temp: Content,
+    navController: NavController,
+    viewModel: BaseViewModel,
+    onLongClick: (Content) -> Unit,
+    // Every card fills its grid cell, as on the "More" page; Home's rows keep the fixed sizes.
+    fillMaxWidth: Boolean = false,
+) {
+    val browseId = temp.browseId
+    val playlistId = temp.playlistId
+    if ((playlistId != null && temp.videoId == null) || (playlistId != null && temp.videoId == "")) {
+        if (playlistId.startsWith("UC")) {
+            HomeItemArtist(onClick = {
+                navController.navigate(
+                    ArtistDestination(
+                        channelId = playlistId,
+                    ),
+                )
+            }, data = temp, fillMaxWidth = fillMaxWidth)
+        } else {
+            HomeItemContentPlaylist(onClick = {
+                navController.navigate(
+                    PlaylistDestination(
+                        playlistId = playlistId,
+                    ),
+                )
+            }, data = temp, fillMaxWidth = fillMaxWidth)
+        }
+    } else if ((browseId != null && temp.videoId == null) || (browseId != null && temp.videoId == "")) {
+        if (browseId.startsWith("UC")) {
+            HomeItemArtist(onClick = {
+                navController.navigate(
+                    ArtistDestination(
+                        channelId = browseId,
+                    ),
+                )
+            }, data = temp, fillMaxWidth = fillMaxWidth)
+        } else if (browseId.startsWith("MPSP")) {
+            HomeItemContentPlaylist(onClick = {
+                navController.navigate(
+                    PodcastDestination(
+                        podcastId = browseId,
+                    ),
+                )
+            }, data = temp, fillMaxWidth = fillMaxWidth)
+        } else {
+            HomeItemContentPlaylist(onClick = {
+                navController.navigate(
+                    AlbumDestination(
+                        browseId = browseId,
+                    ),
+                )
+            }, data = temp, fillMaxWidth = fillMaxWidth)
+        }
+    } else if (temp.thumbnails.firstOrNull()?.width != temp.thumbnails.firstOrNull()?.height) {
+        HomeItemVideo(
+            onClick = { temp.playRadio(viewModel) },
+            onLongClick = { onLongClick(temp) },
+            data = temp,
+            fillMaxWidth = fillMaxWidth,
+        )
+    } else {
+        HomeItemSong(
+            onClick = { temp.playRadio(viewModel) },
+            onLongClick = { onLongClick(temp) },
+            data = temp,
+            fillMaxWidth = fillMaxWidth,
+        )
+    }
+}
+
+/**
+ * The thumbnail shape [HomeContentCard] draws for [this]: 16:9 for the video card, square for every
+ * other card. It mirrors the card's dispatch, so a layout can size a row before drawing it.
+ */
+fun Content.homeCardAspectRatio(): Float {
+    val opensPage = (playlistId != null || browseId != null) && videoId.isNullOrEmpty()
+    val wide = thumbnails.firstOrNull()?.width != thumbnails.firstOrNull()?.height
+    return if (!opensPage && wide) 16f / 9f else 1f
+}
+
+private fun Content.playRadio(viewModel: BaseViewModel) {
+    val firstQueue: Track = toTrack()
+    viewModel.setQueueData(
+        QueueData.Data(
+            listTracks = arrayListOf(firstQueue),
+            firstPlayedTrack = firstQueue,
+            playlistId = "RDAMVM$videoId",
+            playlistName = title,
+            playlistType = PlaylistType.RADIO,
+            continuation = null,
+        ),
+    )
+    viewModel.loadMediaItem(
+        firstQueue,
+        Config.SONG_CLICK,
+    )
+}
+
+/**
+ * Opens what a section's "More" endpoint points to. YouTube names the page type on the endpoint, so
+ * an album, playlist, artist or podcast opens its own screen; an unnamed one (`FEmusic_*`) is a
+ * generic shelf page.
+ */
+fun NavController.navigateToMoreEndpoint(
+    endpoint: MoreEndpoint,
+    title: String?,
+) {
+    when (endpoint.pageType) {
+        MoreEndpoint.PAGE_TYPE_ALBUM, MoreEndpoint.PAGE_TYPE_AUDIOBOOK -> {
+            navigate(AlbumDestination(browseId = endpoint.browseId))
+        }
+
+        MoreEndpoint.PAGE_TYPE_PLAYLIST -> {
+            navigate(PlaylistDestination(playlistId = endpoint.browseId))
+        }
+
+        MoreEndpoint.PAGE_TYPE_ARTIST, MoreEndpoint.PAGE_TYPE_USER_CHANNEL -> {
+            navigate(ArtistDestination(channelId = endpoint.browseId))
+        }
+
+        MoreEndpoint.PAGE_TYPE_PODCAST -> {
+            navigate(PodcastDestination(podcastId = endpoint.browseId))
+        }
+
+        else -> {
+            navigate(BrowseDestination(browseId = endpoint.browseId, params = endpoint.params, title = title))
         }
     }
 }
@@ -364,17 +512,18 @@ fun HomeItemContentPlaylist(
     onLongClick: (() -> Unit)? = null,
     // 混源网格(收藏/下载)里标记来源的双品牌角标(网易/YT);纯源页面不传。
     showSourceBadge: Boolean = false,
-    // true=封面铺满所在网格槽宽(Adaptive 网格槽宽>thumbSize 时保持左右边距对称);
+    // true=封面铺满所在网格槽宽(Adaptive/More 页网格,槽宽>thumbSize 时保持左右边距对称);
     // false=固定 thumbSize 方卡(主页 LazyRow 等固定尺寸场景)。
-    fillWidth: Boolean = false,
+    fillMaxWidth: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
     val thumbModifier =
-        if (fillWidth) {
+        if (fillMaxWidth) {
             Modifier.fillMaxWidth().aspectRatio(1f)
         } else {
             Modifier.size(thumbSize)
         }
+    val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(thumbSize)
     Box(
         Modifier
             .wrapContentSize()
@@ -391,7 +540,10 @@ fun HomeItemContentPlaylist(
             // 边距由各自 Text 的 padding 提供,视觉与原 10dp 等价。
             modifier =
                 Modifier
-                    .heightIn(min = thumbSize + 76.dp),
+                    // One floor for every home card, so a row mixing them stays one height. A
+                    // cell-filling card has no such row to match and its artwork is narrower than
+                    // thumbSize, so the floor would only add empty space under every tile.
+                    .then(if (fillMaxWidth) Modifier else Modifier.heightIn(min = thumbSize + 76.dp)),
         ) {
             val thumb =
                 when (data) {
@@ -558,8 +710,7 @@ fun HomeItemContentPlaylist(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier
-                        .width(thumbSize)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(start = 10.dp, top = 8.dp),
             )
@@ -644,8 +795,7 @@ fun HomeItemContentPlaylist(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier
-                        .width(thumbSize)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(start = 10.dp)
                         .basicMarquee(
@@ -776,7 +926,10 @@ fun HomeItemSong(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     data: Content,
+    // Fill a grid cell instead of the fixed 160dp, as Metrolist's browse grid does.
+    fillMaxWidth: Boolean = false,
 ) {
+    val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
     Box(
         modifier =
             Modifier
@@ -793,7 +946,7 @@ fun HomeItemSong(
         Column(
             modifier =
                 Modifier
-                    .heightIn(min = 236.dp),
+                    .then(if (fillMaxWidth) Modifier else Modifier.heightIn(min = 236.dp)),
         ) {
             val thumb =
                 data.thumbnails.lastOrNull()?.url?.let {
@@ -819,7 +972,8 @@ fun HomeItemSong(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .size(160.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .then(if (fillMaxWidth) Modifier.fillMaxWidth().aspectRatio(1f) else Modifier.size(160.dp))
                         .clip(
                             RoundedCornerShape(10.dp),
                         ),
@@ -832,8 +986,7 @@ fun HomeItemSong(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier
-                        .width(160.dp)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(start = 10.dp, top = 8.dp),
             )
@@ -861,8 +1014,7 @@ fun HomeItemSong(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier =
-                        Modifier
-                            .width(160.dp)
+                        textWidth
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .basicMarquee(
                                 initialDelayMillis = 2000,
@@ -882,8 +1034,11 @@ fun HomeItemVideo(
     onLongClick: () -> Unit,
     data: Content,
     forceDark: Boolean = LocalForceDarkText.current,
+    // Fill a grid cell instead of the fixed 284.5dp, as Metrolist's browse grid does.
+    fillMaxWidth: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(284.5.dp)
     Box(
         Modifier
             .fillMaxSize()
@@ -898,7 +1053,7 @@ fun HomeItemVideo(
         Column(
             modifier =
                 Modifier
-                    .heightIn(min = 236.dp),
+                    .then(if (fillMaxWidth) Modifier else Modifier.heightIn(min = 236.dp)),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
             Logger.w("AsyncImage", "HomeItemSong: $thumb")
@@ -917,7 +1072,8 @@ fun HomeItemVideo(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .height(160.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .then(if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.height(160.dp))
                         .aspectRatio(16f / 9f)
                         .clip(
                             RoundedCornerShape(10.dp),
@@ -931,8 +1087,7 @@ fun HomeItemVideo(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier
-                        .width(284.5.dp)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(start = 10.dp, top = 8.dp),
             )
@@ -950,8 +1105,7 @@ fun HomeItemVideo(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier
-                        .width(284.5.dp)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .basicMarquee(
                             initialDelayMillis = 2000,
@@ -969,8 +1123,11 @@ fun HomeItemArtist(
     onClick: () -> Unit,
     data: Content,
     forceDark: Boolean = LocalForceDarkText.current,
+    // Fill a grid cell instead of the fixed 160dp, as Metrolist's browse grid does.
+    fillMaxWidth: Boolean = false,
 ) {
     val titleColor = if (forceDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val textWidth = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp)
     Box(
         Modifier
             .fillMaxSize()
@@ -984,7 +1141,7 @@ fun HomeItemArtist(
         Column(
             modifier =
                 Modifier
-                    .heightIn(min = 236.dp),
+                    .then(if (fillMaxWidth) Modifier else Modifier.heightIn(min = 236.dp)),
         ) {
             val thumb = data.thumbnails.lastOrNull()?.url
             Logger.w("AsyncImage", "HomeItemSong: $thumb")
@@ -1003,7 +1160,8 @@ fun HomeItemArtist(
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
-                        .size(160.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .then(if (fillMaxWidth) Modifier.fillMaxWidth().aspectRatio(1f) else Modifier.size(160.dp))
                         .clip(
                             CircleShape,
                         ),
@@ -1017,8 +1175,7 @@ fun HomeItemArtist(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier =
-                    Modifier
-                        .width(160.dp)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(top = 8.dp),
             )
@@ -1030,8 +1187,7 @@ fun HomeItemArtist(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier =
-                    Modifier
-                        .width(160.dp)
+                    textWidth
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .basicMarquee(
                             initialDelayMillis = 2000,
@@ -1047,6 +1203,8 @@ fun HomeItemArtist(
 fun MoodMomentAndGenreHomeItem(
     title: String,
     stripeColor: Long,
+    // Fill a grid cell instead of the fixed 160dp.
+    fillMaxWidth: Boolean = false,
     onClick: () -> Unit,
 ) {
     ElevatedCard(
@@ -1057,8 +1215,7 @@ fun MoodMomentAndGenreHomeItem(
         onClick = onClick,
         shape = RoundedCornerShape(5.dp),
         modifier =
-            Modifier
-                .width(160.dp)
+            (if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier.width(160.dp))
                 .height(50.dp)
                 .padding(8.dp),
     ) {

@@ -38,7 +38,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -64,7 +63,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -87,6 +85,8 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.kyant.backdrop.highlight.Highlight
 import com.kmpalette.rememberPaletteState
+import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
@@ -94,12 +94,10 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
-import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
-import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkTextScrimBrush
+import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.getStringBlocking
@@ -116,7 +114,6 @@ import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
-import com.maxrave.simpmusic.ui.component.rememberThrottledLottieProgress
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -136,20 +133,14 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.PlaylistUIEvent
 import com.maxrave.simpmusic.viewModel.PlaylistUIState
-import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.PlaylistViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -160,32 +151,18 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.delete_playlist_message
-import simpmusic.composeapp.generated.resources.delete_youtube_playlist_message
-import simpmusic.composeapp.generated.resources.delete_playlist_title
-import simpmusic.composeapp.generated.resources.unsubscribe_playlist_message
-import simpmusic.composeapp.generated.resources.unsubscribe_youtube_playlist_message
-import simpmusic.composeapp.generated.resources.unsubscribe_playlist_title
-import simpmusic.composeapp.generated.resources.cancel_download_title
-import simpmusic.composeapp.generated.resources.cancel_download_message
-import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
-import simpmusic.composeapp.generated.resources.cancel
-import simpmusic.composeapp.generated.resources.confirm
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.radio
-import simpmusic.composeapp.generated.resources.remove_download_message
-import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.search
 import simpmusic.composeapp.generated.resources.unlimited
 
-@OptIn(ExperimentalCoroutinesApi::class, ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(
     viewModel: PlaylistViewModel = koinViewModel(),
@@ -201,33 +178,11 @@ fun PlaylistScreen(
     val id = playlistId.removePrefix("VL")
     val tag = "PlaylistScreen"
 
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/downloading_animation.json").decodeToString(),
-        )
-    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // 网易自建歌单:歌曲菜单露"从歌单移除"(数据到齐后判定一次;收藏歌单/YT 歌单恒 false)
-    var neteaseOwnPlaylist by remember { mutableStateOf(false) }
-    var neteaseLikedPlaylist by remember { mutableStateOf(false) }
-    var showUnsubscribeDialog by remember { mutableStateOf(false) }
-    var showDeletePlaylistDialog by remember { mutableStateOf(false) }
-    val loadedPlaylistId = (uiState as? Success)?.data?.id
-    LaunchedEffect(loadedPlaylistId) {
-        neteaseOwnPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseOwnPlaylist() } ?: false
-        neteaseLikedPlaylist = loadedPlaylistId?.let { viewModel.isNeteaseLikedPlaylist() } ?: false
-    }
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
-    // 收藏心=云端态;显隐按"该源是否登录"判(未登录无云端态可显)
-    val playlistIsNetease = (uiState as? Success)?.data?.id?.toLongOrNull() != null
-    val ytLoggedIn by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
-    val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
-    val favoriteEnabled = if (playlistIsNetease) neteaseLoggedIn else ytLoggedIn
-    val remoteSaved by viewModel.remoteSaved.collectAsStateWithLifecycle()
-    val remoteSavePending by viewModel.remoteSavePending.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
 
@@ -242,17 +197,11 @@ fun PlaylistScreen(
     }
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var showRemoveDownloadDialog by rememberSaveable { mutableStateOf(false) }
-    var showCancelDownloadDialog by rememberSaveable { mutableStateOf(false) }
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
-    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
-    LaunchedEffect(showSelectionSheet) {
-        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
-    }
 
     val filteredTrack by remember {
         derivedStateOf {
@@ -355,9 +304,7 @@ fun PlaylistScreen(
     }
     val paletteState = rememberPaletteState()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
@@ -405,24 +352,17 @@ fun PlaylistScreen(
         )
     }
 //    Box {
-    // target 只取状态"类型":Success 是普通 class(引用相等),实例级 target 会让任何
-    // 内容性重写(移除歌曲后的 trackCount-1、元数据刷新)触发整屏淡出淡入——即"移除后
-    // 列表来回闪"。按类型切换只保留 Loading↔Success↔Error 的过场;内容更新在
-    // Success 分支内读 uiState 原地重组,不再动画。
     Crossfade(
-        targetState = uiState::class,
-    ) { stateClass ->
-        Logger.w(tag, "State hash: ${stateClass.hashCode()}")
-        when (stateClass) {
-            PlaylistUIState.Success::class -> {
-                val state = uiState as Success
+        targetState = uiState,
+    ) { state ->
+        Logger.w(tag, "State hash: ${state.hashCode()}")
+        when (state) {
+            is PlaylistUIState.Success -> {
                 val data = state.data
                 Logger.d(tag, "data: $data")
                 if (data == null) return@Crossfade
                 val hazeState =
-                    rememberHazeState(
-                        blurEnabled = true,
-                    )
+                    rememberHazeState()
                 LazyColumn(
                     modifier =
                         Modifier
@@ -461,17 +401,15 @@ fun PlaylistScreen(
                                             ) {
                                                 // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
-                                                    // 头图全屏宽展示,数据侧 URL 只有 544/500 —— 请求侧升 1080
-                                                    val hiResThumb = data.thumbnail.toHiResArtworkUrl()
                                                     AsyncImage(
                                                         model =
                                                             ImageRequest
                                                                 .Builder(LocalPlatformContext.current)
-                                                                .data(hiResThumb)
+                                                                .data(data.thumbnail)
                                                                 .diskCachePolicy(CachePolicy.ENABLED)
                                                                 .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(hiResThumb)
-                                                                .memoryCacheKey(hiResThumb)
+                                                                .diskCacheKey(data.thumbnail)
+                                                                .memoryCacheKey(data.thumbnail)
                                                                 .crossfade(false)
                                                                 .build(),
                                                         placeholder = rememberHolderPainter(),
@@ -486,14 +424,14 @@ fun PlaylistScreen(
                                                     // Scrim spans 70% of the artwork (not a fixed 200dp): the
                                                     // shorter the ramp, the steeper the alpha, and a steep ramp
                                                     // is what makes the fade read as an edge. See
-                                                    // artworkTextScrimBrush for the curve itself.
+                                                    // artworkScrimBrush for the curve itself.
                                                     Box(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
                                                                 .height((screenInfo.hDP * 0.35f).dp)
                                                                 .align(Alignment.BottomCenter)
-                                                                .background(artworkTextScrimBrush(mutedPaletteBg)),
+                                                                .background(artworkScrimBrush(mutedPaletteBg)),
                                                     )
                                                     Column(
                                                         modifier =
@@ -581,18 +519,16 @@ fun PlaylistScreen(
                                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        // 收藏心=云端账号收藏;own/红心歌单排除;该源未登录隐藏
-                                                        if (favoriteEnabled && !data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                                                        if (!data.isRadio) {
                                                             Box(
                                                                 modifier = Modifier.size(48.dp),
                                                                 contentAlignment = Alignment.Center,
                                                             ) {
                                                                 HeartCheckBox(
                                                                     size = 28,
-                                                                    checked = remoteSaved ?: liked,
-                                                                    modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
+                                                                    checked = liked,
                                                                     onStateChange = {
-                                                                        if (favoriteEnabled) viewModel.setRemoteSaved(!(remoteSaved ?: liked)) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                                        viewModel.onUIEvent(PlaylistUIEvent.Favorite)
                                                                     },
                                                                 )
                                                             }
@@ -643,17 +579,15 @@ fun PlaylistScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                                                         verticalAlignment = Alignment.Top,
                                                     ) {
-                                                        // 280dp≈735px 槽位,同样请求侧升 1080(与竖屏头图同源同缓存)
-                                                        val landscapeThumb = data.thumbnail.toHiResArtworkUrl()
                                                         AsyncImage(
                                                             model =
                                                                 ImageRequest
                                                                     .Builder(LocalPlatformContext.current)
-                                                                    .data(landscapeThumb)
+                                                                    .data(data.thumbnail)
                                                                     .diskCachePolicy(CachePolicy.ENABLED)
                                                                     .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                    .diskCacheKey(landscapeThumb)
-                                                                    .memoryCacheKey(landscapeThumb)
+                                                                    .diskCacheKey(data.thumbnail)
+                                                                    .memoryCacheKey(data.thumbnail)
                                                                     .crossfade(false)
                                                                     .build(),
                                                             placeholder = rememberHolderPainter(),
@@ -788,7 +722,9 @@ fun PlaylistScreen(
                                                                                             Modifier
                                                                                                 .fillMaxSize()
                                                                                                 .clickable {
-                                                                                                    showRemoveDownloadDialog = true
+                                                                                                    viewModel.makeToast(
+                                                                                                        getStringBlocking(Res.string.downloaded),
+                                                                                                    )
                                                                                                 },
                                                                                         contentAlignment = Alignment.Center,
                                                                                     ) {
@@ -807,17 +743,13 @@ fun PlaylistScreen(
                                                                                             Modifier
                                                                                                 .fillMaxSize()
                                                                                                 .clickable {
-                                                                                                    showCancelDownloadDialog = true
+                                                                                                    viewModel.makeToast(
+                                                                                                        getStringBlocking(Res.string.downloading),
+                                                                                                    )
                                                                                                 },
                                                                                         contentAlignment = Alignment.Center,
                                                                                     ) {
-                                                                                        Image(
-                                                                                            painter =
-                                                                                                rememberLottiePainter(
-                                                                                                    composition = composition,
-                                                                                                    progress = rememberThrottledLottieProgress(),
-                                                                                                ),
-                                                                                            contentDescription = "Lottie animation",
+                                                                                        DownloadingIndicator(
                                                                                             modifier = Modifier.size(28.dp),
                                                                                         )
                                                                                     }
@@ -884,17 +816,16 @@ fun PlaylistScreen(
                                                             .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    if (favoriteEnabled && !data.isRadio && !isYourYouTubePlaylist && !neteaseOwnPlaylist && !neteaseLikedPlaylist) {
+                                                    if (!data.isRadio) {
                                                         Box(
                                                             modifier = Modifier.size(48.dp),
                                                             contentAlignment = Alignment.Center,
                                                         ) {
                                                             HeartCheckBox(
                                                                 size = 28,
-                                                                checked = remoteSaved ?: liked,
-                                                                modifier = Modifier.alpha(if (favoriteEnabled) 1f else 0.38f),
+                                                                checked = liked,
                                                                 onStateChange = {
-                                                                    if (favoriteEnabled) viewModel.setRemoteSaved(!(remoteSaved ?: liked)) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                                    viewModel.onUIEvent(PlaylistUIEvent.Favorite)
                                                                 },
                                                             )
                                                         }
@@ -1006,7 +937,9 @@ fun PlaylistScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showRemoveDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                getStringBlocking(Res.string.downloaded),
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
@@ -1025,17 +958,13 @@ fun PlaylistScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showCancelDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                getStringBlocking(Res.string.downloading),
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
-                                                                                Image(
-                                                                                    painter =
-                                                                                        rememberLottiePainter(
-                                                                                            composition = composition,
-                                                                                            progress = rememberThrottledLottieProgress(),
-                                                                                        ),
-                                                                                    contentDescription = "Lottie animation",
+                                                                                DownloadingIndicator(
                                                                                     modifier = Modifier.size(28.dp),
                                                                                 )
                                                                             }
@@ -1244,12 +1173,7 @@ fun PlaylistScreen(
                         Modifier
                             .fillMaxWidth()
                             .onGloballyPositioned { searchBarHeightPx = it.size.height }
-                            .hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     ) {
                         Row(
                             modifier =
@@ -1319,12 +1243,7 @@ fun PlaylistScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 if (showSelectionSheet) {
@@ -1343,11 +1262,6 @@ fun PlaylistScreen(
                         onAddToPlaylist = { showSelectionAddToPlaylist = true },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
-                            selectionState.exit()
-                        },
-                        allDownloaded = allSelectedDownloaded,
-                        onRemoveDownload = {
-                            selectionViewModel.removeDownload(selectedIds)
                             selectionState.exit()
                         },
                         onAddToFavorite = {
@@ -1371,82 +1285,6 @@ fun PlaylistScreen(
                         onYTPlaylistClick = {},
                     )
                 }
-                if (showDeletePlaylistDialog) {
-                    // 自建歌单删除确认:网易/YT 各用本源文案(2026-09-22 YT 自建补齐入口)
-                    val isNeteasePlaylist = data.id.toLongOrNull() != null
-                    AlertDialog(
-                        containerColor = rememberSurfaceDarkColors().container,
-                        titleContentColor = rememberSurfaceDarkColors().content,
-                        textContentColor = rememberSurfaceDarkColors().content,
-                        title = { Text(text = stringResource(Res.string.delete_playlist_title)) },
-                        text = {
-                            Text(
-                                text =
-                                    stringResource(
-                                        if (isNeteasePlaylist) Res.string.delete_playlist_message else Res.string.delete_youtube_playlist_message,
-                                        data.title,
-                                    ),
-                            )
-                        },
-                        onDismissRequest = { showDeletePlaylistDialog = false },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                if (isNeteasePlaylist) {
-                                    viewModel.deleteNeteasePlaylist()
-                                } else {
-                                    viewModel.deleteYouTubePlaylist()
-                                }
-                                showDeletePlaylistDialog = false
-                                navController.navigateUp()
-                            }) {
-                                Text(text = stringResource(Res.string.delete))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showDeletePlaylistDialog = false }) {
-                                Text(text = stringResource(Res.string.cancel))
-                            }
-                        },
-                    )
-                }
-                if (showUnsubscribeDialog) {
-                    // 收藏歌单取消收藏:网易/YT 各用本源文案;确认后**不自动返回**(歌单还在
-                    // 云端,留在当前页即可,用户 2026-09-22 定案),库页分区由事件本地移除
-                    val isNeteasePlaylist = data.id.toLongOrNull() != null
-                    AlertDialog(
-                        containerColor = rememberSurfaceDarkColors().container,
-                        titleContentColor = rememberSurfaceDarkColors().content,
-                        textContentColor = rememberSurfaceDarkColors().content,
-                        title = { Text(text = stringResource(Res.string.unsubscribe_playlist_title)) },
-                        text = {
-                            Text(
-                                text =
-                                    stringResource(
-                                        if (isNeteasePlaylist) Res.string.unsubscribe_playlist_message else Res.string.unsubscribe_youtube_playlist_message,
-                                        data.title,
-                                    ),
-                            )
-                        },
-                        onDismissRequest = { showUnsubscribeDialog = false },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                if (isNeteasePlaylist) {
-                                    viewModel.unsubscribeNeteasePlaylist()
-                                } else {
-                                    viewModel.unsubscribeYouTubePlaylist()
-                                }
-                                showUnsubscribeDialog = false
-                            }) {
-                                Text(text = stringResource(Res.string.confirm))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showUnsubscribeDialog = false }) {
-                                Text(text = stringResource(Res.string.cancel))
-                            }
-                        },
-                    )
-                }
                 if (itemBottomSheetShow && currentItem != null) {
                     val track = currentItem?.toSongEntity() ?: return@Crossfade
                     NowPlayingBottomSheet(
@@ -1456,18 +1294,6 @@ fun PlaylistScreen(
                         },
                         navController = navController,
                         song = track,
-                        onRemoveFromPlaylist =
-                            // 红心歌单不露(与红心按钮功能重复,红心即入口);其余自建歌单露出。
-                            // YT 自建(非电台)拉齐网易,云端 edit_playlist 移除条目
-                            if (neteaseOwnPlaylist && !neteaseLikedPlaylist) {
-                                { viewModel.removeTrackFromNeteasePlaylist(track.videoId) }
-                            } else if (isYourYouTubePlaylist && !data.isRadio) {
-                                { viewModel.removeTrackFromYouTubePlaylist(track.videoId) }
-                            } else {
-                                null
-                            },
-                        // 红心歌单内取消红心不再即时剔歌(用户定案:闪动效果差,云端为准下次进入更新)
-                        onLikeChanged = null,
                     )
                 }
                 if (playlistBottomSheetShow) {
@@ -1484,31 +1310,6 @@ fun PlaylistScreen(
                         playlistId = data.id,
                         playlistName = data.title,
                         isYourYouTubePlaylist = isYourYouTubePlaylist && !data.isRadio,
-                        // 网易歌单:已收藏的才露"取消收藏"(与红心状态同源,未收藏时不露),
-                        // 自建的露"删除歌单"(红心歌单两者都不露)
-                        onUnsubscribe =
-                            // 收藏歌单露"取消收藏":网易(已收藏的)+ YT 从收藏分区进入的
-                            // (isYourYouTubePlaylist=false 即收藏歌单入口);确认后不返回
-                            if ((data.id.toLongOrNull() != null &&
-                                !neteaseOwnPlaylist &&
-                                !neteaseLikedPlaylist &&
-                                (remoteSaved ?: liked)) ||
-                                (data.id.toLongOrNull() == null && !isYourYouTubePlaylist && !data.isRadio)
-                            ) {
-                                { showUnsubscribeDialog = true }
-                            } else {
-                                null
-                            },
-                        onDeletePlaylist =
-                            // 自建歌单露删除:网易自建(非红心)+ YT 自建(非系统/电台)——
-                            // 2026-09-22 对齐库页长按,自建歌单详情页也能删(用户点名)
-                            if ((data.id.toLongOrNull() != null && neteaseOwnPlaylist && !neteaseLikedPlaylist) ||
-                                (data.id.toLongOrNull() == null && isYourYouTubePlaylist && !data.isRadio)
-                            ) {
-                                { showDeletePlaylistDialog = true }
-                            } else {
-                                null
-                            },
                         onEditTitle = { newTitle ->
                             viewModel.updatePlaylistTitle(newTitle, data.id)
                         },
@@ -1567,17 +1368,12 @@ fun PlaylistScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
             }
 
-            PlaylistUIState.Loading::class -> {
+            is PlaylistUIState.Loading -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -1588,59 +1384,10 @@ fun PlaylistScreen(
                 }
             }
 
-            PlaylistUIState.Error::class -> {
-                val state = uiState as Error
+            is PlaylistUIState.Error -> {
                 viewModel.makeToast("Error: ${state.message}")
                 navController.navigateUp()
             }
         }
-    }
-    if (showCancelDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.cancel_download_title)) },
-            text = { Text(text = stringResource(Res.string.cancel_download_message)) },
-            onDismissRequest = { showCancelDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.cancelDownloadingPlaylist()
-                    showCancelDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel_download_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelDownloadDialog = false }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRemoveDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.remove_download_title)) },
-            text = { Text(text = stringResource(Res.string.remove_download_message)) },
-            onDismissRequest = { showRemoveDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.removeDownloadedPlaylist()
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
     }
 }

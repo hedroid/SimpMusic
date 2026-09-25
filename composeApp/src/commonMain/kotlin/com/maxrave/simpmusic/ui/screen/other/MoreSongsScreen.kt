@@ -40,6 +40,8 @@ import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
+import com.maxrave.simpmusic.extension.barBlurStyle
+import androidx.compose.material3.MaterialTheme
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
@@ -50,10 +52,9 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.MoreSongsUIState
 import com.maxrave.simpmusic.viewModel.MoreSongsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
@@ -64,7 +65,7 @@ import simpmusic.composeapp.generated.resources.popular
 import simpmusic.composeapp.generated.resources.sort_by_newest
 
 /** 网易艺人"全部歌曲"分页页:热门/最新排序 chips + 近底追加(MoreAlbums 同款骨架)。 */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreSongsScreen(
     innerPadding: PaddingValues,
@@ -170,9 +171,7 @@ fun MoreSongsScreen(
                     }
                     TopAppBar(
                         modifier =
-                            Modifier.hazeEffect(state = hazeState, style = HazeMaterials.ultraThin()) {
-                                blurEnabled = true
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(MaterialTheme.colorScheme.surface, 0.3f)),
                         title = {
                             Text(
                                 text = state.title,

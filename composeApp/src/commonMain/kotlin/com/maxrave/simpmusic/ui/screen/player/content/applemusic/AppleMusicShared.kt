@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -73,6 +74,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
+import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.DeviceVolumeController
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
@@ -95,6 +97,9 @@ import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.Repeat
+import com.maxrave.simpmusic.ui.icon.RepeatOne
+import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Star
 import com.maxrave.simpmusic.ui.icon.StarBorder
@@ -614,6 +619,8 @@ internal fun AppleMusicTransportRow(
     controllerState: ControlState,
     onUIEvent: (UIEvent) -> Unit,
     modifier: Modifier = Modifier,
+    // Only the fullscreen lyrics page asks for these; the Now Playing page keeps its three buttons.
+    showShuffleAndRepeat: Boolean = false,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val sideButton = 56.dp
@@ -634,9 +641,24 @@ internal fun AppleMusicTransportRow(
         Row(
             // Mock: a tight centered cluster — NOT SpaceEvenly, which spreads the
             // rewind/forward glyphs to the screen edges (first device screenshots).
-            horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+            // With shuffle and repeat on the two ends the five span the row instead, the way
+            // Apple's desktop player lays them out.
+            horizontalArrangement =
+                if (showShuffleAndRepeat) {
+                    Arrangement.SpaceBetween
+                } else {
+                    Arrangement.spacedBy(gap, Alignment.CenterHorizontally)
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (showShuffleAndRepeat) {
+                AppleMusicGlyphButton(
+                    icon = SimpIcons.Shuffle,
+                    onClick = { onUIEvent(UIEvent.Shuffle) },
+                    size = 40.dp,
+                    tint = Color.White.copy(alpha = if (controllerState.isShuffle) 1f else 0.4f),
+                )
+            }
             IconButton(
                 onClick = {
                     if (controllerState.isPreviousAvailable) {
@@ -686,6 +708,15 @@ internal fun AppleMusicTransportRow(
                     contentDescription = "",
                     tint = Color.White.copy(alpha = if (controllerState.isNextAvailable) 1f else 0.4f),
                     modifier = Modifier.size(iconPrevNext),
+                )
+            }
+            if (showShuffleAndRepeat) {
+                val repeatState = controllerState.repeatState
+                AppleMusicGlyphButton(
+                    icon = if (repeatState is RepeatState.One) SimpIcons.RepeatOne else SimpIcons.Repeat,
+                    onClick = { onUIEvent(UIEvent.Repeat) },
+                    size = 40.dp,
+                    tint = Color.White.copy(alpha = if (repeatState !is RepeatState.None) 1f else 0.4f),
                 )
             }
         }
@@ -807,6 +838,39 @@ internal fun AppleMusicDock(
             },
         )
     }
+}
+
+/**
+ * Progress bar + times + transport — the playback half of [AppleMusicBottomCluster], shared with
+ * the fullscreen lyrics landscape layout. Emits straight into the caller's Column; the horizontal
+ * gutter belongs to that Column, as it does in the cluster.
+ */
+@Composable
+internal fun ColumnScope.AppleMusicPlaybackControls(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    typography: AppleMusicTypography,
+    showShuffleAndRepeat: Boolean = false,
+) {
+    // Fixed 18dp shell: the track swells on touch, but inside a CONSTANT footprint —
+    // otherwise the growing slider re-measures this whole column and the artwork above
+    // it visibly jumps. It also gives the bar a real 18dp touch target instead of 7dp.
+    Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
+        AppleMusicThinSlider(
+            value = state.sliderValue / 100f,
+            activeColor = if (state.timelineState.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
+            onValueChange = { actions.onSliderChange(it * 100f) },
+            onValueChangeFinished = actions.onSliderChangeFinished,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    AppleMusicTimesRow(state = state, typography = typography, modifier = Modifier.padding(top = 8.dp))
+    Spacer(modifier = Modifier.height(12.dp))
+    AppleMusicTransportRow(
+        controllerState = state.controllerState,
+        onUIEvent = actions.onUIEvent,
+        showShuffleAndRepeat = showShuffleAndRepeat,
+    )
 }
 
 /**

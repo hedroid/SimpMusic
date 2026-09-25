@@ -99,12 +99,17 @@ import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.HorizontalScrollBar
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
+import com.maxrave.simpmusic.ui.component.BlogPromoDialog
+import com.maxrave.simpmusic.ui.component.FootgunsStarDialog
+import com.maxrave.simpmusic.ui.component.ShareSavedLyricsDialog
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.DropdownButton
 import com.maxrave.simpmusic.ui.component.EndOfPage
@@ -139,6 +144,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.ui.theme.desktopPanelDark
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.FOOTGUNS_STAR_KEY
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_COMMUTE
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_ENERGIZE
@@ -152,10 +158,10 @@ import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_SLEEP
 import com.maxrave.simpmusic.viewModel.HomeViewModel.Companion.HOME_PARAMS_WORKOUT
 import com.maxrave.simpmusic.viewModel.ListState
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -212,7 +218,9 @@ private val listOfHomeChip =
         Res.string.focus,
     )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+private const val BLOG_PROMO_KEY = "blog_promo_v1_seen"
+
+@OptIn(ExperimentalMaterial3Api::class)
 @ExperimentalFoundationApi
 @Composable
 fun HomeScreen(
@@ -249,6 +257,7 @@ fun HomeScreen(
     val shouldShowLogInAlert by viewModel.showLogInAlert.collectAsStateWithLifecycle()
 
     val openAppTime by sharedViewModel.openAppTime.collectAsStateWithLifecycle()
+    val shareLyricsPermissions by sharedViewModel.shareSavedLyrics.collectAsStateWithLifecycle()
 
     val backgroundColor = MaterialTheme.colorScheme.background
     val isLightTheme = backgroundColor.luminance() > 0.5f
@@ -293,14 +302,21 @@ fun HomeScreen(
     var showReviewDialog by rememberSaveable {
         mutableStateOf(false)
     }
+    var showRequestShareLyricsPermissions by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var showBlogPromoDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
+    var showFootgunsDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
     var topAppBarHeightPx by rememberSaveable {
         mutableIntStateOf(0)
     }
 
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex }
@@ -343,12 +359,28 @@ fun HomeScreen(
         // 账户信息晚于 feed 到达也要重算(时序修复)
         accountShow = accountInfo?.first?.let { name -> homeData.none { it.subtitle == name } } ?: true
     }
-    LaunchedEffect(openAppTime) {
-        Logger.w("HomeScreen", "openAppTime: $openAppTime")
+    LaunchedEffect(openAppTime, shareLyricsPermissions) {
+        Logger.w("HomeScreen", "openAppTime: $openAppTime, shareLyricsPermissions: $shareLyricsPermissions")
         if (openAppTime >= 10 && openAppTime % 10 == 0 && openAppTime <= 50) {
             showReviewDialog = true
+        } else if ((openAppTime == 1 || openAppTime % 15 == 0) && openAppTime <= 60 && !shareLyricsPermissions) {
+            showRequestShareLyricsPermissions = true
+        } else if (openAppTime == 5) {
+            // Blog promo: one-shot after 5 app opens, bump key suffix to re-promote later
+            if (sharedViewModel.getString(BLOG_PROMO_KEY) != "true") {
+                showBlogPromoDialog = true
+            }
+        } else if (openAppTime % 10 == 6 &&
+            openAppTime <= 46 &&
+            sharedViewModel.getString(FOOTGUNS_STAR_KEY) != "true"
+        ) {
+            // kotlin-footguns star prompt: 6, 16, 26, 36, 46 - one open after each review milestone,
+            // and clear of the share-lyrics (15, 45) and blog-promo (5) milestones
+            showFootgunsDialog = true
         } else {
             showReviewDialog = false
+            showFootgunsDialog = false
+            showRequestShareLyricsPermissions = false
         }
     }
 
@@ -397,6 +429,52 @@ fun HomeScreen(
                     isDismissOnly = false,
                 )
                 showReviewDialog = false
+            },
+        )
+    }
+
+    if (showFootgunsDialog) {
+        FootgunsStarDialog(
+            onDismissRequest = {
+                // "Later" advances OPEN_APP_TIME, the same way the review and share-lyrics dialogs do.
+                // Home's launch effect runs again every time Home re-enters composition, reading the
+                // stored count; leaving it untouched kept the milestone condition true, so the prompt
+                // came back on every return to Home until the app was restarted.
+                showFootgunsDialog = false
+                sharedViewModel.onDoneReview(isDismissOnly = true)
+            },
+            onDoneStar = {
+                sharedViewModel.putString(FOOTGUNS_STAR_KEY, "true")
+                showFootgunsDialog = false
+            },
+        )
+    }
+
+    if (showBlogPromoDialog) {
+        BlogPromoDialog(
+            onDismissRequest = {
+                sharedViewModel.putString(BLOG_PROMO_KEY, "true")
+                showBlogPromoDialog = false
+            },
+            onVisitBlog = {
+                sharedViewModel.putString(BLOG_PROMO_KEY, "true")
+                showBlogPromoDialog = false
+            },
+        )
+    }
+
+    if (showRequestShareLyricsPermissions) {
+        ShareSavedLyricsDialog(
+            onDismissRequest = {
+                showRequestShareLyricsPermissions = false
+                sharedViewModel.onDoneReview(
+                    isDismissOnly = true,
+                )
+            },
+            onConfirm = { contributor ->
+                sharedViewModel.onDoneRequestingShareLyrics(
+                    contributor,
+                )
             },
         )
     }
@@ -507,7 +585,7 @@ fun HomeScreen(
                     }
                     LazyColumn(
                         state = scrollState,
-                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         itemsIndexed(homeData, key = { _, item ->
                             item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
@@ -742,9 +820,7 @@ fun HomeScreen(
                                 Modifier.background(Color.Transparent)
                             } else {
                                 Modifier
-                                    .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                                        blurEnabled = true
-                                    }
+                                    .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) })
                             },
                         ).onGloballyPositioned { coordinates ->
                             topAppBarHeightPx = coordinates.size.height
@@ -932,6 +1008,10 @@ fun AccountLayout(
     }
 }
 
+// Portrait fills the width with one column (the next one peeking in). On a landscape window that one
+// column stretched across the whole screen, so every row there is capped instead.
+private val LandscapeGridItemMaxWidth = 400.dp
+
 @ExperimentalFoundationApi
 @Composable
 fun QuickPicks(
@@ -941,6 +1021,7 @@ fun QuickPicks(
 ) {
     val lazyListState = rememberLazyGridState()
     val snapperFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState, snapPosition = SnapPosition.Start))
+    val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
     val density = LocalDensity.current
     var widthDp by remember {
         mutableStateOf(0.dp)
@@ -1010,11 +1091,16 @@ fun QuickPicks(
                             bottomSheetShow = true
                         },
                         data = it,
-                        widthDp = widthDp,
+                        widthDp = if (isPortrait) widthDp else minOf(widthDp, LandscapeGridItemMaxWidth + 30.dp),
                     )
                 }
             }
         }
+        HorizontalScrollBar(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            scrollState = lazyListState,
+            flingBehavior = snapperFlingBehavior,
+        )
     }
 }
 
@@ -1067,6 +1153,11 @@ fun MoodMomentAndGenre(
                     }
                 }
             }
+            HorizontalScrollBar(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                scrollState = gridState,
+                flingBehavior = flingBehavior,
+            )
         }
     }
 }
@@ -1103,6 +1194,7 @@ fun ChartData(
 
     val lazyListState2 = rememberLazyGridState()
     val snapperFlingBehavior2 = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = lazyListState2))
+    val isPortrait = getScreenSizeInfo().let { it.wDP < it.hDP }
 
     Column(
         Modifier.onGloballyPositioned { coordinates ->
@@ -1163,10 +1255,15 @@ fun ChartData(
                         )
                     },
                     data = data,
-                    widthDp = gridWidthDp,
+                    widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
                 )
             }
         }
         }
+        HorizontalScrollBar(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            scrollState = lazyListState2,
+            flingBehavior = snapperFlingBehavior2,
+        )
     }
 }

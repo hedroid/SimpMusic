@@ -5,7 +5,6 @@ import android.app.Application
 import android.database.CursorWindow
 import android.os.Build
 import android.util.Log
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import cat.ereza.customactivityoncrash.config.CaocConfig
@@ -52,9 +51,6 @@ class SimpMusicApplication :
 
     override fun onCreate() {
         super.onCreate()
-        // Follow the system by default; MainActivity syncs this with the user's
-        // theme preference so chrome (splash, system bars) matches the Compose theme.
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         configCrashlytics(this, BuildKonfig.sentryDsn)
         configLastfm(BuildKonfig.lastfmApiKey, BuildKonfig.lastfmSecret)
         startKoin {

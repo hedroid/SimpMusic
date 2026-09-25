@@ -35,6 +35,8 @@ import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
+import com.maxrave.simpmusic.extension.barBlurStyle
+import androidx.compose.material3.MaterialTheme
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
@@ -46,10 +48,9 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SimilarSongsUIState
 import com.maxrave.simpmusic.viewModel.SimilarSongsViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
@@ -59,7 +60,7 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.similar_songs
 
 /** 网易单曲"相似歌曲"分页页(MoreSongsScreen 同款骨架,无排序 chips)。 */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimilarSongsScreen(
     innerPadding: PaddingValues,
@@ -143,9 +144,7 @@ fun SimilarSongsScreen(
                     }
                     TopAppBar(
                         modifier =
-                            Modifier.hazeEffect(state = hazeState, style = HazeMaterials.ultraThin()) {
-                                blurEnabled = true
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(MaterialTheme.colorScheme.surface, 0.3f)),
                         title = {
                             Text(
                                 text = stringResource(Res.string.similar_songs),

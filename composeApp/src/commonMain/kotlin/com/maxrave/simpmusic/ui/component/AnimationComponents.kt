@@ -186,36 +186,3 @@ fun LimitedBorderAnimationView(
         }
     }
 }
-/**
- * 播放指示 Lottie(audio_playing_animation.json,fr=100/op=144 帧≈1.44s 循环)的限帧进度驱动。
- * compottie 自动播放以屏幕刷新率(高刷机 120Hz)逐帧失效重绘——当前曲指示条是实测主热源
- * (真机静止歌单页仍 ~120fps、主线程 35-55% CPU→发热,2026-09-21 真机归因)。这里以
- * [fps]=12 手写进度:状态写入频率=重绘频率,频谱条视觉依旧流畅;调用点都在"正在播放"
- * 分支内,组合离开分支协程自动取消。
- */
-@Composable
-fun rememberThrottledLottieProgress(
-    fps: Float = 12f,
-    durationMs: Float = 1440f,
-): () -> Float {
-    val progress = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        // last 只在真正推一格时重置:它是"距上次推进"的基准,逐帧刷新会让 dtMs 恒等于
-        // 一帧间隔(~8ms)、永远够不到节流阈值,动画冻在 progress=0——首版就冻在这
-        var last = -1L
-        while (true) {
-            withFrameNanos { now ->
-                if (last < 0) {
-                    last = now
-                } else {
-                    val dtMs = (now - last) / 1_000_000f
-                    if (dtMs >= 1000f / fps) {
-                        progress.floatValue = (progress.floatValue + dtMs / durationMs) % 1f
-                        last = now
-                    }
-                }
-            }
-        }
-    }
-    return { progress.floatValue }
-}

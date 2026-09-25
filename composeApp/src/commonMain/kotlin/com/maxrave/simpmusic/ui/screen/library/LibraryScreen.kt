@@ -93,10 +93,10 @@ import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPla
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -139,7 +139,7 @@ import simpmusic.composeapp.generated.resources.your_netease
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_youtube_music
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     innerPadding: PaddingValues,
@@ -190,9 +190,7 @@ fun LibraryScreen(
     var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     var topAppBarHeight by remember {
         mutableStateOf(0.dp)
@@ -559,9 +557,7 @@ fun LibraryScreen(
             .background(Color.Transparent)
             // 传页面背景色:返回本页时首 1-2 帧 hazeSource 尚无内容,玻璃层显示底色而非
             // 全透明,消除"透明→磨砂"的顶栏闪烁
-            .hazeEffect(hazeState, style = HazeMaterials.ultraThin(MaterialTheme.colorScheme.surface)) {
-                blurEnabled = true
-            }.onGloballyPositioned { coordinates ->
+            .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin(MaterialTheme.colorScheme.surface).then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
                 topAppBarHeight = with(density) { coordinates.size.height.toDp() }
             },
     ) {

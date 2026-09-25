@@ -181,7 +181,7 @@ fun NeteaseTagScreen(
                                         }
                                     },
                                     data = content,
-                                    fillWidth = true,
+                                    fillMaxWidth = true,
                                 )
                             }
                             // copyright 页脚:跨满整行(普通 item 只占一格宽,格式就不对了)

@@ -34,13 +34,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -54,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -71,13 +68,15 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.kmpalette.rememberPaletteState
 import com.kyant.backdrop.highlight.Highlight
+import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
-import com.maxrave.simpmusic.extension.artworkTextScrimBrush
+import com.maxrave.simpmusic.extension.artworkScrimBrush
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.toImmersiveBackground
@@ -87,7 +86,6 @@ import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HeartCheckBox
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
-import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.PlaylistBottomSheet
@@ -95,9 +93,6 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
-import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
-import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
-import com.maxrave.simpmusic.ui.component.rememberThrottledLottieProgress
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -117,13 +112,10 @@ import com.maxrave.simpmusic.viewModel.LocalPlaylistState
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.runBlocking
@@ -133,23 +125,13 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.unsubscribe_album_message
-import simpmusic.composeapp.generated.resources.unsubscribe_album_title
-import simpmusic.composeapp.generated.resources.cancel_download_title
-import simpmusic.composeapp.generated.resources.cancel_download_message
-import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
-import simpmusic.composeapp.generated.resources.cancel
-import simpmusic.composeapp.generated.resources.confirm
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.other_version
-import simpmusic.composeapp.generated.resources.remove_download_message
-import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.year_and_category
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -172,31 +154,16 @@ fun AlbumScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // 收藏心=云端态;显隐按"该源是否登录"判(未登录无云端态可显)
-    val albumIsNetease = uiState.browseId.toLongOrNull() != null
-    val ytLoggedInAlbum by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
-    val neteaseLoggedInAlbum by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
-    val albumFavoriteEnabled = if (albumIsNetease) neteaseLoggedInAlbum else ytLoggedInAlbum
 
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
     var albumBottomSheetShow by rememberSaveable { mutableStateOf(false) }
-    var showUnsubscribeAlbumDialog by rememberSaveable { mutableStateOf(false) }
     var chosenSong: Track? by remember { mutableStateOf(null) }
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
-    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
-    LaunchedEffect(showSelectionSheet) {
-        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
-    }
 
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/downloading_animation.json").decodeToString(),
-        )
-    }
 
     LaunchedEffect(browseId) {
         viewModel.updateBrowseId(browseId)
@@ -209,16 +176,12 @@ fun AlbumScreen(
         }
     }
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
-    var showRemoveDownloadDialog by rememberSaveable { mutableStateOf(false) }
-    var showCancelDownloadDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(key1 = firstItemVisible) {
         shouldHideTopBar = !firstItemVisible
     }
     val paletteState = rememberPaletteState()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
@@ -296,17 +259,15 @@ fun AlbumScreen(
                                         ) {
                                             // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                             Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
-                                                // 头图全屏宽展示,专辑封面源通常 w544 —— 请求侧升 1080
-                                                val hiResThumb = uiState.thumbnail.toHiResArtworkUrl()
                                                 AsyncImage(
                                                     model =
                                                         ImageRequest
                                                             .Builder(LocalPlatformContext.current)
-                                                            .data(hiResThumb)
+                                                            .data(uiState.thumbnail)
                                                             .diskCachePolicy(CachePolicy.ENABLED)
                                                             .memoryCachePolicy(CachePolicy.ENABLED)
-                                                            .diskCacheKey(hiResThumb)
-                                                            .memoryCacheKey(hiResThumb)
+                                                            .diskCacheKey(uiState.thumbnail)
+                                                            .memoryCacheKey(uiState.thumbnail)
                                                             .crossfade(false)
                                                             .build(),
                                                     placeholder = rememberHolderPainter(),
@@ -330,7 +291,7 @@ fun AlbumScreen(
                                                             .fillMaxWidth()
                                                             .height((screenInfo.hDP * 0.35f).dp)
                                                             .align(Alignment.BottomCenter)
-                                                            .background(artworkTextScrimBrush(mutedPaletteBg)),
+                                                            .background(artworkScrimBrush(mutedPaletteBg)),
                                                 )
                                                 // Title/artist/year overlay (centered horizontally like Apple Music)
                                                 Column(
@@ -357,16 +318,13 @@ fun AlbumScreen(
                                                         textAlign = TextAlign.Center,
                                                         modifier =
                                                             Modifier.clickable {
-                                                                // 空串=网易合辑等无歌手 id,名字保留但不可跳歌手页
-                                                                uiState.artist.id
-                                                                    ?.takeIf { it.isNotEmpty() }
-                                                                    ?.let { channelId ->
-                                                                        navController.navigate(
-                                                                            ArtistDestination(
-                                                                                channelId = channelId,
-                                                                            ),
-                                                                        )
-                                                                    }
+                                                                uiState.artist.id?.let { channelId ->
+                                                                    navController.navigate(
+                                                                        ArtistDestination(
+                                                                            channelId = channelId,
+                                                                        ),
+                                                                    )
+                                                                }
                                                             },
                                                     )
                                                     Spacer(modifier = Modifier.height(2.dp))
@@ -407,16 +365,15 @@ fun AlbumScreen(
                                                         .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                if (true) Box(
+                                                Box(
                                                     modifier = Modifier.size(48.dp),
                                                     contentAlignment = Alignment.Center,
                                                 ) {
                                                     HeartCheckBox(
                                                         size = 28,
                                                         checked = uiState.liked,
-                                                        modifier = Modifier.alpha(if (albumFavoriteEnabled) 1f else 0.38f),
                                                         onStateChange = {
-                                                            if (albumFavoriteEnabled) viewModel.setRemoteSaved(!uiState.liked) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                            viewModel.setAlbumLike()
                                                         },
                                                     )
                                                 }
@@ -499,16 +456,13 @@ fun AlbumScreen(
                                                             color = seed,
                                                             modifier =
                                                                 Modifier.clickable {
-                                                                    // 空串=网易合辑等无歌手 id,名字保留但不可跳歌手页
-                                                                    uiState.artist.id
-                                                                        ?.takeIf { it.isNotEmpty() }
-                                                                        ?.let { channelId ->
-                                                                            navController.navigate(
-                                                                                ArtistDestination(
-                                                                                    channelId = channelId,
-                                                                                ),
-                                                                            )
-                                                                        }
+                                                                    uiState.artist.id?.let { channelId ->
+                                                                        navController.navigate(
+                                                                            ArtistDestination(
+                                                                                channelId = channelId,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                                 },
                                                         )
                                                         Spacer(modifier = Modifier.height(6.dp))
@@ -602,7 +556,11 @@ fun AlbumScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showRemoveDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                runBlocking {
+                                                                                                    getString(Res.string.downloaded)
+                                                                                                },
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
@@ -621,17 +579,15 @@ fun AlbumScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showCancelDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                runBlocking {
+                                                                                                    getString(Res.string.downloading)
+                                                                                                },
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
-                                                                                Image(
-                                                                                    painter =
-                                                                                        rememberLottiePainter(
-                                                                                            composition = composition,
-                                                                                            progress = rememberThrottledLottieProgress(),
-                                                                                        ),
-                                                                                    contentDescription = "Lottie animation",
+                                                                                DownloadingIndicator(
                                                                                     modifier = Modifier.size(28.dp),
                                                                                 )
                                                                             }
@@ -691,16 +647,15 @@ fun AlbumScreen(
                                                         .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                if (true) Box(
+                                                Box(
                                                     modifier = Modifier.size(48.dp),
                                                     contentAlignment = Alignment.Center,
                                                 ) {
                                                     HeartCheckBox(
                                                         size = 28,
                                                         checked = uiState.liked,
-                                                        modifier = Modifier.alpha(if (albumFavoriteEnabled) 1f else 0.38f),
                                                         onStateChange = {
-                                                            if (albumFavoriteEnabled) viewModel.setRemoteSaved(!uiState.liked) else sharedViewModel.notifyFavoriteNeedsLogin()
+                                                            viewModel.setAlbumLike()
                                                         },
                                                     )
                                                 }
@@ -805,7 +760,11 @@ fun AlbumScreen(
                                                                             Modifier
                                                                                 .fillMaxSize()
                                                                                 .clickable {
-                                                                                    showRemoveDownloadDialog = true
+                                                                                    viewModel.makeToast(
+                                                                                        runBlocking {
+                                                                                            getString(Res.string.downloaded)
+                                                                                        },
+                                                                                    )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
                                                                     ) {
@@ -824,17 +783,15 @@ fun AlbumScreen(
                                                                             Modifier
                                                                                 .fillMaxSize()
                                                                                 .clickable {
-                                                                                    showCancelDownloadDialog = true
+                                                                                    viewModel.makeToast(
+                                                                                        runBlocking {
+                                                                                            getString(Res.string.downloading)
+                                                                                        },
+                                                                                    )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
                                                                     ) {
-                                                                        Image(
-                                                                            painter =
-                                                                                rememberLottiePainter(
-                                                                                    composition = composition,
-                                                                                    progress = rememberThrottledLottieProgress(),
-                                                                                ),
-                                                                            contentDescription = "Lottie animation",
+                                                                        DownloadingIndicator(
                                                                             modifier = Modifier.size(28.dp),
                                                                         )
                                                                     }
@@ -935,25 +892,35 @@ fun AlbumScreen(
                     }
                     item(contentType = "other_version") {
                         AnimatedVisibility(uiState.otherVersion.isNotEmpty()) {
-                            // 统一横行组件:标题与首卡对齐 + 卡间 4dp 间距(深色页沿用白标题)
-                            MediaRow(
-                                title = stringResource(Res.string.other_version),
-                                titleColor = Color.White,
-                                horizontalPadding = 12.dp,
-                            ) {
-                                items(uiState.otherVersion) { album ->
-                                    HomeItemContentPlaylist(
-                                        forceDark = true,
-                                        onClick = {
-                                            navController.navigate(
-                                                AlbumDestination(
-                                                    browseId = album.browseId,
-                                                ),
-                                            )
-                                        },
-                                        data = album,
-                                        thumbSize = 180.dp,
-                                    )
+                            Column {
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = stringResource(Res.string.other_version),
+                                    style = typo().labelMedium,
+                                    modifier =
+                                        Modifier.padding(
+                                            horizontal = 24.dp,
+                                            vertical = 8.dp,
+                                        ),
+                                )
+                                LazyRow(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                ) {
+                                    items(uiState.otherVersion) { album ->
+                                        HomeItemContentPlaylist(
+                                            forceDark = true,
+                                            onClick = {
+                                                navController.navigate(
+                                                    AlbumDestination(
+                                                        browseId = album.browseId,
+                                                    ),
+                                                )
+                                            },
+                                            data = album,
+                                            thumbSize = 180.dp,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1001,12 +968,7 @@ fun AlbumScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 AnimatedVisibility(
@@ -1021,19 +983,13 @@ fun AlbumScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 if (showSelectionSheet) {
                     val selectedIds = selectionState.selected.toList()
                     SelectedSongsBottomSheet(
                         count = selectedIds.size,
-                        selectionIds = selectedIds,
                         onDismiss = { showSelectionSheet = false },
                         onPlayNext = {
                             selectionViewModel.playNext(selectedIds)
@@ -1045,17 +1001,9 @@ fun AlbumScreen(
                         },
                         // Deliberately does not exit yet: the playlist picker opens next and
                         // still needs the selection alive.
-                        onAddToPlaylist = {
-                selectionViewModel.loadCloudPlaylists()
-                showSelectionAddToPlaylist = true
-            },
+                        onAddToPlaylist = { showSelectionAddToPlaylist = true },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
-                            selectionState.exit()
-                        },
-                        allDownloaded = allSelectedDownloaded,
-                        onRemoveDownload = {
-                            selectionViewModel.removeDownload(selectedIds)
                             selectionState.exit()
                         },
                         onAddToFavorite = {
@@ -1067,26 +1015,16 @@ fun AlbumScreen(
                 if (showSelectionAddToPlaylist) {
                     val selectedIds = selectionState.selected.toList()
                     val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
-                    val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
-                    val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
                     AddToPlaylistModalBottomSheet(
                         isBottomSheetVisible = true,
-                        // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
-                        // 2026-09-24 多选路径接云端分区,与单曲弹窗同款
-                        listLocalPlaylist = emptyList(),
-                        listYouTubePlaylist = youTubePlaylists,
-                        listNeteasePlaylist = neteasePlaylists,
-                        videoIds = selectedIds,
+                        listLocalPlaylist = localPlaylists,
+                        listYouTubePlaylist = emptyList(),
                         onDismiss = { showSelectionAddToPlaylist = false },
-                        onClick = {},
-                        onYTPlaylistClick = { playlist ->
-                            selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
+                        onClick = { playlist ->
+                            selectionViewModel.addToPlaylist(playlist.id, selectedIds)
                             selectionState.exit()
                         },
-                        onNeteasePlaylistClick = { playlist ->
-                            selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
-                            selectionState.exit()
-                        },
+                        onYTPlaylistClick = {},
                     )
                 }
                 if (showBottomSheet) {
@@ -1099,42 +1037,12 @@ fun AlbumScreen(
                         song = chosenSong?.toSongEntity(),
                     )
                 }
-                if (showUnsubscribeAlbumDialog) {
-                    AlertDialog(
-                        containerColor = rememberSurfaceDarkColors().container,
-                        titleContentColor = rememberSurfaceDarkColors().content,
-                        textContentColor = rememberSurfaceDarkColors().content,
-                        title = { Text(text = stringResource(Res.string.unsubscribe_album_title)) },
-                        text = { Text(text = stringResource(Res.string.unsubscribe_album_message, uiState.title)) },
-                        onDismissRequest = { showUnsubscribeAlbumDialog = false },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                viewModel.unsubscribeNeteaseAlbum(browseId)
-                                showUnsubscribeAlbumDialog = false
-                            }) {
-                                Text(text = stringResource(Res.string.confirm))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showUnsubscribeAlbumDialog = false }) {
-                                Text(text = stringResource(Res.string.cancel))
-                            }
-                        },
-                    )
-                }
                 if (albumBottomSheetShow) {
                     PlaylistBottomSheet(
                         onDismiss = { albumBottomSheetShow = false },
                         playlistId = browseId,
                         playlistName = uiState.title,
                         isYourYouTubePlaylist = false,
-                        // 网易专辑:更多菜单露出"取消收藏"
-                        onUnsubscribe =
-                            if (browseId.toLongOrNull() != null) {
-                                { showUnsubscribeAlbumDialog = true }
-                            } else {
-                                null
-                            },
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 uiState.listTrack.toCollection(arrayListOf()),
@@ -1154,53 +1062,5 @@ fun AlbumScreen(
                 )
             }
         }
-    }
-    if (showCancelDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.cancel_download_title)) },
-            text = { Text(text = stringResource(Res.string.cancel_download_message)) },
-            onDismissRequest = { showCancelDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.cancelDownloadingAlbum()
-                    showCancelDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel_download_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelDownloadDialog = false }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRemoveDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.remove_download_title)) },
-            text = { Text(text = stringResource(Res.string.remove_download_message)) },
-            onDismissRequest = { showRemoveDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.removeDownloadedAlbum()
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
     }
 }

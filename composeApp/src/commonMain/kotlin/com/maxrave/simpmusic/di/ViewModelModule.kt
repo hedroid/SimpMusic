@@ -6,6 +6,7 @@ import com.maxrave.simpmusic.viewModel.AnalyticsViewModel
 import com.maxrave.simpmusic.viewModel.ListenTogetherSettingsViewModel
 import com.maxrave.simpmusic.viewModel.ListenTogetherViewModel
 import com.maxrave.simpmusic.viewModel.ArtistViewModel
+import com.maxrave.simpmusic.viewModel.BrowseViewModel
 import com.maxrave.simpmusic.viewModel.HomeViewModel
 import com.maxrave.simpmusic.viewModel.ImportViewModel
 import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
@@ -13,6 +14,8 @@ import com.maxrave.simpmusic.viewModel.LibraryMutationBus
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.LocalPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LogInViewModel
+import com.maxrave.simpmusic.viewModel.LoginSyncHostViewModel
+import com.maxrave.simpmusic.viewModel.LoginSyncSenderViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
@@ -67,6 +70,10 @@ val viewModelModule =
                 get(),
             )
         }
+        // Only one of these resolves on a given platform: Desktop binds the host repository, Android the
+        // sender. Koin resolves dependencies when a ViewModel is created, not when it is declared.
+        viewModel { LoginSyncHostViewModel(get()) }
+        viewModel { LoginSyncSenderViewModel(get()) }
         viewModel {
             NowPlayingBottomSheetViewModel(
                 get(),
@@ -199,6 +206,11 @@ val viewModelModule =
         viewModel {
             SimilarSongsViewModel(
                 get(),
+                get(),
+            )
+        }
+        viewModel {
+            BrowseViewModel(
                 get(),
             )
         }
