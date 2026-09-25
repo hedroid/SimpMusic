@@ -70,16 +70,18 @@ infix fun <E> Collection<E>.symmetricDifference(other: Collection<E>): Set<E> {
 @Composable
 fun LocalDateTime.formatTimeAgo(): String {
     val now = now()
+    // Room Converters.fromTimestamp 以 UTC 落 LocalDateTime,这里必须按 UTC 转回绝对时刻;
+    // 曾误用系统时区,标签整体抬高一个时区偏移(上海 +8h:刚插入的行也显示"8 小时前")
     val duration =
         this
-            .toInstant(TimeZone.currentSystemDefault())
+            .toInstant(TimeZone.UTC)
             .periodUntil(now.toInstant(TimeZone.currentSystemDefault()), TimeZone.currentSystemDefault())
 
     val monthsDiff = duration.months + (duration.years * 12)
     val daysDiff = duration.days
 
     // For hours, we need to calculate manually since Period doesn't include hours
-    val thisInstant = this.toInstant(TimeZone.currentSystemDefault())
+    val thisInstant = this.toInstant(TimeZone.UTC)
     val nowInstant = now.toInstant(TimeZone.currentSystemDefault())
     val hoursDiff = (nowInstant - thisInstant).inWholeHours
 
