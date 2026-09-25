@@ -2,9 +2,6 @@ package com.maxrave.simpmusic.ui.screen.home
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.exponentialDecay
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,10 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.AnchoredDraggableState
-import androidx.compose.foundation.gestures.DraggableAnchors
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,24 +37,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,7 +61,6 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.domain.data.entities.NotificationEntity
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.extension.formatTimeAgo
 import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
@@ -84,7 +70,6 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
-import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
@@ -100,7 +85,6 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.new_release
 import simpmusic.composeapp.generated.resources.no_notification
 import simpmusic.composeapp.generated.resources.notification
@@ -160,17 +144,11 @@ fun NotificationScreen(
                         ),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    // key=id:左滑删除时让 LazyColumn 按行身份移除;animateItem 让邻居行滑移补位而非跳变
-                    items(it, key = { notification -> notification.id }) { notification ->
-                        SwipeToDeleteNotification(
-                            onDelete = { viewModel.deleteNotification(notification.id) },
-                            modifier = Modifier.animateItem(),
-                        ) {
-                            NotificationItem(
-                                notification = notification,
-                                navController,
-                            )
-                        }
+                    items(it) { notification ->
+                        NotificationItem(
+                            notification = notification,
+                            navController,
+                        )
                     }
                     item {
                         EndOfPage()
@@ -237,115 +215,6 @@ fun NotificationScreen(
                     ),
             )
         }
-    }
-}
-
-private enum class NotificationSwipeAnchor { Settled, Delete }
-
-// 与播放页 ArtworkSnapSpring 同款手感:低阻尼弹簧冲过头再弹回,落位才有"弹"的感觉
-private val NotificationSwipeSpring: AnimationSpec<Float> =
-    spring(
-        dampingRatio = 0.38f,
-        stiffness = 700f,
-    )
-
-/** 删除图标入场完成的位移量:前 64dp 的拖动内完成视差滑入+放大 */
-private val NOTIFICATION_ICON_SETTLE = 64.dp
-
-/**
- * 通知行左滑删除容器,M3 SwipeToDismissBox / 系统通知同款形态:删除提示是垫在内容行
- * 下方的一整条静态色块(垃圾桶+文案贴行尾),内容左移多少就在让出的矩形里"揭示"多少
- * ——draw 阶段 clipRect 实现(内容行是透明的,整层不裁会被透出来)。图标随揭示进度做
- * 视差+放大(swipe-action 通行手感)。拖动越过 positionalThreshold 的瞬间 targetValue
- * 翻成 Delete,震一次(armed 单次,受触感总开关门控);松手以回弹弹簧落位——没过阈值
- * 是橡皮筋回弹,过了阈值整行飞出屏幕(settledValue=Delete)才回调 onDelete,行随列表
- * 更新消失。锚点只有 0 与 -行宽,右滑不响应。
- */
-@Composable
-private fun SwipeToDeleteNotification(
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val density = LocalDensity.current
-    val state = remember {
-        AnchoredDraggableState(
-            initialValue = NotificationSwipeAnchor.Settled,
-            positionalThreshold = { distance -> distance * 0.35f },
-            velocityThreshold = { with(density) { 125.dp.toPx() } },
-            snapAnimationSpec = NotificationSwipeSpring,
-            decayAnimationSpec = exponentialDecay(),
-        )
-    }
-    var hapticArmed by remember { mutableStateOf(true) }
-    LaunchedEffect(state) {
-        snapshotFlow { state.targetValue }.collect { target ->
-            when (target) {
-                NotificationSwipeAnchor.Delete ->
-                    if (hapticArmed) {
-                        hapticArmed = false
-                        HapticFeedback.tap()
-                    }
-                NotificationSwipeAnchor.Settled -> hapticArmed = true
-            }
-        }
-    }
-    // settledValue 在落位动画结束时翻转:整行飞出后才删
-    LaunchedEffect(state) {
-        snapshotFlow { state.settledValue }.collect { settled ->
-            if (settled == NotificationSwipeAnchor.Delete) onDelete()
-        }
-    }
-    Box(
-        modifier
-            .clipToBounds()
-            .onSizeChanged { size ->
-                state.updateAnchors(
-                    DraggableAnchors {
-                        NotificationSwipeAnchor.Settled at 0f
-                        NotificationSwipeAnchor.Delete at -size.width.toFloat()
-                    },
-                )
-            }.anchoredDraggable(state, Orientation.Horizontal),
-    ) {
-        Row(
-            Modifier
-                .matchParentSize()
-                .drawWithContent {
-                    // 只画内容让出的那一段:静止时 reveal=0,整层不可见
-                    val offset = state.offset.takeUnless { it.isNaN() } ?: 0f
-                    val reveal = (-offset).coerceIn(0f, size.width)
-                    clipRect(left = size.width - reveal, top = 0f, right = size.width, bottom = size.height) {
-                        this@drawWithContent.drawContent()
-                    }
-                }.background(MaterialTheme.colorScheme.errorContainer)
-                .padding(end = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        ) {
-            Text(
-                text = stringResource(Res.string.delete),
-                style = typo().titleSmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-            )
-            Icon(
-                imageVector = SimpIcons.Delete,
-                contentDescription = stringResource(Res.string.delete),
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.graphicsLayer {
-                    val offset = state.offset.takeUnless { it.isNaN() } ?: 0f
-                    val progress = ((-offset) / NOTIFICATION_ICON_SETTLE.toPx()).coerceIn(0f, 1f)
-                    scaleX = 0.5f + 0.5f * progress
-                    scaleY = 0.5f + 0.5f * progress
-                    translationX = (1f - progress) * 48f
-                },
-            )
-        }
-        Box(
-            Modifier.graphicsLayer {
-                translationX = state.offset.takeUnless { it.isNaN() } ?: 0f
-            },
-        ) { content() }
     }
 }
 
