@@ -502,6 +502,12 @@ private const val SHOW_IMPORT_PLAYLIST_SETTINGS = false
 // offline-fallback branch all stay compiled — flip this to true to restore the toggle as-is.
 private const val SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE = false
 
+// "Devices" (login sync, QR sign-in handoff to desktop) is hidden (2026-09-25): the owner doesn't
+// use it yet — the sync only carries YT/Spotify/Discord/Lastfm sign-ins, no NetEase cookie. The
+// loginSync module, dialog, QrScanner and both view models all stay compiled — flip this to true
+// to restore the section as-is.
+private const val SHOW_LOGIN_SYNC_SETTINGS = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
@@ -737,23 +743,25 @@ fun SettingScreen(
                 Spacer(Modifier.height(16.dp))
                 // Above every section, and inside item 0 rather than an item of its own, for the
                 // glow reason above.
-                Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
-                SettingItem(
-                    title =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
-                        ),
-                    subtitle =
-                        stringResource(
-                            if (getPlatform() == Platform.Android) {
-                                Res.string.login_sync_android_description
-                            } else {
-                                Res.string.login_sync_desktop_description
-                            },
-                        ),
-                    onClick = { showLoginSyncDialog = true },
-                )
-                Spacer(Modifier.height(8.dp))
+                if (SHOW_LOGIN_SYNC_SETTINGS) {
+                    Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
+                    SettingItem(
+                        title =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
+                            ),
+                        subtitle =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) {
+                                    Res.string.login_sync_android_description
+                                } else {
+                                    Res.string.login_sync_desktop_description
+                                },
+                            ),
+                        onClick = { showLoginSyncDialog = true },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
                 val themeModeLabels =
                     listOf(
@@ -875,6 +883,15 @@ fun SettingScreen(
                         RomanizationLanguage.MACEDONIAN to stringResource(Res.string.romanization_macedonian),
                     )
                 val romanizationSelected = RomanizationLanguage.parse(romanizationStored)
+                // 弹窗只提供日/韩/中三个常用语言(2026-09-25 用户定案);其余 9 种长尾语言
+                // (印地/旁遮普/西里尔系…)仍在 enum/引擎/DataStore 里——老用户已选的照常
+                // 罗马音化,只是不能再新勾选。副标题名单用全量 labels,已选长尾项有名字显示。
+                val romanizationChoices =
+                    listOf(
+                        RomanizationLanguage.JAPANESE,
+                        RomanizationLanguage.KOREAN,
+                        RomanizationLanguage.CHINESE,
+                    )
                 SettingItem(
                     title = stringResource(Res.string.lyrics_romanization),
                     // Two different jobs for one line. Off, the row has to explain what the
@@ -911,15 +928,20 @@ fun SettingScreen(
                                 multipleSelect =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            romanizationLabels.map { (language, label) ->
-                                                (language in romanizationSelected) to label
+                                            romanizationChoices.map { language ->
+                                                (language in romanizationSelected) to
+                                                    romanizationLabels.first { it.first == language }.second
                                             },
                                     ),
                                 confirm =
                                     runBlocking { getString(Res.string.save) } to { state ->
                                         val chosen = state.multipleSelect?.getListSelected().orEmpty()
+                                        // 弹窗没列出的长尾语言若此前已选,保留不动(用户没机会
+                                        // 看到它们的勾选框,不该因保存常用项而被清掉)
+                                        val unlisted =
+                                            romanizationSelected.filter { it !in romanizationChoices }.toSet()
                                         val languages =
-                                            romanizationLabels.filter { it.second in chosen }.map { it.first }.toSet()
+                                            (romanizationLabels.filter { it.second in chosen }.map { it.first } + unlisted).toSet()
                                         sharedViewModel.setRomanizationLanguages(languages)
                                         // Japanese needs its dictionary pack on disk. A no-op when
                                         // it is already there (or bundled, as on Desktop) — and the

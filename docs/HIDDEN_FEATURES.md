@@ -20,6 +20,8 @@
 | "离线时继续展示您的 YouTube 播放列表"（`keep_your_youtube_playlist_offline`） | `SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE = false` | `SettingScreen.kt`（常量区，紧随导入播放列表门控） | 2026-09-20 | 常量改 `true`。DataStore 键/`setKeepYouTubePlaylistOffline`/`PlaylistRepositoryImpl` 离线回读分支全保留 |
 | "主歌词提供商"设置项 | 入口删除（无门控，恢复看 TODO） | `SettingScreen.kt`（已无引用）；唯一选择处 = 播放页三点菜单，且仅 YT 歌显示（网易歌走官方专线） | 2026-09-15, 9829c5b2 | 跨源歌词供应商（QQ/酷狗…）做好后，入口放回**播放页菜单**，设置页不恢复（决策见 AGENTS.md 跨源歌词 TODO） |
 | neteaseAutoSwitch（网易灰歌自动切 YT 源） | SettingItem 注释掉 | `SettingScreen.kt:1431` 附近 | 2026-09-15（切源统一入口轮） | M9 灰歌回退实现后恢复此 SettingItem；VM 状态与 setter 均保留 |
+| "设备"分区（登录同步：扫码把登录态发到桌面端） | `SHOW_LOGIN_SYNC_SETTINGS = false` | `SettingScreen.kt`（常量区，紧随 SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE） | 2026-09-25 | 常量改 `true`。loginSync 模块/弹窗/QrScanner/双 VM 全保留；注意同步范围只有 YT/Spotify/Discord/Lastfm，无网易 cookie |
+| 歌词罗马音弹窗长尾语言（印地/旁遮普/俄/乌/塞/保/白俄/吉尔吉斯/马其顿，共 9 项） | 弹窗选择列表精简为日/韩/中三项；副标题名单仍用全量映射 | `SettingScreen.kt` 的 `romanizationChoices` | 2026-09-25 | 列表加回对应 enum 项即可；enum/罗马音引擎/DataStore 全保留，已选长尾语言的老用户不受影响（confirm 保留未列出项） |
 | 上游开屏推广弹窗 ×3（分享歌词权限请求 1/15/45 次开启、作者博客推广 5 次、kotlin-footguns 求星 6/16/26/36/46 次） | 删除（触发链恢复 fork 原版只留 review 评分弹窗；三个 Dialog 组件文件物理删除） | `HomeScreen.kt` 的 `LaunchedEffect(openAppTime)`；组件原在 `ui/component/{ShareSavedLyricsDialog,BlogPromoDialog,FootgunsStarDialog}.kt` | 2026-09-25, 上游 v2.2.0 合并后 | 回溯上游合并提交重取三个组件文件+触发链；字符串/`SharedViewModel.shareSavedLyrics` 状态保留未动 |
 
 ## 二、库页 chip 下线（路由保留）
