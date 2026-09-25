@@ -394,6 +394,10 @@ filled states render identically.
 - **Limitations**:
   - No offline playback
 
+### Build & Lint Traps
+
+- **Do NOT rename `mipmap-anydpi-v26` to bare `mipmap-anydpi`**, even though lint's `ObsoleteSdkInt` suggests exactly that once minSdk ≥ 26. AAPT2's resource optimizer then drops the adaptive-icon XML from the APK entirely (verified 2026-09-25: `unzip -l` showed only the per-density legacy webps), and launchers fall back to the unmasked square legacy icon. Keep the `-v26` folder and live with the one warning. Symptom if hit again: app icon suddenly square on the launcher.
+
 ### External APIs
 - YouTube Music: Hidden/unofficial API (may change anytime)
 - Spotify: Requires login for lyrics
