@@ -34,7 +34,7 @@
 | CR-13 本地歌单同步 | **不修** | 缺陷属实，但本地歌单功能已整体下线、无 UI 入口，唯一调用点在隐藏页面——死代码，功能复活时再修 |
 | CR-15 网易仓库懒加载 | **不修** | 代价仅启动多建一个 Ktor client（毫秒级），上游本就存在大量 `createdAtStart`；有启动耗时实测数据再动 |
 | CR-16 分类封面锁 | **不修** | 锁内 400ms delay 是刻意的 405 频控设计（见 PITFALLS），被阻塞的仅是空态分类卡的装饰性封面回填，不阻塞页面主体 |
-| CR-17 1080 封面内存 | **部分修（B2 落地 11984ce1）** | ①"ViewModel 长持 Bitmap"证实并已修：`screenData.bitmap` 与 coil 内存缓存条目同对象，被 single VM 全程 pin 住 ~4.4MiB；播放页销毁时 DisposableEffect 置 null，重开由 onSuccess 从缓存补喂。②AM 磨砂降采样（B1）评估后**不做**：该请求刻意与 pager 同 URL/同 key/同 size 共享缓存条目（分裂 key 双下载的旧坑），降采样反而新增一条独立缓存；blur 是 API 31+ RenderEffect（GPU 侧），无 Java 堆拷贝。③"pager 邻页叠加"属滑动过渡的固有成本（LazyPager 仅组合可见页，稳态 1 张）。剩余可选项：profiler 连续切歌 50-100 次的 retained bitmap 验证 |
+| CR-17 1080 封面内存 | **部分修+实测定案（B2=11984ce1；profiler 验证 2026-09-25 完成）** | ①"ViewModel 长持 Bitmap"证实并已修：播放页销毁清 `screenData.bitmap`。②AM 磨砂降采样（B1）不做：共享缓存条目+RenderEffect GPU blur，降采样反而新增条目。③**模拟器实测（网易红心歌单连续切歌 150 次，`am dumpheap`+自写 HPROF 解析器数实例）**：播放页开着，100 切后 Bitmap 实例 74 个、累计 150 切后 71 个——**计数持平=无逐曲泄漏，由 coil 内存缓存 LRU 上限管理**；Java 堆全程平台期（157→114→113→122→139MB 无线性增长），Native 堆 87→183→145MB（LRU 填充后正常驱逐回落）；**关播放页 74→46（-28）实证 B2 释放生效**，剩余为 LRU 常驻缓存（快速重开用）。CR-17"十几 MiB"量级属实但性质=有界缓存非泄漏 |
 | CR-06 搜索串台 | **顺延下一轮** | 竞态属实但本单夸大：searchSongs 仅显式提交触发（输入过程只走 suggest），需快速连续两次提交才可能复现。修法=存 job 取消+generation 校验 |
 | CR-07 歌词竞态 | **顺延下一轮** | 主歌词/空结果分支有 `lyricsVideoId != song.videoId` 自愈（错写会触发重拉）；真问题仅罗马音分支无校验写入且不触发重拉。局部加 videoId 校验即可，不必做统一 lyricsJob 大改 |
 | CR-10 QR client 泄漏 | **顺延下一轮** | 属实（每 HttpClient 独立 OkHttp 引擎，onCleared 只取消轮询），但仅反复进出登录页才积累，Closeable+close 很便宜 |
@@ -306,6 +306,6 @@ cookie 合并在 mutex 内完成，但 `cookieSaver(merged)` 在锁外执行。�
 - [ ] CR-14 优化通知差集。（顺延下一轮）
 - [~] CR-15 真正懒加载网易仓库。（不修：毫秒级，有实测数据再动）
 - [~] CR-16 拆分分类封面锁。（不修：刻意的 405 频控设计）
-- [x] CR-17 位图内存压测。（B2 已修 11984ce1：播放页销毁清 VM 位图 pin；B1 降采样评估后不做——共享缓存条目+RenderEffect GPU blur，降采样反而新增缓存条目；完整 profiler 验证可选）
+- [x] CR-17 位图内存压测。（B2 已修 11984ce1；B1 降采样不做；模拟器实测 150 切：Bitmap 计数 74→71 持平=LRU 有界非泄漏，关播放页 74→46 实证释放——2026-09-25 完成）
 
 建议完成前两批后先跑一次回归；全部完成后再做真机长时间播放、快速切歌、后台通知、低内存和 Android 8/9 兼容测试。
