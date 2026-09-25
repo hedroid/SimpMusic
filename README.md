@@ -9,14 +9,14 @@
 
 <a href="https://github.com/maxrave-dev/SimpMusic"><img src="https://img.shields.io/badge/%E4%B8%8A%E6%B8%B8-maxrave--dev%2FSimpMusic-blue" alt="upstream"></a>
 <a href="https://github.com/hedroid/SimpMusic"><img src="https://img.shields.io/github/stars/hedroid/SimpMusic?style=social" alt="stars"></a>
-<a href="https://github.com/hedroid/NeriPlayer"><img src="https://img.shields.io/badge/%E5%A7%8A%E5%A6%B9%E9%A1%B9%E7%9B%AE-NeriPlayer-orange" alt="NeriPlayer"></a>
+<a href="https://github.com/cwuom/NeriPlayer"><img src="https://img.shields.io/badge/%E5%8F%82%E8%80%83%E9%A1%B9%E7%9B%AE-NeriPlayer-orange" alt="NeriPlayer"></a>
 
 </div>
 
 > **相关项目**
 > - 上游原版 SimpMusic（YouTube Music 客户端本体）：**https://github.com/maxrave-dev/SimpMusic**
 > - 本 fork：**https://github.com/hedroid/SimpMusic**（core 子模块在 [hedroid/SimpMusic-Core](https://github.com/hedroid/SimpMusic-Core)）
-> - 姊妹项目 NeriPlayer（同作者的另一款音乐播放器，多源流媒体 + 本地管理 + 自建同步）：**https://github.com/hedroid/NeriPlayer**
+> - 参考项目 NeriPlayer（多源流媒体 + 本地管理 + 自建同步的开源音乐播放器）：**https://github.com/cwuom/NeriPlayer**
 >   本 fork 的播放错误恢复、物理洗牌等多处设计参考了它的实现。
 
 ## 截图
@@ -110,7 +110,7 @@ cd SimpMusic
   SponsorBlock / Return YouTube Dislike、均衡器、Listen Together、桌面端等）由上游提供，请给上游一个 ⭐。
 - [InnerTune](https://github.com/z-huang/InnerTune/) / [SmartTube](https://github.com/yuliskov/SmartTube) — 上游获取 YouTube Music 数据与流媒体的思路来源。
 - [SponsorBlock](https://sponsor.ajay.app/) / Return YouTube Dislike / [LRCLIB](https://lrclib.net/) — 数据服务。
-- [NeriPlayer](https://github.com/hedroid/NeriPlayer) — 播放稳定性与队列设计的参考实现。
+- [NeriPlayer](https://github.com/cwuom/NeriPlayer) — 播放稳定性与队列设计的参考实现。
 - 网易云音乐数据来自其公开 Web 接口，本应用仅作个人学习与自用客户端。
 
 ## 法律声明
