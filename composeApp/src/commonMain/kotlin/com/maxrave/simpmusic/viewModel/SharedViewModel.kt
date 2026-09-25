@@ -2626,4 +2626,3 @@ sealed class VoteState {
  */
 private fun String.isCanvasVideoUrl(): Boolean = contains(".mp4") || contains(".m3u8")
 
-const val FOOTGUNS_STAR_KEY = "footguns_starred"
