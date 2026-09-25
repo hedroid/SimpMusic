@@ -32,6 +32,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -175,6 +176,14 @@ fun NowPlayingScreenContent(
     onDismiss: () -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
+
+    // 播放页销毁时清掉 VM(Koin single,常驻)持有的封面位图引用:它与 pager 的 coil 内存
+    // 缓存条目是同一对象,不清的话这张 ~4.4MiB 的 1080 位图被 single VM 全程 pin 住,
+    // LRU 驱逐也放不掉。重开播放页时 PlayerPageArtwork/AM backdrop 的 onSuccess 会从
+    // 内存缓存即时补喂,导出/分享歌词按钮的可用性随之恢复。
+    DisposableEffect(Unit) {
+        onDispose { sharedViewModel.setBitmap(null) }
+    }
 
     // ViewModel State
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
