@@ -815,6 +815,8 @@ dump bounds 取,目测两次全偏)。
 |---|---|---|
 | ~~相似歌曲独立页~~ ✅ 已落地（2026-09-25，core 145cbf5+主仓 f13e0f1d：三点菜单入口(网易歌)→SimilarSongsScreen 分页列表，整队起播；MoreSongs 同构骨架） | | |
 | M7 评论页 | songComments 分页端点+repo 方法现成，详情卡已在用前 2 热评 | 中 |
+| 无尽队列下拉=橡皮筋触发 | 用户 2026-09-25 定需求：①橡皮筋效果做强（现 overscroll 默认拉伸感弱）；②**追加时机改成"触发橡皮筋才追加"**——现实现是近底边沿自动续批+滚动停 250ms 手势兜底（AGENTS.md 播放队列页增强三轮），满屏小队列下拉本身就是 overscroll 无滚动事件，需改走 nestedScroll 连接器吃 post-scroll 段作唯一触发信号并自绘更强橡皮筋；两套队列 UI（QueueBottomSheet/AppleMusicQueueView）同改 | 中 |
+| 日志排查功能 | 用户 2026-09-25 定需求：真机（三星 release）kermit/logcat 全被 ROM 静默，出问题只能靠模拟器复现。方向=app 内日志环形缓冲（kermit 接自定义 writer）+设置页"导出日志"→写文件/系统分享面板；要覆盖网络层既有 W 级埋点（netease api rejected 等） | 中 |
 | M8 云盘页 | cloudDisk 端点已封装，repo 映射+UI 未接；云盘歌可播不可缓存下载 | 中 |
 | 网易播客 | 搜索 type=1004/1009 通道已知；dj 生态端点与播放链路待调研（节目音频是否同走取流）；UI 候选复用库页播客分区或并入"您的网易云" | 中（含调研） |
 | 跨源歌词供应商（YT 歌用网易/QQ 词库） | 接入点全现成（getLyricsFromFormat/LyricsProvider），Lyrico 匹配算法待移植 | 中偏大 |
