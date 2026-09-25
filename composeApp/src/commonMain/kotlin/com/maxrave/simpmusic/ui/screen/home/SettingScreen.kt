@@ -1178,20 +1178,31 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.preferred_audio_language),
-                    subtitle = preferredAudioLanguage.ifEmpty { stringResource(Res.string.original_audio) },
+                    // 与 YouTube 字幕翻译语言行同款形态(2026-09-25 用户定案):已选值显示语言
+                    // 名而非裸代码,弹窗用 languagePicker(常用语言下拉 + 手填代码),取值列表与
+                    // 校验和翻译语言共用同一套(LanguageDropdownField / isLanguageCode)。空值
+                    // 的语义两边不同——翻译=跟随应用语言,音轨=播原声。
+                    subtitle =
+                        preferredAudioLanguage.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
+                            ?: stringResource(Res.string.original_audio),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
                                 title = runBlocking { getString(Res.string.preferred_audio_language) },
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.preferred_audio_language) },
+                                        // No label — same reasoning as the translation language dialog.
+                                        label = "",
                                         value = preferredAudioLanguage,
-                                        // Empty is valid here: it means "original audio".
+                                        // Empty is valid here: it means "original audio". The check
+                                        // itself is the translation language's (isLanguageCode) so a
+                                        // zh-Hant-style tag is accepted; the track matcher only
+                                        // compares the primary subtag, so the extra part is inert.
                                         verifyCodeBlock = {
-                                            (it.isEmpty() || it.isTwoLetterCode()) to
+                                            (it.isEmpty() || it.isLanguageCode()) to
                                                 runBlocking { getString(Res.string.invalid_language_code) }
                                         },
+                                        placeholder = runBlocking { getString(Res.string.original_audio) },
                                     ),
                                 message = runBlocking { getString(Res.string.preferred_audio_language_message) },
                                 confirm =
@@ -1199,6 +1210,7 @@ fun SettingScreen(
                                         viewModel.setPreferredAudioLanguage(state.textField?.value ?: "")
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
+                                languagePicker = true,
                             ),
                         )
                     },

@@ -98,12 +98,14 @@ fun LanguageDropdownField(
             // the dialog surface (surfaceContainerHigh) so the menu reads as part of it.
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            // Explicit "follow the app language" entry — picking it empties the field, which
-            // saves as "" (= follow) rather than pinning the resolved app language.
+            // Explicit empty-value entry — picking it empties the field, which saves as "".
+            // The wording is the caller's emptyHint (the field placeholder): "follow the app
+            // language" for the translation language, "original audio" for the audio track
+            // picker — each setting's empty value means something different.
             DropdownMenuItem(
                 text = {
                     Text(
-                        text = stringResource(Res.string.follow_app_language),
+                        text = emptyHint ?: stringResource(Res.string.follow_app_language),
                         style = typo().bodyMedium,
                         maxLines = 1,
                     )
