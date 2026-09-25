@@ -439,7 +439,8 @@ class LibraryViewModel(
                 }
             }
             _youTubeRefreshing.value = false
-            mutationBus.drainPending().forEach { applyMutation(it) }
+            // 只消费 YT 归属的等位事件,网易侧的留给 getNeteaseLibrary 首拉
+            mutationBus.drainPending(MusicSource.YOUTUBE_MUSIC).forEach { applyMutation(it) }
         }
     }
 
@@ -489,8 +490,8 @@ class LibraryViewModel(
             }
             _neteaseRefreshing.value = false
             // VM 不在期间发生的变更(冷启动直接进子页操作)补放:此刻首拉数据已就位,
-            // 过滤/插入能落到真实列表上
-            mutationBus.drainPending().forEach { applyMutation(it) }
+            // 过滤/插入能落到真实列表上;只消费网易归属的事件,YT 侧留给 getYouTubeLibrary
+            mutationBus.drainPending(MusicSource.NETEASE).forEach { applyMutation(it) }
         }
     }
 

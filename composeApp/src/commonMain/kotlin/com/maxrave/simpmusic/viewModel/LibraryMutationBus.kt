@@ -4,6 +4,7 @@ import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
+import com.maxrave.domain.source.MusicSource
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -51,6 +52,29 @@ sealed interface LibraryMutation {
     data class AlbumUnsubscribed(val albumId: String) : LibraryMutation
 }
 
+/**
+ * 事件归属侧:pending 里的等位事件由**对应来源**的库页首拉消费(442/493 两个 drain 点)。
+ * 判据与全仓路由约定一致——id 纯数字=网易;否则归属 YT。
+ */
+fun LibraryMutation.owner(): MusicSource =
+    when (this) {
+        is LibraryMutation.NeteaseHeartCountChanged,
+        is LibraryMutation.NeteasePlaylistCreated,
+        -> MusicSource.NETEASE
+
+        is LibraryMutation.YouTubePlaylistCreated -> MusicSource.YOUTUBE_MUSIC
+        is LibraryMutation.PlaylistFavorited ->
+            if (playlist.source == MusicSource.NETEASE.name) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
+
+        is LibraryMutation.PlaylistRemoved -> playlistId.ownerByShape()
+        is LibraryMutation.ArtistUnfollowed -> artistId.ownerByShape()
+        is LibraryMutation.AlbumUnsubscribed -> albumId.ownerByShape()
+        is LibraryMutation.AlbumFavorited -> album.browseId.ownerByShape()
+        is LibraryMutation.ArtistFollowed -> artist.browseId.ownerByShape()
+    }
+
+private fun String.ownerByShape(): MusicSource = if (toLongOrNull() != null) MusicSource.NETEASE else MusicSource.YOUTUBE_MUSIC
+
 class LibraryMutationBus {
     private val _mutations = MutableSharedFlow<LibraryMutation>(extraBufferCapacity = 32)
     val mutations: SharedFlow<LibraryMutation> = _mutations.asSharedFlow()
@@ -69,10 +93,20 @@ class LibraryMutationBus {
         _mutations.tryEmit(mutation)
     }
 
-    fun drainPending(): List<LibraryMutation> {
+    /**
+     * 只取走属于 [source] 一侧的事件,另一侧的原地留着等它自己的首拉来消费——
+     * 共用一个队列会让先完成的一侧把另一侧的移除/插入事件连带取走丢掉
+     * (对方分区当时还在 Loading,`as? Success` 门吞掉)。
+     */
+    fun drainPending(source: MusicSource): List<LibraryMutation> {
         val drained = mutableListOf<LibraryMutation>()
-        while (true) {
-            drained += pending.poll() ?: break
+        val iterator = pending.iterator()
+        while (iterator.hasNext()) {
+            val mutation = iterator.next()
+            if (mutation.owner() == source) {
+                drained.add(mutation)
+                iterator.remove()
+            }
         }
         return drained
     }
