@@ -169,9 +169,16 @@ class AutoBackupWorker(
                         fileName,
                     )
                 if (target != null) {
-                    context.contentResolver.openOutputStream(target)?.use { output ->
+                    val output = context.contentResolver.openOutputStream(target)
+                    if (output == null) {
+                        // 建了文档但拿不到流:删掉孤儿条目并记失败,否则 lastBackupTime 更新而文件没写出
+                        context.contentResolver.delete(target, null, null)
+                        Logger.e(TAG, "openOutputStream returned null for configured folder: $fileName")
+                        return false
+                    }
+                    output.use { out ->
                         backupFile.inputStream().use { input ->
-                            input.copyTo(output)
+                            input.copyTo(out)
                         }
                     }
                     Logger.i(TAG, "Backup saved to configured folder: $fileName")
@@ -182,6 +189,7 @@ class AutoBackupWorker(
             }
         }
 
+        var insertedUri: android.net.Uri? = null
         return try {
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -193,18 +201,24 @@ class AutoBackupWorker(
                 MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
                 contentValues,
             )
-
-            uri?.let { outputUri ->
-                context.contentResolver.openOutputStream(outputUri)?.use { output ->
-                    backupFile.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
+            insertedUri = uri ?: return false
+            val output = context.contentResolver.openOutputStream(uri)
+            if (output == null) {
+                context.contentResolver.delete(uri, null, null)
+                Logger.e(TAG, "openOutputStream returned null for MediaStore entry: $fileName")
+                return false
+            }
+            output.use { out ->
+                backupFile.inputStream().use { input ->
+                    input.copyTo(out)
                 }
-                Logger.i(TAG, "Backup saved to Documents/SimpMusic/$fileName")
-                true
-            } ?: false
+            }
+            Logger.i(TAG, "Backup saved to Documents/SimpMusic/$fileName")
+            true
         } catch (e: Exception) {
             Logger.e(TAG, "Error saving backup: ${e.message}")
+            // 失败清掉半成品条目(空文件/半截 zip 都比没有更糟——下一轮清理会把它们当备份数)
+            insertedUri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
             false
         }
     }
@@ -251,17 +265,15 @@ class AutoBackupWorker(
                     }
                 }
 
-                // Delete old files if exceeding maxFiles
-                if (backupFiles.size > maxFiles) {
-                    val filesToDelete = backupFiles.drop(maxFiles)
-                    filesToDelete.forEach { (id, name) ->
-                        val deleteUri = android.content.ContentUris.withAppendedId(
-                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                            id
-                        )
-                        context.contentResolver.delete(deleteUri, null, null)
-                        Logger.i(TAG, "Deleted old backup: $name")
-                    }
+                backupFiles.drop(maxFiles).forEach { (id, name) ->
+                    // 删除必须与查询/插入同一集合:行在 Files 集合(Documents/ 路径),
+                    // 拼到 Downloads 集合的 URI 上删永远返回 0,旧备份清不掉
+                    val deleteUri = android.content.ContentUris.withAppendedId(
+                        MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                        id
+                    )
+                    context.contentResolver.delete(deleteUri, null, null)
+                    Logger.i(TAG, "Deleted old backup: $name")
                 }
             }
         } catch (e: Exception) {
