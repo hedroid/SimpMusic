@@ -1,11 +1,8 @@
 # CLAUDE.md - SimpMusic Project Guide for AI Agents
 
-## 🌐 Language Rule
+## 🌐 语言规则
 
-**Response language**: Always respond in **English**, and after each sentence, add a **Vietnamese translation in parentheses**.
-Example: "Hello, how are you? (Xin chào, bạn khỏe không?)"
-
-This applies to all conversations in this project. The user is using Max plan so token cost is not a concern.
+**回复语言**：在本项目的所有对话中，只使用**简体中文**回复。不要附加英文、越南语或其他语言的对照翻译，除非用户在当前请求中明确要求。
 
 ## 📋 Project Overview
 
@@ -112,7 +109,7 @@ Service modules:
 - **autoEqService/**: AutoEq headphone correction profiles (index + fixed-band curves)
 - **lyricsService/**: Lyrics fetching (LRCLIB, SimpMusic Lyrics, BetterLyrics)
 - **listenTogether/**: shared listening rooms, wire-compatible with Metrolist (`MetrolistGroup/metroproto`)
-- **kizzy/**: Discord Rich Presence
+- **kizzy/**: Discord Rich Presence (settings section hidden 2026-09-20 behind `SHOW_DISCORD_SETTINGS` in `SettingScreen.kt`; module itself intact)
 - **ktorExt/**: Ktor extensions for networking
 
 #### 4. **crashlytics/** & **crashlytics-empty/**
@@ -397,6 +394,10 @@ filled states render identically.
 - **Limitations**:
   - No offline playback
 
+### Build & Lint Traps
+
+- **Do NOT rename `mipmap-anydpi-v26` to bare `mipmap-anydpi`**, even though lint's `ObsoleteSdkInt` suggests exactly that once minSdk ≥ 26. AAPT2's resource optimizer then drops the adaptive-icon XML from the APK entirely (verified 2026-09-25: `unzip -l` showed only the per-density legacy webps), and launchers fall back to the unmasked square legacy icon. Keep the `-v26` folder and live with the one warning. Symptom if hit again: app icon suddenly square on the launcher.
+
 ### External APIs
 - YouTube Music: Hidden/unofficial API (may change anytime)
 - Spotify: Requires login for lyrics
@@ -509,6 +510,28 @@ if (getPlatform() == Platform.Android) {
 ```
 
 ## 📜 Changelog Summary (post-1.0.4)
+
+### UI and library refinements (2026-09-17)
+- **Library shortcuts keep their content**: the original Favorites / Followed / Most played /
+  Downloaded entries remain in "Your Library", with Playlists / Collections / Podcasts added as
+  standalone destinations. The Downloaded destination switches songs and downloaded containers
+  inline through the same coloured shortcut-card language used by the library home; it no longer
+  opens a second downloaded-songs screen.
+- **Now Playing action-sheet cleanup**: Add to playlist uses concise Local playlist / YouTube Music /
+  NetEase labels and hides unavailable account destinations when signed out. A single artist opens
+  directly; only multi-artist tracks show the picker. Playback speed and pitch use fixed-size,
+  non-clipping icons and controls that remain complete on compact screens and larger font scales.
+- **Account sync settings are grouped**: YouTube Music and NetEase each expose one settings row
+  opening a multi-select dialog for liked songs, followed artists and saved playlists/albums. The
+  YouTube row remains disabled while signed out and sits directly above Google playback reporting.
+
+### New Features (2026-09-16)
+- **Dual local/source-account collection state**: songs, playlists, albums and artists now expose
+  SimpMusic-local state separately from YouTube Music/NetEase account state. Both sources share
+  the same UI semantics and independent sync switches; mini-player heart remains local-only.
+- **Cross-source playlist actions**: YT and NetEase songs can be added to editable playlists in
+  their own source account. Online playlists can be copied as independent editable local snapshots;
+  this is distinct from the existing linked local-playlist-to-YT synchronization workflow.
 
 ### Architecture Changes
 - **Desktop: GStreamer → VLCJ**: Completely replaced GStreamer with VLCJ for desktop audio playback
@@ -766,6 +789,12 @@ if (getPlatform() == Platform.Android) {
   - **Linux bundle: the whitelist gained `afir,amovie,asplit,amix`** (`scripts/mpv-linux/Dockerfile`), and the rebuilt slice no longer bundles `libglib-2.0.so.0` (the `java.awt.Desktop` cure finally lands). Trap on Apple Silicon: `docker buildx` is absent, so `--platform linux/amd64` is **silently ignored** by the legacy builder and `mpvSetupLinuxCi` produces an arm64 slice whose ELF check (e_type only) passes — pin the amd64 `ubuntu:22.04` base by digest (or install buildx) and check `e_machine == 62`. Built in 8 min under colima (vz + Rosetta); the tarball (16,909,206 B, SHA-256 `6cc64efb…`) replaced the Linux asset on the `abc` release of `simpmusic-files` on 2026-09-02 and is pinned in `mpvNativesChecksums`. An older pinned tarball would make Linux fall back to Delay-only through the tiered drop.
   - Verification lives in JVM tests against ffmpeg-generated reference vectors under `core/media/media3/src/test/resources/audio/` (echo bit-exact, convolver < 1e-4). **kotlin-lsp is not a compile gate here**: it has no KMP support and answers "No diagnostics" for a broken `commonMain` file; the JetBrains MCP is the only gate.
 
+- **Discord integration hidden from Settings (2026-09-20)**: the owner doesn't need Discord Rich Presence, so its whole settings section ("Discord integration" header + login/logout row + "Enable Rich Presence" toggle) is now gated behind `SHOW_DISCORD_SETTINGS = false` at the top of `SettingScreen.kt` — the same conditional-item shape Last.fm already uses (`if (viewModel.lastfmAvailable)`). **Hidden, not removed**: the login screen route, `SettingsViewModel` state, the `MediaServiceHandlerImpl` RPC sender and the `kizzy` module all stay compiled; flip the const to `true` to restore the section as-is. The two `collectAsStateWithLifecycle` calls moved inside the guarded item so no unused-state warnings remain. Caveat: the runtime path keys on `discordEnabled` + stored token in DataStore, so an account logged in *before* the hide would still push presence with no UI left to log out — clear app data (or the DataStore keys) if that ever matters.
+
+- **Backup copy round + hidden-features ledger (2026-09-20)**: (1) "Backup downloaded data" toggle hidden behind `SHOW_BACKUP_DOWNLOADED_SETTINGS = false` next to the Discord gate — DataStore flag (default off), `setBackupDownloaded` and the backup/restore pipeline branches all stay compiled. (2) Backup copy fixed to match reality: the manual backup button now reads "Back up settings, local playlists, liked songs, library and listening history" (`backup_description`, 5 locales) — local playlists/liked songs lost their Library-page entrance with the YOUR_LIBRARY chip removal, so the backup zip is their only exit and the copy says so; the auto-backup subtitle became a `%1$s` template fed by `backupLocation` (custom folder name, else the real default `Documents/SimpMusic`), replacing a stale hardcoded "Downloads/SimpMusic". (3) About page (`CreditScreen`) introduces NetEase Cloud Music alongside YT in `credit_app` (en/zh-rCN), and its copyright line reuses the extracted `endOfPageCredit()` from `EndOfPage.kt` — same "@{year} {app} {version}/hedroid" text, centered like every other page footer, replacing the divergent hardcoded "©2023-2025 hedroid" (string deleted). (4) **`docs/HIDDEN_FEATURES.md` is now the ledger of every hidden/offline/removed feature in this fork** — gate location + restore method per item; register any new hide there (prefer the `SHOW_XXX = false` const pattern for settings).
+
+- **Import playlists hidden + backup copy finalized (2026-09-20, later the same day)**: the "Import playlists" section (row + simpmusic.org/tools link blurb + file picker) is gated behind `SHOW_IMPORT_PLAYLIST_SETTINGS = false` next to the other gates — `ImportViewModel`, the progress dialog and the parser stay compiled (launcher moved inside the guarded block so nothing goes unused). The backup button copy was regrouped once more: enumerating local playlists/liked songs confused users who have no entrance to that data, so `backup_description` now reads "Back up all app data, including settings and listening history" (5 locales) — accurate without naming invisible items. `docs/HIDDEN_FEATURES.md` updated accordingly.
+
 ## 🔄 CLAUDE.md Auto-Update Rule (MANDATORY)
 
 After completing any of the following types of changes, the AI agent **MUST** update this CLAUDE.md file:
@@ -790,6 +819,6 @@ After completing any of the following types of changes, the AI agent **MUST** up
 
 *This document helps AI Agents quickly understand the SimpMusic project. Update regularly when there are major changes to architecture or structure.*
 
-**Last updated**: 2026-09-02
+**Last updated**: 2026-09-20
 **Project version**: Check latest release on GitHub
 **Maintained by**: maxrave-dev and contributors

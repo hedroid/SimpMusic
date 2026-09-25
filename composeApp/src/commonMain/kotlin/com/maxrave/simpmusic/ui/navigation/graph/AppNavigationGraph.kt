@@ -12,6 +12,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.ui.navigation.destination.home.NeteaseTagDestination
+import com.maxrave.simpmusic.ui.screen.home.NeteaseHomeScreen
+import com.maxrave.simpmusic.ui.screen.home.NeteaseMixScreen
+import com.maxrave.simpmusic.ui.screen.home.NeteaseTagScreen
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import org.koin.compose.koinInject
+import androidx.navigation.toRoute
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.WrappedDestination
 import com.maxrave.simpmusic.ui.theme.ForceDarkContent
@@ -57,9 +67,25 @@ fun AppNavigationGraph(
     ) {
         // Bottom bar destinations
         composable<HomeDestination> {
-            HomeScreen(
-                onScrolling = onScrolling,
+            // YT 用 YT 的页面,网易用网易的(独立页,上游 HomeScreen 零改动)
+            val sharedViewModel: SharedViewModel = koinInject()
+            val selectedSource by sharedViewModel.selectedSource.collectAsStateWithLifecycle()
+            if (selectedSource == MusicSource.NETEASE.name) {
+                NeteaseHomeScreen(
+                    onScrolling = onScrolling,
+                    navController = navController,
+                )
+            } else {
+                HomeScreen(
+                    onScrolling = onScrolling,
+                    navController = navController,
+                )
+            }
+        }
+        composable<NeteaseTagDestination> { entry ->
+            NeteaseTagScreen(
                 navController = navController,
+                tag = entry.toRoute<NeteaseTagDestination>().tag,
             )
         }
         composable<SearchDestination> {
@@ -74,13 +100,22 @@ fun AppNavigationGraph(
                 onScrolling = onScrolling,
             )
         }
-        // Only reachable as a tab while signed in to YouTube
+        // Reachable as a tab while signed in to YouTube (YT mixes) or NetEase (私人FM);
+        // 按音源分流,与 HomeDestination 同款
         composable<MixForYouDestination> {
-            MixForYouScreen(
-                innerPadding = innerPadding,
-                navController = navController,
-                onScrolling = onScrolling,
-            )
+            val sharedViewModel: SharedViewModel = koinInject()
+            val selectedSource by sharedViewModel.selectedSource.collectAsStateWithLifecycle()
+            if (selectedSource == MusicSource.NETEASE.name) {
+                NeteaseMixScreen(
+                    onScrolling = onScrolling,
+                )
+            } else {
+                MixForYouScreen(
+                    innerPadding = innerPadding,
+                    navController = navController,
+                    onScrolling = onScrolling,
+                )
+            }
         }
         // Only reachable as a tab while local tracking is enabled.
         // ForceDarkContent for the same reason as album/playlist/artist: the page background comes

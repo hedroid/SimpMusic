@@ -253,6 +253,9 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.getLocation()
 
+        // Fork: upstream's repackaging block (checkOfficialBuild + UnofficialBuildScreen) is
+        // disabled here — this fork ships its own signing key under the same applicationId, and
+        // the F-Droid key pin would brick every fork release build.
         setContent {
             App(viewModel)
         }
@@ -291,7 +294,29 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     is ToastType.PlayerError -> {
-                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error) }
+                        runBlocking {
+                            ComposeResUtils.getResString(ComposeResUtils.StringType.TIME_OUT_ERROR, type.error)
+                        }
+                    }
+
+                    ToastType.UnavailableSongPaused -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.SONG_UNAVAILABLE) }
+                    }
+
+                    ToastType.UnavailableSongSkipped -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SKIPPED) }
+                    }
+
+                    ToastType.UnavailableSongSwitched -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SWITCHED) }
+                    }
+
+                    ToastType.UnavailableSongSwitchFailed -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_SWITCH_FAILED) }
+                    }
+
+                    ToastType.UnavailableQueueExhausted -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_QUEUE_EXHAUSTED) }
                     }
                 },
             )

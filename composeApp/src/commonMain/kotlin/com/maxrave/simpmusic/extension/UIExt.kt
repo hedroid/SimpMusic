@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -57,11 +58,14 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.kmpalette.palette.graphics.Palette
 import com.maxrave.domain.data.model.ui.ScreenSizeInfo
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.theme.LocalAppColors
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -527,6 +531,25 @@ fun Palette?.toImmersiveBackground(): Color {
 }
 
 /**
+ * The frosted top bar of the immersive screens: their own page colour behind a 24dp blur, washed
+ * with that colour again at [tintAlpha]. Blur is forced on, so Android 8–11 takes haze's
+ * RenderScript path instead of a flat scrim.
+ *
+ * A plain function, not remembered: `HazeBlurStyle { }` records its writes into a list and compares
+ * by them, so an unchanged tint recomposes into an equal Style and leaves the node alone.
+ */
+fun barBlurStyle(
+    tint: Color,
+    tintAlpha: Float,
+): HazeBlurStyle =
+    HazeBlurStyle {
+        blurEnabled(true)
+        blurRadius(24.dp)
+        backgroundColor(tint)
+        colorEffects(listOf(HazeColorEffect.tint(tint.copy(alpha = tintAlpha))))
+    }
+
+/**
  * Vertical scrim from [from] to [to] that fades without showing an edge.
  *
  * Two details are what make this read as smooth where a plain
@@ -567,11 +590,35 @@ fun smoothScrimBrush(
 /**
  * The common case of [smoothScrimBrush]: a bottom scrim that melts artwork into the page
  * background ([toImmersiveBackground]) by ramping [color] from invisible to opaque.
+ * Must stay a pure fade to [color] — page-level glow layers (home first shelf,
+ * [AmbientThemeGlow], Mix for you, Listen together) end on the page colour, so any
+ * darkening here reads as a gray veil with a hard seam where the layer stops.
+ * White text over the artwork itself wants [artworkTextScrimBrush] instead.
  */
 fun artworkScrimBrush(
     color: Color,
     steps: Int = 24,
-): Brush = smoothScrimBrush(from = color.copy(alpha = 0f), to = color, steps = steps)
+): Brush =
+    smoothScrimBrush(
+        from = color.copy(alpha = 0f),
+        to = color,
+        steps = steps,
+    )
+
+/**
+ * [artworkScrimBrush] variant for headers overlaying white text on the artwork: the ramp
+ * ends 45% toward black so bright covers (netease playlists skew light) still bottom out
+ * dark enough for the title/author line.
+ */
+fun artworkTextScrimBrush(
+    color: Color,
+    steps: Int = 24,
+): Brush =
+    smoothScrimBrush(
+        from = color.copy(alpha = 0f),
+        to = lerp(color, Color.Black, 0.45f),
+        steps = steps,
+    )
 
 fun Modifier.isElementVisible(onVisibilityChanged: (Boolean) -> Unit) =
     composed {

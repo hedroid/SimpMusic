@@ -40,10 +40,15 @@ plugins {
     alias(libs.plugins.compose.hotReload)
 }
 
-version =
+// Windows MSI packaging (conveyor) requires MAJOR.MINOR.BUILD — pad a two-segment
+// app version ("3.0") with a zero build segment. Android keeps the two-segment name.
+val msiStyleVersion =
     libs.versions.version.name
         .get()
         .removeSuffix("-hf")
+        .let { if (it.count { c -> c == '.' } < 2) "$it.0" else it }
+
+version = msiStyleVersion
 
 kotlin {
     // 21 matches :media-jvm-ui (requires 21+).
@@ -209,18 +214,12 @@ compose.desktop {
             }
             windows {
                 includeAllModules = true
-                packageVersion =
-                    libs.versions.version.name
-                        .get()
-                        .removeSuffix("-hf")
+                packageVersion = msiStyleVersion
                 iconFile.set(rootDir.resolve("composeApp/icon/circle_app_icon.ico"))
             }
             linux {
                 includeAllModules = true
-                packageVersion =
-                    libs.versions.version.name
-                        .get()
-                        .removeSuffix("-hf")
+                packageVersion = msiStyleVersion
                 iconFile.set(rootDir.resolve("composeApp/icon/circle_app_icon.png"))
             }
         }

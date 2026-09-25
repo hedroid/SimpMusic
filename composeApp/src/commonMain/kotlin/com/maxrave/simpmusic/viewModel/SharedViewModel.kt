@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
+import com.maxrave.common.Config
 import com.maxrave.common.Config.ALBUM_CLICK
 import com.maxrave.common.Config.DOWNLOAD_CACHE
 import com.maxrave.common.Config.PLAYLIST_CLICK
@@ -18,6 +19,7 @@ import com.maxrave.domain.data.entities.LyricsEntity
 import com.maxrave.domain.data.entities.NewFormatEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.data.entities.NeteaseSongInfoEntity
 import com.maxrave.domain.data.entities.SongInfoEntity
 import com.maxrave.domain.data.entities.TranslatedLyricsEntity
 import com.maxrave.domain.data.model.browse.album.Track
@@ -65,6 +67,11 @@ import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.getDownloadFolderPath
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.readAvailable
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.utils.VersionManager
@@ -72,6 +79,7 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -100,13 +108,21 @@ import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
+import simpmusic.composeapp.generated.resources.login_netease_first
 import simpmusic.composeapp.generated.resources.added_to_youtube_liked
 import simpmusic.composeapp.generated.resources.error
+import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.lastfm_login_failed
 import simpmusic.composeapp.generated.resources.login_success
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.removed_from_youtube_liked
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.netease_rate_limited
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.liked_toast
+import simpmusic.composeapp.generated.resources.need_login_toast
 import simpmusic.composeapp.generated.resources.shared
+import simpmusic.composeapp.generated.resources.unliked_toast
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
 import java.io.FileOutputStream
@@ -124,7 +140,46 @@ class SharedViewModel(
     private val playlistRepository: PlaylistRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
     private val cacheRepository: CacheRepository,
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl,
 ) : BaseViewModel() {
+
+    // ---------------------------------------------------------------- 音源切换(feat/netease-source)
+
+    /** 当前激活音源,扇形菜单与各页面 TODO 分支共用这一份状态 */
+    val selectedSource: StateFlow<String> =
+        dataStoreManager.selectedSource
+            .stateIn(viewModelScope, SharingStarted.Eagerly, com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC.name)
+
+    val neteaseLoggedIn: StateFlow<Boolean> =
+        dataStoreManager.neteaseCookie
+            .map { it.isNotEmpty() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
+        viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
+    }
+
+    /**
+     * 统一的切源入口:三处切源路径(底栏长按菜单、网易登录成功自动切、登出/访客回落 YT)
+     * 必须都走这里。只切 setting,**不停播、不清播放状态**(用户 2026-09-22 定案):播放管线
+     * 按歌曲 ID 形状路由,混源队列本就能播,切源不打断正在听的音乐。持久化的队列/recentMediaId
+     * 也保留,跨源残留在下次启动时由 core mayBeRestoreQueue 的跨源守卫(恢复曲 ID 形状≠当前源
+     * 则跳过)兜住。同源重复调用无副作用。
+     */
+    fun switchSource(source: com.maxrave.domain.source.MusicSource) {
+        if (selectedSource.value == source.name) return
+        viewModelScope.launch {
+            // 网易未登录选网易源:不切换,toast 引导登录(菜单项保持可点,别毫无反应)
+            if (source == com.maxrave.domain.source.MusicSource.NETEASE &&
+                dataStoreManager.neteaseCookie.first().isBlank()
+            ) {
+                makeToast(getString(Res.string.login_netease_first))
+                return@launch
+            }
+            setSelectedSource(source)
+        }
+    }
+
     var isFirstLiked: Boolean = false
     var isFirstMiniplayer: Boolean = false
     var isFirstSuggestions: Boolean = false
@@ -135,6 +190,9 @@ class SharedViewModel(
 
     private var _liked: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val liked: SharedFlow<Boolean> = _liked.asSharedFlow()
+
+    private val _remoteSongLikeState = MutableStateFlow(RemoteSongLikeState())
+    val remoteSongLikeState: StateFlow<RemoteSongLikeState> = _remoteSongLikeState
 
     var isServiceRunning: Boolean = false
 
@@ -168,6 +226,22 @@ class SharedViewModel(
 
     private val _showNotificationPermissionDialog = MutableStateFlow(false)
     val showNotificationPermissionDialog: StateFlow<Boolean> = _showNotificationPermissionDialog
+
+    private val _isOfficialBuild = MutableStateFlow(true)
+    val isOfficialBuild: StateFlow<Boolean> = _isOfficialBuild
+
+    // One-shot: the Desktop capsule asks the Now Playing panel, which hosts the page, to open
+    // full-screen lyrics. The panel consumes it once shown.
+    private val _fullscreenLyricsRequest = MutableStateFlow(false)
+    val fullscreenLyricsRequest: StateFlow<Boolean> = _fullscreenLyricsRequest
+
+    fun requestFullscreenLyrics() {
+        _fullscreenLyricsRequest.value = true
+    }
+
+    fun consumeFullscreenLyricsRequest() {
+        _fullscreenLyricsRequest.value = false
+    }
 
     private var getFormatFlowJob: Job? = null
 
@@ -215,9 +289,6 @@ class SharedViewModel(
             NowPlayingScreenData.initial(),
         )
     val nowPlayingScreenData: StateFlow<NowPlayingScreenData> = _nowPlayingScreenData
-
-    private var _likeStatus = MutableStateFlow<Boolean>(false)
-    val likeStatus: StateFlow<Boolean> = _likeStatus
 
     /**
      * Which body of the Apple Music player was open last — held by ENUM NAME so this class stays
@@ -272,7 +343,10 @@ class SharedViewModel(
                                     getCanvas(nowPlaying.mediaItem.mediaId, (timeline.total / 1000).toInt())
                                 }
                                 nowPlaying.songEntity?.let { song ->
-                                    if (nowPlayingScreenData.value.lyricsData == null) {
+                                    // 判"该不该拉词"看 lyricsVideoId 而非 lyricsData==null:
+                                    // 切歌保留旧词期间 lyricsData 非空但 id 是旧歌的,照样要拉;
+                                    // 真没词的歌 updateLyrics(null) 会把 id 落成当前曲,不会重拉。
+                                    if (nowPlayingScreenData.value.lyricsVideoId != song.videoId) {
                                         Logger.w(tag, "Get lyrics from format")
                                         getLyricsFromFormat(nowPlaying.mediaItem.isVideo(), song, (timeline.total / 1000).toInt())
                                     }
@@ -389,6 +463,11 @@ class SharedViewModel(
                             ?: -1L
                     _timeline.update { it.copy(total = seededTotal) }
                     state.songEntity?.let { track ->
+                        // 歌词 stale-while-revalidate:整包重建时旧词原样保留(lyricsVideoId
+                        // 还是旧歌的 id = "过期"标记),新词由 updateLyrics 落地时整体替换。
+                        // 之前的 `lyricsData = null` 让歌词区/整行歌词先塌掉再重建,就是
+                        // 切歌"歌词闪一下"的根因;拉词触发改为按 lyricsVideoId 判过期。
+                        val previousData = _nowPlayingScreenData.value
                         _nowPlayingScreenData.value =
                             NowPlayingScreenData(
                                 nowPlayingTitle = track.title,
@@ -399,18 +478,43 @@ class SharedViewModel(
                                 isVideo = false,
                                 thumbnailURL = null,
                                 canvasData = null,
-                                lyricsData = null,
+                                lyricsData = previousData.lyricsData,
+                                lyricsVideoId = previousData.lyricsVideoId,
                                 songInfoData = null,
                                 playlistName =
                                     mediaPlayerHandler.queueData.value
                                         ?.data
                                         ?.playlistName ?: "",
                             )
+                        // 兜底:拉词链路若极端失败、始终没调 updateLyrics 落地,保留的旧词
+                        // 不能挂一整首歌 — 10s 后仍是过期词就清空,回到"无词"态。
+                        viewModelScope.launch {
+                            delay(10_000)
+                            if (_nowPlayingState.value?.songEntity?.videoId == track.videoId &&
+                                _nowPlayingScreenData.value.lyricsVideoId != track.videoId
+                            ) {
+                                _nowPlayingScreenData.update {
+                                    it.copy(lyricsData = null, lyricsVideoId = track.videoId)
+                                }
+                            }
+                        }
                     }
                     state.mediaItem.let { now ->
                         _canvas.value = null
-                        getLikeStatus(now.mediaId)
-                        getSongInfo(now.mediaId)
+                        if (now.mediaId.toLongOrNull() != null) {
+                            // 网易歌:YT songInfo(含 RYD 踩数)/YT 点赞状态对数字 ID 必失败,
+                            // 白打两个请求还刷 logcat;songInfoData 必须显式清空,否则
+                            // copy(...) 会把上一首的详情卡一直带着走。点赞状态换成云村红心。
+                            _nowPlayingScreenData.update {
+                                it.copy(
+                                    songInfoData = null,
+                                    neteaseSongData = null,
+                                )
+                            }
+                        } else {
+                            _nowPlayingScreenData.update { it.copy(neteaseSongData = null) }
+                            getSongInfo(now.mediaId)
+                        }
                         getFormat(now.mediaId)
                         _nowPlayingScreenData.update {
                             it.copy(
@@ -425,6 +529,11 @@ class SharedViewModel(
                             it.copy(
                                 isExplicit = song.isExplicit,
                             )
+                        }
+                        refreshRemoteSongLike(song)
+                        // 网易详情卡要 song 行的 artistId/albumId,在 songEntity 到位后拉
+                        if (song.videoId.toLongOrNull() != null) {
+                            getNeteaseSongInfo(song)
                         }
                     }
                 }
@@ -444,6 +553,12 @@ class SharedViewModel(
 
                             SimpleMediaState.Initial -> {
                                 _timeline.update { it.copy(loading = true) }
+                            }
+
+                            SimpleMediaState.Stopped -> {
+                                // 错误/灰歌动作后的闲置:停转圈,进度现场原样冻结——
+                                // 灰歌暂停后 player 停在 IDLE,走 Initial 会永远转圈
+                                _timeline.update { it.copy(loading = false) }
                             }
 
                             SimpleMediaState.Ended -> {
@@ -486,9 +601,12 @@ class SharedViewModel(
                                 // When progress hasn't changed (same value polled again) or is negative,
                                 // don't modify loading state. The loading flag is already managed by
                                 // Buffering/Ready/Loading state events. Setting loading=true here would
-                                // cause rapid flickering because the progress poll interval (100ms) is
-                                // shorter than the adapter's position cache update interval (200ms),
-                                // resulting in duplicate position values that incorrectly triggered loading.
+                                // cause rapid flickering whenever the same value arrives twice,
+                                // which it can: the handler's ticker and the adapter's position
+                                // poll both run at 50ms and are not in step, so a poll is sometimes
+                                // read twice. A repeat is not evidence of a stall, and the loading
+                                // flag belongs to the Buffering/Ready events rather than to a
+                                // guess made here.
                             }
 
                             is SimpleMediaState.Loading -> {
@@ -601,15 +719,86 @@ class SharedViewModel(
         }
     }
 
-    private fun getLikeStatus(videoId: String?) {
+    /** 网易歌详情卡:艺人(头像/粉丝)+专辑(发行/简介)+评论(总数/热评),各路独立降级 */
+    private var neteaseSongInfoJob: Job? = null
+
+    /**
+     * 红心=云端账号状态(云端是唯一事实源):切歌时拉云端态,驱动显示与本地缓存镜像
+     * (song.liked 行,库页"喜欢的歌曲"等本地视图读它)。未登录/拉取失败时保持本地
+     * 缓存值显示,操作会走云端并给出失败提示。
+     */
+    private fun refreshRemoteSongLike(song: SongEntity) {
+        _remoteSongLikeState.value = RemoteSongLikeState()
         viewModelScope.launch {
-            if (videoId != null) {
-                _likeStatus.value = false
-                songRepository.getLikeStatus(videoId).collectLatest { status ->
-                    _likeStatus.value = status
+            val cloudLiked = songRepository.getRemoteLikeStatus(song.videoId)
+            _remoteSongLikeState.value = RemoteSongLikeState(liked = cloudLiked)
+            if (cloudLiked != null) {
+                _liked.value = cloudLiked
+                mediaPlayerHandler.like(cloudLiked)
+                val localLiked = songRepository.getSongById(song.videoId).lastOrNull()?.liked == true
+                if (localLiked != cloudLiked) {
+                    songRepository.setLikedLocal(song.videoId, if (cloudLiked) 1 else 0)
                 }
             }
         }
+    }
+
+    /**
+     * 红心点击的唯一路径:直接切换云端账号红心。成功后镜像本地缓存(song.liked,供
+     * 库页本地视图)并同步通知栏图标;失败 toast。迷你播放条红心也走这里。
+     */
+    /** 红心/收藏在未登录源上被点击时:置灰按钮仍可点,点这里给统一提示。 */
+    fun notifyFavoriteNeedsLogin() {
+        makeToast(getString(Res.string.need_login_toast))
+    }
+
+    fun setRemoteSongLiked(liked: Boolean) {
+        val song = nowPlayingState.value?.songEntity ?: return
+        viewModelScope.launch {
+            _remoteSongLikeState.value = _remoteSongLikeState.value.copy(pending = true, failed = false)
+            val result = songRepository.setRemoteLikeStatus(song.videoId, liked)
+            val ok = result.getOrDefault(false)
+            if (!ok) {
+                makeToast(
+                    getString(
+                        when {
+                            result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException ->
+                                Res.string.netease_rate_limited
+                            song.videoId.toLongOrNull() != null -> Res.string.cloud_action_failed_netease
+                            else -> Res.string.cloud_action_failed_youtube
+                        },
+                    ),
+                )
+            } else {
+                makeToast(getString(if (liked) Res.string.liked_toast else Res.string.unliked_toast))
+                songRepository.setLikedLocal(song.videoId, if (liked) 1 else 0)
+                _liked.value = liked
+                mediaPlayerHandler.like(liked)
+            }
+            _remoteSongLikeState.value =
+                if (ok) {
+                    RemoteSongLikeState(liked = liked)
+                } else {
+                    _remoteSongLikeState.value.copy(pending = false, failed = true)
+                }
+        }
+    }
+
+    private fun getNeteaseSongInfo(song: SongEntity) {
+        neteaseSongInfoJob?.cancel()
+        neteaseSongInfoJob =
+            viewModelScope.launch {
+                val meta =
+                    neteaseRepository.getSongInfo(
+                        songId = song.videoId,
+                        artistId = song.artistId?.firstOrNull()?.takeIf { it.isNotEmpty() },
+                        albumId = song.albumId,
+                    )
+                // 切歌竞态:发布前确认还是这首歌,别把上一首的卡盖到新歌上
+                if (mediaPlayerHandler.nowPlayingState.value.songEntity?.videoId == song.videoId) {
+                    _nowPlayingScreenData.update { it.copy(neteaseSongData = meta) }
+                }
+            }
     }
 
     private fun getCanvas(
@@ -810,6 +999,25 @@ class SharedViewModel(
                     ),
                 )
                 loadMediaItemFromTrack(track, SONG_CLICK)
+            } else if (videoId.toLongOrNull() != null) {
+                // 网易歌本地无行:getFullMetadata 是 YT 管线,数字 id 必抓取失败(分享回流断的
+                // 根因)——按 id 走网易 songDetail 直取,与 YT 分享同构起播
+                val track = neteaseRepository.getNeteaseSongTrack(videoId)
+                if (track != null) {
+                    mediaPlayerHandler.setQueueData(
+                        QueueData.Data(
+                            listTracks = arrayListOf(track),
+                            firstPlayedTrack = track,
+                            playlistId = "RDAMVM$videoId",
+                            playlistName = getString(Res.string.shared),
+                            playlistType = PlaylistType.RADIO,
+                            continuation = null,
+                        ),
+                    )
+                    loadMediaItemFromTrack(track, SONG_CLICK)
+                } else {
+                    makeToast(getString(Res.string.error))
+                }
             } else {
                 streamRepository.getFullMetadata(videoId).collectLatest { response ->
                     val track = response.data
@@ -958,8 +1166,10 @@ class SharedViewModel(
                 }
 
                 UIEvent.ToggleLike -> {
+                    // 红心直连云端:当前态优先读云端快照,未知时回落本地镜像
                     Logger.w(tag, "ToggleLike")
-                    mediaPlayerHandler.onPlayerEvent(PlayerEvent.ToggleLike)
+                    val current = _remoteSongLikeState.value.liked ?: _liked.value
+                    setRemoteSongLiked(!current)
                 }
 
                 is UIEvent.UpdateVolume -> {
@@ -1149,6 +1359,29 @@ class SharedViewModel(
         }
     }
 
+    /**
+     * [signingCerts]: SHA-256 hex of each certificate this APK is signed with. A failed fetch leaves
+     * the app usable — it plays offline, and an unknown answer must not lock out our own users.
+     */
+    fun checkOfficialBuild(
+        packageName: String,
+        signingCerts: List<String>,
+    ) {
+        if (packageName !in Config.OFFICIAL_PACKAGE_NAMES) {
+            _isOfficialBuild.value = false
+            return
+        }
+        viewModelScope.launch {
+            updateRepository.getFdroidSigningKeys().collect { response ->
+                val keys = response.data
+                // No certificate read at all is an unknown answer, and unknown never blocks.
+                if (response is Resource.Success && keys != null && signingCerts.isNotEmpty() && keys.none { it in signingCerts }) {
+                    _isOfficialBuild.value = false
+                }
+            }
+        }
+    }
+
     fun stopPlayer() {
         _nowPlayingScreenData.value = NowPlayingScreenData.initial()
         _nowPlayingState.value = null
@@ -1168,9 +1401,12 @@ class SharedViewModel(
         lyricsProvider: LyricsProvider = LyricsProvider.SIMPMUSIC,
     ) {
         if (inputLyrics == null) {
+            // "这首歌没有词"也是一次落地:把 lyricsVideoId 落成当前曲,拉词触发就此收口
+            // (retained 旧词同时被清掉,不会把上一首的词永远挂在屏上)。
             _nowPlayingScreenData.update {
                 it.copy(
                     lyricsData = null,
+                    lyricsVideoId = videoId,
                 )
             }
             return
@@ -1353,6 +1589,7 @@ class SharedViewModel(
                                     lyrics = lyrics,
                                     lyricsProvider = lyricsProvider,
                                 ),
+                            lyricsVideoId = videoId,
                         )
                     }
                     // Save lyrics to database
@@ -1416,6 +1653,11 @@ class SharedViewModel(
                         ?: ""
                 }
             resetLyricsVoteState()
+            // 网易歌(纯数字 id):走 NETEASE 官方专线(官方原文/官方翻译),现有供应商退居兜底
+            if (videoId.toLongOrNull() != null) {
+                getNeteaseLyrics(videoId, song, (artist ?: ""), duration)
+                return@launch
+            }
             val lyricsProvider = dataStoreManager.lyricsProvider.first()
             when (lyricsProvider) {
                 DataStoreManager.SIMPMUSIC -> {
@@ -1451,7 +1693,72 @@ class SharedViewModel(
                         duration,
                     )
                 }
+
+                // NETEASE 只对网易歌有意义(上方数字 ID 分支);设置页入口隐藏前可能存下该值,
+                // YT 歌遇到时回落默认供应商,否则 when 落空导致一首词都不取
+                else -> {
+                    getSimpMusicLyrics(
+                        videoId,
+                        song,
+                        (artist ?: ""),
+                        duration,
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * 网易官方歌词专线:主选恒为 NETEASE(与歌曲同源,逐字 yrc+官方翻译,第三方库不可能更准),
+     * 设置项(网易模式下已隐藏不可用项)不影响主选,仅决定兜底顺位;NETEASE 失败 →
+     * LRCLIB(按名搜) → 本地已保存。官方翻译直接喂 translatedLyrics,缺失才走 AI。
+     */
+    private fun getNeteaseLyrics(
+        videoId: String,
+        song: SongEntity,
+        artist: String,
+        duration: Int,
+    ) {
+        viewModelScope.launch {
+            neteaseRepository.getNeteaseLyricsData(videoId)
+                .fold(
+                    onSuccess = { (lyrics, officialTranslation, officialRomanization) ->
+                        updateLyrics(
+                            videoId,
+                            duration,
+                            lyrics,
+                            false,
+                            LyricsProvider.NETEASE,
+                        )
+                        insertLyrics(lyrics.toLyricsEntity(videoId))
+                        if (officialRomanization != null) {
+                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂
+                            _nowPlayingScreenData.update {
+                                it.copy(
+                                    lyricsData = it.lyricsData?.copy(
+                                        romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
+                                    ),
+                                )
+                            }
+                        }
+                        if (officialTranslation != null) {
+                            // 官方翻译与原文同源,时间轴天然对齐
+                            updateLyrics(
+                                videoId,
+                                0,
+                                officialTranslation,
+                                true,
+                                LyricsProvider.NETEASE,
+                            )
+                        } else {
+                            getAITranslationLyrics(videoId, lyrics)
+                        }
+                    },
+                    onFailure = {
+                        log("Netease lyrics miss: ${it.message}")
+                        getLrclibLyrics(song, artist, duration)
+                    },
+                )
         }
     }
 
@@ -1874,41 +2181,6 @@ class SharedViewModel(
         }
     }
 
-    fun addToYouTubeLiked() {
-        viewModelScope.launch {
-            val videoId = mediaPlayerHandler.nowPlaying.first()?.mediaId
-            if (videoId != null) {
-                val like = likeStatus.value
-                if (!like) {
-                    songRepository
-                        .addToYouTubeLiked(
-                            mediaPlayerHandler.nowPlaying.first()?.mediaId,
-                        ).collect { response ->
-                            if (response == 200) {
-                                makeToast(getString(Res.string.added_to_youtube_liked))
-                                getLikeStatus(videoId)
-                            } else {
-                                makeToast(getString(Res.string.error))
-                            }
-                        }
-                } else {
-                    songRepository
-                        .removeFromYouTubeLiked(
-                            mediaPlayerHandler.nowPlaying.first()?.mediaId,
-                        ).collect {
-                            if (it == 200) {
-                                makeToast(getString(Res.string.removed_from_youtube_liked))
-                                getLikeStatus(videoId)
-                            } else {
-                                makeToast(getString(Res.string.error))
-                            }
-                        }
-                }
-            }
-        }
-    }
-
-    fun getTranslucentBottomBar() = dataStoreManager.translucentBottomBar
 
     fun getEnableLiquidGlass() = dataStoreManager.enableLiquidGlass
 
@@ -1926,6 +2198,8 @@ class SharedViewModel(
     fun getNowPlayingStyle() = dataStoreManager.nowPlayingStyle
 
     fun getLyricsStyle() = dataStoreManager.lyricsStyle
+
+    fun getLyricsOffsetMs() = dataStoreManager.lyricsOffsetMs
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
@@ -2002,6 +2276,12 @@ class SharedViewModel(
                 } catch (e: Exception) {
                     throw RuntimeException(e)
                 }
+                // 网易歌:CDN 直链音频(mpeg/flac),youTube.download 的 itag 合并管线不适用,
+                // 直接取流下载写文件;进度喂同一个 DownloadProgress 弹窗
+                if (track.videoId.toLongOrNull() != null) {
+                    downloadNeteaseFile(track.videoId, path)
+                    return@let
+                }
                 songRepository
                     .downloadToFile(
                         track = track,
@@ -2012,6 +2292,53 @@ class SharedViewModel(
                         _downloadFileProgress.value = it
                     }
             }
+        }
+    }
+
+    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载 → 覆盖写 + 进度 */
+    private suspend fun downloadNeteaseFile(
+        videoId: String,
+        path: String,
+    ) {
+        _downloadFileProgress.value = DownloadProgress()
+        val stream =
+            neteaseRepository.getStreamInfo(videoId, isDownload = true).getOrNull()
+        if (stream == null) {
+            _downloadFileProgress.value = DownloadProgress.failed("netease stream unavailable")
+            return
+        }
+        val ext = if (stream.mimeType?.contains("flac", ignoreCase = true) == true) "flac" else "mp3"
+        try {
+            HttpClient(CIO).use { client ->
+                val response = client.get(stream.url)
+                // ktor2 的 ByteReadChannel 没有总长属性,Content-Length 头兜底(缺头则只报速度不报百分比)
+                val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
+                val channel = response.bodyAsChannel()
+                val output = FileOutputStream("$path.$ext")
+                val buffer = ByteArray(64 * 1024)
+                var read = 0L
+                val startedAt = System.currentTimeMillis()
+                while (true) {
+                    val n = channel.readAvailable(buffer, 0, buffer.size)
+                    if (n <= 0) break
+                    output.write(buffer, 0, n)
+                    read += n
+                    if (total > 0) {
+                        val elapsedS = (System.currentTimeMillis() - startedAt).coerceAtLeast(1) / 1000f
+                        _downloadFileProgress.value =
+                            DownloadProgress(
+                                audioDownloadProgress = (read.toFloat() / total).coerceIn(0f, 1f),
+                                downloadSpeed = (read / 1024f / elapsedS).toInt(),
+                            )
+                    }
+                }
+                output.close()
+                _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
+            }
+            Logger.d(tag, "Netease file saved to $path.$ext")
+        } catch (e: Exception) {
+            Logger.e(tag, "netease download failed: ${e.message}")
+            _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "download failed")
         }
     }
 
@@ -2165,7 +2492,6 @@ class SharedViewModel(
     // instead of calling runBlocking inside composition (used by NowPlayingScreenContent).
     fun isUserLoggedInFlow(): Flow<Boolean> = dataStoreManager.cookie.map { it.isNotEmpty() }
 
-    fun isCombineFavoriteAndYTLiked(): Boolean = runBlocking { dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE }
 }
 
 sealed class UIEvent {
@@ -2203,12 +2529,20 @@ sealed class UIEvent {
     data object ToggleLike : UIEvent()
 }
 
+/** Independent source-account state. `liked == null` means signed out or not yet known. */
+data class RemoteSongLikeState(
+    val liked: Boolean? = null,
+    val pending: Boolean = false,
+    val failed: Boolean = false,
+)
+
 enum class LyricsProvider {
     SIMPMUSIC,
     YOUTUBE,
     SPOTIFY,
     LRCLIB,
     BETTER_LYRICS,
+    NETEASE,
     AI,
     OFFLINE,
 }
@@ -2222,7 +2556,15 @@ data class NowPlayingScreenData(
     val thumbnailURL: String?,
     val canvasData: CanvasData? = null,
     val lyricsData: LyricsData? = null,
+    /**
+     * lyricsData 属于哪首歌。切歌时旧词会被保留(stale-while-revalidate,防歌词区闪空),
+     * 这个标记就是"旧词是不是当前曲的":拉词触发与落地写入都看它,防止旧词被当成新词
+     * 永远留在屏上。
+     */
+    val lyricsVideoId: String? = null,
     val songInfoData: SongInfoEntity? = null,
+    /** 网易歌详情卡数据(艺人/专辑/热评),与 songInfoData 按源互斥 */
+    val neteaseSongData: NeteaseSongInfoEntity? = null,
     val bitmap: ImageBitmap? = null,
 ) {
     data class CanvasData(
@@ -2233,6 +2575,8 @@ data class NowPlayingScreenData(
     data class LyricsData(
         val lyrics: Lyrics,
         val translatedLyrics: Pair<Lyrics, LyricsProvider>? = null,
+        // 官方罗马音(网易 romalrc,行级与原文同源对齐);null=无官方数据,渲染端回退本地引擎
+        val romanizedLyrics: Pair<Lyrics, LyricsProvider>? = null,
         val lyricsProvider: LyricsProvider,
     )
 

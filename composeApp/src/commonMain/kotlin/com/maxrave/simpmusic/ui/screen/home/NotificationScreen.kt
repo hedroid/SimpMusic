@@ -61,22 +61,27 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.domain.data.entities.NotificationEntity
+import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.extension.formatTimeAgo
 import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
+import com.maxrave.simpmusic.ui.component.NeteaseBrandRed
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.YouTubeBrandRed
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.NeteaseCloudMusic
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.YouTubeMusic
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NotificationViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.stringResource
@@ -100,7 +105,7 @@ fun NotificationScreen(
     val glowNowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val density = LocalDensity.current
-    val hazeState = rememberHazeState(blurEnabled = true)
+    val hazeState = rememberHazeState()
     var topAppBarHeight by remember { mutableStateOf(0.dp) }
     // Home's rule: transparent only while pixel-0 is on screen; the frost itself stays light.
     val isAtTop by remember {
@@ -185,12 +190,7 @@ fun NotificationScreen(
                         Modifier
                     } else {
                         // AlbumScreen's bar recipe, thinned to 0.3 — see SettingScreen.
-                        Modifier.hazeEffect(hazeState) {
-                            blurEnabled = true
-                            blurRadius = 24.dp
-                            backgroundColor = barTint
-                            tints = listOf(HazeTint(barTint.copy(alpha = 0.3f)))
-                        }
+                        Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(barTint, 0.3f))
                     },
                 ).onGloballyPositioned { coordinates ->
                     topAppBarHeight = with(density) { coordinates.size.height.toDp() }
@@ -296,14 +296,39 @@ fun NotificationItem(
             }
             Spacer(modifier = Modifier.height(10.dp))
         }
-        Text(
-            text = notification.time.formatTimeAgo(),
-            style = typo().titleSmall,
+        // 时间行尾随品牌原色源标识(用户 2026-09-25 定案:双源各推各的,靠它分"重复"还是两源);
+        // 图标尺寸=时间字体的字号换算,不引入第二套尺寸
+        Row(
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
                     .padding(end = 15.dp),
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val timeStyle = typo().titleSmall
+            Text(
+                text = notification.time.formatTimeAgo(),
+                style = timeStyle,
+            )
+            Spacer(modifier = Modifier.padding(start = 4.dp))
+            val netease = notification.channelId.toLongOrNull() != null
+            Icon(
+                imageVector =
+                    if (netease) {
+                        SimpIcons.NeteaseCloudMusic
+                    } else {
+                        SimpIcons.YouTubeMusic
+                    },
+                contentDescription = null,
+                tint = if (netease) NeteaseBrandRed else YouTubeBrandRed,
+                modifier =
+                    Modifier.size(
+                        with(LocalDensity.current) {
+                            timeStyle.fontSize.toDp()
+                        },
+                    ),
+            )
+        }
     }
 }
 @Composable

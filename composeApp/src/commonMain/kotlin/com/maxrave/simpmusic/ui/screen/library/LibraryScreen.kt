@@ -76,6 +76,8 @@ import com.maxrave.simpmusic.ui.component.LibraryItem
 import com.maxrave.simpmusic.ui.component.LibraryItemState
 import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
+import com.maxrave.simpmusic.ui.component.LibraryTilingItem
+import com.maxrave.simpmusic.ui.component.LibraryTilingState
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -86,29 +88,38 @@ import com.maxrave.simpmusic.ui.icon.Groups
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryCollectionDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
+import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.download_management
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
 import simpmusic.composeapp.generated.resources.delete
+import simpmusic.composeapp.generated.resources.downloaded_collections
 import simpmusic.composeapp.generated.resources.downloaded_playlists
+import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.favorite_playlists
 import simpmusic.composeapp.generated.resources.favorite_podcasts
 import simpmusic.composeapp.generated.resources.library
+import simpmusic.composeapp.generated.resources.library_podcasts
 import simpmusic.composeapp.generated.resources.mix_for_you
 import simpmusic.composeapp.generated.resources.no_YouTube_playlists
 import simpmusic.composeapp.generated.resources.no_charts_found
@@ -118,15 +129,17 @@ import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
+import simpmusic.composeapp.generated.resources.playlists
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.simpmusic_charts
 import simpmusic.composeapp.generated.resources.wrapped
 import simpmusic.composeapp.generated.resources.your_library
+import simpmusic.composeapp.generated.resources.your_netease
 import simpmusic.composeapp.generated.resources.your_playlists
-import simpmusic.composeapp.generated.resources.your_youtube_playlists
+import simpmusic.composeapp.generated.resources.your_youtube_music
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     innerPadding: PaddingValues,
@@ -143,6 +156,10 @@ fun LibraryScreen(
     val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
     val nowPlaying by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
+    val youTubeLikedPlaylists by viewModel.youTubeLikedPlaylists.collectAsStateWithLifecycle()
+    val youTubeAutoPlaylists by viewModel.youTubeAutoPlaylists.collectAsStateWithLifecycle()
+    val youTubeAlbums by viewModel.youTubeAlbums.collectAsStateWithLifecycle()
+    val followedYTArtists by viewModel.followedYTArtists.collectAsStateWithLifecycle()
     val listCanvasSong by viewModel.listCanvasSong.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
@@ -150,6 +167,14 @@ fun LibraryScreen(
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
     val chartPlaylists by viewModel.chartPlaylists.collectAsStateWithLifecycle()
     val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
+    val neteaseLoggedIn by viewModel.neteaseLoggedIn.collectAsStateWithLifecycle(initialValue = false)
+    val neteasePlaylist by viewModel.neteasePlaylist.collectAsStateWithLifecycle()
+    val subscribedArtists by viewModel.subscribedArtists.collectAsStateWithLifecycle()
+    val starredAlbums by viewModel.starredAlbums.collectAsStateWithLifecycle()
+    val neteaseRefreshing by viewModel.neteaseRefreshing.collectAsStateWithLifecycle()
+    val youTubeRefreshing by viewModel.youTubeRefreshing.collectAsStateWithLifecycle()
+    val ownNeteasePlaylistIds by viewModel.ownNeteasePlaylistIds.collectAsStateWithLifecycle()
+    val neteaseLikedPlaylistId by viewModel.neteaseLikedPlaylistId.collectAsStateWithLifecycle()
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
@@ -165,9 +190,7 @@ fun LibraryScreen(
     var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     var topAppBarHeight by remember {
         mutableStateOf(0.dp)
@@ -181,12 +204,39 @@ fun LibraryScreen(
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val openLibraryPlaylists = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
+    }
+    val openLibraryCollections = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.FAVORITE_PLAYLIST.name))
+    }
+    val openLibraryPodcasts = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.FAVORITE_PODCAST.name))
+    }
+    val openLibraryDownloads = {
+        navController.navigate(LibraryCollectionDestination(LibraryChipType.DOWNLOADED_PLAYLIST.name))
+    }
 
     LaunchedEffect(currentFilter) {
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                if (youTubePlaylist.data.isNullOrEmpty()) {
-                    viewModel.getYouTubePlaylist()
+                // 未加载过、或"登录态下系统歌单置顶行为空"(首拉撞上 cookie 恢复竞态/
+                // split 间歇失败时 auto 分区空——登录账号必有 LM/SE,空=那次数据不可信)
+                // 才拉。不看 created 空:删除唯一自建歌单后 YTM 服务端删除是异步的(~1min),
+                // 按空重拉会把还没删掉的歌单又拉回来(2026-09-22)。子页写操作走
+                // LibraryMutationBus 本地回写,不依赖返回时刷新。
+                if (youTubePlaylist !is LocalResource.Success ||
+                    youTubeAutoPlaylists.data.isNullOrEmpty()
+                ) {
+                    viewModel.getYouTubeLibrary()
+                }
+            }
+
+            // "您的网易云"三分区(歌单/关注的歌手/收藏的专辑):空数据才拉;子页动作本地回写。
+            // 登出回落由 VM 的 neteaseCookie collect 负责,这里不会停在无数据的分区上。
+            LibraryChipType.NETEASE_PLAYLIST -> {
+                if (neteasePlaylist !is LocalResource.Success) {
+                    viewModel.getNeteaseLibrary()
                 }
             }
 
@@ -194,29 +244,18 @@ fun LibraryScreen(
             // while it was selected would land here with no chip to match — send it back to the
             // default. The enum value itself stays so older persisted values still parse.
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
-                viewModel.setCurrentScreen(LibraryChipType.YOUR_LIBRARY)
-            }
-
-            LibraryChipType.YOUR_LIBRARY -> {
-                viewModel.getCanvasSong()
-                viewModel.getRecentlyAdded()
-            }
-
-            LibraryChipType.LOCAL_PLAYLIST -> {
-                viewModel.getLocalPlaylist()
-            }
-
-            LibraryChipType.FAVORITE_PLAYLIST -> {
-                viewModel.getPlaylistFavorite()
+                viewModel.setCurrentScreen(LibraryChipType.CHART)
             }
 
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
                 viewModel.getDownloadedPlaylist()
             }
 
-            LibraryChipType.FAVORITE_PODCAST -> {
-                viewModel.getFavoritePodcasts()
-            }
+            LibraryChipType.YOUR_LIBRARY,
+            LibraryChipType.LOCAL_PLAYLIST,
+            LibraryChipType.FAVORITE_PLAYLIST,
+            LibraryChipType.FAVORITE_PODCAST,
+            -> viewModel.setCurrentScreen(LibraryChipType.CHART)
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -235,75 +274,55 @@ fun LibraryScreen(
         targetState = currentFilter,
     ) { filter ->
         when (filter) {
-            LibraryChipType.YOUR_LIBRARY -> {
-                val state = rememberLazyListState()
-                val isScrollingUp by state.isScrollingUp()
-                LaunchedEffect(state) {
-                    snapshotFlow { state.firstVisibleItemIndex }
-                        .collect {
-                            if (it <= 1) {
-                                onScrolling.invoke(true)
-                            } else {
-                                onScrolling.invoke(isScrollingUp)
-                            }
-                        }
-                }
-                LazyColumn(
-                    contentPadding =
-                        innerPadding.copy(
-                            top = topAppBarHeight,
-                        ),
-                    state = state,
-                ) {
-                    item {
-                        LibraryTilingBox(navController)
-                    }
-
-                    if (!listCanvasSong.data.isNullOrEmpty()) {
-                        item {
-                            LibraryItem(
-                                state =
-                                    LibraryItemState(
-                                        type = LibraryItemType.CanvasSong,
-                                        data = listCanvasSong.data ?: emptyList(),
-                                        isLoading = listCanvasSong is LocalResource.Loading,
-                                    ),
-                                navController = navController,
-                            )
-                        }
-                    }
-
-                    item {
-                        LibraryItem(
-                            state =
-                                LibraryItemState(
-                                    type =
-                                        LibraryItemType.RecentlyAdded(
-                                            playingVideoId = nowPlaying,
-                                        ),
-                                    data = recentlyAdded.data ?: emptyList(),
-                                    isLoading = recentlyAdded is LocalResource.Loading,
-                                ),
-                            navController = navController,
-                            selectionState = selectionState,
-                        )
-                    }
-                    item {
-                        EndOfPage()
-                    }
-                }
+            // 下载管理 chip 页:复用独立页的内容体,chip 页无 TopAppBar(库页自带标题区)
+            LibraryChipType.DOWNLOADED_PLAYLIST -> {
+                val dynamicViewModel: LibraryDynamicPlaylistViewModel = koinViewModel()
+                val sharedVm: SharedViewModel = koinInject()
+                DownloadedManagementBody(
+                    topPadding = topAppBarHeight,
+                    bottomPadding = innerPadding.calculateBottomPadding(),
+                    navController = navController,
+                    viewModel = viewModel,
+                    dynamicPlaylistViewModel = dynamicViewModel,
+                    sharedViewModel = sharedVm,
+                )
             }
 
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
-                GridLibraryPlaylist(
-                    navController,
-                    innerPadding.copy(top = topAppBarHeight),
-                    youTubePlaylist,
-                    emptyText = Res.string.no_YouTube_playlists,
+                LibraryYouTubeTab(
+                    navController = navController,
+                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    playlists = youTubePlaylist,
+                    likedPlaylists = youTubeLikedPlaylists,
+                    autoPlaylists = youTubeAutoPlaylists,
+                    albums = youTubeAlbums,
+                    artists = followedYTArtists,
+                    isRefreshing = youTubeRefreshing,
+                    onRefresh = { viewModel.getYouTubeLibrary(force = true) },
+                    onDeletePlaylist = { viewModel.deleteYouTubePlaylist(it) },
+                    onUnsubscribePlaylist = { viewModel.unsubscribeYouTubePlaylist(it) },
+                    onCreatePlaylist = { viewModel.createYouTubePlaylistInLibrary(it) },
                     onScrolling = onScrolling,
-                ) {
-                    viewModel.getYouTubePlaylist()
-                }
+                )
+            }
+
+            LibraryChipType.NETEASE_PLAYLIST -> {
+                LibraryNeteaseTab(
+                    navController = navController,
+                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    playlists = neteasePlaylist,
+                    artists = subscribedArtists,
+                    albums = starredAlbums,
+                    isRefreshing = neteaseRefreshing,
+                    onRefresh = { viewModel.getNeteaseLibrary(force = true) },
+                    ownPlaylistIds = ownNeteasePlaylistIds,
+                    likedPlaylistId = neteaseLikedPlaylistId,
+                    onUnsubscribePlaylist = { viewModel.unsubscribeNeteasePlaylist(it) },
+                    onDeletePlaylist = { viewModel.deleteNeteasePlaylist(it) },
+                    onUnsubscribeAlbum = { viewModel.unsubscribeNeteaseAlbum(it) },
+                    onCreatePlaylist = { viewModel.createNeteasePlaylistInLibrary(it) },
+                    onScrolling = onScrolling,
+                )
             }
 
             // Nothing to draw: MixForYouScreen owns this content now, and the effect above bounces
@@ -317,6 +336,16 @@ fun LibraryScreen(
                     yourLocalPlaylist,
                     onScrolling = onScrolling,
                     emptyText = Res.string.no_playlists_added,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.playlists),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                     createNewPlaylist = {
                         showAddSheet = true
                     },
@@ -331,7 +360,18 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     favoritePlaylist,
                     emptyText = Res.string.no_favorite_playlists,
+                    // 混源网格:网易来源的收藏条目带品牌角标
                     onScrolling = onScrolling,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.favorite),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                 ) {
                     viewModel.getPlaylistFavorite()
                 }
@@ -344,6 +384,39 @@ fun LibraryScreen(
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
                     onScrolling = onScrolling,
+                    header = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            LibraryTilingBox(
+                                navController = navController,
+                                onOpenPlaylists = openLibraryPlaylists,
+                                onOpenCollections = openLibraryCollections,
+                                onOpenPodcasts = openLibraryPodcasts,
+                                onOpenDownloads = openLibraryDownloads,
+                            )
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                            ) {
+                                LibraryTilingItem(
+                                    state = LibraryTilingState.DownloadedSongs,
+                                    onClick = {
+                                        navController.navigate(
+                                            LibraryDynamicPlaylistDestination(
+                                                type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
+                                            ),
+                                        )
+                                    },
+                                )
+                                Text(
+                                    text = stringResource(Res.string.downloaded_collections),
+                                    style = typo().titleMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
+                                )
+                            }
+                        }
+                    },
                     onRemoveDownload = { item ->
                         removeDownloadTarget = item
                     },
@@ -359,6 +432,16 @@ fun LibraryScreen(
                     favoritePodcasts,
                     emptyText = Res.string.no_favorite_podcasts,
                     onScrolling = onScrolling,
+                    header = {
+                        LibrarySectionHeader(
+                            navController = navController,
+                            title = stringResource(Res.string.library_podcasts),
+                            onOpenPlaylists = openLibraryPlaylists,
+                            onOpenCollections = openLibraryCollections,
+                            onOpenPodcasts = openLibraryPodcasts,
+                            onOpenDownloads = openLibraryDownloads,
+                        )
+                    },
                 ) {
                     viewModel.getFavoritePodcasts()
                 }
@@ -371,6 +454,8 @@ fun LibraryScreen(
                     chartPlaylists,
                     emptyText = Res.string.no_charts_found,
                     onScrolling = onScrolling,
+                    // 排行榜 tile 封面右上角标 YTM 品牌角标(替代原 SimpMusic 图标)
+                    showSourceBadge = true,
                 ) {
                     viewModel.getChartPlaylists()
                 }
@@ -386,6 +471,7 @@ fun LibraryScreen(
                     viewModel.getMonthlyRecaps()
                 }
             }
+            else -> Unit
         }
     }
     val coroutineScope = rememberCoroutineScope()
@@ -469,9 +555,7 @@ fun LibraryScreen(
     Column(
         Modifier
             .background(Color.Transparent)
-            .hazeEffect(hazeState, style = HazeMaterials.ultraThin()) {
-                blurEnabled = true
-            }.onGloballyPositioned { coordinates ->
+            .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
                 topAppBarHeight = with(density) { coordinates.size.height.toDp() }
             },
     ) {
@@ -547,12 +631,24 @@ fun LibraryScreen(
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            LibraryChipType.entries.forEach { type ->
-                // Mix for you left this row for a tab of its own.
-                if (type == LibraryChipType.YOUTUBE_MIX_FOR_YOU) {
+            // "您的库"chip 页已下线;下载管理升为顶层 chip(在 Wrapped 后),本地歌单等
+            // 独立路由保留但不再从 chip 行进入。顺序(用户 2026-09-20 定序):网易云 →
+            // YouTube Music → 排行榜 → Wrapped → 下载管理;"进库默认选第一个可见 chip"
+            // 的取值顺序与此保持一致。
+            val topLevelLibraryChips =
+                listOf(
+                    LibraryChipType.NETEASE_PLAYLIST,
+                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
+                    LibraryChipType.CHART,
+                    LibraryChipType.WRAPPED,
+                    LibraryChipType.DOWNLOADED_PLAYLIST,
+                )
+            topLevelLibraryChips.forEach { type ->
+                if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
                     return@forEach
                 }
-                if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
+                // "您的网易云"分区只在网易登录时出现(与 YT 分区对 YT 登录的门控对称)
+                if (type == LibraryChipType.NETEASE_PLAYLIST && !neteaseLoggedIn) {
                     return@forEach
                 }
                 // Nothing to recap without the plays — gated exactly as the YouTube chip above
@@ -566,11 +662,12 @@ fun LibraryScreen(
                     text =
                         when (type) {
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
-                            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_playlists)
+                            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_music)
+                            LibraryChipType.NETEASE_PLAYLIST -> stringResource(Res.string.your_netease)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
                             LibraryChipType.FAVORITE_PLAYLIST -> stringResource(Res.string.favorite_playlists)
-                            LibraryChipType.DOWNLOADED_PLAYLIST -> stringResource(Res.string.downloaded_playlists)
+                            LibraryChipType.DOWNLOADED_PLAYLIST -> stringResource(Res.string.download_management)
                             LibraryChipType.FAVORITE_PODCAST -> stringResource(Res.string.favorite_podcasts)
                             LibraryChipType.CHART -> stringResource(Res.string.simpmusic_charts)
                             LibraryChipType.WRAPPED -> stringResource(Res.string.wrapped)
@@ -584,6 +681,7 @@ fun LibraryScreen(
             val selectedIds = selectionState.selected.toList()
             SelectedSongsBottomSheet(
                 count = selectedIds.size,
+                selectionIds = selectedIds,
                 onDismiss = { showSelectionSheet = false },
                 onPlayNext = {
                     selectionViewModel.playNext(selectedIds)
@@ -593,7 +691,10 @@ fun LibraryScreen(
                     selectionViewModel.addToQueue(selectedIds)
                     selectionState.exit()
                 },
-                onAddToPlaylist = { showSelectionAddToPlaylist = true },
+                onAddToPlaylist = {
+                selectionViewModel.loadCloudPlaylists()
+                showSelectionAddToPlaylist = true
+            },
                 onDownload = {
                     selectionViewModel.download(selectedIds)
                     selectionState.exit()
@@ -612,16 +713,26 @@ fun LibraryScreen(
         if (showSelectionAddToPlaylist) {
             val selectedIds = selectionState.selected.toList()
             val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+            val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+            val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
             AddToPlaylistModalBottomSheet(
                 isBottomSheetVisible = true,
-                listLocalPlaylist = localPlaylists,
-                listYouTubePlaylist = emptyList(),
+                // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
+                // 2026-09-24 多选路径接云端分区,与单曲弹窗同款
+                listLocalPlaylist = emptyList(),
+                listYouTubePlaylist = youTubePlaylists,
+                listNeteasePlaylist = neteasePlaylists,
+                videoIds = selectedIds,
                 onDismiss = { showSelectionAddToPlaylist = false },
-                onClick = { playlist ->
-                    selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+                onClick = {},
+                onYTPlaylistClick = { playlist ->
+                    selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
                     selectionState.exit()
                 },
-                onYTPlaylistClick = {},
+                onNeteasePlaylistClick = { playlist ->
+                    selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                    selectionState.exit()
+                },
             )
         }
         removeDownloadTarget?.let { target ->
@@ -647,5 +758,31 @@ fun LibraryScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun LibrarySectionHeader(
+    navController: NavController,
+    title: String,
+    onOpenPlaylists: () -> Unit,
+    onOpenCollections: () -> Unit,
+    onOpenPodcasts: () -> Unit,
+    onOpenDownloads: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LibraryTilingBox(
+            navController = navController,
+            onOpenPlaylists = onOpenPlaylists,
+            onOpenCollections = onOpenCollections,
+            onOpenPodcasts = onOpenPodcasts,
+            onOpenDownloads = onOpenDownloads,
+        )
+        Text(
+            text = title,
+            style = typo().titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = 10.dp, top = 10.dp, end = 10.dp, bottom = 4.dp),
+        )
     }
 }

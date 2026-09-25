@@ -39,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -52,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
@@ -62,6 +62,7 @@ import com.maxrave.simpmusic.ui.component.QueueItemBottomSheet
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.rememberDragDropState
 import com.maxrave.simpmusic.ui.icon.Info
+import com.maxrave.simpmusic.ui.icon.MyLocation
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.Repeat
 import com.maxrave.simpmusic.ui.icon.RepeatOne
@@ -71,13 +72,22 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import multiplatform.network.cmptoast.ToastGravity
+import multiplatform.network.cmptoast.showToast
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.continue_playing
 import simpmusic.composeapp.generated.resources.endless_queue
+import simpmusic.composeapp.generated.resources.endless_queue_fm_locked
 import simpmusic.composeapp.generated.resources.now_playing
 
 /**
@@ -99,34 +109,26 @@ internal fun AppleMusicQueueView(
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
     musicServiceHandler: MediaPlayerHandler = koinInject(),
 ) {
     val localDensity = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Upcoming tracks live in the SAME index space as musicServiceHandler.swap(from, to) and
+    // The FULL queue, QueueBottomSheet semantics: played tracks stay ABOVE the current one, so
+    // the locate button can land ON the current song and you can still scroll up past it. This
+    // view used to drop the played prefix (Apple Music's own "Playing Next" shape), but then the
+    // current track was row 0 with nothing above it — locating pinned the list at its top edge
+    // with no way to scroll up, which reads as stuck.
+    //
+    // Rows live in the SAME index space as musicServiceHandler.swap(from, to) and
     // removeMediaItem(index): artworkQueue == queueData.data.listTracks, and both operations
     // read/write that list (and the player timeline) at the SAME position — confirmed by reading
     // MediaServiceHandlerImpl.removeMediaItem/swap and ExoPlayerAdapter.moveMediaItem/
     // removeMediaItem/getUnshuffledIndex, which all treat their index argument as "current
-    // shuffle/display order", i.e. exactly artworkQueue's own order. `offset` converts a position
-    // within this UPCOMING-ONLY sublist back to that absolute space.
-    val offset = state.currentOrderIndex + 1
-    // withIndex() BEFORE drop(), so every row carries the index it had in the full queue.
-    //
-    // This used to be a plain drop() with `offset + localIndex` added back at click time, and that
-    // is exactly where the Apple Music queue diverged from QueueBottomSheet — which never computes
-    // an index at all, it reads the one itemsIndexed hands it over the whole list. Adding the
-    // offset back makes every row's identity depend on state.currentOrderIndex, a value DERIVED in
-    // the shell; the moment that derivation is off by anything, the row the user tapped and the
-    // index sent to the player are two different songs. Carrying the original index removes the
-    // arithmetic, so a wrong currentOrderIndex can now only cut the list in the wrong PLACE — it
-    // can no longer play the wrong song, because the index travels with the track it belongs to.
-    val upcoming =
-        remember(state.artworkQueue, state.currentOrderIndex) {
-            if (state.currentOrderIndex < 0) emptyList() else state.artworkQueue.withIndex().drop(offset)
-        }
+    // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
+    // local index == absolute index — no offset arithmetic to get wrong anywhere.
 
     Column(modifier = modifier.fillMaxSize()) {
         // statusBars + 20dp, not a bare status-bar offset: the grabber that
@@ -135,44 +137,54 @@ internal fun AppleMusicQueueView(
         Spacer(
             modifier =
                 Modifier.height(
-                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } + 20.dp,
+                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } +
+                        if (isCompact) 8.dp else 20.dp,
                 ),
         )
-        AppleMusicCompactHeader(state = state, actions = actions, typography = typography)
+        AppleMusicCompactHeader(state = state, actions = actions, typography = typography, compact = isCompact)
         AppleMusicQueuePillsRow(
             state = state,
             actions = actions,
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
-            modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = if (isCompact) 8.dp else 20.dp),
         )
-        AppleMusicContinuePlayingHeader(
-            state = state,
-            dataStoreManager = dataStoreManager,
-            typography = typography,
-            activePillContainer = activePillContainer,
-            activePillContent = activePillContent,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
+        val queueDataState by musicServiceHandler.queueData.collectAsStateWithLifecycle()
+        // 到尾触发协程的"重武装"键:开关翻转(尤其关→开)要重启边沿判定,否则弹窗打开时
+        // (开关还是关的)近尾边沿已白白消费一次,之后布尔恒 true 不再有新边沿(同 QueueBottomSheet)
+        val endlessQueueEnabledForRearm by remember(dataStoreManager) {
+            dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }
+        }.collectAsStateWithLifecycle(initialValue = false)
+        // Compact (landscape side panel) drops the "Continue Playing" section header: between the
+        // compact header, the pills and the transport-only cluster there is no room for it, and
+        // its endless toggle stays reachable in portrait and in the queue bottom sheet.
+        if (!isCompact) {
+            AppleMusicContinuePlayingHeader(
+                state = state,
+                dataStoreManager = dataStoreManager,
+                typography = typography,
+                activePillContainer = activePillContainer,
+                activePillContent = activePillContent,
+                // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
+                isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
+                onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
 
-        val lazyListState = rememberLazyListState()
-        // rememberDragDropState stores this lambda in remember(lazyListState), so it is frozen at
-        // FIRST composition — capturing `offset` directly would keep using the offset from the
-        // track that was playing back then and swap the wrong two rows after any track change.
-        val currentOffset by rememberUpdatedState(offset)
+        // Start already anchored on the current track (no top-of-list flash on entry), then
+        // follow track changes: the scroll offset does not move on its own, so a queue the user
+        // had scrolled through stays parked mid-list with the current track off-screen.
+        val lazyListState =
+            rememberLazyListState(initialFirstVisibleItemIndex = state.currentOrderIndex.coerceAtLeast(0))
         val dragDropState =
             rememberDragDropState(lazyListState) { from, to ->
-                actions.onMoveQueueItem(from + currentOffset, to + currentOffset)
+                actions.onMoveQueueItem(from, to)
             }
 
-        // Follow the track change. The list holds only what is still to come, so every time the
-        // player advances the row that was at the top leaves it and everything shifts up by one —
-        // but the scroll offset does not move, so a queue the user had scrolled through stays
-        // parked mid-list with the track that is actually next off-screen. Re-anchoring to the top
-        // is what "showing the current position" means for an upcoming-only list.
         LaunchedEffect(state.currentOrderIndex) {
             if (state.currentOrderIndex >= 0) {
-                lazyListState.animateScrollToItem(0)
+                lazyListState.animateScrollToItem(state.currentOrderIndex)
             }
         }
 
@@ -183,13 +195,59 @@ internal fun AppleMusicQueueView(
         val shouldLoadMore by remember {
             derivedStateOf {
                 val layoutInfo = lazyListState.layoutInfo
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+                // 布局未就绪/滚动中的瞬时空列表不算"到底"(曾返回 true,快速甩动会伪触发
+                // loadMore 把中段歌单提前转成无尽电台)
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
                 lastVisibleItem.index >= layoutInfo.totalItemsCount - 3 && layoutInfo.totalItemsCount > 0
             }
         }
+        // 一次到尾只拉一批:布尔边沿触发,INITIALIZING 窗口里的边沿等就绪补射一次
+        // (pending);不按落批链式追加(曾一次连灌几十首、指示器连转多圈)。
+        // 手势兜底:批次太小(≤2 首)时布尔无边沿可用,手势停止后复核一次;
+        // drop(1) 跳过初始未滚动发射,两路共享 2s 抑制窗防同手势双批。同 QueueBottomSheet。
+        var lastLoadMoreAt by remember { mutableStateOf(0L) }
+        LaunchedEffect(endlessQueueEnabledForRearm) {
+            var prevMore = false
+            var pending = false
+            snapshotFlow { shouldLoadMore to loadMoreState }
+                .collect { (more, state) ->
+                    when {
+                        more && !prevMore -> {
+                            if (state == QueueData.StateSource.STATE_INITIALIZED) {
+                                lastLoadMoreAt = System.currentTimeMillis()
+                                musicServiceHandler.loadMore()
+                            } else {
+                                pending = true
+                            }
+                        }
+
+                        more && pending && state == QueueData.StateSource.STATE_INITIALIZED -> {
+                            pending = false
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        }
+                    }
+                    if (!more) pending = false
+                    prevMore = more
+                }
+        }
         LaunchedEffect(Unit) {
-            snapshotFlow { shouldLoadMore }
-                .collect { if (it && loadMoreState == QueueData.StateSource.STATE_INITIALIZED) musicServiceHandler.loadMore() }
+            snapshotFlow { lazyListState.isScrollInProgress }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest { scrolling ->
+                    if (!scrolling) {
+                        delay(250)
+                        if (!lazyListState.isScrollInProgress &&
+                            shouldLoadMore &&
+                            loadMoreState == QueueData.StateSource.STATE_INITIALIZED &&
+                            System.currentTimeMillis() - lastLoadMoreAt > 2_000
+                        ) {
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        }
+                    }
+                }
         }
         var overscrollJob by remember { mutableStateOf<Job?>(null) }
 
@@ -251,27 +309,25 @@ internal fun AppleMusicQueueView(
                         },
             ) {
                 itemsIndexed(
-                    upcoming,
-                    // Absolute index in the key: `upcoming` is a sublist, so a bare local index
-                    // shifts on every track change and invalidates every row.
-                    key = { _, item -> item.index.toString() + item.value.videoId },
-                ) { localIndex, item ->
-                    val track = item.value
-                    // The queue-wide index this row actually has. Everything the PLAYER is told
-                    // uses this; only the drag gesture below uses localIndex, because that one is
-                    // genuinely about position within the visible list.
-                    val queueIndex = item.index
+                    state.artworkQueue,
+                    // Same key shape QueueBottomSheet uses over the full list.
+                    key = { i, t -> i.toString() + t.videoId },
+                ) { index, track ->
+                    // Local index == absolute queue index (whole list is shown), so everything the
+                    // PLAYER is told — click seeks, ⋯ sheet, drag reorder — takes this directly.
+                    val queueIndex = index
                     DraggableItem(
                         dragDropState = dragDropState,
-                        index = localIndex,
+                        index = index,
                         modifier = Modifier,
                     ) { _ ->
                         // Owner's call: the OLD queue sheet's row component, verbatim — no bespoke
                         // row. Long-press-drag reorders (list-level gesture above); ⋯ opens the
-                        // same per-item sheet the queue sheet uses.
+                        // same per-item sheet the queue sheet uses; the current track gets the
+                        // equalizer highlight.
                         SongFullWidthItems(
                             track = track,
-                            isPlaying = false,
+                            isPlaying = queueIndex == state.currentOrderIndex,
                             modifier = Modifier.fillMaxWidth(),
                             onClickListener = { videoId ->
                                 if (videoId == track.videoId) actions.onSeekToQueueIndex(queueIndex)
@@ -280,6 +336,25 @@ internal fun AppleMusicQueueView(
                         )
                     }
                 }
+            }
+            if (state.artworkQueue.isNotEmpty()) {
+                // Over the last song row (the list's bottom fade is blank space, so the button
+                // centres on the last visible row). Scrolls the CURRENT track's row — equalizer
+                // and all — to the top of the list; played tracks above it stay reachable.
+                AppleMusicFloatingCircleButton(
+                    icon = SimpIcons.MyLocation,
+                    onClick = {
+                        val target = state.currentOrderIndex
+                        if (target >= 0 && target < lazyListState.layoutInfo.totalItemsCount) {
+                            coroutineScope.launch { lazyListState.animateScrollToItem(target) }
+                        }
+                    },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = QUEUE_BOTTOM_FADE + 16.dp),
+                    contentDescription = stringResource(Res.string.now_playing),
+                )
             }
         }
 
@@ -292,6 +367,11 @@ internal fun AppleMusicQueueView(
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
             deviceVolumeController = deviceVolumeController,
+            compact = isCompact,
+            // Compact queue keeps transport + dock only: this list has no tap-to-toggle surface
+            // the way the lyrics page does, so the cluster is always in-flow — the full block
+            // (slider/times/volume) left the list under ~90dp in the side panel.
+            transportOnly = isCompact,
         )
     }
 }
@@ -382,6 +462,8 @@ private fun AppleMusicContinuePlayingHeader(
     typography: AppleMusicTypography,
     activePillContainer: Color,
     activePillContent: Color,
+    isFmQueue: Boolean,
+    onEndlessDisabled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -400,7 +482,16 @@ private fun AppleMusicContinuePlayingHeader(
             // printing an empty one.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(Res.string.now_playing),
+                    // "Now playing 12/34" — the count rides the subtitle line because this row's
+                    // right half is already taken by the endless-queue switch, and the playlist
+                    // name below marquee-fills the whole width. Same queueSectionSubtitle the
+                    // endless label uses, mirroring the queue sheet's 队列 xx/YY.
+                    text =
+                        if (state.currentOrderIndex >= 0 && state.artworkQueue.isNotEmpty()) {
+                            "${stringResource(Res.string.now_playing)} ${state.currentOrderIndex + 1}/${state.artworkQueue.size}"
+                        } else {
+                            stringResource(Res.string.now_playing)
+                        },
                     style = typography.queueSectionSubtitle,
                 )
                 val source = state.screenData.playlistName
@@ -421,9 +512,18 @@ private fun AppleMusicContinuePlayingHeader(
                 modifier = Modifier.padding(end = 8.dp),
             )
             Switch(
-                checked = endlessQueueEnabled,
+                checked = isFmQueue || endlessQueueEnabled,
                 onCheckedChange = { checked ->
-                    coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                    if (isFmQueue) {
+                        showToast(
+                            runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                            ToastGravity.Bottom,
+                        )
+                    } else {
+                        // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                        if (!checked) onEndlessDisabled()
+                        coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                    }
                 },
                 colors =
                     SwitchDefaults.colors(

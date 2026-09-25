@@ -9,6 +9,12 @@
     <string name="view_count">%1$s views</string>
     <string name="clear_search_history">Clear search history</string>
     <string name="liked">Liked</string>
+    <string name="liked_songs">Liked songs</string>
+    <string name="liked_songs_by">By %1$s</string>
+    <plurals name="liked_songs_count">
+        <item quantity="one">%1$d song</item>
+        <item quantity="other">%1$d songs</item>
+    </plurals>
     <string name="like">Like</string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="download">Download</string>
@@ -73,6 +79,10 @@
     <string name="option">Option</string>
     <string name="no_description">No description</string>
     <string name="in_search">in Search</string>
+    <string name="artist_page_coming_soon">Artist page is coming soon</string>
+    <string name="hot_search">Hot search</string>
+    <string name="sort_hot">Hot</string>
+    <string name="sort_highquality">High quality</string>
     <string name="clear_player_cache">Clear Player Cache</string>
     <string name="cancel">Cancel</string>
     <string name="clear">Clear</string>
@@ -87,6 +97,10 @@
     <string name="clear_thumbnail_cache">Clear Thumbnail Cache</string>
     <string name="add">Add</string>
     <string name="playlist_name">Playlist Name</string>
+    <string name="create_new_playlist">New playlist</string>
+    <string name="created_playlists">Created playlists</string>
+    <string name="collected_playlists">Saved playlists</string>
+    <string name="could_not_create_playlist">Couldn\'t create the playlist</string>
     <string name="create">Create</string>
     <string name="edit">Edit</string>
     <string name="edit_title">Edit title</string>
@@ -121,7 +135,7 @@
     <string name="thumbnail_cache">Thumbnail Cache</string>
     <string name="backup">Backup</string>
     <string name="backup_your_data">Backup Your Data</string>
-    <string name="save_all_your_playlist_data">Save all your playlist data</string>
+    <string name="backup_description">Back up all app data, including settings and listening history</string>
     <string name="restore_your_data">Restore Your Data</string>
     <string name="restore_your_saved_data">Restore your saved data</string>
     <string name="about_us">About us</string>
@@ -139,6 +153,15 @@
     <string name="custom_order">Custom order</string>
     <string name="album">Album</string>
     <string name="youtube_url">YouTube URL</string>
+    <string name="netease_url">NetEase URL</string>
+    <string name="fans_count">%1$s fans</string>
+    <string name="comments_count">%1$s comments</string>
+    <string name="likes_count">%1$s likes</string>
+    <string name="similar_songs">Similar songs</string>
+    <string name="track_count_short">%1$s tracks</string>
+    <string name="comments_title">Comments · %1$s</string>
+    <string name="end_of_list">End of the list</string>
+    <string name="comments">Comments</string>
     <string name="download_url">Download URL</string>
     <string name="now_playing">Now Playing</string>
     <string name="queue">Queue</string>
@@ -169,6 +192,9 @@
     <string name="balance_media_loudness">Balance media loudness</string>
     <string name="normalize_volume">Normalize Volume</string>
     <string name="audio">Audio</string>
+    <string name="no_equalizer">Your device doesn't have equalizer</string>
+    <string name="open_system_equalizer">Open system equalizer</string>
+    <string name="use_your_system_equalizer">Use your system equalizer</string>
     <string name="version_format" translatable="false">v%1$s</string>
     <string name="streaming_data_provider_piped">Streaming data provider (Piped)</string>
     <string name="itag">Itag</string>
@@ -181,6 +207,9 @@
     <string name="added_to_playlist">Added to playlist</string>
     <string name="description">Description</string>
     <string name="playback">Playback</string>
+    <string name="footguns_promo_title">Every trap I fell into</string>
+    <string name="footguns_promo_message">SimpMusic cost me a lot of nights on Kotlin and Compose traps that no doc ever warned me about. I wrote every one of them down in kotlin-footguns, so you don't lose the same nights. If it saves even one of yours, a star would mean a lot to me.</string>
+    <string name="save_all_your_playlist_data">Save all your playlist data</string>
     <string name="save_playback_state">Save Playback State</string>
     <string name="save_shuffle_and_repeat_mode">Save shuffle and repeat mode</string>
     <string name="skip_silent">Skip Silent</string>
@@ -257,7 +286,7 @@
     <string name="saved_to_local_playlist">Saved to local playlist</string>
     <string name="if_you_want_to_unsync_this_playlist_please_go_to_local_playlist">if you want to unsync this playlist, please go to local playlist</string>
     <string name="log_in_to_get_YouTube_playlist">Log in to get YouTube Playlist</string>
-    <string name="sync_playlist_warning">SimpMusic will create a YouTube Music Playlist automatically. Are you sure?</string>
+    <string name="sync_playlist_warning">SimpMusic will create or update playlists on YouTube Music and NetEase Cloud Music (each with that platform\'s own tracks). Continue?</string>
     <string name="syncing">Syncing</string>
     <string name="unsync_playlist_warning">"Unsync this playlist? This playlist will not be removed from YouTube Music "</string>
     <string name="unsyncing">Unsyncing</string>
@@ -294,9 +323,9 @@
     <string name="older_first">Older First</string>
     <string name="newer_first">Newer First</string>
     <string name="added_date">Added date</string>
-    <string name="credit_app">A simple music app using YouTube Music for backend \n\nSimpMusic is an open source project to stream music from YouTube and YouTube Music without ads and tracking. SimpMusic provides many features:\n\n - Streaming music \n - Synced lyrics\n - Personalize data\n - etc…</string>
+    <string name="credit_app">A simple music app powered by YouTube Music and NetEase Cloud Music \n\nSimpMusic is an open source project to stream music from YouTube and YouTube Music without ads and tracking, or play directly from NetEase Cloud Music with your account. SimpMusic provides many features:\n\n - Streaming music \n - Synced lyrics\n - Personalize data\n - etc…</string>
     <string name="issue_tracker">Issue Tracker</string>
-    <string name="copyright" translatable="false">©2023-2025 hedroid</string>
+    <string name="copyright" translatable="false">©2023-%1$s Tuan Minh Nguyen Duc (maxrave-dev)</string>
     <string name="featured_playlists">Featured Playlists</string>
     <string name="podcasts" translatable="false">Podcasts</string>
     <string name="featured_inArtist">Featured on</string>
@@ -321,9 +350,11 @@
     <string name="your_music_is_always_up_to_date">YOUR MUSIC IS ALWAYS UP-TO-DATE</string>
     <string name="youtube_account">YouTube Account</string>
     <string name="manage_your_youtube_accounts">Manage your YouTube Accounts</string>
-    <string name="sync_follow_to_youtube">Sync Follow with YouTube</string>
     <string name="equalizer">Equalizer</string>
     <string name="equalizer_description">Shape the sound with a ten-band curve</string>
+    <string name="equalizer_type">Equalizer type</string>
+    <string name="equalizer_type_built_in">Built-in</string>
+    <string name="equalizer_type_system">System</string>
     <string name="equalizer_preamp">Preamp</string>
     <string name="equalizer_presets">Presets</string>
     <string name="equalizer_preset_custom">Custom</string>
@@ -362,9 +393,27 @@
     <string name="reverb_help_predelay_meaning">Pre-delay is the silence before the reverb starts. A longer gap keeps the dry sound clear and pushes the walls further away.</string>
     <string name="reverb_help_damping_meaning">Damping is where the tail starts losing treble. It darkens further as it decays, the way air and soft surfaces absorb highs.</string>
     <string name="reverb_help_mix">Mix is the wet share: the slider sets how much of the room you hear against the dry signal, identically on Android and Desktop.</string>
-    <string name="sync_follow_to_youtube_description">Following an artist in SimpMusic also subscribes to their channel on your YouTube account</string>
     <string name="sync_follow_failed">Couldn't update your YouTube subscription</string>
+    <string name="sync_follow_failed_netease">Couldn\'t update your NetEase subscription</string>
     <string name="subscribed_on_youtube">Subscribed on YouTube</string>
+    <string name="subscribed_on_netease">Subscribed on NetEase</string>
+    <string name="unsubscribed_on_netease">Unsubscribed on NetEase</string>
+    <string name="unsubscribe_playlist_title">Unsubscribe playlist?</string>
+    <string name="unsubscribe_playlist_message">The playlist %1$s will be removed from your NetEase library.</string>
+    <string name="unsubscribe_album_title">Unsubscribe album?</string>
+    <string name="unsubscribe_album_message">The album %1$s will be removed from your NetEase starred albums.</string>
+    <string name="unsubscribed_netease_playlist">Unsubscribed from the NetEase playlist</string>
+    <string name="unsubscribed_youtube_playlist">Removed from your YouTube Music library</string>
+    <string name="unsubscribe_youtube_playlist_message">The playlist %1$s will be removed from your YouTube Music library.</string>
+    <string name="delete_youtube_playlist_message">The playlist \"%1$s\" will be permanently deleted from your YouTube account. This cannot be undone.</string>
+    <string name="created_playlist">Playlist created</string>
+    <string name="unsubscribe_from_library">Remove from favorites</string>
+    <string name="netease_action_failed">Action failed. Please try again.</string>
+    <string name="netease_rate_limited">Too many requests. NetEase has temporarily limited this account, please try later.</string>
+    <string name="sort_by_newest">Newest</string>
+    <string name="unsubscribed_netease_album">Removed from starred albums</string>
+    <string name="removed_from_playlist">Removed from the playlist</string>
+    <string name="remove_from_playlist_failed">Couldn\'t remove the song from the playlist</string>
     <string name="unsubscribed_on_youtube">Unsubscribed on YouTube</string>
     <string name="no_account">No account</string>
     <string name="add_an_account">Add an account</string>
@@ -374,7 +423,7 @@
     <string name="play_next">Play next</string>
     <string name="codec">Codec</string>
     <string name="plays">Play/View Count</string>
-    <string name="like_and_dislike">%1$d like(s), %2$d dislike(s)</string>
+    <string name="like_and_dislike">%1$s like(s), %2$s dislike(s)</string>
     <string name="published_at">Published on %1$s</string>
     <string name="less">Less</string>
     <string name="spotify">Spotify</string>
@@ -398,6 +447,7 @@
     <string name="guide_liked_title">Add to YouTube Liked Playlist</string>
     <string name="log_out_from_spotify">Log out from Spotify</string>
     <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
     <string name="top_videos">Top videos</string>
     <string name="trending">Trending</string>
     <string name="new_singles">New singles</string>
@@ -427,6 +477,10 @@
     <string name="lyrics_style_classic">Classic</string>
     <string name="lyrics_style_apple_music" translatable="false">Apple Music</string>
     <string name="requires_android_12" translatable="false">Android 12+</string>
+    <string name="lyrics_offset">Lyrics timing offset</string>
+    <string name="lyrics_offset_message">Shift every lyric line by this many milliseconds. Use a positive number when you hear the audio later than you see it, which is what Bluetooth headphones do, and a negative number to make the lyrics appear earlier.</string>
+    <string name="lyrics_offset_value">%1$s ms</string>
+    <string name="lyrics_offset_invalid">Enter a whole number of milliseconds</string>
     <string name="lyrics_romanization">Lyrics romanization</string>
     <string name="lyrics_romanization_description">Show lyrics in Latin script for the languages you pick</string>
     <string name="romanization_japanese" translatable="false">Japanese</string>
@@ -449,8 +503,6 @@
     <string name="theme_color_wallpaper">Wallpaper</string>
     <string name="theme_color_custom">Custom</string>
     <string name="custom_color">Custom color</string>
-    <string name="translucent_bottom_navigation_bar">Translucent bottom navigation bar</string>
-    <string name="you_can_see_the_content_below_the_bottom_bar">You can see the content below the bottom bar</string>
     <string name="donation">If you love my work, give me a coffee</string>
     <string name="relax">Relax</string>
     <string name="sleep">Sleep</string>
@@ -498,6 +550,7 @@
     <string name="lyrics_provider_lrc">Lyrics provided by LRCLIB</string>
     <string name="sync_first">Sync this playlist to YouTube Music first</string>
     <string name="endless_queue">Endless queue</string>
+    <string name="endless_queue_fm_locked">Personal FM is always endless and can't be turned off</string>
     <string name="continue_playing">Continue Playing</string>
     <string name="continue_playing_endless_subtitle">Automatically adds similar songs when the queue ends</string>
     <string name="lyrics_sync_provider_footer" translatable="false">%1$s • %2$s</string>
@@ -559,6 +612,7 @@
     <string name="processing">Processing</string>
     <string name="website">Website</string>
     <string name="download_this_song_video_file_to_your_device">Download this song/video file to your device</string>
+    <string name="download_this_song_file_to_your_device">Download this song's file to your device</string>
     <string name="kill_service_on_exit">Kill service on exit</string>
     <string name="kill_service_on_exit_description">Stop background music player when exiting app</string>
     <string name="desktop_player">Desktop player</string>
@@ -579,6 +633,9 @@
     <string name="crossfade_skip_album_description">Skip the crossfade between tracks of the same album, so albums meant to run without gaps still do. The transition out of the album still crossfades.</string>
     <string name="youtube_subtitle_language">YouTube Subtitle Translation Language</string>
     <string name="youtube_subtitle_language_message">Pick a common language from the dropdown, or type a language code (e.g. en, zh-Hant). This is the preferred translation language for YouTube subtitles. Leave empty to follow the app language.</string>
+    <string name="preferred_audio_language">Preferred audio language</string>
+    <string name="preferred_audio_language_message">Some videos, mostly podcasts, come with several audio tracks in different languages. Type a language code (Eg: vi) (2 letters) to play that track when it exists. Leave it empty to always play the original audio.</string>
+    <string name="original_audio">Original audio</string>
     <string name="use_anonymous">Use anonymous name to contribute</string>
     <string name="contributor_name">Contributor name</string>
     <string name="contributor_email">Contributor email</string>
@@ -590,7 +647,7 @@
     <string name="backup_downloaded">Backup downloaded data</string>
     <string name="backup_downloaded_description">Backup all downloaded songs's data</string>
     <string name="auto_backup">Auto backup</string>
-    <string name="auto_backup_description">Automatically backup your data to Downloads/SimpMusic folder</string>
+    <string name="auto_backup_description">Automatically back up your data to %1$s</string>
     <string name="backup_frequency">Backup frequency</string>
     <string name="daily">Daily</string>
     <string name="weekly">Weekly</string>
@@ -601,7 +658,9 @@
     <string name="never">Never</string>
     <string name="auto_backup_success">Auto backup completed successfully</string>
     <string name="auto_backup_failed">Auto backup failed</string>
-    <string name="no_playlist_found">No local playlists found, please create one first</string>
+    <string name="no_playlist_found">No playlists found — create one first</string>
+    <string name="login_required_short">Log in to %1$s to use this</string>
+    <string name="login_netease_first">Please log in to NetEase Music first</string>
     <string name="list_all_cookies_of_this_page">List all cookies of this page</string>
     <string name="copied_to_clipboard">Copied to clipboard</string>
     <string name="update_channel">Update channel</string>
@@ -639,12 +698,8 @@
     <string name="lastfm_paste_callback_confirm">Continue with this link</string>
     <string name="logged_in_as">Logged in as %1$s</string>
     <string name="youtube_liked_music">YouTube Liked Music</string>
-    <string name="keep_service_alive">Keep service alive</string>
-    <string name="keep_service_alive_description">Keep music player service alive to avoid being killed by system</string>
     <string name="keep_your_youtube_playlist_offline">Keep showing your YouTube playlist when offline</string>
     <string name="keep_your_youtube_playlist_offline_description">Save your YT playlist to local and keep to show when offline</string>
-    <string name="combine_local_and_youtube_liked_songs">Replace Favorite by YouTube Liked when logged in</string>
-    <string name="combine_local_and_youtube_liked_songs_description">Using only YouTube Liked (not support like a song when offline)</string>
     <string name="this_year">This year</string>
     <string name="last_90_days">Last 90 days</string>
     <string name="last_30_days">Last 30 days</string>
@@ -725,6 +780,8 @@
     <string name="key">Key</string>
     <string name="scale">Scale</string>
     <string name="home_offline_title">Can't connect</string>
+    <string name="home_login_required_title">Log in to YouTube Music</string>
+    <string name="home_login_required_subtitle">The home feed is only available with a signed-in account. Guest browsing is no longer served by YouTube Music.</string>
     <string name="home_offline_subtitle">Check your internet connection and try again, or listen to your downloaded music.</string>
     <string name="listen_to_downloaded">Listen to downloaded music</string>
     <string name="playing_on_device">Playing on %1$s</string>
@@ -804,7 +861,7 @@
     <string name="share_lyrics_background">Background</string>
     <string name="share_lyrics_permission_denied">Storage permission is needed to save the image</string>
     <string name="share_lyrics_no_lyrics">This song has no lyrics to share</string>
-    <string name="wrapped" translatable="false">Wrapped</string>
+    <string name="wrapped">Wrapped</string>
     <string name="wrapped_year" translatable="false">Wrapped %1$s</string>
     <string name="wrapped_tap_to_begin">Tap to begin</string>
     <string name="wrapped_tap_to_continue">Tap to continue</string>
@@ -881,6 +938,140 @@
     <string name="month_full_dec">December</string>
     <string name="backup_location">Backup location</string>
     <string name="backup_location_default">Documents/SimpMusic (default)</string>
+    <string name="backup_default_folder_name">Documents/SimpMusic</string>
     <string name="language_follow_system">Follow system</string>
     <string name="language_follow_system_current">Follow system (current: %1$s)</string>
+    <!-- NetEase source (feat/netease-source) -->
+    <string name="netease">NetEase Music</string>
+    <string name="your_netease">Your NetEase</string>
+    <string name="no_netease_content">No NetEase content found</string>
+    <string name="netease_playlists">Playlists</string>
+    <string name="starred_albums">Starred albums</string>
+    <string name="netease_home_error">Couldn't load NetEase recommendations. Check your connection and retry.</string>
+    <string name="netease_home_logged_out">Logged out of NetEase — browsing public feeds only, playback unavailable.</string>
+    <string name="netease_lyrics">NetEase official lyrics</string>
+    <string name="personal_fm">Personal FM</string>
+    <string name="personal_fm_subtitle">An endless stream tuned to your taste</string>
+    <string name="personal_fm_start">Start listening</string>
+    <string name="personal_fm_pause">Pause</string>
+    <string name="personal_fm_resume">Resume</string>
+    <string name="log_in_to_netease">Log in to NetEase</string>
+    <string name="log_out_from_netease">Log out of NetEase</string>
+    <string name="intro_login_to_netease">NetEase as a second music source</string>
+    <string name="netease_login_to_netease">Log in to NetEase</string>
+    <string name="netease_quality">NetEase streaming quality</string>
+    <string name="netease_download_quality">NetEase download quality</string>
+    <string name="netease_delete_playlist">Delete playlist</string>
+    <string name="deleted_playlist">Playlist deleted</string>
+    <string name="delete_playlist_title">Delete this playlist?</string>
+    <string name="delete_playlist_message">The playlist \"%1$s\" will be permanently deleted from your NetEase account. This cannot be undone.</string>
+    <string name="netease_play_report">Send playback data to NetEase</string>
+    <string name="netease_play_report_description">Uploads your listening history to NetEase Cloud servers to improve your NetEase recommendations, at the risk of triggering NetEase risk control</string>
+    <string name="your_netease_playlists">Your NetEase Cloud Music playlists</string>
+    <string name="added_to_netease_playlist">Added to NetEase Cloud Music playlist</string>
+    <string name="download_management">Downloads</string>
+    <string name="song_unavailable">This song can't be played from the current source (may need VIP or be unavailable)</string>
+    <string name="netease_unavailable_action">Unavailable songs</string>
+    <string name="netease_unavailable_action_skip">Auto skip</string>
+    <string name="netease_unavailable_action_pause">Pause</string>
+    <string name="netease_unavailable_action_switch">Switch to YouTube Music</string>
+    <string name="unavailable_song_skipped">Unavailable song skipped</string>
+    <string name="unavailable_song_switched">Playing the YouTube Music version</string>
+    <string name="unavailable_song_switch_failed">No YouTube Music version found, skipped</string>
+    <string name="unavailable_song_queue_exhausted">No playable songs left in the queue</string>
+    <string name="cloud_action_failed_netease">Couldn't update your NetEase account</string>
+    <string name="need_login_toast">Sign in to use favorites</string>
+    <string name="mixed_source_selection">Mixes music sources — cannot add</string>
+    <string name="liked_toast">Liked</string>
+    <string name="unliked_toast">Removed from likes</string>
+    <string name="saved_toast">Saved</string>
+    <string name="unsaved_toast">Removed from library</string>
+    <string name="followed_toast">Following</string>
+    <string name="unfollowed_toast">Unfollowed</string>
+    <string name="synced_n_of_m">Added %1$d songs to favorites</string>
+    <string name="all_songs_already_liked">All selected songs are already in favorites</string>
+    <string name="cloud_action_failed_youtube">Couldn't update your YouTube Music account</string>
+    <string name="library_podcasts">Podcasts</string>
+    <string name="downloaded_songs">Downloaded songs</string>
+    <string name="downloaded_songs_tab">Songs</string>
+    <string name="no_downloaded_songs">No downloaded songs</string>
+    <string name="downloaded_collections">Downloaded albums and playlists</string>
+    <string name="your_youtube_music">Your YouTube Music</string>
+    <string name="youtube_collection_sync">Sync playlists and albums with YouTube Music</string>
+    <string name="youtube_collection_sync_description">Mirror playlist and album favorite changes made in SimpMusic to your YouTube Music account; when off, changes stay local</string>
+    <string name="netease_login_qr">QR code</string>
+    <string name="netease_login_phone">Phone</string>
+    <string name="netease_login_web">Web</string>
+    <string name="netease_login_cookie">Cookie</string>
+    <string name="netease_qr_generating">Generating QR code...</string>
+    <string name="netease_qr_waiting_scan">Scan with the NetEase Music app to sign in</string>
+    <string name="netease_qr_scanned">Scanned — confirm on your phone</string>
+    <string name="netease_qr_expired">QR expired — tap to refresh</string>
+    <string name="netease_phone_number">Phone number</string>
+    <string name="netease_password">Password</string>
+    <string name="netease_captcha">SMS code</string>
+    <string name="netease_send_captcha">Send code</string>
+    <string name="netease_login_by_password">Log in with password</string>
+    <string name="netease_qr_title">QR Login</string>
+    <string name="netease_qr_subtitle">Open the NetEase Music app and scan the code</string>
+    <string name="netease_qr_refresh">Refresh QR code</string>
+    <string name="netease_qr_use_web">Web login</string>
+    <string name="netease_verify_hint">Complete the security check below — login continues automatically</string>
+    <string name="netease_account">NetEase account</string>
+    <string name="manage_your_netease_account">Manage your NetEase account</string>
+    <string name="netease_logout_warning">You will need to sign in again to use the NetEase source</string>
+    <string name="netease_qr_risk">Security check triggered — please use web login</string>
+    <string name="netease_qr_hint">The QR code comes from NetEase's API; once you confirm on your phone, the app listens for the result and saves the session cookie</string>
+    <string name="netease_dev_login_title">Your MUSIC_U cookie value of NetEase, or a full cookie string</string>
+    <string name="netease_login_by_captcha">Log in with code</string>
+    <string name="netease_cookie_hint">Paste your MUSIC_U cookie value, or a full cookie string exported from a logged-in browser</string>
+    <string name="netease_quality_standard">Standard (128kbps)</string>
+    <string name="netease_quality_higher">Higher (192kbps)</string>
+    <string name="netease_quality_exhigh">Very high (320kbps)</string>
+    <string name="netease_quality_lossless">Lossless (VIP)</string>
+    <string name="netease_quality_hires">Hi-Res (VIP)</string>
+    <string name="netease_quality_jyeffect">HD surround (VIP)</string>
+    <string name="netease_quality_sky">Immersive surround (VIP)</string>
+    <string name="netease_quality_jymaster">Ultra master (VIP)</string>
+
+    <string name="haptic_feedback">Haptic feedback</string>
+    <string name="haptic_feedback_description">Vibration on taps</string>
+    <string name="haptic_feedback_light">Light</string>
+    <string name="haptic_feedback_medium">Medium</string>
+    <string name="haptic_feedback_strong">Strong</string>
+
+    <string name="login_sync_section">Devices</string>
+    <string name="login_sync_desktop_title">Sign in from your phone</string>
+    <string name="login_sync_desktop_description">Scan a QR code with SimpMusic on Android to bring your sign-ins here</string>
+    <string name="login_sync_android_title">Send sign-ins to desktop</string>
+    <string name="login_sync_android_description">Scan the QR code shown by SimpMusic on your computer</string>
+    <string name="login_sync_desktop_instructions">On your phone, open SimpMusic → Settings → %1$s, then scan this code.</string>
+    <string name="login_sync_pick_address">Pick an address your phone can reach — on the same network, or over Tailscale.</string>
+    <string name="login_sync_phone_connected">Phone connected. Confirm on your phone to continue.</string>
+    <string name="login_sync_received">Signed in to %1$s</string>
+    <string name="login_sync_expired">This code has expired.</string>
+    <string name="login_sync_new_code">New code</string>
+    <string name="login_sync_no_network">No network address found on this computer.</string>
+    <string name="login_sync_start_failed">Couldn't start: %1$s</string>
+    <string name="login_sync_receive_failed">Couldn't receive the sign-ins: %1$s</string>
+    <string name="login_sync_scan_hint">Point the camera at the QR code on your computer</string>
+    <string name="login_sync_connecting">Connecting to your computer…</string>
+    <string name="login_sync_trust_title">Trust this computer?</string>
+    <string name="login_sync_trust_message">%1$s (%2$s) is asking for your sign-ins. Only continue if this is the computer in front of you.</string>
+    <string name="login_sync_trust">Trust</string>
+    <string name="login_sync_choose_title">Choose what to send</string>
+    <string name="login_sync_send">Send</string>
+    <string name="login_sync_sending">Sending…</string>
+    <string name="login_sync_sent">Signed in on %1$s: %2$s</string>
+    <string name="login_sync_nothing_signed_in">You're not signed in to any service yet.</string>
+    <string name="login_sync_camera_needed">SimpMusic uses the camera only to scan the code shown on your computer.</string>
+    <string name="login_sync_allow_camera">Allow camera</string>
+    <string name="login_sync_camera_blocked">Camera access is turned off for SimpMusic. Turn it on in Settings to scan the code.</string>
+    <string name="login_sync_open_settings">Open settings</string>
+    <string name="login_sync_no_camera">No camera is available to scan the code.</string>
+    <string name="login_sync_unreachable">Couldn't reach the computer. Make sure your phone is on the same network or tailnet, then try again.</string>
+    <string name="login_sync_code_expired">The code on your computer has expired. Show a new one and scan again.</string>
+    <string name="login_sync_failed">Something went wrong. Please try again.</string>
+    <string name="modified_build_title">Unofficial app</string>
+    <string name="modified_build_message">You are using an unofficial copy of SimpMusic that was modified or repackaged by someone else. It cannot be used. Download the official version from simpmusic.org.</string>
 </resources>

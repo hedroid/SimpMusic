@@ -58,7 +58,6 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_MEDIUM_LOWER_BOUND
-import coil3.toUri
 import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.player.GenericMediaItem
 import com.maxrave.domain.manager.DataStoreManager
@@ -66,6 +65,7 @@ import com.maxrave.domain.manager.DataStoreManager.Values.TRUE
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.Orientation
 import com.maxrave.simpmusic.expect.currentOrientation
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.openUrl
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
@@ -89,6 +89,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestinat
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.navigation.graph.AppNavigationGraph
 import com.maxrave.simpmusic.ui.screen.MiniPlayer
+import com.maxrave.simpmusic.ui.screen.other.UnofficialBuildScreen
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreen
 import com.maxrave.simpmusic.ui.screen.player.NowPlayingScreenContent
 import com.maxrave.simpmusic.ui.theme.AppTheme
@@ -103,9 +104,7 @@ import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
@@ -152,7 +151,8 @@ fun App(
     val intent by viewModel.intent.collectAsStateWithLifecycle()
     val showNotificationPermissionDialog by viewModel.showNotificationPermissionDialog.collectAsStateWithLifecycle()
 
-    val isTranslucentBottomBar by viewModel.getTranslucentBottomBar().collectAsStateWithLifecycle(DataStoreManager.FALSE)
+    val selectedSourceValue by viewModel.selectedSource.collectAsStateWithLifecycle()
+    val neteaseLoggedInValue by viewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     val isLiquidGlassEnabled by viewModel.getEnableLiquidGlass().collectAsStateWithLifecycle(DataStoreManager.FALSE)
     // Analytics only makes sense with local tracking on, so its tab follows that setting.
     val isLocalTrackingEnabled by viewModel.getLocalTrackingEnabled().collectAsStateWithLifecycle(DataStoreManager.FALSE)
@@ -160,11 +160,16 @@ fun App(
     // Mix for you comes from the signed-in YouTube account, so its tab follows the session — the
     // same condition that used to hide the chip inside Library.
     val isYouTubeLoggedIn by viewModel.getYouTubeLoggedIn().collectAsStateWithLifecycle(DataStoreManager.FALSE)
-    val showMixForYouTab = isYouTubeLoggedIn == TRUE
+    // 混合 tab:内容按源分流(网易=私人FM 独立屏,YT=mixes),可见性跟"当前源"的登录态走
+    // ——否则 YT 未登录+选 YT 时会露出一个拉不到数据的 YT mixes 页
+    val showMixForYouTab =
+        (neteaseLoggedInValue && selectedSourceValue == com.maxrave.domain.source.MusicSource.NETEASE.name) ||
+            (isYouTubeLoggedIn == TRUE && selectedSourceValue != com.maxrave.domain.source.MusicSource.NETEASE.name)
 
     val themeMode by viewModel.getThemeMode().collectAsStateWithLifecycle(DataStoreManager.THEME_MODE_SYSTEM)
     val themeColorSource by viewModel.getThemeColorSource().collectAsStateWithLifecycle(DataStoreManager.THEME_COLOR_DEFAULT)
     val customThemeColorHex by viewModel.getCustomThemeColor().collectAsStateWithLifecycle(DataStoreManager.DEFAULT_THEME_COLOR_HEX)
+    val isOfficialBuild by viewModel.isOfficialBuild.collectAsStateWithLifecycle()
     // MiniPlayer visibility: derived, never stored.
     //
     // This used to be a rememberSaveable Boolean written by a LaunchedEffect. Two things went
@@ -201,9 +206,7 @@ fun App(
     }
 
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     LaunchedEffect(intent) {
         val intent = intent ?: return@LaunchedEffect
@@ -228,7 +231,10 @@ fun App(
         val data = intent.data
         Logger.d("MainActivity", "onCreate: $data")
         if (data != null) {
-            if (data == "simpmusic://notification".toUri()) {
+            // 字符串比较:这里曾用 coil3.toUri() 造比较对象,而 intent.data 是 eygraber 的
+            // KmpUri——两个不相干类型 == 恒 false,通知深链(点系统通知进通知页)冷/热路径
+            // 全部静默失效。KmpUri.toString() 即原始 uri 串。
+            if (data.toString() == "simpmusic://notification") {
                 viewModel.setIntent(null)
                 navController.navigate(
                     NotificationDestination,
@@ -456,6 +462,10 @@ fun App(
         // Desktop capsule player is glass by design. Same rule as MiniPlayer's useGlassSurface.
         liquidGlassEnabled = isLiquidGlassEnabled == TRUE || getPlatform() == Platform.Desktop,
     ) {
+        if (!isOfficialBuild) {
+            UnofficialBuildScreen()
+            return@AppTheme
+        }
         // Backdrop base must match the theme: white page → white glass, dark/AMOLED → black glass.
         // Read inside AppTheme so MaterialTheme reflects the resolved scheme (light background is #FFFFFF).
         val isLightScheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -468,6 +478,9 @@ fun App(
         val desktopPanel =
             if (isLightScheme) MaterialTheme.colorScheme.surfaceContainer else desktopPanelDark
         Scaffold(
+            // 全局点击触感:根布局旁观所有主窗口点击(Initial 通道不消费事件),
+            // 弹窗/底部菜单是独立 Android 窗口,不经这里。详见 hapticTapFeedback。
+            modifier = Modifier.hapticTapFeedback(),
             containerColor =
                 if (isDesktopShell) desktopWindow else MaterialTheme.colorScheme.background,
             bottomBar = {
@@ -485,10 +498,12 @@ fun App(
                             ) {
                                 MiniPlayer(
                                     Modifier
-                                        .height(56.dp)
+                                        // 56dp card + the 4dp gap below.
+                                        .height(60.dp)
                                         .fillMaxWidth()
                                         .padding(
-                                            horizontal = 12.dp,
+                                            // The bottom bar's own 16dp, so both edges line up.
+                                            horizontal = 16.dp,
                                         ).padding(
                                             bottom = 4.dp,
                                         ),
@@ -511,18 +526,38 @@ fun App(
                                     isScrolledToTop = isScrolledToTop,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                ) { klass ->
-                                    viewModel.reloadDestination(klass)
-                                }
+                                    selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                    neteaseLoggedIn = neteaseLoggedInValue,
+                                    onSourceSelected = { source ->
+                                        if (selectedSourceValue != source.name) {
+                                            // 切源不停播、不跳页(用户 2026-09-22 定案):留在当前页,
+                                            // 区分音源的页(Home/Mix 按状态分流、Search 自适应)原地
+                                            // 刷新;若切源后 Mix tab 不再可见,下方
+                                            // LaunchedEffect(showMixForYouTab) 会把用户带回主页
+                                            viewModel.switchSource(source)
+                                        }
+                                    },
+                                    reloadDestinationIfNeeded = { klass ->
+                                        viewModel.reloadDestination(klass)
+                                    },
+                                )
                             } else {
                                 AppBottomNavigationBar(
                                     navController = navController,
-                                    isTranslucentBackground = isTranslucentBottomBar == TRUE,
                                     showAnalyticsTab = showAnalyticsTab,
                                     showMixForYouTab = showMixForYouTab,
-                                ) { klass ->
-                                    viewModel.reloadDestination(klass)
-                                }
+                                    selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                    neteaseLoggedIn = neteaseLoggedInValue,
+                                    onSourceSelected = { source ->
+                                        if (selectedSourceValue != source.name) {
+                                            // 同上:切源不停播、不跳页,原地刷新区分音源的页
+                                            viewModel.switchSource(source)
+                                        }
+                                    },
+                                    reloadDestinationIfNeeded = { klass ->
+                                        viewModel.reloadDestination(klass)
+                                    },
+                                )
                             }
                         }
                     }
@@ -548,9 +583,18 @@ fun App(
                                 navController = navController,
                                 showAnalyticsTab = showAnalyticsTab,
                                 showMixForYouTab = showMixForYouTab,
-                            ) { klass ->
-                                viewModel.reloadDestination(klass)
-                            }
+                                // 横屏 rail 搜索项长按弹音源菜单,与竖屏底栏同款交互(用户 2026-09-24)
+                                selectedSource = runCatching { com.maxrave.domain.source.MusicSource.valueOf(selectedSourceValue) }.getOrDefault(com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC),
+                                neteaseLoggedIn = neteaseLoggedInValue,
+                                onSourceSelected = { source ->
+                                    if (selectedSourceValue != source.name) {
+                                        viewModel.switchSource(source)
+                                    }
+                                },
+                                reloadDestinationIfNeeded = { klass ->
+                                    viewModel.reloadDestination(klass)
+                                },
+                            )
                         }
                         // Desktop only: the content sits in its own rounded panel floating on a
                         // pure black window, Spotify style, while the rail stays flat black
@@ -619,7 +663,8 @@ fun App(
                                 MiniPlayer(
                                     if (getPlatform() == Platform.Android) {
                                         Modifier
-                                            .height(56.dp)
+                                            // Glass keeps its 52dp card; the flat one is 56dp.
+                                            .height(if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp)
                                             .fillMaxWidth(0.8f)
                                             .padding(
                                                 horizontal = 12.dp,
@@ -650,6 +695,11 @@ fun App(
                                     onClose = {
                                         viewModel.stopPlayer()
                                         viewModel.isServiceRunning = false
+                                    },
+                                    // The page lives in the Now Playing panel, so the panel opens with it.
+                                    onOpenFullscreenLyrics = {
+                                        viewModel.requestFullscreenLyrics()
+                                        isShowNowPlaylistScreen = true
                                     },
                                 )
                             }

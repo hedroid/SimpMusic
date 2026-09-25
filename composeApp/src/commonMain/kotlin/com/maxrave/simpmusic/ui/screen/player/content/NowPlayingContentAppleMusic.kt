@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
@@ -9,6 +10,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -19,6 +23,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Row
@@ -34,6 +40,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -83,6 +90,8 @@ import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.LiquidGlassIconButton
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicBottomCluster
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicHeaderActions
@@ -156,18 +165,6 @@ fun NowPlayingContentAppleMusic(
         actions.onToolbarVisibilityChange(false)
     }
 
-    // The artwork bitmap feeds BOTH the frosted backdrop below and the palette every colour on
-    // this page is derived from. The only thing that ever supplied it is the AsyncImage inside the
-    // artwork pager, which lives in MAIN — and the Crossfade composes exactly one body, so on
-    // QUEUE or LYRICS that pager does not exist. Changing track there fed nothing, and the page
-    // fell back to a flat gradient.
-    //
-    // The loader below sits OUTSIDE the Crossfade so it covers every body, and it is an AsyncImage
-    // rather than an imperative ImageLoader.execute(): the pager's AsyncImage demonstrably loads
-    // this exact url while the execute() call did not, so this uses the path already proven to
-    // work rather than a second one that has to be kept working.
-    var backdropUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
-
     val paletteColor = state.startColor.value
     val seedColor = if (paletteColor == Color.Black) seed else paletteColor
     val activePillContainer = remember(seedColor) { lerp(seedColor, Color.White, 0.75f) }
@@ -177,18 +174,6 @@ fun NowPlayingContentAppleMusic(
         viewState == AppleMusicView.MAIN &&
             (state.screenData.canvasData != null || (state.screenData.isVideo && state.shouldShowVideo))
     val isVideoBackdropTop = showCanvasBackdrop && state.screenData.canvasData == null
-
-    // The approved mock's page gradient is THREE stops — a clearly-tinted top, ~55%-darkened by
-    // mid-page (48%), warm near-black at the bottom. The first cut's two stops to near-black read
-    // as a flat black page on any dark artwork (first device screenshots).
-    val backdropBrush =
-        remember(seedColor) {
-            Brush.verticalGradient(
-                0f to appleMusicGradientColorAt(seedColor, 0f),
-                0.48f to appleMusicGradientColorAt(seedColor, 0.48f),
-                1f to appleMusicGradientColorAt(seedColor, 1f),
-            )
-        }
 
     val deviceVolumeController = rememberDeviceVolumeController()
     val typography = rememberAppleMusicTypography()
@@ -210,50 +195,15 @@ fun NowPlayingContentAppleMusic(
     // loop that crashes the RuntimeShader.
     val panelBackdrop = rememberBackdrop(Color.Black)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    // This style was designed for the portrait full-screen sheet (~411x892dp). In landscape the
+    // player becomes a ~268x411dp SIDE PANEL (App.kt's isTabletLandscape branch) — half the width,
+    // less than half the height — where the fixed 58dp transport gaps clip prev/next off the panel
+    // and the ~378dp bottom cluster alone overflows the height, crushing Lyrics/Queue to nothing.
+    // Every body below reads this one flag; portrait and Desktop never trip it.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        val isCompact = maxWidth < 320.dp || maxHeight < 450.dp
         Box(modifier = Modifier.matchParentSize().layerBackdrop(panelBackdrop)) {
-            // Apple frosts the COVER ART into the page background — the colour and the soft blotches
-            // of the artwork stay visible through it. A flat tinted gradient, which is what this used
-            // to be, gets the hue right and loses everything else: the page reads as a solid colour
-            // swatch rather than as the record it belongs to.
-            //
-            // Loaded straight from the url by AsyncImage rather than through the screen state's
-            // decoded bitmap. The background IS an image, so there is no reason to route it through a
-            // bitmap someone else has to remember to fill in — which is exactly what broke: the only
-            // thing feeding that bitmap was the artwork pager inside MAIN, so on QUEUE or LYRICS a
-            // track change left it null and the page fell back to a bare gradient.
-            //
-            // The palette still needs a bitmap, and it comes off this same load. One source, so the
-            // frosted art and the tint over it cannot end up belonging to different songs.
-            //
-            // The heavy blur radius is safe because the whole style is gated behind Android 12 for
-            // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
-            // scaled far past its own resolution — at this blur that costs nothing visually.
-            if (!backdropUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(backdropUrl)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(backdropUrl + "BIGGER")
-                            .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                    // Same fallback the artwork pager carries: maxresdefault is missing for plenty of
-                    // videos, and without this the page would simply stay black.
-                    onError = {
-                        val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
-                    },
-                    modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
-                )
-            }
-            // The tint still rides on top, but as a translucent wash rather than the whole background:
-            // it keeps the vertical darkening that makes the controls readable at the bottom, while the
-            // frosted artwork shows through it.
-            Box(modifier = Modifier.fillMaxSize().alpha(BACKDROP_TINT_ALPHA).background(backdropBrush))
+            AppleMusicArtworkBackdrop(state = state, actions = actions, seedColor = seedColor)
             // Flat black only for a CANVAS (it fills the screen). A video letterboxes, so a black page
             // turns the bars above and below it into dead black slabs — keep the artwork-tinted
             // gradient there.
@@ -274,6 +224,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
 
                 AppleMusicView.LYRICS ->
@@ -286,6 +237,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
 
                 AppleMusicView.QUEUE ->
@@ -298,6 +250,7 @@ fun NowPlayingContentAppleMusic(
                         activePillContainer = activePillContainer,
                         activePillContent = activePillContent,
                         deviceVolumeController = deviceVolumeController,
+                        isCompact = isCompact,
                     )
             }
         }
@@ -381,6 +334,7 @@ private fun AppleMusicMainView(
     activePillContainer: Color,
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
+    isCompact: Boolean = false,
 ) {
     val screenInfo = getScreenSizeInfo()
     val localDensity = LocalDensity.current
@@ -413,8 +367,11 @@ private fun AppleMusicMainView(
     // remember, not rememberSaveable: a measured height must not survive a rotation, or a portrait
     // cluster height is paired with a landscape screen height for a frame. Seeded near its real
     // value so the FIRST frame doesn't draw a full-screen artwork that then snaps up.
-    var bottomContentHeightDp by remember { mutableIntStateOf(330) }
-    val artworkZoneHeightDp = (screenInfo.hDP - bottomContentHeightDp).coerceAtLeast(200)
+    var bottomContentHeightDp by remember { mutableIntStateOf(if (isCompact) 230 else 330) }
+    // Compact (side panel): a 200dp floor eats half of a ~411dp panel before the cluster even
+    // starts; 140dp leaves the title row real breathing room under the grabber.
+    val artworkZoneHeightDp =
+        (screenInfo.hDP - bottomContentHeightDp).coerceAtLeast(if (isCompact) 140 else 200)
 
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
@@ -422,10 +379,13 @@ private fun AppleMusicMainView(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-            key = { idx ->
-                val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                "appleMusicArtwork_${vid}_$idx"
-            },
+            // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
+            flingBehavior =
+                PagerDefaults.flingBehavior(
+                    state = state.artworkPagerState,
+                    snapAnimationSpec = ArtworkSnapSpring,
+                ),
+            key = { idx -> state.artworkPageKeys.getOrElse(idx) { "appleMusicArtwork$idx" } },
         ) { page ->
             AppleMusicArtworkPage(
                 state = state,
@@ -516,9 +476,9 @@ private fun AppleMusicMainView(
                                 with(localDensity) { coords.size.height.toDp().value.toInt() }
                         },
             ) {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(if (isCompact) 12.dp else 20.dp))
                 AppleMusicMainTitleRow(state = state, actions = actions, typography = typography)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(if (isCompact) 10.dp else 16.dp))
                 AppleMusicBottomCluster(
                     state = state,
                     actions = actions,
@@ -528,6 +488,7 @@ private fun AppleMusicMainView(
                     activePillContainer = activePillContainer,
                     activePillContent = activePillContent,
                     deviceVolumeController = deviceVolumeController,
+                    compact = isCompact,
                 )
             }
             // Idle overlay — replaces the (now invisible) title row + cluster while canvas/video
@@ -691,8 +652,95 @@ private fun AppleMusicMainView(
     }
 }
 
+/**
+ * The frosted cover art behind the page, with the artwork-derived gradient washed over it. Shared
+ * with the fullscreen lyrics landscape layout. Emits straight into the caller's Box — in both
+ * places that Box is the glass backdrop source, and anything stacked after this call (the canvas
+ * black layer here) must keep drawing on top of it.
+ */
 @Composable
-private fun AppleMusicMainTitleRow(
+internal fun BoxScope.AppleMusicArtworkBackdrop(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    seedColor: Color,
+) {
+    // The artwork bitmap feeds BOTH the frosted backdrop below and the palette every colour on
+    // this page is derived from. The only thing that ever supplied it is the AsyncImage inside the
+    // artwork pager, which lives in MAIN — and the Crossfade composes exactly one body, so on
+    // QUEUE or LYRICS that pager does not exist. Changing track there fed nothing, and the page
+    // fell back to a flat gradient.
+    //
+    // The loader below sits OUTSIDE the Crossfade so it covers every body, and it is an AsyncImage
+    // rather than an imperative ImageLoader.execute(): the pager's AsyncImage demonstrably loads
+    // this exact url while the execute() call did not, so this uses the path already proven to
+    // work rather than a second one that has to be kept working.
+    // 磨砂背景与 artwork pager 当前页走同一 URL 派生(playerArtworkUrl:统一 1080 档、
+    // 同磁盘 key、同请求尺寸):翻歌时直接命中 pager 刚落好的缓存条目,不再自己另拉一张
+    // 544 小图、也不再因 key 带 "BIGGER" 与 pager 互不复用。
+    val currentArtworkUrl =
+        state.artworkQueue.getOrNull(state.currentOrderIndex)?.playerArtworkUrl()
+            ?: state.screenData.thumbnailURL
+    var backdropUrl by remember(currentArtworkUrl) { mutableStateOf(currentArtworkUrl) }
+
+    // The approved mock's page gradient is THREE stops — a clearly-tinted top, ~55%-darkened by
+    // mid-page (48%), warm near-black at the bottom. The first cut's two stops to near-black read
+    // as a flat black page on any dark artwork (first device screenshots).
+    val backdropBrush =
+        remember(seedColor) {
+            Brush.verticalGradient(
+                0f to appleMusicGradientColorAt(seedColor, 0f),
+                0.48f to appleMusicGradientColorAt(seedColor, 0.48f),
+                1f to appleMusicGradientColorAt(seedColor, 1f),
+            )
+        }
+
+    // Apple frosts the COVER ART into the page background — the colour and the soft blotches
+    // of the artwork stay visible through it. A flat tinted gradient, which is what this used
+    // to be, gets the hue right and loses everything else: the page reads as a solid colour
+    // swatch rather than as the record it belongs to.
+    //
+    // Loaded straight from the url by AsyncImage rather than through the screen state's
+    // decoded bitmap. The background IS an image, so there is no reason to route it through a
+    // bitmap someone else has to remember to fill in — which is exactly what broke: the only
+    // thing feeding that bitmap was the artwork pager inside MAIN, so on QUEUE or LYRICS a
+    // track change left it null and the page fell back to a bare gradient.
+    //
+    // The palette still needs a bitmap, and it comes off this same load. One source, so the
+    // frosted art and the tint over it cannot end up belonging to different songs.
+    //
+    // The heavy blur radius is safe because the whole style is gated behind Android 12 for
+    // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
+    // scaled far past its own resolution — at this blur that costs nothing visually.
+    if (!backdropUrl.isNullOrBlank()) {
+        AsyncImage(
+            model =
+                ImageRequest
+                    .Builder(LocalPlatformContext.current)
+                    .data(backdropUrl)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .diskCacheKey(backdropUrl)
+                    .size(1080)
+                    .build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
+            // Same fallback the artwork pager carries: maxresdefault is missing for plenty of
+            // videos, and without this the page would simply stay black.
+            onError = {
+                val fallback = backdropUrl?.replace("maxresdefault", "hqdefault")
+                if (fallback != null && fallback != backdropUrl) backdropUrl = fallback
+            },
+            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
+        )
+    }
+    // The tint still rides on top, but as a translucent wash rather than the whole background:
+    // it keeps the vertical darkening that makes the controls readable at the bottom, while the
+    // frosted artwork shows through it.
+    Box(modifier = Modifier.fillMaxSize().alpha(BACKDROP_TINT_ALPHA).background(backdropBrush))
+}
+
+@Composable
+internal fun AppleMusicMainTitleRow(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
     typography: AppleMusicTypography,
@@ -702,31 +750,49 @@ private fun AppleMusicMainTitleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typography.mainTitle,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                        .focusable(),
-            )
+            // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "appleMusicTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                Text(
+                    text = title,
+                    style = typography.mainTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (state.screenData.isExplicit) {
                     ExplicitBadge(modifier = Modifier.size(20.dp).padding(end = 4.dp))
                 }
-                Text(
-                    text = state.screenData.artistName,
-                    style = typography.mainArtist,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                            .focusable()
-                            .clickable { actions.onNavigateToArtist() },
-                )
+                AnimatedContent(
+                    targetState = state.screenData.artistName,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                    },
+                    label = "appleMusicArtist",
+                ) { artist ->
+                    // marquee 同上,超长省略号。
+                    Text(
+                        text = artist,
+                        style = typography.mainArtist,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier =
+                            Modifier
+                                .clickable { actions.onNavigateToArtist() },
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
@@ -760,45 +826,49 @@ private fun AppleMusicArtworkPage(
         isCurrentPage && (state.screenData.canvasData != null || (state.screenData.isVideo && state.shouldShowVideo))
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isCurrentPage) {
-            var artworkUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
-            Box(
+        // 统一按页封面(见 Classic 的 PlayerPageArtwork):model 跟着本页 Track 走,
+        // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
+        // "灰占位→crossfade 重绘"。封面在 canvas/视频下保持组合(alpha 0)调色板照常
+        // 馈送,与旧 live 分支同一契约。
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(artworkZoneHeightDp.dp),
+        ) {
+            PlayerPageArtwork(
+                pageTrack = pageTrack,
+                isCurrentPage = isCurrentPage,
+                onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
+                // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
+                // overlay: that overlay had to land on exactly the page gradient's colour at
+                // that Y, and any drift drew a hard horizontal line across the screen.
+                // Masking lets the real background show through — nothing left to match.
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkZoneHeightDp.dp),
-            ) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(artworkUrl)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(artworkUrl + "BIGGER")
-                            .crossfade(550)
-                            .build(),
-                    contentDescription = "",
-                    onSuccess = { actions.onArtworkBitmap(it.result.image.toImageBitmap()) },
-                    onError = {
-                        val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                    },
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
-                    // overlay: that overlay had to land on exactly the page gradient's colour at
-                    // that Y, and any drift drew a hard horizontal line across the screen.
-                    // Masking lets the real background show through — nothing left to match.
+                        .fillMaxSize()
+                        .alpha(if (pageShowsCanvasOrVideo) 0f else 1f)
+                        .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
+            )
+            // 封面右上角的源品牌角标(网易/YTM);canvas/视频背景时随封面一起隐去
+            artworkBadgeSource(
+                pageTrackVideoId = pageTrack?.videoId,
+                isCurrentPage = isCurrentPage,
+                isNeteaseSong = state.isNeteaseSong,
+            )?.let { badgeSource ->
+                SourceBadge(
+                    source = badgeSource,
+                    size = 24.dp,
                     modifier =
                         Modifier
-                            .fillMaxSize()
-                            .alpha(if (pageShowsCanvasOrVideo) 0f else 1f)
-                            .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .alpha(if (pageShowsCanvasOrVideo) 0f else 1f),
                 )
             }
-            if (pageShowsCanvasOrVideo) {
+        }
+        if (pageShowsCanvasOrVideo) {
                 if (isVideoBackdrop) {
                     // Centre the video in the region ABOVE the controls (top → cluster), not in
                     // the whole screen: screen-centred, half of a 16:9 video sat behind the
@@ -960,32 +1030,6 @@ private fun AppleMusicArtworkPage(
                     )
                 }
             }
-        } else if (pageTrack != null) {
-            val staticThumb = pageTrack.thumbnails?.maxByOrNull { it.width * it.height }?.url
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkZoneHeightDp.dp),
-            ) {
-                AsyncImage(
-                    model =
-                        ImageRequest
-                            .Builder(LocalPlatformContext.current)
-                            .data(staticThumb)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .diskCacheKey(staticThumb)
-                            .crossfade(300)
-                            .build(),
-                    contentDescription = pageTrack.title,
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = 300.dp),
-                )
-            }
-        }
     }
 }
 

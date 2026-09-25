@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -15,6 +16,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -25,6 +29,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +47,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -73,6 +79,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -141,6 +148,20 @@ fun NowPlayingContentM3Expressive(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
 ) {
+    NowPlayingExpressiveTheme(state = state) {
+        NowPlayingM3ExpressiveLayout(state = state, actions = actions)
+    }
+}
+
+/**
+ * This style's colour system, shared with the fullscreen lyrics landscape layout, which renders
+ * this style's track row and playback controls and must colour them the same way.
+ */
+@Composable
+internal fun NowPlayingExpressiveTheme(
+    state: NowPlayingContentState,
+    content: @Composable () -> Unit,
+) {
     // === 1. Color system: full dark scheme derived from the artwork ===
     // startColor is animated by the shell from Color.Black (initial) to the palette color;
     // fall back to the app seed while it still sits on the initial black.
@@ -162,7 +183,7 @@ fun NowPlayingContentM3Expressive(
             style = PaletteStyle.Vibrant,
         )
     MaterialExpressiveTheme(colorScheme = derivedScheme) {
-        NowPlayingM3ExpressiveLayout(state = state, actions = actions)
+        content()
     }
 }
 
@@ -267,10 +288,13 @@ private fun NowPlayingM3ExpressiveLayout(
                             .fillMaxWidth(),
                     beyondViewportPageCount = 1,
                     userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    key = { idx ->
-                        val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                        "artwork_${vid}_$idx"
-                    },
+                    // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
+                    flingBehavior =
+                        PagerDefaults.flingBehavior(
+                            state = state.artworkPagerState,
+                            snapAnimationSpec = ArtworkSnapSpring,
+                        ),
+                    key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     ExpressiveArtworkCardPage(
                         state = state,
@@ -477,115 +501,13 @@ private fun NowPlayingM3ExpressiveLayout(
                             ) {
                                 ExpressiveTrackInfoRow(state = state, actions = actions)
                                 if (getPlatform() == Platform.Android) {
-                                    Box(
-                                        Modifier
-                                            .padding(
-                                                top = 15.dp,
-                                            ).padding(horizontal = 20.dp)
-                                            .isElementVisible {
+                                    ExpressivePlaybackControls(
+                                        state = state,
+                                        actions = actions,
+                                        sliderModifier =
+                                            Modifier.isElementVisible {
                                                 actions.onToolbarVisibilityChange(!it && state.isExpanded && state.mainScrollState.value > 0)
                                             },
-                                    ) {
-                                        WavySeekBar(
-                                            progressFraction = state.sliderValue / 100f,
-                                            isPlaying = state.controllerState.isPlaying,
-                                            // Classic swaps the slider color to the rainbow while
-                                            // crossfading (state.sliderTrackColor); tonal primary
-                                            // otherwise.
-                                            activeColor =
-                                                if (state.timelineState.isCrossfading) {
-                                                    state.sliderTrackColor
-                                                } else {
-                                                    colorScheme.primary
-                                                },
-                                            trackColor = colorScheme.secondaryContainer,
-                                            thumbColor = colorScheme.primary,
-                                            onSliderChange = actions.onSliderChange,
-                                            onSliderChangeFinished = actions.onSliderChangeFinished,
-                                        )
-                                    }
-                                    // Time row — same math and negative guard as Classic
-                                    // (formatDuration renders any negative as NA:NA).
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            // Drawn 8dp closer to the wave without shrinking the
-                                            // seekbar's 40dp touch target or moving the layout slot:
-                                            // the same 8dp visually opens the gap to the transport
-                                            // row below (owner: times sat too far from the slider,
-                                            // too close to the controls).
-                                            .offset(y = (-8).dp)
-                                            .padding(horizontal = 20.dp),
-                                    ) {
-                                        Text(
-                                            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
-                                            style = typo().bodyMedium,
-                                            modifier = Modifier.weight(1f),
-                                            textAlign = TextAlign.Left,
-                                        )
-                                        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
-                                        // unconditionally: behind the crossfade check it would
-                                        // restart from zero each time the label appears (same
-                                        // rationale as the desktop MiniPlayer's crossfadeSweep).
-                                        val sweepTransition = rememberInfiniteTransition(label = "m3eCrossfadeSweep")
-                                        val crossfadeSweep by sweepTransition.animateFloat(
-                                            initialValue = 0f,
-                                            targetValue = 1f,
-                                            animationSpec =
-                                                infiniteRepeatable(
-                                                    animation = tween(3200, easing = LinearEasing),
-                                                    repeatMode = RepeatMode.Restart,
-                                                ),
-                                            label = "m3eSweepHead",
-                                        )
-                                        AnimatedVisibility(
-                                            enter = fadeIn(),
-                                            exit = fadeOut(),
-                                            visible = state.timelineState.isCrossfading,
-                                        ) {
-                                            // Same effect as the desktop MiniPlayer label: a
-                                            // highlight sweeping through the glyphs via a text
-                                            // brush — no overlay, no clipping.
-                                            val shimmerSpan = 140f
-                                            val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
-                                            val labelColor = typo().bodyMedium.color
-                                            Text(
-                                                text = stringResource(Res.string.crossfading),
-                                                style =
-                                                    typo().bodyMedium.copy(
-                                                        brush =
-                                                            Brush.horizontalGradient(
-                                                                0f to labelColor.copy(alpha = 0.45f),
-                                                                // The sweep head is PURE white, not the resting label colour — the label
-                                                                // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
-                                                                0.5f to Color.White,
-                                                                1f to labelColor.copy(alpha = 0.45f),
-                                                                startX = shimmerHead,
-                                                                endX = shimmerHead + shimmerSpan,
-                                                                tileMode = TileMode.Clamp,
-                                                            ),
-                                                    ),
-                                                textAlign = TextAlign.Center,
-                                            )
-                                        }
-                                        Text(
-                                            text = formatDuration(state.timelineState.total),
-                                            style = typo().bodyMedium,
-                                            modifier = Modifier.weight(1f),
-                                            textAlign = TextAlign.Right,
-                                        )
-                                    }
-                                    Spacer(
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .height(8.dp),
-                                    )
-                                    ExpressiveTransportRow(
-                                        controllerState = state.controllerState,
-                                        loading = state.timelineState.loading,
-                                        onUIEvent = actions.onUIEvent,
-                                        modifier = Modifier.padding(horizontal = 20.dp),
                                     )
                                 } else {
                                     Spacer(Modifier.height(16.dp))
@@ -724,9 +646,10 @@ private fun NowPlayingM3ExpressiveLayout(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ExpressiveTrackInfoRow(
+internal fun ExpressiveTrackInfoRow(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
+    showCanvasThumbnail: Boolean = true,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Row(
@@ -737,8 +660,9 @@ private fun ExpressiveTrackInfoRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // While a canvas hides the big artwork, a small thumbnail joins the row — Classic
-        // verbatim (its shared NowPlayingTrackInfoRow does exactly this).
-        AnimatedVisibility(state.screenData.canvasData != null) {
+        // verbatim (its shared NowPlayingTrackInfoRow does exactly this). Switched off by the
+        // fullscreen lyrics landscape layout, which shows the full artwork right above the row.
+        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -764,20 +688,29 @@ private fun ExpressiveTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typo().titleMedium,
-                color = Color.White,
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            iterations = Int.MAX_VALUE,
-                            animationMode = MarqueeAnimationMode.Immediately,
-                        ).focusable(),
-            )
+            // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "expressiveTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                Text(
+                    text = title,
+                    style = typo().titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically),
+                )
+            }
             Spacer(modifier = Modifier.height(3.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -791,73 +724,189 @@ private fun ExpressiveTrackInfoRow(
                                 .padding(end = 4.dp),
                     )
                 }
-                Text(
-                    text = state.screenData.artistName,
-                    style = typo().bodyMedium,
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .clickable {
-                                actions.onNavigateToArtist()
-                            },
-                )
-            }
-        }
-        if (state.isUserLoggedIn) {
-            Spacer(modifier = Modifier.size(12.dp))
-            IconButton(
-                onClick = { actions.onAddToYouTubeLiked() },
-                shape = CircleShape,
-                colors =
-                    IconButtonDefaults.iconButtonColors(
-                        containerColor = colorScheme.surfaceContainerHigh,
-                        contentColor = colorScheme.onSurface,
-                    ),
-                modifier = Modifier.size(48.dp),
-            ) {
-                Crossfade(targetState = state.likeStatus) { liked ->
-                    Icon(
-                        imageVector = if (liked) SimpIcons.CheckCircle else SimpIcons.AddCircleOutline,
-                        contentDescription = "",
+                AnimatedContent(
+                    targetState = state.screenData.artistName,
+                    transitionSpec = {
+                        (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                    },
+                    modifier = Modifier.weight(1f),
+                    label = "expressiveArtist",
+                ) { artist ->
+                    // marquee 同上,超长省略号。
+                    Text(
+                        text = artist,
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .clickable {
+                                    actions.onNavigateToArtist()
+                                },
                     )
                 }
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
+        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
+        run {
         val likeBurst = rememberHeartBurstState()
-        FilledIconToggleButton(
-            checked = state.controllerState.isLiked,
-            onCheckedChange = {
-                // Fire on the TAP that likes, never on the state — see HeartBurstState's doc.
-                if (!state.controllerState.isLiked) likeBurst.fire()
-                actions.onUIEvent(UIEvent.ToggleLike)
-            },
-            shape = CircleShape,
-            colors =
-                IconButtonDefaults.filledIconToggleButtonColors(
-                    containerColor = colorScheme.surfaceContainerHigh,
-                    contentColor = colorScheme.onSurfaceVariant,
-                    checkedContainerColor = colorScheme.primaryContainer,
-                    checkedContentColor = colorScheme.onPrimaryContainer,
-                ),
-            // The burst draws outside the 48dp bounds; the button's own shape clip is internal
-            // (on its Surface), so sparks fired from this outer modifier are not trimmed.
-            modifier = Modifier.size(48.dp).heartBurst(likeBurst),
-        ) {
-            Crossfade(targetState = state.controllerState.isLiked) { liked ->
-                Icon(
-                    imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
-                    contentDescription = "",
-                )
+        Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst).alpha(if (state.likeEnabled) 1f else 0.38f)) {
+            FilledIconToggleButton(
+                checked = state.controllerState.isLiked,
+                enabled = state.likeEnabled,
+                onCheckedChange = {
+                    if (!state.controllerState.isLiked) likeBurst.fire()
+                    actions.onUIEvent(UIEvent.ToggleLike)
+                },
+                shape = CircleShape,
+                colors =
+                    IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = colorScheme.surfaceContainerHigh,
+                        contentColor = colorScheme.onSurfaceVariant,
+                        checkedContainerColor = colorScheme.primaryContainer,
+                        checkedContentColor = colorScheme.onPrimaryContainer,
+                    ),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Crossfade(targetState = state.controllerState.isLiked) { liked ->
+                    Icon(
+                        imageVector = if (liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                        contentDescription = "",
+                    )
+                }
             }
         }
+        }
     }
+}
+
+/**
+ * Wavy seek bar + time row + transport — the playback half of the info block, shared with the
+ * fullscreen lyrics landscape layout. Must be composed inside [NowPlayingExpressiveTheme]. Emits
+ * straight into the caller's Column: isElementVisible (passed in through [sliderModifier]) compares
+ * the seek bar against its PARENT layout, so a wrapper here would change what it compares against.
+ */
+@Composable
+internal fun ColumnScope.ExpressivePlaybackControls(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    sliderModifier: Modifier = Modifier,
+    showShuffleAndRepeat: Boolean = false,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .padding(
+                top = 15.dp,
+            ).padding(horizontal = 20.dp)
+            .then(sliderModifier),
+    ) {
+        WavySeekBar(
+            progressFraction = state.sliderValue / 100f,
+            isPlaying = state.controllerState.isPlaying,
+            // Classic swaps the slider color to the rainbow while
+            // crossfading (state.sliderTrackColor); tonal primary
+            // otherwise.
+            activeColor =
+                if (state.timelineState.isCrossfading) {
+                    state.sliderTrackColor
+                } else {
+                    colorScheme.primary
+                },
+            trackColor = colorScheme.secondaryContainer,
+            thumbColor = colorScheme.primary,
+            onSliderChange = actions.onSliderChange,
+            onSliderChangeFinished = actions.onSliderChangeFinished,
+        )
+    }
+    // Time row — same math and negative guard as Classic
+    // (formatDuration renders any negative as NA:NA).
+    Row(
+        Modifier
+            .fillMaxWidth()
+            // Drawn 8dp closer to the wave without shrinking the
+            // seekbar's 40dp touch target or moving the layout slot:
+            // the same 8dp visually opens the gap to the transport
+            // row below (owner: times sat too far from the slider,
+            // too close to the controls).
+            .offset(y = (-8).dp)
+            .padding(horizontal = 20.dp),
+    ) {
+        Text(
+            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Left,
+        )
+        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
+        // unconditionally: behind the crossfade check it would
+        // restart from zero each time the label appears (same
+        // rationale as the desktop MiniPlayer's crossfadeSweep).
+        val sweepTransition = rememberInfiniteTransition(label = "m3eCrossfadeSweep")
+        val crossfadeSweep by sweepTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(3200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "m3eSweepHead",
+        )
+        AnimatedVisibility(
+            enter = fadeIn(),
+            exit = fadeOut(),
+            visible = state.timelineState.isCrossfading,
+        ) {
+            // Same effect as the desktop MiniPlayer label: a
+            // highlight sweeping through the glyphs via a text
+            // brush — no overlay, no clipping.
+            val shimmerSpan = 140f
+            val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
+            val labelColor = typo().bodyMedium.color
+            Text(
+                text = stringResource(Res.string.crossfading),
+                style =
+                    typo().bodyMedium.copy(
+                        brush =
+                            Brush.horizontalGradient(
+                                0f to labelColor.copy(alpha = 0.45f),
+                                // The sweep head is PURE white, not the resting label colour — the label
+                                // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
+                                0.5f to Color.White,
+                                1f to labelColor.copy(alpha = 0.45f),
+                                startX = shimmerHead,
+                                endX = shimmerHead + shimmerSpan,
+                                tileMode = TileMode.Clamp,
+                            ),
+                    ),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            text = formatDuration(state.timelineState.total),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Right,
+        )
+    }
+    Spacer(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(8.dp),
+    )
+    ExpressiveTransportRow(
+        controllerState = state.controllerState,
+        loading = state.timelineState.loading,
+        onUIEvent = actions.onUIEvent,
+        modifier = Modifier.padding(horizontal = 20.dp),
+        showShuffleAndRepeat = showShuffleAndRepeat,
+    )
 }
 
 /**
@@ -959,12 +1008,13 @@ private fun ExpressiveConnectedGroup(
         }
         ExpressiveConnectedSlot(
             shape = middle,
+            enabled = state.likeEnabled,
             onClick = { actions.onShowAddToPlaylist() },
         ) {
             Icon(
                 imageVector = SimpIcons.PlaylistAdd,
                 contentDescription = "Add to Playlist",
-                tint = colorScheme.onSurfaceVariant,
+                tint = if (state.likeEnabled) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                 modifier = Modifier.size(22.dp),
             )
         }
@@ -987,6 +1037,7 @@ private fun RowScope.ExpressiveConnectedSlot(
     shape: Shape,
     onClick: (() -> Unit)?,
     active: Boolean = false,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -994,6 +1045,7 @@ private fun RowScope.ExpressiveConnectedSlot(
     if (onClick != null) {
         Surface(
             onClick = onClick,
+            enabled = enabled,
             shape = shape,
             color = container,
             modifier =

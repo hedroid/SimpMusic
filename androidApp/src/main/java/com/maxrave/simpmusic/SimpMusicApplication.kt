@@ -5,7 +5,6 @@ import android.app.Application
 import android.database.CursorWindow
 import android.os.Build
 import android.util.Log
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import cat.ereza.customactivityoncrash.config.CaocConfig
@@ -21,6 +20,7 @@ import com.maxrave.data.di.loader.loadAllModules
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.di.viewModelModule
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.service.backup.AutoBackupScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,9 +51,6 @@ class SimpMusicApplication :
 
     override fun onCreate() {
         super.onCreate()
-        // Follow the system by default; MainActivity syncs this with the user's
-        // theme preference so chrome (splash, system bars) matches the Compose theme.
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         configCrashlytics(this, BuildKonfig.sentryDsn)
         configLastfm(BuildKonfig.lastfmApiKey, BuildKonfig.lastfmSecret)
         startKoin {
@@ -83,6 +80,9 @@ class SimpMusicApplication :
         applicationScope.launch {
             autoBackupScheduler.observeAndSchedule()
         }
+
+        // 触感反馈:订阅设置档位(播放控件振动),系统层未初始化前调用安全空跑
+        HapticFeedback.initialize(this, dataStoreManager, applicationScope)
 
         CaocConfig.Builder
             .create()

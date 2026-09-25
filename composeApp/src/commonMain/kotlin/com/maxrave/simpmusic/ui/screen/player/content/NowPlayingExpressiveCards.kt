@@ -92,6 +92,8 @@ import com.maxrave.simpmusic.ui.component.LyricsView
 import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.Forward5
 import com.maxrave.simpmusic.ui.icon.Fullscreen
@@ -101,6 +103,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Subtitles
 import com.maxrave.simpmusic.ui.icon.SubtitlesOff
 import com.maxrave.simpmusic.ui.icon.ThumbsUpDown
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.blackMoreOverlay
 import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
@@ -109,7 +112,10 @@ import com.maxrave.simpmusic.viewModel.UIEvent
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.artists
+import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.description
+import simpmusic.composeapp.generated.resources.fans_count
+import simpmusic.composeapp.generated.resources.likes_count
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
@@ -124,6 +130,7 @@ import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
+import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.unsynced
 import simpmusic.composeapp.generated.resources.view_count
 
@@ -289,60 +296,44 @@ internal fun ExpressiveArtworkCardPage(
                         .clip(ArtworkCardShape)
                         .background(colorScheme.surfaceContainer),
             ) {
-                if (isCurrentArtworkPage) {
-                    // Live artwork — kept composed even under canvas/video (alpha 0) so
-                    // onSuccess keeps feeding the palette that drives the whole scheme.
-                    // The artwork URL that is actually loading. `maxresdefault.jpg` — the fallback
-                    // artworkUri many video tracks carry — only EXISTS for videos with an HD
-                    // thumbnail; everything else 404s, onSuccess never fires, the palette never
-                    // generates, and the whole M3E scheme sits on the app-seed cyan for a grey
-                    // song. On error we retry once with `hqdefault.jpg`, which YouTube guarantees
-                    // for every video. Song artwork (googleusercontent) never matches the replace,
-                    // so this is a no-op for it.
-                    var artworkUrl by remember(state.screenData.thumbnailURL) {
-                        mutableStateOf(state.screenData.thumbnailURL)
-                    }
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(artworkUrl)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(artworkUrl + "BIGGER")
-                                .crossfade(550)
-                                .build(),
-                        contentDescription = "",
-                        onSuccess = {
-                            actions.onArtworkBitmap(
-                                it.result.image.toImageBitmap(),
-                            )
-                        },
-                        onError = {
-                            val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                            if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                        },
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
-                        modifier =
-                            Modifier
-                                .align(Alignment.Center)
-                                .then(
-                                    if (state.screenData.isVideo) {
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(16f / 9)
-                                    } else {
-                                        Modifier.fillMaxSize()
-                                    },
-                                ).alpha(
-                                    if (pageHasCanvas || (state.screenData.isVideo && state.shouldShowVideo)) 0f else 1f,
-                                ),
-                    )
+                // 统一按页封面(见 Classic 的 PlayerPageArtwork):model 跟着本页 Track 走,
+                // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
+                // "灰占位→crossfade 重绘"。卡片在 canvas/视频下保持组合(alpha 0),调色板
+                // 照常馈送(翻转时用已解码位图补发),与旧 live 分支同一契约。
+                PlayerPageArtwork(
+                    pageTrack = pageTrack,
+                    isCurrentPage = isCurrentArtworkPage,
+                    onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
+                    modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .then(
+                                if (pageTrack.playerArtworkIsVideo()) {
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(16f / 9)
+                                } else {
+                                    Modifier.fillMaxSize()
+                                },
+                            ).alpha(
+                                if (pageHasCanvas ||
+                                    (
+                                        isCurrentArtworkPage &&
+                                            state.screenData.isVideo &&
+                                            state.shouldShowVideo
+                                        )
+                                ) {
+                                    0f
+                                } else {
+                                    1f
+                                },
+                            ),
+                )
 
-                    // Inline video player — same condition as Classic, rendered inside the card.
-                    // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility member
-                    // otherwise shadows the top-level overload (same workaround as Classic).
+                // Inline video player — same condition as Classic, rendered inside the card.
+                // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility member
+                // otherwise shadows the top-level overload (same workaround as Classic).
+                if (isCurrentArtworkPage) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = state.screenData.isVideo && state.shouldShowVideo,
                         modifier = Modifier.align(Alignment.Center),
@@ -494,26 +485,24 @@ internal fun ExpressiveArtworkCardPage(
                             }
                         }
                     }
-                } else if (pageTrack != null) {
-                    // Adjacent page — static thumbnail card.
-                    val staticThumb =
-                        pageTrack.thumbnails
-                            ?.maxByOrNull { it.width * it.height }
-                            ?.url
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(staticThumb)
-                                .diskCachePolicy(CachePolicy.ENABLED)
-                                .diskCacheKey(staticThumb)
-                                .crossfade(300)
-                                .build(),
-                        contentDescription = pageTrack.title,
-                        contentScale = ContentScale.Crop,
-                        placeholder = rememberHolderPainter(),
-                        error = rememberHolderPainter(),
-                        modifier = Modifier.fillMaxSize(),
+                }
+                // 卡片右上角的源品牌角标(网易/YTM);canvas 模式随卡片 alpha 一起隐去,
+                // 当前页播视频时与封面图同条件隐藏(相邻页静态卡恒显)
+                artworkBadgeSource(
+                    pageTrackVideoId = pageTrack?.videoId,
+                    isCurrentPage = isCurrentArtworkPage,
+                    isNeteaseSong = state.isNeteaseSong,
+                )?.let { badgeSource ->
+                    SourceBadge(
+                        source = badgeSource,
+                        size = 24.dp,
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .alpha(
+                                    if (!isCurrentArtworkPage || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
+                                ),
                     )
                 }
             }
@@ -561,7 +550,7 @@ internal fun ExpressiveBelowTheFold(
                         // Vote button — only when the lyrics or the translation come from SimpMusic
                         // Lyrics. The rule itself lives on the shared contract (canVote), so a style
                         // cannot ship without it the way the Apple Music tab did.
-                        if (state.screenData.lyricsData.canVote()) {
+                        if (!state.isNeteaseSong && state.screenData.lyricsData.canVote()) {
                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                 IconButton(
                                     onClick = {
@@ -682,8 +671,9 @@ internal fun ExpressiveBelowTheFold(
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
+        val neteaseMeta = state.screenData.neteaseSongData
         // Artist card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
             Surface(
                 onClick = {
                     actions.onNavigateToArtist()
@@ -700,7 +690,7 @@ internal fun ExpressiveBelowTheFold(
                                 .fillMaxWidth()
                                 .height(250.dp),
                     ) {
-                        val thumb = state.screenData.songInfoData?.authorThumbnail
+                        val thumb = neteaseMeta?.artistAvatar ?: state.screenData.songInfoData?.authorThumbnail
                         AsyncImage(
                             model =
                                 ImageRequest
@@ -747,13 +737,16 @@ internal fun ExpressiveBelowTheFold(
                                 .padding(horizontal = 15.dp, vertical = 12.dp),
                     ) {
                         Text(
-                            text = state.screenData.songInfoData?.author ?: "",
+                            text = neteaseMeta?.artistName ?: state.screenData.songInfoData?.author ?: "",
                             style = typo().titleMedium,
                             color = Color.White,
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = state.screenData.songInfoData?.subscribers ?: "",
+                            text =
+                                neteaseMeta?.artistFans?.let {
+                                    stringResource(Res.string.fans_count, formatCompactCount(it))
+                                } ?: state.screenData.songInfoData?.subscribers ?: "",
                             style = typo().bodySmall,
                             color = Color.White.copy(alpha = 0.7f),
                         )
@@ -763,7 +756,7 @@ internal fun ExpressiveBelowTheFold(
         }
         Spacer(modifier = Modifier.height(10.dp))
         // Description card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
             Surface(
                 shape = ExpressiveCardShape,
                 color = colorScheme.surfaceContainer,
@@ -774,56 +767,87 @@ internal fun ExpressiveBelowTheFold(
                         .fillMaxWidth(),
                 ) {
                     Spacer(modifier = Modifier.height(5.dp))
-                    Text(
-                        text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
-                        style = typo().labelSmall,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text =
-                            stringResource(
-                                Res.string.view_count,
-                                "%,d".format(state.screenData.songInfoData?.viewCount),
-                            ),
-                        style = typo().labelMedium,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text =
-                            stringResource(
-                                Res.string.like_and_dislike,
-                                state.screenData.songInfoData?.like ?: 0,
-                                state.screenData.songInfoData?.dislike ?: 0,
-                            ),
-                        style = typo().bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(Res.string.description),
-                        style = typo().labelSmall,
-                        color = Color.White,
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    DescriptionView(
-                        text = state.screenData.songInfoData?.description ?: "",
-                        onTimeClicked = { raw ->
-                            val timestamp = parseTimestampToMilliseconds(raw)
-                            if (timestamp != 0.0 && timestamp < state.timelineState.total) {
-                                actions.onUIEvent(
-                                    UIEvent.UpdateProgress(
-                                        ((timestamp * 100) / state.timelineState.total).toFloat(),
-                                    ),
-                                )
-                            }
-                        },
-                        onURLClicked = { url ->
-                            uriHandler.openUri(
-                                url,
+                    if (neteaseMeta != null) {
+                        val releaseInfo =
+                            listOfNotNull(
+                                neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
+                                neteaseMeta.albumTrackCount?.let {
+                                    stringResource(Res.string.track_count_short, it.toString())
+                                },
+                                neteaseMeta.albumCompany,
+                            ).joinToString(" · ")
+                        if (releaseInfo.isNotEmpty()) {
+                            Text(text = releaseInfo, style = typo().labelSmall, color = Color.White)
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        neteaseMeta.likeCount?.let { likeCount ->
+                            Text(
+                                text = stringResource(Res.string.likes_count, formatCompactCount(likeCount)),
+                                style = typo().labelMedium,
+                                color = Color.White,
                             )
-                        },
-                    )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                        if (neteaseMeta.commentCount > 0) {
+                            Text(
+                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
+                                style = typo().bodyMedium,
+                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
+                            )
+                        }
+                        val bio = neteaseMeta.artistBriefDesc ?: neteaseMeta.albumDescription
+                        if (!bio.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DescriptionView(
+                                text = bio,
+                                onTimeClicked = {},
+                                onURLClicked = { url -> uriHandler.openUri(url) },
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
+                            style = typo().labelSmall,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text =
+                                stringResource(
+                                    Res.string.view_count,
+                                    formatCompactCount(state.screenData.songInfoData?.viewCount ?: 0),
+                                ),
+                            style = typo().labelMedium,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text =
+                                stringResource(
+                                    Res.string.like_and_dislike,
+                                    formatCompactCount(state.screenData.songInfoData?.like ?: 0),
+                                    formatCompactCount(state.screenData.songInfoData?.dislike ?: 0),
+                                ),
+                            style = typo().bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        DescriptionView(
+                            text = state.screenData.songInfoData?.description ?: "",
+                            onTimeClicked = { raw ->
+                                val timestamp = parseTimestampToMilliseconds(raw)
+                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                    actions.onUIEvent(
+                                        UIEvent.UpdateProgress(((timestamp * 100) / state.timelineState.total).toFloat()),
+                                    )
+                                }
+                            },
+                            onURLClicked = { url -> uriHandler.openUri(url) },
+                        )
+                    }
                 }
             }
         }

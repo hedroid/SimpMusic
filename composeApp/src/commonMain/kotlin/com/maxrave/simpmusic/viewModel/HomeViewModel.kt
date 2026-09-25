@@ -180,6 +180,7 @@ class HomeViewModel(
     }
 
     fun getHomeItemList(params: String? = null) {
+        // 网易主页走独立屏 NeteaseHomeScreen(架构定稿),本 VM 只服务 YT 源,无音源分支。
         loading.value = true
         _homeListState.value = ListState.LOADING
         language =

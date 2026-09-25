@@ -6,8 +6,13 @@
   Only views RemoteViews accepts may appear here — the launcher inflates this through
   RemoteViews, and a bare <View> makes it fail and print "Couldn't add widget." in the preview
   slot. Placeholders are therefore ImageViews with a background and no src.
+
+  android:tint (not app:tint) on the controls is deliberate: the launcher inflates this
+  layout with the platform inflater, outside AppCompat, where app:tint would be silently
+  dropped — hence the per-view tools:ignore="UseAppTint".
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/widget_preview_surface"
@@ -60,7 +65,8 @@
                     android:layout_height="18dp"
                     android:contentDescription="@null"
                     android:src="@drawable/rounded_skip_previous_24"
-                    android:tint="#FFFFFF" />
+                    android:tint="#FFFFFF"
+                    tools:ignore="UseAppTint" />
 
                 <ImageView
                     android:layout_width="22dp"
@@ -68,7 +74,8 @@
                     android:layout_marginStart="14dp"
                     android:contentDescription="@null"
                     android:src="@drawable/rounded_play_arrow_24"
-                    android:tint="#FFFFFF" />
+                    android:tint="#FFFFFF"
+                    tools:ignore="UseAppTint" />
 
                 <ImageView
                     android:layout_width="18dp"
@@ -76,7 +83,8 @@
                     android:layout_marginStart="14dp"
                     android:contentDescription="@null"
                     android:src="@drawable/rounded_skip_next_24"
-                    android:tint="#FFFFFF" />
+                    android:tint="#FFFFFF"
+                    tools:ignore="UseAppTint" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

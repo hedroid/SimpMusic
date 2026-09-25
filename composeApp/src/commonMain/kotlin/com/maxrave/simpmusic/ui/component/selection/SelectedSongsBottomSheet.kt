@@ -1,7 +1,9 @@
 package com.maxrave.simpmusic.ui.component.selection
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.simpmusic.ui.component.ActionButton
 import com.maxrave.simpmusic.ui.component.EndOfModalBottomSheet
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -49,8 +52,11 @@ import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.downloaded
-import simpmusic.composeapp.generated.resources.favorite
+import simpmusic.composeapp.generated.resources.like
 import simpmusic.composeapp.generated.resources.n_songs_selected
+import simpmusic.composeapp.generated.resources.mixed_source_selection
+import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.login_required_short
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
@@ -83,6 +89,9 @@ fun SelectedSongsBottomSheet(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
+    // 当前选中集合的 videoId(按 id 形状判源):混源时"添加到歌单"置灰——歌单按源互斥,
+    // 混选加歌只会丢一半,宁可不做(2026-09-24 用户定案)
+    selectionIds: List<String> = emptyList(),
     onDownload: (() -> Unit)? = null,
     allDownloaded: Boolean = false,
     onRemoveDownload: (() -> Unit)? = null,
@@ -91,6 +100,25 @@ fun SelectedSongsBottomSheet(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val colors = rememberSurfaceDarkColors()
+    val mixedSources =
+        selectionIds.map { it.toLongOrNull() != null }.distinct().size > 1
+    // 涉及源未登录也挡(与点赞同款严格门控):登录态在组件内读,7 个调用方零改动
+    val dataStoreManager: com.maxrave.domain.manager.DataStoreManager = org.koin.compose.koinInject()
+    val neteaseCookie by dataStoreManager.neteaseCookie.collectAsStateWithLifecycle("")
+    val ytLoggedIn by dataStoreManager.loggedIn.collectAsStateWithLifecycle(null)
+    val loggedOutSource =
+        selectionIds.any { id ->
+            (id.toLongOrNull() != null && neteaseCookie.isBlank()) ||
+                (id.toLongOrNull() == null && ytLoggedIn != com.maxrave.domain.manager.DataStoreManager.TRUE)
+        }
+    // 混源优先提示(先解决源一致性,登录是下一层)
+    val addBlockedReason: Int? =
+        when {
+            selectionIds.isEmpty() -> null
+            mixedSources -> 1
+            loggedOutSource -> 2
+            else -> null
+        }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Confirmed inside the sheet so the nine call sites only wire state and a callback — none of
     // them has to draw its own dialog for the batch removal.
@@ -157,7 +185,40 @@ fun SelectedSongsBottomSheet(
                         ActionButton(
                             icon = SimpIcons.PlaylistAdd,
                             text = Res.string.add_to_a_playlist,
+                            enable = addBlockedReason == null,
                         ) { hideThen(onAddToPlaylist) }
+                        // 第二排提示:首字与按钮文字左对齐(20+48+10=78dp,ActionButton 同款起点),置灰
+                        // 混源→含不同音源;涉及源未登录→登录后可用
+                        when (addBlockedReason) {
+                            1 ->
+                                Text(
+                                    text = stringResource(Res.string.mixed_source_selection),
+                                    style = typo().labelSmall,
+                                    color = colors.disabled,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                                )
+
+                            2 -> {
+                                // 同源选中(混源已被上一档挡),未登录的源至多一个;带源名提示
+                                val loggedOutNetease = selectionIds.any { it.toLongOrNull() != null }
+                                Text(
+                                    text =
+                                        stringResource(
+                                            Res.string.login_required_short,
+                                            if (loggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                        ),
+                                    style = typo().labelSmall,
+                                    color = colors.disabled,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                                )
+                            }
+                        }
                     }
                     if (allDownloaded && onRemoveDownload != null) {
                         // Same accent blue the single-song menu wears once a track is on disk.
@@ -167,16 +228,64 @@ fun SelectedSongsBottomSheet(
                             iconColor = Color(0xFF00A0CB),
                         ) { showRemoveDownloadDialog = true }
                     } else if (onDownload != null) {
+                        // 未登录置灰(2026-09-25 用户定案:未登录不可下载对应源的歌);混源不挡
                         ActionButton(
                             icon = SimpIcons.Download,
                             text = Res.string.download,
+                            enable = !loggedOutSource,
                         ) { hideThen(onDownload) }
+                        if (loggedOutSource && selectionIds.isNotEmpty()) {
+                            val firstLoggedOutNetease =
+                                selectionIds
+                                    .firstOrNull { id ->
+                                        (id.toLongOrNull() != null && neteaseCookie.isBlank()) ||
+                                            (id.toLongOrNull() == null && ytLoggedIn != com.maxrave.domain.manager.DataStoreManager.TRUE)
+                                    }?.toLongOrNull() != null
+                            Text(
+                                text =
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (firstLoggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                    ),
+                                style = typo().labelSmall,
+                                color = colors.disabled,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                            )
+                        }
                     }
                     if (onAddToFavorite != null) {
+                        // 文案与单曲三点菜单一致("点赞");favorite="收藏"易误读成本地收藏。
+                        // 未登录置灰+带源名提示(2026-09-25 与"添加到歌单"对齐);混源不挡——
+                        // 红心按各源分别调云端,混选可全做,无歌单的源互斥问题
                         ActionButton(
                             icon = SimpIcons.Favorite,
-                            text = Res.string.favorite,
+                            text = Res.string.like,
+                            enable = !loggedOutSource,
                         ) { hideThen(onAddToFavorite) }
+                        if (loggedOutSource && selectionIds.isNotEmpty()) {
+                            val firstLoggedOutNetease =
+                                selectionIds
+                                    .firstOrNull { id ->
+                                        (id.toLongOrNull() != null && neteaseCookie.isBlank()) ||
+                                            (id.toLongOrNull() == null && ytLoggedIn != com.maxrave.domain.manager.DataStoreManager.TRUE)
+                                    }?.toLongOrNull() != null
+                            Text(
+                                text =
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (firstLoggedOutNetease) stringResource(Res.string.netease) else "YouTube Music",
+                                    ),
+                                style = typo().labelSmall,
+                                color = colors.disabled,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 78.dp, end = 20.dp, top = 0.dp, bottom = 2.dp),
+                            )
+                        }
                     }
                     extraActions.forEach { action ->
                         ActionButton(

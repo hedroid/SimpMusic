@@ -3,6 +3,7 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
 import androidx.compose.animation.Animatable
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -18,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
@@ -28,6 +30,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +51,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -129,9 +133,13 @@ import com.maxrave.simpmusic.ui.component.PlayPauseButton
 import com.maxrave.simpmusic.ui.component.PlayerControlLayout
 import com.maxrave.simpmusic.ui.component.lyrics.ShareLyricsSheet
 import com.maxrave.simpmusic.ui.component.lyrics.toShareLyricsLines
+import com.maxrave.simpmusic.ui.component.SourceBadge
+import com.maxrave.simpmusic.ui.component.artworkBadgeSource
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.Forward5
 import com.maxrave.simpmusic.ui.icon.Fullscreen
 import com.maxrave.simpmusic.ui.icon.Info
@@ -144,6 +152,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Subtitles
 import com.maxrave.simpmusic.ui.icon.SubtitlesOff
 import com.maxrave.simpmusic.ui.icon.ThumbsUpDown
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.blackMoreOverlay
 import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
@@ -160,6 +169,9 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.crossfading
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
+import simpmusic.composeapp.generated.resources.comments_count
+import simpmusic.composeapp.generated.resources.fans_count
+import simpmusic.composeapp.generated.resources.likes_count
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics
 import simpmusic.composeapp.generated.resources.lyrics_provider_betterlyrics
@@ -173,6 +185,7 @@ import simpmusic.composeapp.generated.resources.published_at
 import simpmusic.composeapp.generated.resources.rate_lyrics
 import simpmusic.composeapp.generated.resources.rich_synced
 import simpmusic.composeapp.generated.resources.share_lyrics
+import simpmusic.composeapp.generated.resources.track_count_short
 import simpmusic.composeapp.generated.resources.show
 import simpmusic.composeapp.generated.resources.spotify_lyrics_provider
 import simpmusic.composeapp.generated.resources.unsynced
@@ -320,10 +333,13 @@ fun NowPlayingContentSpotify(
                             .fillMaxWidth(),
                     beyondViewportPageCount = 1,
                     userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    key = { idx ->
-                        val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                        "artwork_${vid}_$idx"
-                    },
+                    // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
+                    flingBehavior =
+                        PagerDefaults.flingBehavior(
+                            state = state.artworkPagerState,
+                            snapAnimationSpec = ArtworkSnapSpring,
+                        ),
+                    key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex
@@ -512,73 +528,76 @@ fun NowPlayingContentSpotify(
                                         .alpha(if (pageHasCanvas) 0f else 1f)
                                         .aspectRatio(1f),
                             ) {
-                                if (isCurrentArtworkPage) {
-                                    // Live artwork (drives palette extraction via setBitmap).
-                                    // The artwork URL that is actually loading. `maxresdefault.jpg` —
-                                    // the fallback artworkUri many video tracks carry — only EXISTS
-                                    // for videos with an HD thumbnail; everything else 404s,
-                                    // onSuccess never fires, the palette never generates, and the
-                                    // gradient sits on its fallback for a grey song. On error we
-                                    // retry once with `hqdefault.jpg`, which YouTube guarantees for
-                                    // every video. Song artwork (googleusercontent) never matches
-                                    // the replace, so this is a no-op for it.
-                                    var artworkUrl by remember(state.screenData.thumbnailURL) {
-                                        mutableStateOf(state.screenData.thumbnailURL)
-                                    }
-                                    Box(
-                                        contentAlignment = Alignment.Center,
+                                // ── Unified per-page artwork ──
+                                // ONE data-driven node for every page (PlayerPageArtwork): the
+                                // model comes from THIS page's Track, so the current/adjacent flip
+                                // is a parameter change, not a subtree swap — no placeholder
+                                // round-trip when a swiped page settles. Adjacent pages feed
+                                // their own page-backdrop palette via onArtworkLoaded; the current
+                                // page additionally feeds the global palette, re-firing at the
+                                // flip with the already-decoded bitmap (no reload involved).
+                                val palettePageScope = rememberCoroutineScope()
+                                val pageIsVideoTrack = pageTrack.playerArtworkIsVideo()
+                                val pageHidesArtwork =
+                                    isCurrentArtworkPage &&
+                                        state.screenData.isVideo &&
+                                        state.shouldShowVideo
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.Center)
+                                            .background(Color.Transparent)
+                                            .shadow(
+                                                elevation = 3.dp,
+                                                shape = RoundedCornerShape(8.dp),
+                                                spotColor =
+                                                    if (isCurrentArtworkPage) {
+                                                        state.spotShadowColor.copy(alpha = 0.6f)
+                                                    } else {
+                                                        Color.Black.copy(alpha = 0.4f)
+                                                    },
+                                                ambientColor = Color.Transparent,
+                                            ),
+                                ) {
+                                    PlayerPageArtwork(
+                                        pageTrack = pageTrack,
+                                        isCurrentPage = isCurrentArtworkPage,
+                                        onArtworkLoaded = { bitmap ->
+                                            palettePageScope.launch {
+                                                pagePaletteState.generate(bitmap)
+                                            }
+                                        },
+                                        onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                                         modifier =
                                             Modifier
                                                 .align(Alignment.Center)
-                                                .background(Color.Transparent)
-                                                .shadow(
-                                                    elevation = 3.dp,
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    spotColor =
-                                                        state.spotShadowColor.copy(
-                                                            alpha = 0.6f,
-                                                        ),
-                                                    ambientColor = Color.Transparent,
-                                                ),
-                                    ) {
-                                        AsyncImage(
-                                            model =
-                                                ImageRequest
-                                                    .Builder(LocalPlatformContext.current)
-                                                    .data(artworkUrl)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(artworkUrl + "BIGGER")
-                                                    .crossfade(550)
-                                                    .build(),
-                                            contentDescription = "",
-                                            onSuccess = {
-                                                actions.onArtworkBitmap(
-                                                    it.result.image.toImageBitmap(),
-                                                )
-                                            },
-                                            onError = {
-                                                val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                                                if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                                            },
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = rememberHolderPainter(),
-                                            error = rememberHolderPainter(),
+                                                .padding(3.dp)
+                                                .fillMaxWidth()
+                                                .aspectRatio(if (pageIsVideoTrack) 16f / 9 else 1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .alpha(if (pageHidesArtwork) 0f else 1f),
+                                    )
+
+                                    // 封面右上角的源品牌角标(网易/YTM);canvas/视频模式随封面一起隐去
+                                    artworkBadgeSource(
+                                        pageTrackVideoId = pageTrack?.videoId,
+                                        isCurrentPage = isCurrentArtworkPage,
+                                        isNeteaseSong = state.isNeteaseSong,
+                                    )?.let { badgeSource ->
+                                        SourceBadge(
+                                            source = badgeSource,
+                                            size = 24.dp,
                                             modifier =
                                                 Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(3.dp)
-                                                    .fillMaxWidth()
-                                                    .background(Color.Transparent)
-                                                    .aspectRatio(
-                                                        if (!state.screenData.isVideo) 1f else 16f / 9,
-                                                    ).clip(
-                                                        RoundedCornerShape(8.dp),
-                                                    ).alpha(
-                                                        if (!state.screenData.isVideo || !state.shouldShowVideo) 1f else 0f,
-                                                    ),
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(10.dp)
+                                                    .alpha(if (pageHidesArtwork) 0f else 1f),
                                         )
                                     }
+                                }
 
+                                if (isCurrentArtworkPage) {
                                     // Inline video player (current page + isVideo + shouldShowVideo).
                                     androidx.compose.animation.AnimatedVisibility(
                                         visible = state.screenData.isVideo && state.shouldShowVideo,
@@ -732,58 +751,6 @@ fun NowPlayingContentSpotify(
                                                 }
                                             }
                                         }
-                                    }
-                                } else if (pageTrack != null) {
-                                    // Adjacent page — static thumbnail from Track.thumbnails.
-                                    val staticThumb =
-                                        pageTrack.thumbnails
-                                            ?.maxByOrNull { it.width * it.height }
-                                            ?.url
-                                    val palettePageScope = rememberCoroutineScope()
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier =
-                                            Modifier
-                                                .align(Alignment.Center)
-                                                .background(Color.Transparent)
-                                                .shadow(
-                                                    elevation = 3.dp,
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    spotColor = Color.Black.copy(alpha = 0.4f),
-                                                    ambientColor = Color.Transparent,
-                                                ),
-                                    ) {
-                                        AsyncImage(
-                                            model =
-                                                ImageRequest
-                                                    .Builder(LocalPlatformContext.current)
-                                                    .data(staticThumb)
-                                                    .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(staticThumb)
-                                                    .crossfade(300)
-                                                    .build(),
-                                            contentDescription = pageTrack.title,
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = rememberHolderPainter(),
-                                            error = rememberHolderPainter(),
-                                            // Feed the per-page palette using the SAME bitmap
-                                            // we just rendered so the Layer 0 gradient backdrop
-                                            // matches what the user sees on screen.
-                                            onSuccess = { state ->
-                                                palettePageScope.launch {
-                                                    pagePaletteState.generate(
-                                                        state.result.image.toImageBitmap(),
-                                                    )
-                                                }
-                                            },
-                                            modifier =
-                                                Modifier
-                                                    .align(Alignment.Center)
-                                                    .padding(3.dp)
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(1f)
-                                                    .clip(RoundedCornerShape(8.dp)),
-                                        )
                                     }
                                 }
                             }
@@ -982,213 +949,14 @@ fun NowPlayingContentSpotify(
                                         actions = actions,
                                     )
                                     if (getPlatform() == Platform.Android) {
-                                        // Real Slider
-                                        Box(
-                                            Modifier
-                                                .padding(
-                                                    top = 15.dp,
-                                                ).padding(horizontal = 20.dp)
-                                                .isElementVisible {
+                                        SpotifyPlaybackControls(
+                                            state = state,
+                                            actions = actions,
+                                            sliderModifier =
+                                                Modifier.isElementVisible {
                                                     actions.onToolbarVisibilityChange(!it && state.isExpanded && state.mainScrollState.value > 0)
                                                 },
-                                        ) {
-                                            Box(
-                                                modifier =
-                                                    Modifier
-                                                        .fillMaxWidth()
-                                                        .height(24.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                Crossfade(state.timelineState.loading) {
-                                                    if (it) {
-                                                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                            LinearProgressIndicator(
-                                                                modifier =
-                                                                    Modifier
-                                                                        .fillMaxWidth()
-                                                                        .height(4.dp)
-                                                                        .padding(
-                                                                            horizontal = 3.dp,
-                                                                        ).clip(
-                                                                            RoundedCornerShape(8.dp),
-                                                                        ),
-                                                                color = Color.Gray,
-                                                                trackColor = Color.DarkGray,
-                                                                strokeCap = StrokeCap.Round,
-                                                            )
-                                                        }
-                                                    } else {
-                                                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                            LinearProgressIndicator(
-                                                                progress = { state.timelineState.bufferedPercent.toFloat() / 100 },
-                                                                modifier =
-                                                                    Modifier
-                                                                        .fillMaxWidth()
-                                                                        .height(4.dp)
-                                                                        .padding(
-                                                                            horizontal = 3.dp,
-                                                                        ).clip(
-                                                                            RoundedCornerShape(8.dp),
-                                                                        ),
-                                                                color = Color.Gray,
-                                                                trackColor =
-                                                                    Color.Gray.copy(
-                                                                        alpha = 0.6f,
-                                                                    ),
-                                                                strokeCap = StrokeCap.Round,
-                                                                drawStopIndicator = {},
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                Slider(
-                                                    // material3 1.5.0-alpha25 keeps a
-                                                    // binary-compatibility overload of Slider that
-                                                    // accepts valueRange and then forwards without
-                                                    // it, so the slider silently runs on the
-                                                    // default 0f..1f and anything larger is clamped
-                                                    // to a full track. Hand it a fraction instead;
-                                                    // sliderValue stays on the 0..100 scale that
-                                                    // UIEvent.UpdateProgress and the time labels
-                                                    // are built around.
-                                                    value = state.sliderValue / 100f,
-                                                    onValueChangeFinished = {
-                                                        actions.onSliderChangeFinished()
-                                                    },
-                                                    onValueChange = {
-                                                        actions.onSliderChange(it * 100f)
-                                                    },
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(top = 3.dp)
-                                                            .align(
-                                                                Alignment.TopCenter,
-                                                            ),
-                                                    track = { sliderState ->
-                                                        SliderDefaults.Track(
-                                                            modifier =
-                                                                Modifier
-                                                                    .height(5.dp),
-                                                            enabled = true,
-                                                            sliderState = sliderState,
-                                                            colors =
-                                                                SliderDefaults.colors().copy(
-                                                                    thumbColor = state.sliderTrackColor,
-                                                                    activeTrackColor = state.sliderTrackColor,
-                                                                    inactiveTrackColor = Color.Transparent,
-                                                                ),
-                                                            thumbTrackGapSize = 0.dp,
-                                                            drawTick = { _, _ -> },
-                                                            drawStopIndicator = null,
-                                                        )
-                                                    },
-                                                    thumb = {
-                                                        SliderDefaults.Thumb(
-                                                            modifier =
-                                                                Modifier
-                                                                    .height(18.dp)
-                                                                    .width(8.dp)
-                                                                    .padding(
-                                                                        vertical = 4.dp,
-                                                                    ),
-                                                            thumbSize = DpSize(8.dp, 8.dp),
-                                                            interactionSource =
-                                                                remember {
-                                                                    MutableInteractionSource()
-                                                                },
-                                                            colors =
-                                                                SliderDefaults.colors().copy(
-                                                                    thumbColor = state.sliderTrackColor,
-                                                                    activeTrackColor = state.sliderTrackColor,
-                                                                    inactiveTrackColor = Color.Transparent,
-                                                                ),
-                                                            enabled = true,
-                                                        )
-                                                    },
-                                                )
-                                            }
-                                        }
-                                        // Time Layout
-                                        Row(
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 20.dp),
-                                        ) {
-                                            Text(
-                                                text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
-                                                style = typo().bodyMedium,
-                                                modifier = Modifier.weight(1f),
-                                                textAlign = TextAlign.Left,
-                                            )
-                                            // Sweep head for the "Crossfading" shimmer, 0..1. Runs
-                                            // unconditionally: behind the crossfade check it would
-                                            // restart from zero each time the label appears (same
-                                            // rationale as MiniPlayer's crossfadeSweep).
-                                            val sweepTransition = rememberInfiniteTransition(label = "nowPlayingCrossfadeSweep")
-                                            val crossfadeSweep by sweepTransition.animateFloat(
-                                                initialValue = 0f,
-                                                targetValue = 1f,
-                                                animationSpec =
-                                                    infiniteRepeatable(
-                                                        animation = tween(3200, easing = LinearEasing),
-                                                        repeatMode = RepeatMode.Restart,
-                                                    ),
-                                                label = "nowPlayingSweepHead",
-                                            )
-                                            AnimatedVisibility(
-                                                enter = fadeIn(),
-                                                exit = fadeOut(),
-                                                visible = state.timelineState.isCrossfading,
-                                            ) {
-                                                // Same effect as the desktop MiniPlayer label: a
-                                                // highlight sweeping through the glyphs via a text
-                                                // brush — no overlay, no clipping.
-                                                val shimmerSpan = 140f
-                                                val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
-                                                val labelColor = typo().bodyMedium.color
-                                                Text(
-                                                    text = stringResource(Res.string.crossfading),
-                                                    style =
-                                                        typo().bodyMedium.copy(
-                                                            brush =
-                                                                Brush.horizontalGradient(
-                                                                    0f to labelColor.copy(alpha = 0.45f),
-                                                                    // The sweep head is PURE white, not the resting label colour — the label
-                                                                    // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
-                                                                    0.5f to Color.White,
-                                                                    1f to labelColor.copy(alpha = 0.45f),
-                                                                    startX = shimmerHead,
-                                                                    endX = shimmerHead + shimmerSpan,
-                                                                    tileMode = TileMode.Clamp,
-                                                                ),
-                                                        ),
-                                                    modifier = Modifier.weight(1f),
-                                                    textAlign = TextAlign.Center,
-                                                )
-                                            }
-                                            Text(
-                                                text = formatDuration(state.timelineState.total),
-                                                style = typo().bodyMedium,
-                                                modifier = Modifier.weight(1f),
-                                                textAlign = TextAlign.Right,
-                                            )
-                                        }
-
-                                        Spacer(
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .height(5.dp),
                                         )
-                                        // Control Button Layout
-                                        PlayerControlLayout(
-                                            state.controllerState,
-                                        ) {
-                                            actions.onUIEvent(it)
-                                        }
                                     } else {
                                         Spacer(Modifier.height(16.dp))
                                     }
@@ -1255,13 +1023,14 @@ fun NowPlayingContentSpotify(
                                                         .size(24.dp)
                                                         .aspectRatio(1f)
                                                         .clip(CircleShape),
+                                                enabled = state.likeEnabled,
                                                 onClick = {
                                                     actions.onShowAddToPlaylist()
                                                 },
                                             ) {
                                                 Icon(
                                                     imageVector = SimpIcons.PlaylistAdd,
-                                                    tint = Color.White,
+                                                    tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
                                                     contentDescription = "Add to Playlist",
                                                 )
                                             }
@@ -1437,7 +1206,7 @@ fun NowPlayingContentSpotify(
                                         // SimpMusic Lyrics. The rule itself lives on the shared contract
                                         // (canVote), so a style cannot ship without it the way the Apple
                                         // Music tab did.
-                                        if (state.screenData.lyricsData.canVote()) {
+                                        if (!state.isNeteaseSong && state.screenData.lyricsData.canVote()) {
                                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                                 IconButton(
                                                     onClick = {
@@ -1558,7 +1327,9 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+                        // 艺人卡按源取数:网易歌来自 neteaseSongData(头像/粉丝数),YT 歌来自 songInfoData
+                        val neteaseMeta = state.screenData.neteaseSongData
+                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
                             ElevatedCard(
                                 onClick = {
                                     actions.onNavigateToArtist()
@@ -1580,7 +1351,9 @@ fun NowPlayingContentSpotify(
                                                 .fillMaxWidth()
                                                 .height(250.dp),
                                     ) {
-                                        val thumb = state.screenData.songInfoData?.authorThumbnail
+                                        val thumb =
+                                            neteaseMeta?.artistAvatar
+                                                ?: state.screenData.songInfoData?.authorThumbnail
                                         AsyncImage(
                                             model =
                                                 ImageRequest
@@ -1630,13 +1403,16 @@ fun NowPlayingContentSpotify(
                                                 .padding(horizontal = 15.dp, vertical = 12.dp),
                                     ) {
                                         Text(
-                                            text = state.screenData.songInfoData?.author ?: "",
+                                            text = neteaseMeta?.artistName ?: state.screenData.songInfoData?.author ?: "",
                                             style = typo().titleMedium,
                                             color = Color.White,
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = state.screenData.songInfoData?.subscribers ?: "",
+                                            text =
+                                                neteaseMeta?.artistFans?.let {
+                                                    stringResource(Res.string.fans_count, formatCompactCount(it))
+                                                } ?: state.screenData.songInfoData?.subscribers ?: "",
                                             style = typo().bodySmall,
                                             color = Color.White.copy(alpha = 0.7f),
                                         )
@@ -1645,7 +1421,7 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null) {
+                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
                             ElevatedCard(
                                 onClick = {},
                                 shape = RoundedCornerShape(8.dp),
@@ -1660,56 +1436,112 @@ fun NowPlayingContentSpotify(
                                         .fillMaxWidth(),
                                 ) {
                                     Spacer(modifier = Modifier.height(5.dp))
-                                    Text(
-                                        text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
-                                        style = typo().labelSmall,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                Res.string.view_count,
-                                                "%,d".format(state.screenData.songInfoData?.viewCount),
-                                            ),
-                                        style = typo().labelMedium,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text =
-                                            stringResource(
-                                                Res.string.like_and_dislike,
-                                                state.screenData.songInfoData?.like ?: 0,
-                                                state.screenData.songInfoData?.dislike ?: 0,
-                                            ),
-                                        style = typo().bodyMedium,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = stringResource(Res.string.description),
-                                        style = typo().labelSmall,
-                                        color = Color.White,
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    DescriptionView(
-                                        text = state.screenData.songInfoData?.description ?: "",
-                                        onTimeClicked = { raw ->
-                                            val timestamp = parseTimestampToMilliseconds(raw)
-                                            if (timestamp != 0.0 && timestamp < state.timelineState.total) {
-                                                actions.onUIEvent(
-                                                    UIEvent.UpdateProgress(
-                                                        ((timestamp * 100) / state.timelineState.total).toFloat(),
-                                                    ),
-                                                )
-                                            }
-                                        },
-                                        onURLClicked = { url ->
-                                            uriHandler.openUri(
-                                                url,
+                                    if (neteaseMeta != null) {
+                                        // 网易版说明卡三层:发行信息(日期·曲目数·唱片公司) →
+                                        // 数据行(评论数可点开列表 · 相似歌曲入口) → 简介(艺人优先,专辑兜底)
+                                        val releaseInfo =
+                                            listOfNotNull(
+                                                neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
+                                                neteaseMeta.albumTrackCount?.let {
+                                                    stringResource(Res.string.track_count_short, it.toString())
+                                                },
+                                                neteaseMeta.albumCompany,
+                                            ).joinToString(" · ")
+                                        if (releaseInfo.isNotEmpty()) {
+                                            Text(
+                                                text = releaseInfo,
+                                                style = typo().labelSmall,
+                                                color = Color.White,
                                             )
-                                        },
-                                    )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+                                        neteaseMeta.likeCount?.let { likeCount ->
+                                            Text(
+                                                text = stringResource(Res.string.likes_count, formatCompactCount(likeCount)),
+                                                style = typo().labelMedium,
+                                                color = Color.White,
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+                                        if (neteaseMeta.commentCount > 0) {
+                                            Text(
+                                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
+                                                style = typo().bodyMedium,
+                                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
+                                            )
+                                        }
+                                        val bio =
+                                            neteaseMeta.artistBriefDesc
+                                                ?: neteaseMeta.albumDescription
+                                        if (!bio.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            // 与 YT 分支同款:简介块前带"描述"标签行
+                                            Text(
+                                                text = stringResource(Res.string.description),
+                                                style = typo().labelSmall,
+                                                color = Color.White,
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            DescriptionView(
+                                                text = bio,
+                                                onTimeClicked = { },
+                                                onURLClicked = { url ->
+                                                    uriHandler.openUri(url)
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            text = stringResource(Res.string.published_at, state.screenData.songInfoData?.uploadDate ?: ""),
+                                            style = typo().labelSmall,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    Res.string.view_count,
+                                                    formatCompactCount(state.screenData.songInfoData?.viewCount ?: 0),
+                                                ),
+                                            style = typo().labelMedium,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text =
+                                                stringResource(
+                                                    Res.string.like_and_dislike,
+                                                    formatCompactCount(state.screenData.songInfoData?.like ?: 0),
+                                                    formatCompactCount(state.screenData.songInfoData?.dislike ?: 0),
+                                                ),
+                                            style = typo().bodyMedium,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = stringResource(Res.string.description),
+                                            style = typo().labelSmall,
+                                            color = Color.White,
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        DescriptionView(
+                                            text = state.screenData.songInfoData?.description ?: "",
+                                            onTimeClicked = { raw ->
+                                                val timestamp = parseTimestampToMilliseconds(raw)
+                                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                                    actions.onUIEvent(
+                                                        UIEvent.UpdateProgress(
+                                                            ((timestamp * 100) / state.timelineState.total).toFloat(),
+                                                        ),
+                                                    )
+                                                }
+                                            },
+                                            onURLClicked = { url ->
+                                                uriHandler.openUri(
+                                                    url,
+                                                )
+                                            },
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(5.dp))
@@ -1819,7 +1651,12 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        HeartCheckBox(checked = state.controllerState.isLiked, size = 30) {
+                        HeartCheckBox(
+                            checked = state.controllerState.isLiked,
+                            size = 30,
+                            enabled = state.likeEnabled,
+                            modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+                        ) {
                             actions.onUIEvent(UIEvent.ToggleLike)
                         }
                         Spacer(modifier = Modifier.width(15.dp))
@@ -1884,11 +1721,14 @@ fun NowPlayingContentSpotify(
 // The focused info layout (controls visible) and the canvas-unfocused overlay rendered this
 // exact metadata row twice — thumbnail-when-canvas, title, explicit badge + artists,
 // YouTube like button, favourite heart. Extracted once; both call sites pass the same holders.
+// The fullscreen lyrics landscape layout reuses it too, with the thumbnail off: that layout
+// already shows the artwork at full size right above the row.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NowPlayingTrackInfoRow(
+internal fun NowPlayingTrackInfoRow(
     state: NowPlayingContentState,
     actions: NowPlayingContentActions,
+    showCanvasThumbnail: Boolean = true,
 ) {
     Row(
         modifier =
@@ -1897,7 +1737,7 @@ private fun NowPlayingTrackInfoRow(
                 .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedVisibility(state.screenData.canvasData != null) {
+        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -1923,20 +1763,29 @@ private fun NowPlayingTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            Text(
-                text = state.screenData.nowPlayingTitle,
-                style = typo().titleMedium,
-                maxLines = 1,
-                color = Color.White,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            iterations = Int.MAX_VALUE,
-                            animationMode = MarqueeAnimationMode.Immediately,
-                        ).focusable(),
-            )
+            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 550ms crossfade 不同
+            // 步,读作"闪一下"。Spotify 同款上滑淡入淡出,过渡内文字各自带 marquee。
+            AnimatedContent(
+                targetState = state.screenData.nowPlayingTitle,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                },
+                label = "nowPlayingTitle",
+            ) { title ->
+                // marquee 不放进 AnimatedContent 内容里:Immediately 模式在过渡期旧/新两份
+                // 内容同时组合会互相抢焦点/重启滚动,实测直接把标题渲染成空白。
+                Text(
+                    text = title,
+                    style = typo().titleMedium,
+                    maxLines = 1,
+                    color = Color.White,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight(align = Alignment.CenterVertically),
+                )
+            }
             Spacer(modifier = Modifier.height(3.dp))
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -1954,70 +1803,260 @@ private fun NowPlayingTrackInfoRow(
                     }
                 }
                 item(state.screenData.artistName) {
-                    Text(
-                        text = state.screenData.artistName,
-                        style = typo().bodyMedium,
-                        maxLines = 1,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(align = Alignment.CenterVertically)
-                                .basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    animationMode = MarqueeAnimationMode.Immediately,
-                                ).focusable()
-                                .clickable {
-                                    actions.onNavigateToArtist()
-                                },
-                    )
-                }
-            }
-        }
-        if (state.isUserLoggedIn) {
-            Spacer(modifier = Modifier.size(16.dp))
-            Crossfade(
-                targetState = state.likeStatus,
-            ) {
-                if (it) {
-                    IconButton(
-                        modifier =
-                            Modifier
-                                .size(24.dp)
-                                .aspectRatio(1f)
-                                .clip(
-                                    CircleShape,
-                                ),
-                        onClick = {
-                            actions.onAddToYouTubeLiked()
+                    AnimatedContent(
+                        targetState = state.screenData.artistName,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
+                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
                         },
-                    ) {
-                        Icon(imageVector = SimpIcons.CheckCircle, tint = Color.White, contentDescription = "")
-                    }
-                } else {
-                    IconButton(
-                        modifier =
-                            Modifier
-                                .size(24.dp)
-                                .aspectRatio(1f)
-                                .clip(
-                                    CircleShape,
-                                ),
-                        onClick = {
-                            actions.onAddToYouTubeLiked()
-                        },
-                    ) {
-                        Icon(
-                            imageVector = SimpIcons.AddCircleOutline,
-                            tint = Color.White,
-                            contentDescription = "",
+                        label = "nowPlayingArtist",
+                    ) { artist ->
+                        // marquee 同样不进 AnimatedContent(见上方标题注释),超长用省略号。
+                        Text(
+                            text = artist,
+                            style = typo().bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .clickable {
+                                        actions.onNavigateToArtist()
+                                    },
                         )
                     }
                 }
             }
         }
         Spacer(modifier = Modifier.size(12.dp))
-        HeartCheckBox(checked = state.controllerState.isLiked, size = 32) {
-            actions.onUIEvent(UIEvent.ToggleLike)
+        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
+        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            HeartCheckBox(
+                checked = state.controllerState.isLiked,
+                size = 32,
+                enabled = state.likeEnabled,
+                modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+            ) {
+                actions.onUIEvent(UIEvent.ToggleLike)
+            }
         }
+    }
+}
+
+// Seek bar, time row and transport — the playback half of the info layout, shared with the
+// fullscreen lyrics landscape layout. Emits straight into the caller's Column rather than wrapping
+// itself in one: isElementVisible (passed in through [sliderModifier]) compares the slider against
+// its PARENT layout, so a wrapper here would silently change what it compares against.
+@Composable
+internal fun ColumnScope.SpotifyPlaybackControls(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    sliderModifier: Modifier = Modifier,
+) {
+    // Real Slider
+    Box(
+        Modifier
+            .padding(
+                top = 15.dp,
+            ).padding(horizontal = 20.dp)
+            .then(sliderModifier),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Crossfade(state.timelineState.loading) {
+                if (it) {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                        LinearProgressIndicator(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .padding(
+                                        horizontal = 3.dp,
+                                    ).clip(
+                                        RoundedCornerShape(8.dp),
+                                    ),
+                            color = Color.Gray,
+                            trackColor = Color.DarkGray,
+                            strokeCap = StrokeCap.Round,
+                        )
+                    }
+                } else {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                        LinearProgressIndicator(
+                            progress = { state.timelineState.bufferedPercent.toFloat() / 100 },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .padding(
+                                        horizontal = 3.dp,
+                                    ).clip(
+                                        RoundedCornerShape(8.dp),
+                                    ),
+                            color = Color.Gray,
+                            trackColor =
+                                Color.Gray.copy(
+                                    alpha = 0.6f,
+                                ),
+                            strokeCap = StrokeCap.Round,
+                            drawStopIndicator = {},
+                        )
+                    }
+                }
+            }
+        }
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Slider(
+                // material3 1.5.0-alpha25 keeps a
+                // binary-compatibility overload of Slider that
+                // accepts valueRange and then forwards without
+                // it, so the slider silently runs on the
+                // default 0f..1f and anything larger is clamped
+                // to a full track. Hand it a fraction instead;
+                // sliderValue stays on the 0..100 scale that
+                // UIEvent.UpdateProgress and the time labels
+                // are built around.
+                value = state.sliderValue / 100f,
+                onValueChangeFinished = {
+                    actions.onSliderChangeFinished()
+                },
+                onValueChange = {
+                    actions.onSliderChange(it * 100f)
+                },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 3.dp)
+                        .align(
+                            Alignment.TopCenter,
+                        ),
+                track = { sliderState ->
+                    SliderDefaults.Track(
+                        modifier =
+                            Modifier
+                                .height(5.dp),
+                        enabled = true,
+                        sliderState = sliderState,
+                        colors =
+                            SliderDefaults.colors().copy(
+                                thumbColor = state.sliderTrackColor,
+                                activeTrackColor = state.sliderTrackColor,
+                                inactiveTrackColor = Color.Transparent,
+                            ),
+                        thumbTrackGapSize = 0.dp,
+                        drawTick = { _, _ -> },
+                        drawStopIndicator = null,
+                    )
+                },
+                thumb = {
+                    SliderDefaults.Thumb(
+                        modifier =
+                            Modifier
+                                .height(18.dp)
+                                .width(8.dp)
+                                .padding(
+                                    vertical = 4.dp,
+                                ),
+                        thumbSize = DpSize(8.dp, 8.dp),
+                        interactionSource =
+                            remember {
+                                MutableInteractionSource()
+                            },
+                        colors =
+                            SliderDefaults.colors().copy(
+                                thumbColor = state.sliderTrackColor,
+                                activeTrackColor = state.sliderTrackColor,
+                                inactiveTrackColor = Color.Transparent,
+                            ),
+                        enabled = true,
+                    )
+                },
+            )
+        }
+    }
+    // Time Layout
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+    ) {
+        Text(
+            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Left,
+        )
+        // Sweep head for the "Crossfading" shimmer, 0..1. Runs
+        // unconditionally: behind the crossfade check it would
+        // restart from zero each time the label appears (same
+        // rationale as MiniPlayer's crossfadeSweep).
+        val sweepTransition = rememberInfiniteTransition(label = "nowPlayingCrossfadeSweep")
+        val crossfadeSweep by sweepTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(3200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart,
+                ),
+            label = "nowPlayingSweepHead",
+        )
+        AnimatedVisibility(
+            enter = fadeIn(),
+            exit = fadeOut(),
+            visible = state.timelineState.isCrossfading,
+        ) {
+            // Same effect as the desktop MiniPlayer label: a
+            // highlight sweeping through the glyphs via a text
+            // brush — no overlay, no clipping.
+            val shimmerSpan = 140f
+            val shimmerHead = crossfadeSweep * (shimmerSpan * 3f) - shimmerSpan
+            val labelColor = typo().bodyMedium.color
+            Text(
+                text = stringResource(Res.string.crossfading),
+                style =
+                    typo().bodyMedium.copy(
+                        brush =
+                            Brush.horizontalGradient(
+                                0f to labelColor.copy(alpha = 0.45f),
+                                // The sweep head is PURE white, not the resting label colour — the label
+                                // colour is an adaptive grey, and a grey gleam reads as no gleam at all.
+                                0.5f to Color.White,
+                                1f to labelColor.copy(alpha = 0.45f),
+                                startX = shimmerHead,
+                                endX = shimmerHead + shimmerSpan,
+                                tileMode = TileMode.Clamp,
+                            ),
+                    ),
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            text = formatDuration(state.timelineState.total),
+            style = typo().bodyMedium,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Right,
+        )
+    }
+
+    Spacer(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(5.dp),
+    )
+    // Control Button Layout
+    PlayerControlLayout(
+        state.controllerState,
+    ) {
+        actions.onUIEvent(it)
     }
 }

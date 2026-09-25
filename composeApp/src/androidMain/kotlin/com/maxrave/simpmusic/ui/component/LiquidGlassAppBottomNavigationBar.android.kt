@@ -47,6 +47,8 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.domain.data.player.GenericMediaItem
+import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.expect.ui.PlatformBackdrop
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
@@ -79,7 +81,12 @@ actual fun LiquidGlassAppBottomNavigationBar(
     showMixForYouTab: Boolean,
     onOpenNowPlaying: () -> Unit,
     reloadDestinationIfNeeded: (KClass<*>) -> Unit,
+    selectedSource: MusicSource,
+    neteaseLoggedIn: Boolean,
+    onSourceSelected: (MusicSource) -> Unit,
 ) {
+    // 音源切换:与扁平导航栏同一套长按手势+菜单(见 SourceSwitchControls)
+    var showSourceMenu by remember { mutableStateOf(false) }
     val layer = rememberGraphicsLayer()
     val toolbarInteraction = rememberGlassInteraction()
     val searchFabInteraction = rememberGlassInteraction()
@@ -235,6 +242,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
     }
 
     fun selectTab(index: Int) {
+        // 底栏 tab 点击震感:根观察器事件链到不了 bottomBar slot,回调里直接震
+        HapticFeedback.tap()
         val screen = bottomNavScreens.find { it.ordinal == index } ?: return
         if (selectedIndex == index) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {
@@ -329,10 +338,20 @@ actual fun LiquidGlassAppBottomNavigationBar(
                                 luminanceAnimation.value,
                                 CircleShape,
                                 searchFabInteraction,
-                            ).clickable { selectTab(BottomNavScreen.Search.ordinal) },
+                            ).sourceSwitchGesture(
+                                onLongPress = { showSourceMenu = true },
+                                onTap = { selectTab(BottomNavScreen.Search.ordinal) },
+                            ),
                     contentAlignment = Alignment.Center,
                 ) {
                     BottomNavScreen.Search.icon()
+                    SourceSwitchMenu(
+                        expanded = showSourceMenu,
+                        onDismiss = { showSourceMenu = false },
+                        selectedSource = selectedSource,
+                        neteaseLoggedIn = neteaseLoggedIn,
+                        onSourceSelected = onSourceSelected,
+                    )
                 }
             } else {
                 val selectedScreen =

@@ -24,6 +24,7 @@ import simpmusic.composeapp.generated.resources.intro
 import simpmusic.composeapp.generated.resources.month_s_ago
 import simpmusic.composeapp.generated.resources.music_off_topic
 import simpmusic.composeapp.generated.resources.na_na
+import simpmusic.composeapp.generated.resources.netease_rate_limited
 import simpmusic.composeapp.generated.resources.newer_first
 import simpmusic.composeapp.generated.resources.older_first
 import simpmusic.composeapp.generated.resources.outro
@@ -69,16 +70,18 @@ infix fun <E> Collection<E>.symmetricDifference(other: Collection<E>): Set<E> {
 @Composable
 fun LocalDateTime.formatTimeAgo(): String {
     val now = now()
+    // Room Converters.fromTimestamp 以 UTC 落 LocalDateTime,这里必须按 UTC 转回绝对时刻;
+    // 曾误用系统时区,标签整体抬高一个时区偏移(上海 +8h:刚插入的行也显示"8 小时前")
     val duration =
         this
-            .toInstant(TimeZone.currentSystemDefault())
+            .toInstant(TimeZone.UTC)
             .periodUntil(now.toInstant(TimeZone.currentSystemDefault()), TimeZone.currentSystemDefault())
 
     val monthsDiff = duration.months + (duration.years * 12)
     val daysDiff = duration.days
 
     // For hours, we need to calculate manually since Period doesn't include hours
-    val thisInstant = this.toInstant(TimeZone.currentSystemDefault())
+    val thisInstant = this.toInstant(TimeZone.UTC)
     val nowInstant = now.toInstant(TimeZone.currentSystemDefault())
     val hoursDiff = (nowInstant - thisInstant).inWholeHours
 
@@ -270,3 +273,10 @@ fun SponsorBlockType.displayString(): String =
         SponsorBlockType.SELF_PROMOTION -> stringResource(Res.string.self_promotion)
         SponsorBlockType.SPONSOR -> stringResource(Res.string.sponsor)
     }
+/** 网易写操作失败的文案分流:405(端点频控/账号风控窗口,重试会续期)给"操作过于频繁"
+ *  专属提示,其余失败维持各调用点原兜底文案。仅对 onFailure 异常判型——业务 code!=200
+ *  被 repo 折叠成 success(false) 的路径拿不到异常,继续走笼统文案。 */
+fun neteaseWriteErrorString(
+    error: Throwable?,
+    fallback: StringResource,
+): StringResource = if (error is com.maxrave.netease.NeteaseRateLimitException) Res.string.netease_rate_limited else fallback

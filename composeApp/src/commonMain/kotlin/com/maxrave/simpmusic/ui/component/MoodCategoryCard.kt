@@ -12,25 +12,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.extension.angledGradientBackground
 import com.maxrave.simpmusic.ui.theme.typo
-import org.jetbrains.compose.resources.painterResource
-import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.monochrome
 
 /**
- * A "Moods & Genres" browse category tile: the [playlistTitleGradient] and SimpMusic badge of an
- * artwork-less playlist tile, plus the tilted cover Spotify puts on its browse cards.
+ * A "Moods & Genres" browse category tile: the [playlistTitleGradient] cover of an artwork-less
+ * playlist tile, a source brand badge (网易/YTM, replaces the old SimpMusic mark) in the top
+ * corner, plus the tilted cover Spotify puts on its browse cards.
  *
  * [artworkUrl] is null until resolved — the category list carries no artwork at all, so the cover
  * costs a separate browse per category and arrives late. The tile is designed to look finished
@@ -41,9 +38,10 @@ fun MoodCategoryCard(
     title: String,
     artworkUrl: String?,
     modifier: Modifier = Modifier,
+    // 分类页本身按音源分流(网易 NeteaseTagScreen / YT MoodScreen),角标跟当前源走
+    source: MusicSource,
     onClick: () -> Unit,
 ) {
-    val badge = painterResource(Res.drawable.monochrome)
     Box(
         modifier =
             modifier
@@ -53,29 +51,18 @@ fun MoodCategoryCard(
                 .angledGradientBackground(
                     colors = playlistTitleGradient(title),
                     degrees = 45f,
-                ).drawBehind {
-                    // PlaylistThumbnailPainter sizes the badge off the width because its tile is
-                    // square. This one is 2:1, so the same fractions would double it — anchor on
-                    // the height instead to keep the badge the size the eye expects.
-                    val radius = size.height * 0.09f
-                    val centerX = size.width - radius * 2f
-                    val centerY = radius * 2f
-                    drawCircle(
-                        center = Offset(centerX, centerY),
-                        color = Color.White,
-                        radius = radius,
-                    )
-                    val badgeSize = size.copy(width = radius * 3f, height = radius * 3f)
-                    translate(
-                        left = centerX - badgeSize.width / 2f,
-                        top = centerY - badgeSize.height / 2f,
-                    ) {
-                        with(badge) {
-                            draw(badgeSize, alpha = 0.2f)
-                        }
-                    }
-                }.clickable(onClick = onClick),
+                ).clickable(onClick = onClick),
     ) {
+        // 2026-09-24 用户反馈:搜索分类卡角标缩小+降透明(默认 22dp 太抢)
+        SourceBadge(
+            source = source,
+            size = 16.dp,
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .alpha(0.65f),
+        )
         if (artworkUrl != null) {
             AsyncImage(
                 model = artworkUrl,

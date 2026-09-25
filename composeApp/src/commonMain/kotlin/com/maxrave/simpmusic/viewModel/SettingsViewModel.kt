@@ -22,6 +22,7 @@ import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.data.player.ReverbPreset
 import com.maxrave.domain.extension.toNetScapeString
 import com.maxrave.domain.manager.DataStoreManager
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.repository.AccountRepository
 import com.maxrave.domain.repository.AlbumRepository
@@ -86,12 +87,14 @@ class SettingsViewModel(
     private val cacheRepository: CacheRepository,
     private val artistRepository: ArtistRepository,
     private val lyricsRomanizerRepository: LyricsRomanizerRepository,
+    private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
     private val databasePath: String? = commonRepository.getDatabasePath()
     private val downloadUtils: DownloadHandler by inject()
     private val playlistRepository: PlaylistRepository by inject()
     private val albumRepository: AlbumRepository by inject()
     private val localPlaylistRepository: LocalPlaylistRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
 
     val castState: StateFlow<GenericCastState> get() = mediaPlayerHandler.castState
 
@@ -111,8 +114,6 @@ class SettingsViewModel(
     val skipSilent: StateFlow<String?> = _skipSilent
     private var _savedPlaybackState: MutableStateFlow<String?> = MutableStateFlow(null)
     val savedPlaybackState: StateFlow<String?> = _savedPlaybackState
-    private var _saveRecentSongAndQueue: MutableStateFlow<String?> = MutableStateFlow(null)
-    val saveRecentSongAndQueue: StateFlow<String?> = _saveRecentSongAndQueue
     private var _lastCheckForUpdate: MutableStateFlow<String?> = MutableStateFlow(null)
     val lastCheckForUpdate: StateFlow<String?> = _lastCheckForUpdate
     private var _sponsorBlockEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -148,8 +149,6 @@ class SettingsViewModel(
     val thumbCacheSize: StateFlow<Long?> = _thumbCacheSize
     private var _canvasCacheSize: MutableStateFlow<Long?> = MutableStateFlow(null)
     val canvasCacheSize: StateFlow<Long?> = _canvasCacheSize
-    private var _translucentBottomBar: MutableStateFlow<String?> = MutableStateFlow(null)
-    val translucentBottomBar: StateFlow<String?> = _translucentBottomBar
     private var _usingProxy = MutableStateFlow(false)
     val usingProxy: StateFlow<Boolean> = _usingProxy
     private var _proxyType = MutableStateFlow(DataStoreManager.ProxyType.PROXY_TYPE_HTTP)
@@ -196,6 +195,10 @@ class SettingsViewModel(
     val autoDownloadLikedSongs: StateFlow<Boolean> = _autoDownloadLikedSongs
     private val _youtubeSubtitleLanguage = MutableStateFlow<String>("")
     val youtubeSubtitleLanguage: StateFlow<String> = _youtubeSubtitleLanguage
+    private val _lyricsOffsetMs = MutableStateFlow<Int>(0)
+    val lyricsOffsetMs: StateFlow<Int> = _lyricsOffsetMs
+    private val _preferredAudioLanguage = MutableStateFlow("")
+    val preferredAudioLanguage: StateFlow<String> = _preferredAudioLanguage
 
     private var _helpBuildLyricsDatabase: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val helpBuildLyricsDatabase: StateFlow<Boolean> = _helpBuildLyricsDatabase
@@ -233,14 +236,8 @@ class SettingsViewModel(
     private val _lastfmScrobbleEnabled = MutableStateFlow(false)
     val lastfmScrobbleEnabled: StateFlow<Boolean> = _lastfmScrobbleEnabled
 
-    private val _keepServiceAlive = MutableStateFlow<Boolean>(false)
-    val keepServiceAlive: StateFlow<Boolean> = _keepServiceAlive
-
     private val _keepYouTubePlaylistOffline = MutableStateFlow<Boolean>(false)
     val keepYouTubePlaylistOffline: StateFlow<Boolean> = _keepYouTubePlaylistOffline
-
-    private val _combineLocalAndYouTubeLiked = MutableStateFlow<Boolean>(false)
-    val combineLocalAndYouTubeLiked: StateFlow<Boolean> = _combineLocalAndYouTubeLiked
 
     private val _downloadQuality = MutableStateFlow<String?>(null)
     val downloadQuality: StateFlow<String?> = _downloadQuality
@@ -286,6 +283,7 @@ class SettingsViewModel(
 
     init {
         getYoutubeSubtitleLanguage()
+        getPreferredAudioLanguage()
         getHelpBuildLyricsDatabase()
         viewModelScope.launch {
             enableLiquidGlass.collect {
@@ -295,6 +293,8 @@ class SettingsViewModel(
             }
         }
     }
+
+    fun getAudioSessionId() = mediaPlayerHandler.player.audioSessionId
 
     fun getData() {
         getLocation()
@@ -306,15 +306,17 @@ class SettingsViewModel(
         getLoggedIn()
         getNormalizeVolume()
         getSkipSilent()
+        getHapticFeedbackLevel()
+        getHapticEnabled()
         getSavedPlaybackState()
         getSendBackToGoogle()
-        getSaveRecentSongAndQueue()
         getLastCheckForUpdate()
         getSponsorBlockEnabled()
         getSponsorBlockCategories()
         getTranslationLanguage()
         getYoutubeSubtitleLanguage()
         getLyricsProvider()
+        getLyricsOffsetMs()
         getUseTranslation()
         getNotificationLyrics()
         getNotificationLyricsMode()
@@ -322,15 +324,14 @@ class SettingsViewModel(
         getRadioAudioOnly()
         getVideoQuality()
         getSpotifyLogIn()
+        getNeteaseLogIn()
         getSpotifyLyrics()
-        getSyncFollowToYouTube()
         getEqualizer()
         getAudioEffects()
         getSpotifyCanvas()
         getAMAnimatedArtwork()
         getUsingProxy()
         getCanvasCache()
-        getTranslucentBottomBar()
         getAutoCheckUpdate()
         getAIProvider()
         getAIApiKey()
@@ -353,9 +354,7 @@ class SettingsViewModel(
         getDiscordRichPresenceEnabled()
         getLastfmSession()
         getLastfmScrobbleEnabled()
-        getKeepServiceAlive()
         getKeepYouTubePlaylistOffline()
-        getCombineLocalAndYouTubeLiked()
         getDownloadQuality()
         getVideoDownloadQuality()
         getLocalTrackingEnabled()
@@ -452,36 +451,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setKeepYouTubePlaylistOffline(keep)
             getKeepYouTubePlaylistOffline()
-        }
-    }
-
-    private fun getCombineLocalAndYouTubeLiked() {
-        viewModelScope.launch {
-            dataStoreManager.combineLocalAndYouTubeLiked.collect { combine ->
-                _combineLocalAndYouTubeLiked.value = combine == DataStoreManager.TRUE
-            }
-        }
-    }
-
-    fun setCombineLocalAndYouTubeLiked(combine: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setCombineLocalAndYouTubeLiked(combine)
-            getCombineLocalAndYouTubeLiked()
-        }
-    }
-
-    private fun getKeepServiceAlive() {
-        viewModelScope.launch {
-            dataStoreManager.keepServiceAlive.collect { keepServiceAlive ->
-                _keepServiceAlive.value = keepServiceAlive == DataStoreManager.TRUE
-            }
-        }
-    }
-
-    fun setKeepServiceAlive(keepServiceAlive: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setKeepServiceAlive(keepServiceAlive)
-            getKeepServiceAlive()
         }
     }
 
@@ -1040,21 +1009,6 @@ class SettingsViewModel(
         }
     }
 
-    fun getTranslucentBottomBar() {
-        viewModelScope.launch {
-            dataStoreManager.translucentBottomBar.collect { translucentBottomBar ->
-                _translucentBottomBar.emit(translucentBottomBar)
-            }
-        }
-    }
-
-    fun setTranslucentBottomBar(translucentBottomBar: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setTranslucentBottomBar(translucentBottomBar)
-            getTranslucentBottomBar()
-        }
-    }
-
     fun getThumbCacheSize(context: PlatformContext) {
         viewModelScope.launch {
             val diskCache = SingletonImageLoader.get(context).diskCache
@@ -1088,6 +1042,23 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setTranslationLanguage(language)
             getTranslationLanguage()
+        }
+    }
+
+    private fun getLyricsOffsetMs() {
+        viewModelScope.launch {
+            dataStoreManager.lyricsOffsetMs.collect { offsetMs ->
+                _lyricsOffsetMs.emit(offsetMs)
+            }
+        }
+    }
+
+    // Deliberately does NOT re-call its getter the way the settings around it do: that getter
+    // collects forever, so calling it again on every write leaves another collector running for the
+    // life of the ViewModel. The one started in init already publishes this value.
+    fun setLyricsOffsetMs(offsetMs: Int) {
+        viewModelScope.launch {
+            dataStoreManager.setLyricsOffsetMs(offsetMs)
         }
     }
 
@@ -1193,14 +1164,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setLocation(location)
             getLocation()
-        }
-    }
-
-    fun getSaveRecentSongAndQueue() {
-        viewModelScope.launch {
-            dataStoreManager.saveRecentSongAndQueue.collect { saved ->
-                _saveRecentSongAndQueue.emit(saved)
-            }
         }
     }
 
@@ -1512,6 +1475,39 @@ class SettingsViewModel(
         }
     }
 
+    /** 触感反馈强度(LIGHT/MEDIUM/STRONG,仅 Android 实际振动;消费端是 expect 的 HapticFeedback) */
+    private var _hapticFeedbackLevel: MutableStateFlow<String> =
+        MutableStateFlow(DataStoreManager.Values.HAPTIC_FEEDBACK_LEVEL_MEDIUM)
+    val hapticFeedbackLevel: StateFlow<String> = _hapticFeedbackLevel
+
+    /** 触感反馈总开关,默认关 */
+    private val _hapticEnabled = MutableStateFlow<Boolean>(false)
+    val hapticEnabled: StateFlow<Boolean> = _hapticEnabled
+
+    fun getHapticFeedbackLevel() {
+        viewModelScope.launch {
+            dataStoreManager.hapticFeedbackLevel.collect { _hapticFeedbackLevel.emit(it) }
+        }
+    }
+
+    fun setHapticFeedbackLevel(level: String) {
+        viewModelScope.launch {
+            dataStoreManager.setHapticFeedbackLevel(level)
+        }
+    }
+
+    fun getHapticEnabled() {
+        viewModelScope.launch {
+            dataStoreManager.hapticEnabled.collect { _hapticEnabled.emit(it == DataStoreManager.TRUE) }
+        }
+    }
+
+    fun setHapticEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setHapticEnabled(enabled)
+        }
+    }
+
     fun getSendBackToGoogle() {
         viewModelScope.launch {
             dataStoreManager.sendBackToGoogle.collect { sendBackToGoogle ->
@@ -1554,13 +1550,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setSaveStateOfPlayback(savedPlaybackState)
             getSavedPlaybackState()
-        }
-    }
-
-    fun setSaveLastPlayed(b: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setSaveRecentSongAndQueue(b)
-            getSaveRecentSongAndQueue()
         }
     }
 
@@ -1621,6 +1610,7 @@ class SettingsViewModel(
                                                         ?.url ?: "",
                                                 cache = accountRepository.getYouTubeCookie(),
                                                 pageId = it.first().pageId,
+                                                authUser = it.first().authUser,
                                                 isUsed = true,
                                             ),
                                         ).singleOrNull()
@@ -1646,6 +1636,7 @@ class SettingsViewModel(
     ): Boolean {
         val currentCookie = dataStoreManager.cookie.first()
         val currentPageId = dataStoreManager.pageId.first()
+        val currentAuthUser = dataStoreManager.authUser.first()
         val currentLoggedIn = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
         try {
             runBlocking {
@@ -1700,6 +1691,7 @@ class SettingsViewModel(
                                     isUsed = index == 0,
                                     netscapeCookie = cookieItem,
                                     pageId = account.pageId,
+                                    authUser = account.authUser,
                                 ),
                             ).firstOrNull()
                             ?.let {
@@ -1707,14 +1699,14 @@ class SettingsViewModel(
                             }
                     }
                     dataStoreManager.setLoggedIn(true)
-                    dataStoreManager.setCookie(cookie, accountInfoList.first().pageId)
+                    dataStoreManager.setCookie(cookie, accountInfoList.first().pageId, accountInfoList.first().authUser)
                     getAllGoogleAccount()
                     getLoggedIn()
                     true
                 } ?: run {
                 Logger.w("getAllGoogleAccount", "addAccount: Account info is null")
                 runBlocking {
-                    dataStoreManager.setCookie(currentCookie, currentPageId)
+                    dataStoreManager.setCookie(currentCookie, currentPageId, currentAuthUser)
                     dataStoreManager.setLoggedIn(currentLoggedIn)
                 }
                 false
@@ -1723,7 +1715,7 @@ class SettingsViewModel(
             e.printStackTrace()
             Logger.e("getAllGoogleAccount", "addAccount: ${e.message}")
             runBlocking {
-                dataStoreManager.setCookie(currentCookie, currentPageId)
+                dataStoreManager.setCookie(currentCookie, currentPageId, currentAuthUser)
                 dataStoreManager.setLoggedIn(currentLoggedIn)
             }
             return false
@@ -1752,7 +1744,7 @@ class SettingsViewModel(
                 acc.netscapeCookie?.let { commonRepository.writeTextToFile(it, (getFileDir() + "/ytdlp-cookie.txt")) }.let {
                     Logger.d("getAllGoogleAccount", "addAccount: write cookie file: $it")
                 }
-                dataStoreManager.setCookie(acc.cache ?: "", acc.pageId)
+                dataStoreManager.setCookie(acc.cache ?: "", acc.pageId, acc.authUser)
                 dataStoreManager.setLoggedIn(true)
                 delay(500)
                 getAllGoogleAccount()
@@ -1841,12 +1833,180 @@ class SettingsViewModel(
         }
     }
 
+    // ---------------------------------------------------------------- 网易云音源
+
+    private var _neteaseLogIn: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val neteaseLogIn: StateFlow<Boolean> = _neteaseLogIn
+
+    private var _neteaseAccounts: MutableStateFlow<List<com.maxrave.domain.data.entities.NeteaseAccountEntity>> = MutableStateFlow(emptyList())
+    val neteaseAccounts: StateFlow<List<com.maxrave.domain.data.entities.NeteaseAccountEntity>> = _neteaseAccounts
+
+    private var _neteaseAccountName: MutableStateFlow<String> = MutableStateFlow("")
+    val neteaseAccountName: StateFlow<String> = _neteaseAccountName
+
+    private var _neteaseAccountThumbUrlState: MutableStateFlow<String> = MutableStateFlow("")
+    val neteaseAccountThumbUrlState: StateFlow<String> = _neteaseAccountThumbUrlState
+
+    private var _neteaseQuality: MutableStateFlow<String> = MutableStateFlow("EXHIGH")
+    val neteaseQuality: StateFlow<String> = _neteaseQuality
+
+    private var _neteaseDownloadQuality: MutableStateFlow<String> = MutableStateFlow("LOSSLESS")
+    val neteaseDownloadQuality: StateFlow<String> = _neteaseDownloadQuality
+
+    private var _neteasePlayReport: MutableStateFlow<Boolean> = MutableStateFlow(true)
+    val neteasePlayReport: StateFlow<Boolean> = _neteasePlayReport
+
+    /** 无版权歌曲动作(SKIP/PAUSE/SWITCH_YT,DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_*) */
+    private var _neteaseUnavailableAction: MutableStateFlow<String> =
+        MutableStateFlow(DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP)
+    val neteaseUnavailableAction: StateFlow<String> = _neteaseUnavailableAction
+
+    fun getNeteaseLogIn() {
+        viewModelScope.launch {
+            dataStoreManager.neteaseAccountThumbUrl.collect { _neteaseAccountThumbUrlState.value = it }
+        }
+        viewModelScope.launch {
+            combineStates(
+                dataStoreManager.neteaseCookie,
+                dataStoreManager.neteaseAccountName,
+                dataStoreManager.neteaseQuality,
+                dataStoreManager.neteaseDownloadQuality,
+                dataStoreManager.neteasePlayReport,
+                dataStoreManager.neteaseUnavailableAction,
+            )
+        }
+    }
+
+    /** DataStore → StateFlow 的一次性搬运,避免八个独立 collect */
+    private suspend fun combineStates(
+        cookie: kotlinx.coroutines.flow.Flow<String>,
+        name: kotlinx.coroutines.flow.Flow<String>,
+        quality: kotlinx.coroutines.flow.Flow<String>,
+        downloadQuality: kotlinx.coroutines.flow.Flow<String>,
+        playReport: kotlinx.coroutines.flow.Flow<String>,
+        unavailableAction: kotlinx.coroutines.flow.Flow<String>,
+    ) {
+        kotlinx.coroutines.flow.combine(
+            cookie,
+            name,
+            quality,
+            downloadQuality,
+            playReport,
+            unavailableAction,
+        ) { values -> values }.collect { state ->
+            _neteaseLogIn.value = (state[0] as String).isNotEmpty()
+            _neteaseAccountName.value = state[1] as String
+            _neteaseQuality.value = normalizeNeteaseQuality(state[2] as String)
+            _neteaseDownloadQuality.value =
+                normalizeNeteaseQuality(state[3] as String, default = NETEASE_DOWNLOAD_QUALITY_DEFAULT)
+            _neteasePlayReport.value = (state[4] as String) == DataStoreManager.TRUE
+            _neteaseUnavailableAction.value = normalizeNeteaseUnavailableAction(state[5] as String)
+        }
+    }
+
+    /**
+     * 网易音质/无版权动作的读取侧归一:DataStore 里残留旧版本枚举名或损坏值时回落默认,
+     * UI(设置页副标题)与消费端永远拿到合法值——裸 key 不再有机会透出到界面。
+     * 存储值本身不重写(懒迁移,与 YT QUALITY.normalize 同款语义)。
+     */
+    private fun normalizeNeteaseQuality(
+        saved: String,
+        default: String = NETEASE_QUALITY_DEFAULT,
+    ): String =
+        listOf(
+            "JYMASTER",
+            "SKY",
+            "JYEFFECT",
+            "HIRES",
+            "LOSSLESS",
+            "EXHIGH",
+            "HIGHER",
+            "STANDARD",
+        ).firstOrNull { it == saved } ?: default
+
+    private fun normalizeNeteaseUnavailableAction(saved: String): String =
+        when (saved) {
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_PAUSE,
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SWITCH_YT,
+            DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP,
+            -> saved
+
+            else -> DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP
+        }
+
+    companion object {
+        private const val NETEASE_QUALITY_DEFAULT = "EXHIGH"
+        private const val NETEASE_DOWNLOAD_QUALITY_DEFAULT = "LOSSLESS"
+    }
+
+    fun setNeteaseQuality(quality: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseQuality(quality) }
+    }
+
+    fun setNeteaseDownloadQuality(quality: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseDownloadQuality(quality) }
+    }
+
+    fun setNeteasePlayReport(enabled: Boolean) {
+        viewModelScope.launch { dataStoreManager.setNeteasePlayReport(enabled) }
+    }
+
+    fun setNeteaseUnavailableAction(action: String) {
+        viewModelScope.launch { dataStoreManager.setNeteaseUnavailableAction(action) }
+    }
+
+    fun getAllNeteaseAccounts() {
+        viewModelScope.launch {
+            // 自愈:cookie 有效但账户表空(如清库只清了 Room)先补行,列表不再"无账户"
+            neteaseRepository.repairAccountRowIfMissing()
+            neteaseRepository.getNeteaseAccounts().collect { _neteaseAccounts.value = it }
+        }
+    }
+
+    fun setUsedNeteaseAccount(acc: com.maxrave.domain.data.entities.NeteaseAccountEntity) {
+        viewModelScope.launch {
+            neteaseRepository.setUsedNeteaseAccount(acc.userId)
+            delay(200)
+            getAllNeteaseAccounts()
+        }
+    }
+
+    /** 访客模式:保留账户表,仅退出当前会话;选中源回落 YTM(统一入口,只切 setting 不动播放状态;已是 YT 源则无操作) */
+    fun useGuestNetease() {
+        viewModelScope.launch {
+            neteaseRepository.useGuest()
+            sharedViewModel.switchSource(MusicSource.YOUTUBE_MUSIC)
+            delay(200)
+            getAllNeteaseAccounts()
+            _neteaseLogIn.value = false
+        }
+    }
+
+    /** 退出全部网易云账户;若当前选中源是网易云则回落 YTM(同上,统一入口) */
+    fun logOutAllNetease() {
+        viewModelScope.launch {
+            neteaseRepository.logout()
+            sharedViewModel.switchSource(MusicSource.YOUTUBE_MUSIC)
+            _neteaseAccounts.value = emptyList()
+            _neteaseLogIn.value = false
+        }
+    }
+
     private var _equalizerEnabled: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val equalizerEnabled: StateFlow<Boolean> = _equalizerEnabled
 
     fun setEqualizerEnabled(enabled: Boolean) {
         viewModelScope.launch {
             dataStoreManager.setEqualizerEnabled(enabled)
+        }
+    }
+
+    private var _equalizerType: MutableStateFlow<String> = MutableStateFlow(DataStoreManager.EQUALIZER_TYPE_BUILT_IN)
+    val equalizerType: StateFlow<String> = _equalizerType
+
+    fun setEqualizerType(type: String) {
+        viewModelScope.launch {
+            dataStoreManager.setEqualizerType(type)
         }
     }
 
@@ -1867,7 +2027,7 @@ class SettingsViewModel(
      * equalizer block itself, which asks on its own so it keeps working if it is ever hosted
      * anywhere else. Both land on this same view model, and the collectors live in
      * [viewModelScope] rather than in a composition — so without this, toggling the switch off and
-     * on left another four behind every time, each re-reading the preference file for a value
+     * on left another five behind every time, each re-reading the preference file for a value
      * three others were already publishing.
      */
     private var equalizerCollectorsStarted = false
@@ -1880,6 +2040,9 @@ class SettingsViewModel(
                 dataStoreManager.equalizerEnabled.collect {
                     _equalizerEnabled.emit(it == DataStoreManager.TRUE)
                 }
+            }
+            launch {
+                dataStoreManager.equalizerType.collect { _equalizerType.emit(it) }
             }
             launch {
                 dataStoreManager.equalizerBands.collect { stored ->
@@ -2046,32 +2209,7 @@ class SettingsViewModel(
         }
     }
 
-    private var _syncFollowToYouTube: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    val syncFollowToYouTube: StateFlow<Boolean> = _syncFollowToYouTube
 
-    fun getSyncFollowToYouTube() {
-        viewModelScope.launch {
-            dataStoreManager.syncFollowToYouTube.collect {
-                _syncFollowToYouTube.emit(it == DataStoreManager.TRUE)
-            }
-        }
-    }
-
-    fun setSyncFollowToYouTube(enabled: Boolean) {
-        viewModelScope.launch {
-            dataStoreManager.setSyncFollowToYouTube(enabled)
-            // Turning it on is a statement about the whole library: artists followed before the
-            // switch would otherwise never reach the account. Turning it off deliberately does
-            // NOT unsubscribe — stopping the mirroring is not the same as asking us to undo it.
-            if (enabled) {
-                // Runs silently. The only toast in this feature belongs to the Follow button on
-                // the artist screen, where the user performed the action and is waiting to see it
-                // take effect; a switch in Settings is not the place to report on a background
-                // sweep the user is not watching.
-                artistRepository.syncFollowedArtistsToYouTube().collect { }
-            }
-        }
-    }
 
     private var _spotifyLyrics: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val spotifyLyrics: StateFlow<Boolean> = _spotifyLyrics
@@ -2165,6 +2303,22 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setYoutubeSubtitleLanguage(language)
             getYoutubeSubtitleLanguage()
+        }
+    }
+
+    private fun getPreferredAudioLanguage() {
+        viewModelScope.launch {
+            dataStoreManager.preferredAudioLanguage.collect { language ->
+                _preferredAudioLanguage.emit(language)
+            }
+        }
+    }
+
+    // Does not re-call the getter, for the same reason as setLyricsOffsetMs: the collector started
+    // in init already publishes every write.
+    fun setPreferredAudioLanguage(language: String) {
+        viewModelScope.launch {
+            dataStoreManager.setPreferredAudioLanguage(language)
         }
     }
 

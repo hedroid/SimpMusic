@@ -11,10 +11,13 @@ import com.maxrave.domain.data.model.browse.artist.ArtistLogo
 import com.maxrave.domain.data.model.browse.artist.Related
 import com.maxrave.domain.data.model.browse.artist.ResultPlaylist
 import com.maxrave.domain.data.model.browse.artist.Singles
+import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.data.model.streams.YouTubeWatchEndpoint
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.domain.repository.SongRepository
@@ -24,25 +27,38 @@ import com.maxrave.simpmusic.viewModel.ArtistScreenState.Error
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Loading
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Success
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.Job
+import org.koin.core.component.inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.sync_follow_failed
 import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.followed_toast
+import simpmusic.composeapp.generated.resources.subscribed_on_netease
+import simpmusic.composeapp.generated.resources.unfollowed_toast
 import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
+import simpmusic.composeapp.generated.resources.unsubscribed_on_netease
+import simpmusic.composeapp.generated.resources.sync_follow_failed_netease
 import org.jetbrains.compose.resources.getString
 
 class ArtistViewModel(
     private val artistRepository: ArtistRepository,
     private val songRepository: SongRepository,
     private val lyricsCanvasRepository: LyricsCanvasRepository,
+    private val dataStoreManager: DataStoreManager,
 ) : BaseViewModel() {
+    private val mutationBus: LibraryMutationBus by inject()
+
     // It is dynamic and can be changed by the user, so separate it from the ArtistScreenData
     private var _canvasUrl: MutableStateFlow<Pair<String, SongEntity>?> = MutableStateFlow(null)
     var canvasUrl: StateFlow<Pair<String, SongEntity>?> = _canvasUrl
@@ -51,8 +67,20 @@ class ArtistViewModel(
     private val _artistLogo: MutableStateFlow<ArtistLogo?> = MutableStateFlow(null)
     val artistLogo: StateFlow<ArtistLogo?> = _artistLogo
 
+    // How many liked songs credit this artist — the "Liked songs" row above Popular (issue #2524)
+    // shows only while this is above zero. Observed, so liking a song from the page updates it.
+    private val _likedSongCount: MutableStateFlow<Int> = MutableStateFlow(0)
+    val likedSongCount: StateFlow<Int> = _likedSongCount
+    private var likedSongsJob: Job? = null
+
     private var _followed: MutableStateFlow<Boolean> = MutableStateFlow(false)
     var followed: StateFlow<Boolean> = _followed
+
+    private val _remoteFollowed = MutableStateFlow<Boolean?>(null)
+    val remoteFollowed: StateFlow<Boolean?> = _remoteFollowed
+
+    private val _remoteFollowPending = MutableStateFlow(false)
+    val remoteFollowPending: StateFlow<Boolean> = _remoteFollowPending
 
     private val _artistScreenState: MutableStateFlow<ArtistScreenState> = MutableStateFlow(Loading)
     val artistScreenState: StateFlow<ArtistScreenState> = _artistScreenState
@@ -62,6 +90,14 @@ class ArtistViewModel(
         _canvasUrl.value = null
         _artistLogo.value = null
         _followed.value = false
+        _remoteFollowed.value = null
+        _remoteFollowPending.value = false
+        _likedSongCount.value = 0
+        likedSongsJob?.cancel()
+        likedSongsJob =
+            viewModelScope.launch {
+                songRepository.getLikedSongsByArtist(channelId).collect { _likedSongCount.value = it.size }
+            }
         viewModelScope.launch {
             artistRepository.getArtistData(channelId).collect { browse ->
                 val data = browse.data
@@ -77,6 +113,17 @@ class ArtistViewModel(
                                         ?.url,
                                 ),
                             )
+                            // 关注=云端账号状态:拉到即驱动显示,并镜像本地缓存行
+                            _remoteFollowed.value = data.subscribed
+                            val cloudFollowed = data.subscribed
+                            if (cloudFollowed != null) {
+                                _followed.value = cloudFollowed
+                                val localFollowed =
+                                    artistRepository.getArtistById(channelId).firstOrNull()?.followed == true
+                                if (localFollowed != cloudFollowed) {
+                                    artistRepository.setFollowedLocal(channelId, cloudFollowed)
+                                }
+                            }
                         }
                         _artistScreenState.value =
                             Success(data.toArtistScreenData())
@@ -147,32 +194,76 @@ class ArtistViewModel(
         }
     }
 
+    /**
+     * 关注点击的唯一路径:直接切换云端账号关注。成功后镜像本地缓存(artist.followed,
+     * 供库页关注的歌手分区),失败 toast。双向都发库页本地回写:取消关注→移除;
+     * 关注→插入完整行(艺人页上下文即权威数据,与网络拉回的行同构)。
+     */
     fun updateFollowed(
         followed: Int,
         channelId: String,
     ) {
+        val target = followed == 1
+        _followed.value = target
         viewModelScope.launch {
-            _followed.value = (followed == 1)
-            // Both outcomes are reported; only null stays quiet, because that means mirroring
-            // is switched off and nothing was attempted. The local follow above stands either
-            // way — these toasts speak for the account, not for the follow itself.
-            val synced = artistRepository.updateFollowedStatus(channelId, followed)
-            when (synced) {
-                true ->
-                    makeToast(
-                        getString(
-                            if (followed == 1) {
-                                Res.string.subscribed_on_youtube
-                            } else {
-                                Res.string.unsubscribed_on_youtube
-                            },
-                        ),
-                    )
-
-                false -> makeToast(getString(Res.string.sync_follow_failed))
-                null -> Unit
+            val ok = artistRepository.setRemoteFollowedStatus(channelId, target)
+            if (ok) {
+                _remoteFollowed.value = target
+                artistRepository.setFollowedLocal(channelId, target)
+                makeToast(getString(if (target) Res.string.followed_toast else Res.string.unfollowed_toast))
+                if (target) {
+                    mutationBus.send(LibraryMutation.ArtistFollowed(followedArtistsResult(channelId)))
+                } else {
+                    // 库页本地回写:取消关注成功 → 关注分区原地移除(不做返回网络刷新)
+                    mutationBus.send(LibraryMutation.ArtistUnfollowed(channelId))
+                }
+            } else {
+                _followed.value = !target
+                makeToast(
+                    getString(
+                        if (channelId.toLongOrNull() != null) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube,
+                    ),
+                )
             }
-            log("updateFollowed: ${_followed.value}, synced: $synced")
+            log("updateFollowed: ${_followed.value}, ok: $ok")
+        }
+    }
+
+    /** 关注事件的载荷:从页面状态构造完整艺人行(字段对齐库页 YT 艺人行的转换形状) */
+    private fun followedArtistsResult(channelId: String): ArtistsResult {
+        val data = (artistScreenState.value as? Success)?.data
+        return ArtistsResult(
+            artist = data?.title ?: "",
+            browseId = channelId,
+            category = "",
+            radioId = "",
+            resultType = "artist",
+            shuffleId = "",
+            thumbnails =
+                data?.imageUrl.takeIf { !it.isNullOrBlank() }
+                    ?.let { listOf(Thumbnail(height = 560, url = it, width = 560)) }
+                    ?: emptyList(),
+        )
+    }
+
+    /** Explicit source-account action; never mutates the SimpMusic-local follow flag. */
+    fun setRemoteFollowed(
+        followed: Boolean,
+        channelId: String,
+    ) {
+        if (_remoteFollowPending.value) return
+        viewModelScope.launch {
+            _remoteFollowPending.value = true
+            if (artistRepository.setRemoteFollowedStatus(channelId, followed)) {
+                _remoteFollowed.value = followed
+            } else {
+                makeToast(
+                    getString(
+                        if (channelId.toLongOrNull() != null) Res.string.sync_follow_failed_netease else Res.string.sync_follow_failed,
+                    ),
+                )
+            }
+            _remoteFollowPending.value = false
         }
     }
 
@@ -235,6 +326,38 @@ class ArtistViewModel(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 网易艺人随机播放:shuffleParam(YouTube watch endpoint)对网易艺人恒为 null——
+     * simiSong 电台是"歌曲级"相似,不适合整个艺人。直接把热门歌曲洗牌整队装载,
+     * 语义对齐 YT 艺人 shuffleParam(队列=艺人电台,播完由无尽队列逻辑接管)。
+     * 必须传 PLAYLIST_CLICK+index:SONG_CLICK 只装点击那一首(混合页整队装载同款教训)。
+     */
+    fun onNeteaseShuffleClick(
+        songs: List<Track>,
+        artistId: String,
+        artistName: String?,
+    ) {
+        if (songs.isEmpty()) return
+        val shuffled = songs.shuffled()
+        viewModelScope.launch {
+            setQueueData(
+                QueueData.Data(
+                    listTracks = shuffled,
+                    firstPlayedTrack = shuffled.first(),
+                    playlistId = "NETEASE_ARTIST_$artistId",
+                    playlistName = "\"$artistName\" ${getString(Res.string.shuffle)}",
+                    playlistType = PlaylistType.RADIO,
+                    continuation = null,
+                ),
+            )
+            loadMediaItem(
+                shuffled.first(),
+                Config.PLAYLIST_CLICK,
+                0,
+            )
         }
     }
 }

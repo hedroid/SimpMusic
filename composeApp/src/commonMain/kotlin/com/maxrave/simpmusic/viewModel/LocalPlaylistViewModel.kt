@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.singleOrNull
@@ -66,6 +67,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDateTime
 import org.koin.core.component.inject
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.add_to_queue
 import simpmusic.composeapp.generated.resources.added_to_playlist
@@ -605,36 +607,38 @@ class LocalPlaylistViewModel(
         }
     }
 
+    /**
+     * Mirrors the download state of [listJob] onto the playlist while the batch runs.
+     *
+     * A missing entry in `downloadTask` means "nothing reported yet", which is NOT the same as
+     * "finished and not downloaded" — collapsing the two into a trailing `else` is what pinned
+     * every playlist to STATE_NOT_DOWNLOADED whenever the map had not been populated. An
+     * unresolved batch therefore leaves the current state alone instead of overwriting it.
+     *
+     * The repository write also has to happen OUTSIDE `_uiState.update`: that helper is a
+     * compare-and-set retry loop, so a lambda with a suspending side effect in it can run more
+     * than once per emission and issue duplicate writes.
+     */
     fun downloadFullPlaylistState(
         id: Long,
         listJob: List<String>,
     ) {
+        if (listJob.isEmpty()) return
         viewModelScope.launch {
             downloadUtils.downloadTask.collect { download ->
-                _uiState.update { ui ->
-                    ui.copy(
-                        downloadState =
-                            if (listJob.all { download[it] == STATE_DOWNLOADED }) {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_DOWNLOADED,
-                                    id,
-                                )
-                                STATE_DOWNLOADED
-                            } else if (listJob.any { download[it] == STATE_DOWNLOADING }) {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_DOWNLOADING,
-                                    id,
-                                )
-                                STATE_DOWNLOADING
-                            } else {
-                                localPlaylistRepository.updateLocalPlaylistDownloadState(
-                                    STATE_NOT_DOWNLOADED,
-                                    id,
-                                )
-                                STATE_NOT_DOWNLOADED
-                            },
-                    )
-                }
+                val states = listJob.map { download[it] }
+                val resolved =
+                    when {
+                        // Checked before completeness: one track actively downloading is enough
+                        // to call the playlist downloading, even if the rest are still unreported.
+                        states.any { it == STATE_DOWNLOADING } -> STATE_DOWNLOADING
+                        states.all { it == STATE_DOWNLOADED } -> STATE_DOWNLOADED
+                        states.any { it == null } -> null
+                        else -> STATE_NOT_DOWNLOADED
+                    }
+                if (resolved == null || resolved == uiState.value.downloadState) return@collect
+                localPlaylistRepository.updateLocalPlaylistDownloadState(resolved, id)
+                _uiState.update { it.copy(downloadState = resolved) }
             }
         }
     }
@@ -651,10 +655,34 @@ class LocalPlaylistViewModel(
         }
     }
 
+    /**
+     * 同步到云端(双平台):YT 歌建/更 YT 歌单(沿用原管线),网易歌建/更云村歌单;
+     * 混源歌单各走各的,一次点击双平台。结果按平台分别 toast,loading 全部结束才收。
+     */
     fun syncPlaylistWithYouTubePlaylist(id: Long) {
         makeToast(getString(Res.string.syncing))
         showLoadingDialog(message = getString(Res.string.syncing))
         viewModelScope.launch {
+            val tracks =
+                localPlaylistRepository.getLocalPlaylist(id).firstOrNull()?.data?.tracks.orEmpty()
+            val hasNeteaseTracks = tracks.any { it.toLongOrNull() != null }
+            val hasYouTubeTracks = tracks.any { it.toLongOrNull() == null }
+            // 网易侧(有网易歌才做):失败不打断 YT 侧,toast 按平台说
+            if (hasNeteaseTracks) {
+                localPlaylistRepository
+                    .syncLocalPlaylistToNeteasePlaylist(id)
+                    .onSuccess { (pid, _) ->
+                        _uiState.update { it.copy(neteasePlaylistId = pid) }
+                        makeToast(getString(Res.string.synced))
+                    }.onFailure {
+                        makeToast(getString(Res.string.cloud_action_failed_netease))
+                    }
+            }
+            if (!hasYouTubeTracks) {
+                // 纯网易歌单:不建空 YT 歌单,loading 在这里收
+                hideLoadingDialog()
+                return@launch
+            }
             localPlaylistRepository
                 .syncLocalPlaylistToYouTubePlaylist(id, getString(Res.string.synced), getString(Res.string.error))
                 .collectLatestResource(
@@ -1022,6 +1050,7 @@ class LocalPlaylistViewModel(
                                 downloadState = pl.downloadState,
                                 syncState = pl.syncState,
                                 ytPlaylistId = pl.youtubePlaylistId,
+                                neteasePlaylistId = pl.neteasePlaylistId,
                                 trackCount = pl.tracks?.size ?: 0,
                             )
                         }
@@ -1106,22 +1135,23 @@ class LocalPlaylistViewModel(
                 )
         } else {
             // Unsynced playlist: local only, no loading dialog needed
-            val loadedList =
-                lazyTrackPagingItems.value?.itemSnapshotList?.toList() ?: return
-            val fromItem = loadedList.getOrNull(from)?.first ?: return
-            val toItem = loadedList.getOrNull(to)?.first ?: return
-            val fromPosition = loadedList.getOrNull(from)?.second?.position ?: from
-            val toPosition = loadedList.getOrNull(to)?.second?.position ?: to
-            val playlistId = uiState.value.id
-
             localPlaylistRepository
-                .changePositionOfSongInPlaylist(playlistId, fromItem.videoId, toPosition)
-                .lastOrNull()
-                ?.let { log("changeLocalPlaylistItemPosition: from $it") }
-            localPlaylistRepository
-                .changePositionOfSongInPlaylist(playlistId, toItem.videoId, fromPosition)
-                .lastOrNull()
-                ?.let { log("changeLocalPlaylistItemPosition: to $it") }
+                .moveItemInLocalPlaylist(
+                    playlistId = uiState.value.id,
+                    fromIndex = from,
+                    toIndex = to,
+                ).collectResource(
+                    onLoading = {
+                        log("changeLocalPlaylistItemPosition (local): loading")
+                    },
+                    onSuccess = {
+                        log("changeLocalPlaylistItemPosition (local): success $it")
+                    },
+                    onError = { message ->
+                        log("changeLocalPlaylistItemPosition (local): error $message")
+                        makeToast(message)
+                    },
+                )
         }
     }
 }
@@ -1157,6 +1187,7 @@ data class LocalPlaylistState(
     val downloadState: Int = DownloadState.STATE_NOT_DOWNLOADED,
     val syncState: Int = LocalPlaylistEntity.YouTubeSyncState.NotSynced,
     val ytPlaylistId: String? = null,
+    val neteasePlaylistId: String? = null,
     val trackCount: Int = 0,
     val page: Int = 0,
     val isLoadedFull: Boolean = false,

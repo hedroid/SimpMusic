@@ -21,7 +21,8 @@ android {
 
     defaultConfig {
         applicationId = "com.maxrave.simpmusic"
-        minSdk = 26
+        // fork 定案(2026-09-25):只面向现代设备,最低 Android 12(API 31)
+        minSdk = 31
         targetSdk = 36
         versionCode =
             libs.versions.version.code

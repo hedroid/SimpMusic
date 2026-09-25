@@ -239,6 +239,7 @@ fun AnalyticsScreen(
         val selectedIds = selectionState.selected.toList()
         SelectedSongsBottomSheet(
             count = selectedIds.size,
+            selectionIds = selectedIds,
             onDismiss = { showSelectionSheet = false },
             onPlayNext = {
                 selectionViewModel.playNext(selectedIds)
@@ -248,7 +249,10 @@ fun AnalyticsScreen(
                 selectionViewModel.addToQueue(selectedIds)
                 selectionState.exit()
             },
-            onAddToPlaylist = { showSelectionAddToPlaylist = true },
+            onAddToPlaylist = {
+                selectionViewModel.loadCloudPlaylists()
+                showSelectionAddToPlaylist = true
+            },
             onDownload = {
                 selectionViewModel.download(selectedIds)
                 selectionState.exit()
@@ -267,16 +271,26 @@ fun AnalyticsScreen(
     if (showSelectionAddToPlaylist) {
         val selectedIds = selectionState.selected.toList()
         val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+        val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+        val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
         AddToPlaylistModalBottomSheet(
             isBottomSheetVisible = true,
-            listLocalPlaylist = localPlaylists,
-            listYouTubePlaylist = emptyList(),
+            // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
+            // 2026-09-24 多选路径接云端分区,与单曲弹窗同款
+            listLocalPlaylist = emptyList(),
+            listYouTubePlaylist = youTubePlaylists,
+            listNeteasePlaylist = neteasePlaylists,
+            videoIds = selectedIds,
             onDismiss = { showSelectionAddToPlaylist = false },
-            onClick = { playlist ->
-                selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+            onClick = {},
+            onYTPlaylistClick = { playlist ->
+                selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
                 selectionState.exit()
             },
-            onYTPlaylistClick = {},
+            onNeteasePlaylistClick = { playlist ->
+                selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                selectionState.exit()
+            },
         )
     }
     if (itemBottomSheetShow && currentItem != null) {
@@ -1144,7 +1158,9 @@ private fun TopArtistsSection(
         SectionHeader(stringResource(Res.string.your_top_artists), gutter) {
             navController.navigate(
                 LibraryDynamicPlaylistDestination(
-                    type = LibraryDynamicPlaylistType.TopArtists.toStringParams(),
+                    // The period on screen, not the latest one: the playlist opens its own view
+                    // model, which would otherwise start from the present.
+                    type = LibraryDynamicPlaylistType.TopArtists(uiState.periodStart, uiState.periodEnd, uiState.dayRange).toStringParams(),
                 ),
             )
         }
@@ -1179,7 +1195,9 @@ private fun TopAlbumsSection(
         SectionHeader(stringResource(Res.string.your_top_albums), gutter) {
             navController.navigate(
                 LibraryDynamicPlaylistDestination(
-                    type = LibraryDynamicPlaylistType.TopAlbums.toStringParams(),
+                    // The period on screen, not the latest one: the playlist opens its own view
+                    // model, which would otherwise start from the present.
+                    type = LibraryDynamicPlaylistType.TopAlbums(uiState.periodStart, uiState.periodEnd, uiState.dayRange).toStringParams(),
                 ),
             )
         }
@@ -1217,7 +1235,9 @@ private fun TopTracksSection(
         SectionHeader(stringResource(Res.string.your_top_tracks), gutter) {
             navController.navigate(
                 LibraryDynamicPlaylistDestination(
-                    type = LibraryDynamicPlaylistType.TopTracks.toStringParams(),
+                    // The period on screen, not the latest one: the playlist opens its own view
+                    // model, which would otherwise start from the present.
+                    type = LibraryDynamicPlaylistType.TopTracks(uiState.periodStart, uiState.periodEnd, uiState.dayRange).toStringParams(),
                 ),
             )
         }

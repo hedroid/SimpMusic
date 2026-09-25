@@ -9,20 +9,29 @@ import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
 import com.maxrave.domain.repository.SongRepository
+import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
+import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
+import simpmusic.composeapp.generated.resources.synced_n_of_m
+import simpmusic.composeapp.generated.resources.netease_rate_limited
+import simpmusic.composeapp.generated.resources.need_login_toast
+import kotlinx.coroutines.flow.first
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
+import simpmusic.composeapp.generated.resources.all_songs_already_liked
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
@@ -47,11 +56,88 @@ class SongSelectionViewModel(
     private val downloadUtils: DownloadHandler by inject()
     private val playlistRepository: PlaylistRepository by inject()
     private val albumRepository: AlbumRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
+    private val dataStoreManager: com.maxrave.domain.manager.DataStoreManager by inject()
 
     val listLocalPlaylist: StateFlow<List<LocalPlaylistEntity>> =
         localPlaylistRepository
             .getAllLocalPlaylists()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // 云端歌单分区("添加到歌单"弹窗,2026-09-24 多选路径接云端——此前 7 个多选调用点只传
+    // 本地歌单,而本地分区被政策开关(SHOW_LOCAL_PLAYLIST_SECTION)隐藏,弹窗实际是空的):
+    // YT=库歌单(滤 VLLM),网易=自建。
+    // null=尚未拉取(弹窗加载中,别闪"未找到"空态);拉完(含空列表)=已加载
+    private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
+    val youTubePlaylists: StateFlow<List<PlaylistsResult>?> = _youTubePlaylists.asStateFlow()
+
+    private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
+    val neteasePlaylists: StateFlow<List<PlaylistsResult>?> = _neteasePlaylists.asStateFlow()
+
+    /** 弹窗打开时拉云端歌单列表(两路独立,失败留空) */
+    fun loadCloudPlaylists() {
+        viewModelScope.launch {
+            runCatching {
+                playlistRepository.getLibraryPlaylist().collect { data ->
+                    _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
+                }
+            }.onFailure {
+                _youTubePlaylists.value = emptyList()
+            }
+        }
+        viewModelScope.launch {
+            runCatching {
+                _neteasePlaylists.value = neteaseRepository.getOwnNeteasePlaylists()
+            }.onFailure {
+                _neteasePlaylists.value = emptyList()
+            }
+        }
+    }
+
+    /** 批量加到 YT 歌单(源互斥:只吃 YT 曲目,网易数字 id 会被服务端拒) */
+    fun addToYouTubePlaylist(
+        playlistId: String,
+        videoIds: List<String>,
+    ) {
+        viewModelScope.launch {
+            val ytIds = videoIds.filter { it.toLongOrNull() == null }
+            if (ytIds.isEmpty()) {
+                makeToast(getString(Res.string.error_occurred))
+                return@launch
+            }
+            var ok = 0
+            ytIds.forEach { id ->
+                localPlaylistRepository
+                    .addYouTubePlaylistItem(playlistId, id)
+                    .collectResource(onSuccess = { ok++ }, onError = { })
+            }
+            makeToast(getString(if (ok > 0) Res.string.added_to_youtube_playlist else Res.string.error_occurred))
+        }
+    }
+
+    /** 批量加到网易自建歌单(端点原生批量;只吃网易曲目) */
+    fun addToNeteasePlaylist(
+        playlistId: String,
+        videoIds: List<String>,
+    ) {
+        viewModelScope.launch {
+            val ids = videoIds.filter { it.toLongOrNull() != null }
+            if (ids.isEmpty()) {
+                makeToast(getString(Res.string.error_occurred))
+                return@launch
+            }
+            neteaseRepository
+                .addTracksToNeteasePlaylist(playlistId, ids)
+                .fold(
+                    onSuccess = { ok ->
+                        makeToast(getString(if (ok) Res.string.added_to_netease_playlist else Res.string.error_occurred))
+                    },
+                    onFailure = {
+                        makeToast(getString(neteaseWriteErrorString(it, Res.string.error_occurred)))
+                    },
+                )
+        }
+    }
 
     /**
      * Whether EVERY song in the last checked selection is on disk, recomputed by
@@ -109,6 +195,18 @@ class SongSelectionViewModel(
      */
     fun download(videoIds: List<String>) {
         viewModelScope.launch {
+            // 防御:涉及源未登录不下载(面板已置灰;2026-09-25 用户定案)
+            val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
+            val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val loggedOut =
+                songsOf(videoIds).any { song ->
+                    (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
+                        (song.videoId.toLongOrNull() == null && !ytLoggedIn)
+                }
+            if (loggedOut) {
+                makeToast(getString(Res.string.need_login_toast))
+                return@launch
+            }
             val pending =
                 songsOf(videoIds).filter {
                     it.downloadState == DownloadState.STATE_NOT_DOWNLOADED
@@ -152,9 +250,48 @@ class SongSelectionViewModel(
 
     fun addToFavorite(videoIds: List<String>) {
         viewModelScope.launch {
-            songsOf(videoIds)
-                .filterNot { it.liked }
-                .forEach { songRepository.updateLikeStatus(it.videoId, 1) }
+            // 点赞=云端账号红心。登录门控(2026-09-24 用户定案):选中集合里任一歌
+            // 所属源未登录 → 整批挡下弹统一提示(宁可不做,不部分执行——与收藏入口
+            // 未登录置灰同哲学);全部源已登录才执行
+            val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
+            val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val songs = songsOf(videoIds)
+            // 登录门控按全量选中判(含已赞的歌——它挡的是"这个源没登录",与赞没赞无关)
+            val blocked =
+                songs.any { song ->
+                    (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
+                        (song.videoId.toLongOrNull() == null && !ytLoggedIn)
+                }
+            if (blocked) {
+                makeToast(getString(Res.string.need_login_toast))
+                return@launch
+            }
+            val candidates = songs.filterNot { it.liked }
+            if (candidates.isEmpty()) {
+                // 全是已赞的歌:没有动作发生,但仍给一句确认(2026-09-24 用户要求)
+                makeToast(getString(Res.string.all_songs_already_liked))
+                return@launch
+            }
+            // 本地行随结果镜像,失败计入汇总
+            var succeeded = 0
+            var attempted = 0
+            candidates
+                .forEach { song ->
+                    attempted++
+                    val result = songRepository.setRemoteLikeStatus(song.videoId, true)
+                    if (result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException) {
+                        // 405 频控窗口内整批都会失败,别把 N 条全戳一遍(重试会续期窗口)
+                        makeToast(getString(Res.string.netease_rate_limited))
+                        return@launch
+                    }
+                    if (result.getOrDefault(false)) {
+                        songRepository.setLikedLocal(song.videoId, 1)
+                        succeeded++
+                    }
+                }
+            if (attempted > 0) {
+                makeToast(org.jetbrains.compose.resources.getString(Res.string.synced_n_of_m, succeeded, attempted))
+            }
         }
     }
 

@@ -72,6 +72,7 @@ import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.rgbFactor
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.extension.toSquareThumbnailUrl
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import kotlinx.coroutines.flow.collectLatest
@@ -240,13 +241,16 @@ private fun Header(
                     backgroundColor.rgbFactor(0.5f),
                 ),
     ) {
+        // 头图全屏宽展示(~1080px),而数据侧 URL 被钉在 YT w617/网易 500 —— 请求侧统一升
+        // 1080(toHiResArtworkUrl),key 跟着改写后的 URL 走,防止同图双缓存条目。
+        val hiResUrl = imageUrl.toHiResArtworkUrl()
         AsyncImage(
             model =
                 ImageRequest
                     .Builder(LocalPlatformContext.current)
-                    .data(imageUrl)
+                    .data(hiResUrl)
                     .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(imageUrl)
+                    .diskCacheKey(hiResUrl)
                     .crossfade(true)
                     .build(),
             onSuccess = {

@@ -63,6 +63,7 @@ import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.netease_lyrics
 import simpmusic.composeapp.generated.resources.ai_translated
 import simpmusic.composeapp.generated.resources.line_synced
 import simpmusic.composeapp.generated.resources.lyrics_provider_betterlyrics
@@ -91,6 +92,7 @@ internal fun AppleMusicLyricsView(
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
 ) {
     val localDensity = LocalDensity.current
@@ -107,7 +109,13 @@ internal fun AppleMusicLyricsView(
     // Apple hands the whole page to the lyrics once you stop touching it, and brings the transport
     // back the moment you touch it again. rememberSaveable so a rotation does not yank the
     // controls back into view.
-    var showCluster by rememberSaveable { mutableStateOf(true) }
+    //
+    // Compact (landscape side panel): START hidden. The cluster is in-flow, and header+cluster
+    // already fill a ~411dp panel — starting it shown gave the lyrics a ~90dp slice (mostly
+    // dissolved by the edge fades) while the dock fell off the bottom of the screen, which is
+    // exactly "the page never opens". Hidden first, the lyrics get the whole panel; a tap on the
+    // page still summons the cluster exactly like portrait.
+    var showCluster by rememberSaveable { mutableStateOf(!isCompact) }
     var showShareSheet by rememberSaveable { mutableStateOf(false) }
     // Bumped on every interaction, and keyed into the timer below, so ANY touch restarts the
     // countdown. Without it a scroll while the cluster is already shown leaves showCluster
@@ -147,10 +155,11 @@ internal fun AppleMusicLyricsView(
         Spacer(
             modifier =
                 Modifier.height(
-                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } + 20.dp,
+                    with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() } +
+                        if (isCompact) 8.dp else 20.dp,
                 ),
         )
-        AppleMusicCompactHeader(state = state, actions = actions, typography = typography)
+        AppleMusicCompactHeader(state = state, actions = actions, typography = typography, compact = isCompact)
 
         Box(
             modifier =
@@ -254,7 +263,7 @@ internal fun AppleMusicLyricsView(
                         // Lyrics — the sole provider that accepts a vote. Classic and M3E have
                         // always gated theirs; this one did not, so it invited a rating on
                         // YouTube/LRCLIB/Spotify lyrics that had nowhere to go.
-                        if (lyricsData.canVote()) {
+                        if (!state.isNeteaseSong && lyricsData.canVote()) {
                             AppleMusicFloatingCircleButton(icon = SimpIcons.ThumbsUpDown, onClick = { actions.onShowVoteDialog() })
                         }
                         AppleMusicFloatingCircleButton(icon = SimpIcons.Share, onClick = { showShareSheet = true })
@@ -295,6 +304,7 @@ internal fun AppleMusicLyricsView(
                 activePillContainer = activePillContainer,
                 activePillContent = activePillContent,
                 deviceVolumeController = deviceVolumeController,
+                compact = isCompact,
             )
         }
     }
@@ -303,25 +313,6 @@ internal fun AppleMusicLyricsView(
 // Long enough to read a line or two and reach for a control, short enough that the page clears
 // itself while you are just listening.
 private const val CLUSTER_AUTO_HIDE_MS = 8_000L
-
-@Composable
-private fun AppleMusicFloatingCircleButton(
-    icon: ImageVector,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .appleMusicPressInflate()
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.24f))
-                .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(imageVector = icon, contentDescription = "", tint = Color.White, modifier = Modifier.size(18.dp))
-    }
-}
 
 /** The sync-type half of the caption: "Word by word", "Line Synced" or "Unsynced". Its own line. */
 @Composable
@@ -345,5 +336,6 @@ private fun appleMusicLyricsProviderText(lyricsData: NowPlayingScreenData.Lyrics
         LyricsProvider.SPOTIFY -> stringResource(Res.string.spotify_lyrics_provider)
         LyricsProvider.OFFLINE -> stringResource(Res.string.offline_mode)
         LyricsProvider.BETTER_LYRICS -> stringResource(Res.string.lyrics_provider_betterlyrics)
+        LyricsProvider.NETEASE -> stringResource(Res.string.netease_lyrics)
         LyricsProvider.AI -> ""
     }

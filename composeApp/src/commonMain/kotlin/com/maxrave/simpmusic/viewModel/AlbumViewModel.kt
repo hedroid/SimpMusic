@@ -6,11 +6,14 @@ import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.artist.ResultAlbum
+import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.songs.Artist
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.mediaservice.handler.DownloadHandler
 import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
+import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.LocalPlaylistRepository
 import com.maxrave.domain.repository.PlaylistRepository
@@ -21,17 +24,25 @@ import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.saved_toast
+import simpmusic.composeapp.generated.resources.unsaved_toast
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.download_cancelled
@@ -45,6 +56,32 @@ class AlbumViewModel(
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject<DownloadHandler>()
     private val playlistRepository: PlaylistRepository by inject<PlaylistRepository>()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
+    private val dataStoreManager: DataStoreManager by inject()
+    private val mutationBus: LibraryMutationBus by inject()
+
+    /** 专辑页"更多"菜单取消收藏网易专辑(/album/sub t=0),云端成功后 toast;本地 liked 同步熄灭 */
+    fun unsubscribeNeteaseAlbum(albumId: String) {
+        if (albumId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            neteaseRepository
+                .subscribeNeteaseAlbum(albumId, subscribe = false)
+                .fold(
+                    onSuccess = { ok ->
+                        makeToast(
+                            getString(
+                                if (ok) Res.string.unsubscribed_netease_album else Res.string.netease_action_failed,
+                            ),
+                        )
+                        if (ok) {
+                            // 库页收藏专辑分区原地移除(本地回写,与库页长按路径对齐)
+                            mutationBus.send(LibraryMutation.AlbumUnsubscribed(albumId))
+                        }
+                    },
+                    onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
+                )
+        }
+    }
     private val localPlaylistRepository: LocalPlaylistRepository by inject<LocalPlaylistRepository>()
     private val _uiState: MutableStateFlow<AlbumUIState> = MutableStateFlow(AlbumUIState.initial())
     val uiState: StateFlow<AlbumUIState> = _uiState
@@ -63,6 +100,7 @@ class AlbumViewModel(
                             _uiState.update {
                                 it.copy(
                                     browseId = browseId,
+                                    audioPlaylistId = data.audioPlaylistId,
                                     title = data.title,
                                     thumbnail = data.thumbnails?.lastOrNull()?.url,
                                     artist =
@@ -105,6 +143,7 @@ class AlbumViewModel(
                                 }
                             }
                             getAlbumFlow(browseId)
+                            refreshRemoteSavedState()
                         } else {
                             makeToast(getString(Res.string.error) + ": Null data")
                             _uiState.update {
@@ -170,14 +209,84 @@ class AlbumViewModel(
     }
 
     fun setAlbumLike() {
+        // 收藏心=云端账号状态:直接转发云端切换,本地行随结果镜像
+        setRemoteSaved(!uiState.value.liked)
+    }
+
+    /** 收藏心=云端账号状态:拉到即驱动显示,并镜像本地缓存行(库页收藏分区读它)。 */
+    private fun refreshRemoteSavedState() {
         viewModelScope.launch {
-            albumRepository.updateAlbumLiked(uiState.value.browseId, if (!uiState.value.liked) 1 else 0)
-            _uiState.update {
-                it.copy(
-                    liked = !it.liked,
+            _uiState.update { it.copy(remoteSaved = null) }
+            val remote =
+                albumRepository.getRemoteSavedState(
+                    uiState.value.browseId,
+                    uiState.value.audioPlaylistId,
                 )
+            if (remote != null) {
+                if (uiState.value.liked != remote) {
+                    albumRepository.updateAlbumLiked(uiState.value.browseId, if (remote) 1 else 0)
+                }
+                _uiState.update { it.copy(remoteSaved = remote, liked = remote) }
+            } else {
+                _uiState.update { it.copy(remoteSaved = null) }
             }
         }
+    }
+
+    /** 收藏心点击的唯一路径:直接切换云端账号收藏;成功镜像本地行+中性 toast。
+     *  双向都发库页本地回写:取消收藏→移除;收藏→插入完整行(页面上下文即权威数据)。 */
+    fun setRemoteSaved(saved: Boolean) {
+        viewModelScope.launch {
+            val isNeteaseId = uiState.value.browseId.toLongOrNull() != null
+            _uiState.update { it.copy(remoteSavePending = true) }
+            val ok =
+                albumRepository.setRemoteSavedState(
+                    uiState.value.browseId,
+                    uiState.value.audioPlaylistId,
+                    saved,
+                )
+            _uiState.update {
+                it.copy(
+                    remoteSaved = if (ok) saved else it.remoteSaved,
+                    remoteSavePending = false,
+                    liked = if (ok) saved else it.liked,
+                )
+            }
+            if (ok) {
+                albumRepository.updateAlbumLiked(uiState.value.browseId, if (saved) 1 else 0)
+                makeToast(getString(if (saved) Res.string.saved_toast else Res.string.unsaved_toast))
+                if (saved) {
+                    favoritedAlbumsResult()?.let { album ->
+                        mutationBus.send(LibraryMutation.AlbumFavorited(album))
+                    }
+                } else {
+                    mutationBus.send(LibraryMutation.AlbumUnsubscribed(uiState.value.browseId))
+                }
+            } else {
+                makeToast(getString(if (isNeteaseId) Res.string.cloud_action_failed_netease else Res.string.cloud_action_failed_youtube))
+            }
+        }
+    }
+
+    /** 收藏事件的载荷:从页面状态构造完整专辑行(字段对齐 netease toAlbumsResult 形状) */
+    private fun favoritedAlbumsResult(): AlbumsResult? {
+        val state = uiState.value
+        if (state.browseId.isBlank() || state.title.isBlank()) return null
+        return AlbumsResult(
+            artists = listOf(Artist(id = state.artist.id, name = state.artist.name)),
+            browseId = state.browseId,
+            category = "Album",
+            duration = Unit,
+            isExplicit = false,
+            resultType = "Album",
+            thumbnails =
+                state.thumbnail?.takeIf { it.isNotBlank() }
+                    ?.let { listOf(Thumbnail(height = 544, url = it, width = 544)) }
+                    ?: emptyList(),
+            title = state.title,
+            type = "album",
+            year = state.year,
+        )
     }
 
     private fun getAlbumFlow(browseId: String) {
@@ -336,6 +445,7 @@ class AlbumViewModel(
 
 data class AlbumUIState(
     val browseId: String = "",
+    val audioPlaylistId: String? = null,
     val title: String = "",
     val thumbnail: String? = null,
     val colors: List<Color> = listOf(Color.Black, Color.Black),
@@ -347,6 +457,8 @@ data class AlbumUIState(
     val year: String = now().year.toString(),
     val downloadState: Int = DownloadState.STATE_NOT_DOWNLOADED,
     val liked: Boolean = false,
+    val remoteSaved: Boolean? = null,
+    val remoteSavePending: Boolean = false,
     val trackCount: Int = 0,
     val description: String? = null,
     val length: String = "",

@@ -19,6 +19,15 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.version_format
 
+/** Credit line shared by every page footer and the about page: "@{year} {app} {version}\nhedroid". */
+@Composable
+fun endOfPageCredit(): String =
+    "@${now().year} " + stringResource(Res.string.app_name) + " " +
+        stringResource(
+            Res.string.version_format,
+            VersionManager.getVersionName(),
+        ) + "\nhedroid"
+
 @Composable
 fun EndOfPage(withoutCredit: Boolean = false) {
     Box(
@@ -30,11 +39,7 @@ fun EndOfPage(withoutCredit: Boolean = false) {
     ) {
         if (!withoutCredit) {
             Text(
-                "@${now().year} " + stringResource(Res.string.app_name) + " " +
-                    stringResource(
-                        Res.string.version_format,
-                        VersionManager.getVersionName(),
-                    ) + "\nhedroid",
+                text = endOfPageCredit(),
                 style = typo().bodySmall,
                 textAlign = TextAlign.Center,
                 modifier =

@@ -2,10 +2,9 @@ package com.maxrave.simpmusic.service.backup
 
 import android.content.ContentValues
 import android.content.Context
-import android.os.Build
-import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import androidx.core.net.toUri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.maxrave.common.DB_NAME
@@ -161,7 +160,7 @@ class AutoBackupWorker(
 
         if (customLocation != null) {
             try {
-                val treeUri = Uri.parse(customLocation)
+                val treeUri = customLocation.toUri()
                 val target =
                     DocumentsContract.createDocument(
                         context.contentResolver,
@@ -187,9 +186,7 @@ class AutoBackupWorker(
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/SimpMusic")
-                }
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/SimpMusic")
             }
 
             val uri = context.contentResolver.insert(
@@ -227,17 +224,10 @@ class AutoBackupWorker(
                 MediaStore.Downloads.DATE_ADDED
             )
 
-            val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val selection =
                 "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} LIKE ?"
-            } else {
-                "${MediaStore.Downloads.DISPLAY_NAME} LIKE ?"
-            }
 
-            val selectionArgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf("Documents/SimpMusic/", "simpmusic_backup_%.zip")
-            } else {
-                arrayOf("simpmusic_backup_%.zip")
-            }
+            val selectionArgs = arrayOf("Documents/SimpMusic/", "simpmusic_backup_%.zip")
 
             val sortOrder = "${MediaStore.Downloads.DATE_ADDED} DESC"
 
@@ -288,7 +278,7 @@ class AutoBackupWorker(
         maxFiles: Int,
     ) {
         try {
-            val treeUri = Uri.parse(customLocation)
+            val treeUri = customLocation.toUri()
             val rootDocId = DocumentsContract.getTreeDocumentId(treeUri)
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootDocId)
 

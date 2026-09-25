@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,7 +64,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -86,6 +89,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -112,27 +116,35 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.maxrave.common.NETEASE_FM_PLAYLIST_ID
 import com.maxrave.data.io.readLocalImageBytes
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
+import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.model.download.DownloadProgress
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.data.model.searchResult.songs.Artist
+import com.maxrave.domain.data.model.searchResult.songs.Thumbnail
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.QueueData
-import com.maxrave.domain.repository.LocalPlaylistRepository
+import com.maxrave.domain.repository.PlaylistRepository
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toListName
 import com.maxrave.logger.Logger
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.copyToClipboard
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.expect.ui.persistPickedImage
 import com.maxrave.simpmusic.expect.ui.photoPickerResult
 import com.maxrave.simpmusic.extension.displayNameRes
 import com.maxrave.simpmusic.extension.greyScale
+import com.maxrave.simpmusic.viewModel.LibraryMutation
+import com.maxrave.simpmusic.viewModel.LibraryMutationBus
 import com.maxrave.simpmusic.ui.icon.AccessAlarm
 import com.maxrave.simpmusic.ui.icon.Add
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
@@ -151,6 +163,8 @@ import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.Lyrics
+import com.maxrave.simpmusic.ui.icon.LibraryMusic
+import com.maxrave.simpmusic.ui.icon.MyLocation
 import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlayCircle
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
@@ -159,13 +173,16 @@ import com.maxrave.simpmusic.ui.icon.Remove
 import com.maxrave.simpmusic.ui.icon.Sensors
 import com.maxrave.simpmusic.ui.icon.Share
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.Speed
+import com.maxrave.simpmusic.ui.icon.FastForward
+import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.Sync
 import com.maxrave.simpmusic.ui.icon.SyncDisabled
-import com.maxrave.simpmusic.ui.icon.Tune
 import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.SimilarSongsDestination
+import com.maxrave.simpmusic.ui.screen.player.deriveOrderIndex
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
@@ -173,6 +190,11 @@ import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -185,6 +207,15 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.create
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.create_new_playlist
+import simpmusic.composeapp.generated.resources.could_not_create_playlist
+import simpmusic.composeapp.generated.resources.playlist_name
+import simpmusic.composeapp.generated.resources.remove_from_playlist
+import simpmusic.composeapp.generated.resources.unsubscribe_from_library
+import simpmusic.composeapp.generated.resources.netease_delete_playlist
 import simpmusic.composeapp.generated.resources.cancel_download_title
 import simpmusic.composeapp.generated.resources.cancel_download_message
 import simpmusic.composeapp.generated.resources.cancel_download_confirm
@@ -202,6 +233,10 @@ import simpmusic.composeapp.generated.resources.can_not_be_empty
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
+import simpmusic.composeapp.generated.resources.comments
+import simpmusic.composeapp.generated.resources.comments_title
+import simpmusic.composeapp.generated.resources.end_of_list
+import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
@@ -210,6 +245,7 @@ import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.download
 import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
+import simpmusic.composeapp.generated.resources.download_this_song_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
@@ -217,20 +253,26 @@ import simpmusic.composeapp.generated.resources.downloading_video
 import simpmusic.composeapp.generated.resources.edit_thumbnail
 import simpmusic.composeapp.generated.resources.edit_title
 import simpmusic.composeapp.generated.resources.endless_queue
+import simpmusic.composeapp.generated.resources.endless_queue_fm_locked
 import simpmusic.composeapp.generated.resources.error_occurred
 import simpmusic.composeapp.generated.resources.extract_source
 import simpmusic.composeapp.generated.resources.itag
 import simpmusic.composeapp.generated.resources.key
 import simpmusic.composeapp.generated.resources.like
+import simpmusic.composeapp.generated.resources.login_required_short
 import simpmusic.composeapp.generated.resources.like_and_dislike
 import simpmusic.composeapp.generated.resources.liked
 import simpmusic.composeapp.generated.resources.list_all_cookies_of_this_page
+import simpmusic.composeapp.generated.resources.netease_dev_login_title
+import simpmusic.composeapp.generated.resources.netease_url
 import simpmusic.composeapp.generated.resources.lrclib
 import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.merging_audio_and_video
 import simpmusic.composeapp.generated.resources.mime_type
+import simpmusic.composeapp.generated.resources.more
 import simpmusic.composeapp.generated.resources.move_down
 import simpmusic.composeapp.generated.resources.move_up
+import simpmusic.composeapp.generated.resources.netease
 import simpmusic.composeapp.generated.resources.no_album
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.no_playlist_found
@@ -263,6 +305,7 @@ import simpmusic.composeapp.generated.resources.sleep_timer_set_error
 import simpmusic.composeapp.generated.resources.sleep_timer_warning
 import simpmusic.composeapp.generated.resources.sort_by
 import simpmusic.composeapp.generated.resources.start_radio
+import simpmusic.composeapp.generated.resources.similar_songs
 import simpmusic.composeapp.generated.resources.sync
 import simpmusic.composeapp.generated.resources.sync_first
 import simpmusic.composeapp.generated.resources.synced
@@ -272,6 +315,7 @@ import simpmusic.composeapp.generated.resources.unknown
 import simpmusic.composeapp.generated.resources.update_playlist
 import simpmusic.composeapp.generated.resources.warning
 import simpmusic.composeapp.generated.resources.yes
+import simpmusic.composeapp.generated.resources.your_netease_playlists
 import simpmusic.composeapp.generated.resources.your_discord_token
 import simpmusic.composeapp.generated.resources.your_playlists
 import simpmusic.composeapp.generated.resources.your_sp_dc_param_of_spotify_cookie
@@ -317,7 +361,8 @@ fun InfoPlayerBottomSheet(
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
         sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(信息面板)
+        modifier = Modifier.fillMaxHeight().hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
@@ -800,82 +845,162 @@ fun InfoPlayerBottomSheet(
                     textAlign = TextAlign.Center,
                 )
 
-                Text(
-                    text = stringResource(Res.string.plays),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text = screenDataState.songInfoData?.viewCount?.toString() ?: stringResource(Res.string.unknown),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(Res.string.like),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
+                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);播放量/赞踩换
+                // 红心总数+评论数(热评内容从播放页详情卡进入评论列表看)。
+                val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
+                val neteaseMeta = screenDataState.neteaseSongData
+                if (isNeteaseSong && neteaseMeta != null) {
+                    neteaseMeta.likeCount?.let { likeCount ->
+                        Text(
+                            text = stringResource(Res.string.like),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = formatCompactCount(likeCount),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    if (neteaseMeta.commentCount > 0) {
+                        Text(
+                            text = stringResource(Res.string.comments),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    val albumDesc = neteaseMeta.albumDescription
+                    if (!albumDesc.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(Res.string.description),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                            textAlign = TextAlign.Center,
+                            style = typo().labelMedium,
+                            color = rememberSurfaceDarkColors().content,
+                        )
+                        Text(
+                            text = albumDesc,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(align = Alignment.CenterVertically)
+                                    .padding(horizontal = 10.dp),
+                            style = typo().bodyMedium,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(Res.string.plays),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text = screenDataState.songInfoData?.viewCount?.let { formatCompactCount(it) } ?: stringResource(Res.string.unknown),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable()
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = stringResource(Res.string.like),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                Res.string.like_and_dislike,
+                                formatCompactCount(screenDataState.songInfoData?.like ?: 0),
+                                formatCompactCount(screenDataState.songInfoData?.dislike ?: 0),
+                            ),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable()
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = stringResource(Res.string.description),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                val sourceUrl =
+                    if (isNeteaseSong) {
+                        "https://music.163.com/song?id=${songEntity?.videoId}"
+                    } else {
+                        "https://music.youtube.com/watch?v=${songEntity?.videoId}"
+                    }
                 Text(
                     text =
                         stringResource(
-                            Res.string.like_and_dislike,
-                            screenDataState.songInfoData?.like ?: 0,
-                            screenDataState.songInfoData?.dislike ?: 0,
+                            if (isNeteaseSong) Res.string.netease_url else Res.string.youtube_url,
                         ),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(Res.string.description),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text = screenDataState.songInfoData?.description ?: stringResource(Res.string.no_description),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = stringResource(Res.string.youtube_url),
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -889,11 +1014,11 @@ fun InfoPlayerBottomSheet(
                         buildAnnotatedString {
                             withLink(
                                 LinkAnnotation.Url(
-                                    "https://music.youtube.com/watch?v=${songEntity?.videoId}",
+                                    sourceUrl,
                                     TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline)),
                                 ),
                             ) {
-                                append("https://music.youtube.com/watch?v=${songEntity?.videoId}")
+                                append(sourceUrl)
                             }
                         },
                     modifier =
@@ -907,6 +1032,8 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
+                // 底部"下载到设备"按钮:与 YT 同款位置同款样式;YT 歌下视频,网易歌下
+                // 音频文件(downloadFile 内部按源分流),封面 jpg 两侧共用
                 OutlinedButton(
                     enabled = screenDataState.bitmap != null,
                     onClick = {
@@ -920,7 +1047,16 @@ fun InfoPlayerBottomSheet(
                             .align(Alignment.CenterHorizontally)
                             .padding(vertical = 10.dp),
                 ) {
-                    Text(text = stringResource(Res.string.download_this_song_video_file_to_your_device))
+                    Text(
+                        text =
+                            stringResource(
+                                if (isNeteaseSong) {
+                                    Res.string.download_this_song_file_to_your_device
+                                } else {
+                                    Res.string.download_this_song_video_file_to_your_device
+                                },
+                            ),
+                    )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -969,25 +1105,92 @@ fun QueueBottomSheet(
         }
     }
     val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsState(false)
+    // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
+    val isFmQueue = queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID
+
+    // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
+    // uses (deriveOrderIndex): trust the player's own index when it points at the track
+    // nowPlayingState says is playing, else fall back to that track's last position in the
+    // queue. Both inputs are collected state, so the header counter and the locate button
+    // track song changes while the sheet is open.
+    val nowPlayingVideoId = songEntity?.videoId
+    val currentQueueIndex by remember(queue, nowPlayingVideoId) {
+        derivedStateOf {
+            deriveOrderIndex(
+                queue = queue,
+                nowPlayingVideoId = nowPlayingVideoId,
+                playerOrderIndex = musicServiceHandler.currentOrderIndex(),
+            )
+        }
+    }
 
     val shouldLoadMore =
         remember {
             derivedStateOf {
                 val layoutInfo = lazyListState.layoutInfo
+                // 布局未就绪/滚动中的瞬时空列表不算"到底":这里曾返回 true,快速甩动队列时
+                // 空布局伪触发 loadMore,把才滑到中段的歌单队列提前转成无尽电台
                 val lastVisibleItem =
                     layoutInfo.visibleItemsInfo.lastOrNull()
-                        ?: return@derivedStateOf true
+                        ?: return@derivedStateOf false
 
                 lastVisibleItem.index >= layoutInfo.totalItemsCount - 3 && layoutInfo.totalItemsCount > 0
             }
         }
 
-    // Convert the state into a cold flow and collect
-    LaunchedEffect(shouldLoadMore) {
-        snapshotFlow { shouldLoadMore.value }
-            .collect {
-                // if should load more, then invoke loadMore
-                if (it && loadMoreState == QueueData.StateSource.STATE_INITIALIZED) musicServiceHandler.loadMore()
+    // 一次到尾只拉一批(用户口径"有下拉动作时追加几首"):布尔边沿=到达尾部,触发一次;
+    // 边沿若落在批次 INITIALIZING 窗口里,等就绪补射一次(pending)防丢触发。
+    // 不做落批链式追加——曾按总条数边沿续射,一次下拉能连灌几十首、指示器连转多圈。
+    // 两路开火共享 2s 抑制窗:同一次手势里"到尾边沿"+"手势停止兜底"只算一次。
+    var lastLoadMoreAt by remember { mutableStateOf(0L) }
+    // 键里带 endlessQueueEnable:开关翻转(尤其关→开)重启本协程,prevMore 归零=重新武装
+    // 边沿。否则弹窗打开时(开关还是关的)近尾边沿已白白消费一次,之后布尔恒 true 不再有
+    // 新边沿,而满屏小队列的"下拉"是 overscroll 不产生滚动事件——开关怎么开都不会追加。
+    LaunchedEffect(shouldLoadMore, endlessQueueEnable) {
+        var prevMore = false
+        var pending = false
+        snapshotFlow { shouldLoadMore.value to loadMoreState }
+            .collect { (more, state) ->
+                when {
+                    more && !prevMore -> {
+                        if (state == QueueData.StateSource.STATE_INITIALIZED) {
+                            lastLoadMoreAt = System.currentTimeMillis()
+                            musicServiceHandler.loadMore()
+                        } else {
+                            pending = true
+                        }
+                    }
+
+                    more && pending && state == QueueData.StateSource.STATE_INITIALIZED -> {
+                        pending = false
+                        lastLoadMoreAt = System.currentTimeMillis()
+                        musicServiceHandler.loadMore()
+                    }
+                }
+                if (!more) pending = false
+                prevMore = more
+            }
+    }
+
+    // 手势兜底:批次太小(≤2 首)时追加后"近尾"布尔可能一直为 true,没有边沿可用;
+    // 一次滚动手势完全停止后复核一次。drop(1) 跳过初始未滚动的发射(否则弹窗一开就
+    // 多打一枪,单曲队列曾一次追加两批),抑制窗内不重复开火。
+    LaunchedEffect(Unit) {
+        snapshotFlow { lazyListState.isScrollInProgress }
+            .distinctUntilChanged()
+            .drop(1)
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    delay(250)
+                    if (!lazyListState.isScrollInProgress &&
+                        shouldLoadMore.value &&
+                        loadMoreState == QueueData.StateSource.STATE_INITIALIZED &&
+                        System.currentTimeMillis() - lastLoadMoreAt > 2_000
+                    ) {
+                        lastLoadMoreAt = System.currentTimeMillis()
+                        musicServiceHandler.loadMore()
+                    }
+                }
             }
     }
 
@@ -1026,7 +1229,8 @@ fun QueueBottomSheet(
         dragHandle = {},
         scrimColor = Color.Black.copy(alpha = .5f),
         sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(队列面板)
+        modifier = Modifier.fillMaxHeight().hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
@@ -1118,14 +1322,25 @@ fun QueueBottomSheet(
                             .padding(10.dp),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(Res.string.queue),
-                        style = typo().titleMedium,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier =
                             Modifier
-                                .padding(horizontal = 20.dp)
-                                .weight(1f),
-                    )
+                                .weight(1f)
+                                .padding(start = 20.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.queue),
+                            style = typo().titleMedium,
+                        )
+                        if (queue.isNotEmpty()) {
+                            Text(
+                                text = "${currentQueueIndex + 1}/${queue.size}",
+                                style = typo().bodySmall,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(Res.string.endless_queue),
@@ -1133,10 +1348,19 @@ fun QueueBottomSheet(
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                         Switch(
-                            checked = endlessQueueEnable,
-                            onCheckedChange = {
-                                coroutineScope.launch {
-                                    dataStoreManager.setEndlessQueue(it)
+                            checked = isFmQueue || endlessQueueEnable,
+                            onCheckedChange = { checked ->
+                                if (isFmQueue) {
+                                    showToast(
+                                        runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                                        ToastGravity.Bottom,
+                                    )
+                                } else {
+                                    // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                                    if (!checked) musicServiceHandler.restoreOriginalQueueAfterEndless()
+                                    coroutineScope.launch {
+                                        dataStoreManager.setEndlessQueue(checked)
+                                    }
                                 }
                             },
                         )
@@ -1144,98 +1368,135 @@ fun QueueBottomSheet(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                LazyColumn(
-                    horizontalAlignment = Alignment.Start,
-                    state = lazyListState,
+                // Box (not a bare LazyColumn) so the locate button can float over the list at
+                // BottomEnd, and weight(1f) so the list receives the sheet's remaining height as
+                // a BOUNDED constraint — a plain Column child gets an unbounded one, which makes
+                // the lazy list size to its whole content instead of virtualizing.
+                Box(
                     modifier =
                         Modifier
-                            .pointerInput(Unit) {
-                                detectDragGesturesAfterLongPress(
-                                    onDrag = { change, offset ->
-                                        Logger.d("QueueBottomSheet", "onDrag $offset")
-                                        change.consume()
-                                        dragDropState.onDrag(offset = offset)
-
-                                        if (overscrollJob?.isActive == true) {
-                                            return@detectDragGesturesAfterLongPress
-                                        }
-
-                                        dragDropState
-                                            .checkForOverScroll()
-                                            .takeIf { it != 0f }
-                                            ?.let {
-                                                overscrollJob =
-                                                    coroutineScope.launch {
-                                                        dragDropState.state.animateScrollBy(
-                                                            it * 1.3f,
-                                                            tween(easing = FastOutLinearInEasing),
-                                                        )
-                                                    }
-                                            }
-                                            ?: run { overscrollJob?.cancel() }
-                                    },
-                                    onDragStart = { offset ->
-                                        Logger.d("QueueBottomSheet", "onDragStart $offset")
-                                        dragDropState.onDragStart(offset)
-                                    },
-                                    onDragEnd = {
-                                        Logger.d("QueueBottomSheet", "onDragEnd")
-                                        dragDropState.onDragInterrupted(true)
-                                        overscrollJob?.cancel()
-                                    },
-                                    onDragCancel = {
-                                        Logger.d("QueueBottomSheet", "onDragCancel")
-                                        dragDropState.onDragInterrupted()
-                                        overscrollJob?.cancel()
-                                    },
-                                )
-                            },
+                            .fillMaxWidth()
+                            .weight(1f),
                 ) {
-                    itemsIndexed(
-                        queue,
-                        key = { i, t -> i.toString() + t.videoId },
-                    ) { index, track ->
-                        if (index != -1) {
-                            DraggableItem(
-                                dragDropState = dragDropState,
-                                index = index,
-                                modifier = Modifier,
-                            ) { _ ->
-                                SongFullWidthItems(
-                                    track = track,
-                                    isPlaying = track.videoId == songEntity?.videoId,
+                    LazyColumn(
+                        horizontalAlignment = Alignment.Start,
+                        state = lazyListState,
+                        modifier =
+                            Modifier
+                                .pointerInput(Unit) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDrag = { change, offset ->
+                                            Logger.d("QueueBottomSheet", "onDrag $offset")
+                                            change.consume()
+                                            dragDropState.onDrag(offset = offset)
+
+                                            if (overscrollJob?.isActive == true) {
+                                                return@detectDragGesturesAfterLongPress
+                                            }
+
+                                            dragDropState
+                                                .checkForOverScroll()
+                                                .takeIf { it != 0f }
+                                                ?.let {
+                                                    overscrollJob =
+                                                        coroutineScope.launch {
+                                                            dragDropState.state.animateScrollBy(
+                                                                it * 1.3f,
+                                                                tween(easing = FastOutLinearInEasing),
+                                                            )
+                                                        }
+                                                }
+                                                ?: run { overscrollJob?.cancel() }
+                                        },
+                                        onDragStart = { offset ->
+                                            Logger.d("QueueBottomSheet", "onDragStart $offset")
+                                            dragDropState.onDragStart(offset)
+                                        },
+                                        onDragEnd = {
+                                            Logger.d("QueueBottomSheet", "onDragEnd")
+                                            dragDropState.onDragInterrupted(true)
+                                            overscrollJob?.cancel()
+                                        },
+                                        onDragCancel = {
+                                            Logger.d("QueueBottomSheet", "onDragCancel")
+                                            dragDropState.onDragInterrupted()
+                                            overscrollJob?.cancel()
+                                        },
+                                    )
+                                },
+                    ) {
+                        itemsIndexed(
+                            queue,
+                            key = { i, t -> i.toString() + t.videoId },
+                        ) { index, track ->
+                            if (index != -1) {
+                                DraggableItem(
+                                    dragDropState = dragDropState,
+                                    index = index,
+                                    modifier = Modifier,
+                                ) { _ ->
+                                    SongFullWidthItems(
+                                        track = track,
+                                        isPlaying = track.videoId == songEntity?.videoId,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth(),
+                                        onClickListener = { videoId ->
+                                            if (videoId == track.videoId) {
+                                                musicServiceHandler.playMediaItemInMediaSource(index)
+                                            }
+                                        },
+                                        onMoreClickListener = {
+                                            showQueueItemBottomSheet(index)
+                                        },
+                                        onAddToQueue = {
+                                            sharedViewModel.addListToQueue(
+                                                arrayListOf(track),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            if (loadMoreState == QueueData.StateSource.STATE_INITIALIZING) {
+                                CenterLoadingBox(
                                     modifier =
                                         Modifier
-                                            .fillMaxWidth(),
-                                    onClickListener = { videoId ->
-                                        if (videoId == track.videoId) {
-                                            musicServiceHandler.playMediaItemInMediaSource(index)
-                                        }
-                                    },
-                                    onMoreClickListener = {
-                                        showQueueItemBottomSheet(index)
-                                    },
-                                    onAddToQueue = {
-                                        sharedViewModel.addListToQueue(
-                                            arrayListOf(track),
-                                        )
-                                    },
+                                            .fillMaxWidth()
+                                            .height(80.dp),
                                 )
                             }
                         }
-                    }
-                    item {
-                        if (loadMoreState == QueueData.StateSource.STATE_INITIALIZING) {
-                            CenterLoadingBox(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(80.dp),
-                            )
+                        item {
+                            EndOfPage()
                         }
                     }
-                    item {
-                        EndOfPage()
+                    if (queue.isNotEmpty()) {
+                        // Two song rows above the sheet bottom (row ≈ 50dp) so it floats over
+                        // the list instead of hugging the gesture bar; translucent container so
+                        // the rows it covers stay readable through it.
+                        val surfaceColors = rememberSurfaceDarkColors()
+                        SmallFloatingActionButton(
+                            onClick = {
+                                if (currentQueueIndex in queue.indices) {
+                                    coroutineScope.launch {
+                                        lazyListState.animateScrollToItem(currentQueueIndex)
+                                    }
+                                }
+                            },
+                            containerColor = surfaceColors.handle.copy(alpha = 0.75f),
+                            contentColor = surfaceColors.content,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 16.dp, bottom = 116.dp),
+                        ) {
+                            Icon(
+                                imageVector = SimpIcons.MyLocation,
+                                contentDescription = stringResource(Res.string.now_playing),
+                            )
+                        }
                     }
                 }
             }
@@ -1281,6 +1542,8 @@ fun QueueItemBottomSheet(
         contentColor = Color.Transparent,
         dragHandle = null,
         scrimColor = Color.Black.copy(alpha = .5f),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(更多操作面板)
+        modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
         Card(
@@ -1425,9 +1688,15 @@ fun NowPlayingBottomSheet(
     onNavigateToOtherScreen: () -> Unit = {},
     onDelete: (() -> Unit)? = null,
     onLibraryDelete: (() -> Unit)? = null,
+    // 歌单页内打开且该歌单可移除歌曲(网易自建歌单)时传入;播放页等其它场景不传不显示
+    onRemoveFromPlaylist: (() -> Unit)? = null,
+    // 需要让宿主页面立即响应点赞状态变化时传入(例如红心歌单取消红心后剔除歌曲)
+    onLikeChanged: ((Boolean) -> Unit)? = null,
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
+    val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(
@@ -1484,12 +1753,16 @@ fun NowPlayingBottomSheet(
             isBottomSheetVisible = true,
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
+            listNeteasePlaylist = uiState.listNeteasePlaylist,
             onDismiss = { addToAPlaylist = false },
             onClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(it.id))
             },
             onYTPlaylistClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToYouTubePlaylist(it.browseId))
+            },
+            onNeteasePlaylistClick = {
+                viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist(it.browseId))
             },
             videoId = uiState.songUIState.videoId,
         )
@@ -1709,6 +1982,8 @@ fun NowPlayingBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -1824,13 +2099,31 @@ fun NowPlayingBottomSheet(
                             }
                         }
                     }
+                    Crossfade(targetState = onRemoveFromPlaylist != null) {
+                        if (it) {
+                            ActionButton(
+                                // 减号=从歌单移除(与"从队列移除"同惯例);垃圾桶只留给"删除"
+                                icon = SimpIcons.Remove,
+                                text = Res.string.remove_from_playlist,
+                            ) {
+                                hideModalBottomSheet()
+                                onRemoveFromPlaylist?.invoke()
+                            }
+                        }
+                    }
                     CheckBoxActionButton(
-                        defaultChecked = uiState.songUIState.liked,
+                        // 云端态优先(登录时拉取,~几百 ms 到):本地 Room 的 liked 可能过期
+                        // (YT 红心歌单里本地未赞、云端已赞,读作"状态不对");云端未到/未登录
+                        // 退回本地值。checkbox 以 defaultChecked 为 key,云端晚到会重置显示
+                        defaultChecked = cloudLikedForGate ?: uiState.songUIState.liked,
                         isHeartIcon = true,
-                        onChangeListener = {
+                        enable = cloudLikedForGate != null,
+                        onChangeListener = { liked ->
                             viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.ToggleLike)
+                            onLikeChanged?.invoke(liked)
                         },
                     )
+
                     ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
@@ -1868,6 +2161,7 @@ fun NowPlayingBottomSheet(
                     ActionButton(
                         icon = SimpIcons.PlaylistAdd,
                         text = Res.string.add_to_a_playlist,
+                        enable = cloudLikedForGate != null,
                     ) {
                         viewModel.resetPlaylists()
                         addToAPlaylist = true
@@ -1888,7 +2182,16 @@ fun NowPlayingBottomSheet(
                         icon = SimpIcons.PeopleAlt,
                         text = Res.string.artists,
                     ) {
-                        artist = true
+                        val artists = uiState.songUIState.listArtists
+                        val onlyArtist = artists.singleOrNull()
+                        val artistId = onlyArtist?.id
+                        if (!artistId.isNullOrBlank()) {
+                            onNavigateToOtherScreen()
+                            navController.navigate(ArtistDestination(artistId))
+                            hideModalBottomSheet()
+                        } else if (artists.size > 1) {
+                            artist = true
+                        }
                     }
                     ActionButton(
                         icon = SimpIcons.Album,
@@ -1930,7 +2233,31 @@ fun NowPlayingBottomSheet(
                         )
                         hideModalBottomSheet()
                     }
-                    Crossfade(targetState = changeMainLyricsProviderEnable) {
+                    // 网易歌独有:simiSong 相似歌曲列表页(2026-09-25 落地,2026-09-15 曾从
+                    // 详情卡摘除的入口以独立页形态回归);YT 歌的相似=电台,无列表形态
+                    if (uiState.songUIState.videoId.toLongOrNull() != null) {
+                        ActionButton(
+                            icon = SimpIcons.LibraryMusic,
+                            text = Res.string.similar_songs,
+                        ) {
+                            onNavigateToOtherScreen()
+                            navController.navigate(
+                                SimilarSongsDestination(
+                                    songId = uiState.songUIState.videoId,
+                                    songTitle = uiState.songUIState.title,
+                                ),
+                            )
+                            hideModalBottomSheet()
+                        }
+                    }
+                    // 网易歌歌词恒走 NETEASE 官方专线,供应商选择对其无效 → 入口隐藏;
+                    // 仅 YT 歌可选(设置页入口已隐藏,这里是唯一选择处)
+                    Crossfade(
+                        targetState =
+                            changeMainLyricsProviderEnable &&
+                                uiState.songUIState.videoId.isNotEmpty() &&
+                                uiState.songUIState.videoId.toLongOrNull() == null,
+                    ) {
                         if (it) {
                             ActionButton(
                                 icon = SimpIcons.Lyrics,
@@ -1976,7 +2303,7 @@ fun NowPlayingBottomSheet(
                     Crossfade(targetState = setSleepTimerEnable) {
                         if (it) {
                             ActionButton(
-                                icon = SimpIcons.Speed,
+                                icon = SimpIcons.GraphicEq,
                                 text =
                                     if (crossfadeEnabled != DataStoreManager.TRUE) {
                                         Res.string.playback_speed_pitch
@@ -2018,6 +2345,7 @@ fun ActionButton(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .defaultMinSize(minHeight = 56.dp)
                 .wrapContentHeight(Alignment.CenterVertically)
                 .then(
                     if (enable) Modifier.clickable { onClick.invoke() } else Modifier.greyScale(),
@@ -2025,15 +2353,15 @@ fun ActionButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         ) {
             Image(
                 imageVector = icon,
                 contentDescription = if (text != null) stringResource(text) else textString ?: "",
                 modifier =
                     Modifier
-                        .wrapContentSize(Alignment.Center)
-                        .padding(12.dp),
+                        .size(48.dp)
+                        .padding(11.dp),
                 colorFilter =
                     if (enable) {
                         ColorFilter.tint(resolvedIconColor)
@@ -2058,14 +2386,17 @@ fun ActionButton(
 fun CheckBoxActionButton(
     defaultChecked: Boolean,
     isHeartIcon: Boolean,
+    enable: Boolean = true,
     onChangeListener: (checked: Boolean) -> Unit,
 ) {
-    var stateChecked by remember { mutableStateOf(defaultChecked) }
+    // key 上 defaultChecked:菜单存活期间云端点赞态晚到(本地过期值先显示)时重置为真值;
+    // 用户已手动切换后云端不会再发新值,不会被覆盖
+    var stateChecked by remember(defaultChecked) { mutableStateOf(defaultChecked) }
     Box(
         modifier =
             Modifier
                 .wrapContentSize(align = Alignment.Center)
-                .clickable {
+                .clickable(enabled = enable) {
                     stateChecked = !stateChecked
                     onChangeListener(stateChecked)
                 },
@@ -2079,13 +2410,17 @@ fun CheckBoxActionButton(
         ) {
             Box(Modifier.padding(10.dp)) {
                 if (isHeartIcon) {
-                    HeartCheckBox(checked = stateChecked, size = 30)
+                    HeartCheckBox(
+                        checked = stateChecked,
+                        size = 30,
+                        modifier = Modifier.alpha(if (enable) 1f else 0.38f),
+                    )
                 } else {
                     Crossfade(stateChecked) {
                         if (it) {
-                            Icon(SimpIcons.CheckCircle, "")
+                            Icon(SimpIcons.CheckCircle, "", tint = if (enable) Color.Unspecified else Color.Gray)
                         } else {
-                            Icon(SimpIcons.AddCircleOutline, "")
+                            Icon(SimpIcons.AddCircleOutline, "", tint = if (enable) Color.Unspecified else Color.Gray)
                         }
                     }
                 }
@@ -2100,7 +2435,7 @@ fun CheckBoxActionButton(
                 style = typo().labelSmall,
                 // Matches [ActionButton], which this sits directly above in every sheet that uses
                 // both — without it the label alone falls back to the colour typo() carries.
-                color = rememberSurfaceDarkColors().content,
+                color = if (enable) rememberSurfaceDarkColors().content else Color.Gray,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2115,18 +2450,20 @@ fun HeartCheckBox(
     size: Int = 24,
     checked: Boolean,
     tint: Color = rememberSurfaceDarkColors().content,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onStateChange: (() -> Unit)? = null,
 ) {
     val burstState = rememberHeartBurstState()
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(size.dp)
                 // Before .clip: the burst draws outside the button bounds and the circle clip
                 // would trim it to the heart's own circle.
                 .heartBurst(burstState)
                 .clip(CircleShape)
-                .clickable {
+                .clickable(enabled = enabled) {
                     // Judged at TAP time: tapping an unchecked heart is a like. Firing from the
                     // tap — not from watching `checked` — is what keeps a track change onto an
                     // already-liked song from celebrating a like nobody gave.
@@ -2187,19 +2524,42 @@ fun PlaybackSpeedPitchBottomSheet(
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(16.dp))
-                // Playback Speed row
+                // Keep the label and the three controls on separate rows. On compact screens (or
+                // with larger system text) putting all five elements on one line squeezed the
+                // first decrement button until its outline was visibly clipped.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        imageVector = SimpIcons.Speed,
-                        contentDescription = stringResource(Res.string.playback_speed),
-                        modifier = Modifier.size(24.dp),
-                        colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().subtitle),
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = CircleShape,
+                        color = rememberSurfaceDarkColors().subtitle.copy(alpha = 0.14f),
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = SimpIcons.FastForward,
+                                contentDescription = stringResource(Res.string.playback_speed),
+                                modifier = Modifier.size(26.dp),
+                                tint = rememberSurfaceDarkColors().content,
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(Res.string.playback_speed),
+                        style = typo().labelSmall,
+                        color = rememberSurfaceDarkColors().content,
                     )
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedIconButton(
+                        modifier = Modifier.size(44.dp),
                         onClick = {
                             val newSpeed = (kotlin.math.floor((playbackSpeed - 0.1f) * 10f) / 10f).coerceIn(0.2f, 2f)
                             onSet(
@@ -2211,6 +2571,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             SimpIcons.Remove,
                             contentDescription = "Decrease speed",
+                            modifier = Modifier.size(24.dp),
                             tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
@@ -2218,10 +2579,11 @@ fun PlaybackSpeedPitchBottomSheet(
                         text = "x${String.format("%.1f", playbackSpeed)}",
                         style = typo().titleMedium,
                         color = rememberSurfaceDarkColors().subtitle,
-                        modifier = Modifier.widthIn(min = 60.dp),
+                        modifier = Modifier.width(88.dp),
                         textAlign = TextAlign.Center,
                     )
-                    IconButton(
+                    OutlinedIconButton(
+                        modifier = Modifier.size(44.dp),
                         onClick = {
                             val newSpeed = (kotlin.math.floor((playbackSpeed + 0.1f) * 10f) / 10f).coerceIn(0.2f, 2f)
                             onSet(
@@ -2233,6 +2595,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             SimpIcons.Add,
                             contentDescription = "Increase speed",
+                            modifier = Modifier.size(24.dp),
                             tint = rememberSurfaceDarkColors().subtitle,
                         )
                     }
@@ -2243,19 +2606,40 @@ fun PlaybackSpeedPitchBottomSheet(
                 // handled by the caller: crossfade owns mpv's filter chain and the two would fight
                 // over it.
                 run {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            SimpIcons.Tune,
-                            contentDescription = stringResource(Res.string.pitch),
-                            modifier = Modifier.size(24.dp),
-                            tint = rememberSurfaceDarkColors().subtitle,
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = rememberSurfaceDarkColors().subtitle.copy(alpha = 0.14f),
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = SimpIcons.GraphicEq,
+                                    contentDescription = stringResource(Res.string.pitch),
+                                    modifier = Modifier.size(26.dp),
+                                    tint = rememberSurfaceDarkColors().content,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(Res.string.pitch),
+                            style = typo().labelSmall,
+                            color = rememberSurfaceDarkColors().content,
                         )
-                        Spacer(modifier = Modifier.weight(1f))
-                        IconButton(
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedIconButton(
+                            modifier = Modifier.size(44.dp),
                             onClick = {
                                 val newPitch = (pitch - 1).coerceIn(-12, 12)
                                 onSet(playbackSpeed, newPitch)
@@ -2264,6 +2648,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 SimpIcons.Remove,
                                 contentDescription = "Decrease pitch",
+                                modifier = Modifier.size(24.dp),
                                 tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
@@ -2271,10 +2656,11 @@ fun PlaybackSpeedPitchBottomSheet(
                             text = "$pitch",
                             style = typo().titleMedium,
                             color = rememberSurfaceDarkColors().subtitle,
-                            modifier = Modifier.widthIn(min = 60.dp),
+                            modifier = Modifier.width(88.dp),
                             textAlign = TextAlign.Center,
                         )
-                        IconButton(
+                        OutlinedIconButton(
+                            modifier = Modifier.size(44.dp),
                             onClick = {
                                 val newPitch = (pitch + 1).coerceIn(-12, 12)
                                 onSet(playbackSpeed, newPitch)
@@ -2283,6 +2669,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 SimpIcons.Add,
                                 contentDescription = "Increase pitch",
+                                modifier = Modifier.size(24.dp),
                                 tint = rememberSurfaceDarkColors().subtitle,
                             )
                         }
@@ -2590,20 +2977,36 @@ fun SleepTimerBottomSheet(
     }
 }
 
+// 三点菜单"添加到歌单"的本地歌单分区下线(2026-09-20,用户定):只留云端歌单(按歌曲来源
+// 互斥)+ 列表顶部"新建歌单"直接建云端歌单并塞入这首歌。管线保留,恢复改 true。
+// 登记:docs/HIDDEN_FEATURES.md
+private const val SHOW_LOCAL_PLAYLIST_SECTION = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddToPlaylistModalBottomSheet(
     isBottomSheetVisible: Boolean,
     listLocalPlaylist: List<LocalPlaylistEntity>,
-    listYouTubePlaylist: List<PlaylistsResult>,
+    // null=尚未拉取(多选弹窗加载中):不闪"未找到"空态;拉完空列表=真没有,才显示空态
+    listYouTubePlaylist: List<PlaylistsResult>?,
+    listNeteasePlaylist: List<PlaylistsResult>? = null,
     videoId: String? = null,
+    // 多选批量建单:非空优先于 videoId(单曲路径不传,行为不变)
+    videoIds: List<String> = emptyList(),
     onClick: (LocalPlaylistEntity) -> Unit,
     onYTPlaylistClick: (PlaylistsResult) -> Unit,
+    onNeteasePlaylistClick: (PlaylistsResult) -> Unit = {},
     onDismiss: () -> Unit,
+    dataStoreManager: DataStoreManager = koinInject(),
+    playlistRepository: PlaylistRepository = koinInject(),
+    neteaseRepository: NeteaseRepositoryImpl = koinInject(),
+    mutationBus: LibraryMutationBus = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val youtubeLoggedIn by dataStoreManager.loggedIn.collectAsState(null)
+    val neteaseCookie by dataStoreManager.neteaseCookie.collectAsState("")
     val hideModalBottomSheet: () -> Unit =
         {
             coroutineScope.launch {
@@ -2611,6 +3014,153 @@ fun AddToPlaylistModalBottomSheet(
                 onDismiss()
             }
         }
+
+    // 新建歌单弹窗:云端(网易=隐私歌单+塞歌两步;YT=建单接口原生支持初始曲目)。
+    // 居中 AlertDialog(与库页 CreatePlaylistDialog 同款形态):原底部 sheet 弹窗实测
+    // popup 内拿不到 IME inset(imePadding/contentWindowInsets(ime) 都抬不动),键盘
+    // 直接压住输入框;居中窗口天然避开。
+    var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+    var creatingPlaylist by remember { mutableStateOf(false) }
+    // 选中集合的合成源判定(单曲看 videoId,批量按 id 形状聚合)与当前选中分区:
+    // 提升到 sheet 外——"新建歌单"对话框(在 ModalBottomSheet 之前组合)也要读它们
+    val selectionHasNetease =
+        videoId?.toLongOrNull() != null || videoIds.any { it.toLongOrNull() != null }
+    val selectionHasYouTube =
+        (videoId != null && videoId.toLongOrNull() == null) ||
+            videoIds.any { it.toLongOrNull() == null }
+    // 0 = SimpMusic local(已下线,常量门控), 1 = YouTube Music account, 2 = NetEase account.
+    var selectedLibrary by remember {
+        mutableStateOf(
+            if (selectionHasNetease && !selectionHasYouTube) 2 else if (SHOW_LOCAL_PLAYLIST_SECTION && !selectionHasNetease && !selectionHasYouTube) 0 else 1,
+        )
+    }
+    if (showCreatePlaylistDialog) {
+        var newPlaylistName by remember { mutableStateOf("") }
+        val createFailedText = stringResource(Res.string.could_not_create_playlist)
+        // 成功文案对齐"加到已有歌单"路径:用户意图是把歌加进歌单,歌单是新建的
+        val addedToPlaylistText =
+            stringResource(
+                if (videoId?.toLongOrNull() != null) {
+                    Res.string.added_to_netease_playlist
+                } else {
+                    Res.string.added_to_youtube_playlist
+                },
+            )
+        AlertDialog(
+            onDismissRequest = { if (!creatingPlaylist) showCreatePlaylistDialog = false },
+            containerColor = rememberSurfaceDarkColors().container,
+            titleContentColor = rememberSurfaceDarkColors().content,
+            textContentColor = rememberSurfaceDarkColors().content,
+            title = { Text(text = stringResource(Res.string.create_new_playlist)) },
+            text = {
+                OutlinedTextField(
+                    value = newPlaylistName,
+                    onValueChange = { s -> newPlaylistName = s },
+                    label = { Text(text = stringResource(Res.string.playlist_name)) },
+                    singleLine = true,
+                    enabled = !creatingPlaylist,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !creatingPlaylist && newPlaylistName.isNotBlank(),
+                    onClick = {
+                        val name = newPlaylistName.trim()
+                        if (name.isEmpty()) return@TextButton
+                        val songs = videoIds.ifEmpty { listOfNotNull(videoId) }
+                        val songId = songs.firstOrNull() ?: return@TextButton
+                        // 建哪个源的歌单:单曲按歌判源;多选跟随当前选中分区(混选时 chip 上
+                        // 看得见,别让"第一首的顺序"替用户决定)
+                        val createAsNetease =
+                            if (videoIds.isNotEmpty()) selectedLibrary == 2 else songId.toLongOrNull() != null
+                        creatingPlaylist = true
+                        coroutineScope.launch {
+                            // 建单成功后单体回读权威行(封面/作者,与库页网络行同构)再发
+                            // 库页本地回写事件——从多深的入口建单,库页都能立即出现新歌单;
+                            // 回读失败退占位行(建单已成功,不为展示重试)
+                            val mutation =
+                                runCatching {
+                                    if (createAsNetease) {
+                                        neteaseRepository.createNeteasePlaylist(name).getOrNull()
+                                            ?.let { id ->
+                                                if (neteaseRepository.addTracksToNeteasePlaylist(id, songs.filter { it.toLongOrNull() != null }).getOrDefault(false)) {
+                                                    val accountName =
+                                                        dataStoreManager.getString("AccountName").first().orEmpty()
+                                                    val row =
+                                                        neteaseRepository.getNeteasePlaylistAsLibraryRow(id)
+                                                            ?: PlaylistEntity(
+                                                                id = id,
+                                                                source = MusicSource.NETEASE.name,
+                                                                author = accountName,
+                                                                title = name,
+                                                                trackCount = songs.count { it.toLongOrNull() != null },
+                                                            )
+                                                    LibraryMutation.NeteasePlaylistCreated(row)
+                                                } else {
+                                                    null
+                                                }
+                                            }
+                                    } else {
+                                        playlistRepository.createYouTubePlaylistWithTracks(name, songs.filter { it.toLongOrNull() == null })?.let { id ->
+                                            val accountName =
+                                                dataStoreManager.getString("AccountName").first().orEmpty()
+                                            val readback = playlistRepository.getYouTubePlaylistAsLibraryRow(id)
+                                            var row =
+                                                readback
+                                                    ?: PlaylistsResult(
+                                                        author = accountName,
+                                                        browseId = id,
+                                                        category = "",
+                                                        itemCount = "",
+                                                        resultType = "",
+                                                        thumbnails = listOf(),
+                                                        title = name,
+                                                    )
+                                            // 服务端给新建歌单生成封面是异步的,建单回读常拿不到封面
+                                            // (实测:回读行无缩略图,刷新后网络行带首曲封面→tile 跳变)。
+                                            // 单曲建单的封面=该曲缩略图,直接补齐(通知栏兜底同款
+                                            // ytimg 可推导地址;hqdefault 对任意视频恒存在)
+                                            if (row.thumbnails.isEmpty()) {
+                                                row =
+                                                    row.copy(
+                                                        thumbnails =
+                                                            listOf(
+                                                                Thumbnail(
+                                                                    height = 544,
+                                                                    url = "https://i.ytimg.com/vi/$songId/hqdefault.jpg",
+                                                                    width = 544,
+                                                                ),
+                                                            ),
+                                                    )
+                                            }
+                                            LibraryMutation.YouTubePlaylistCreated(row)
+                                        }
+                                    }
+                                }.getOrNull()
+                            creatingPlaylist = false
+                            if (mutation != null) {
+                                mutationBus.send(mutation)
+                                showCreatePlaylistDialog = false
+                                hideModalBottomSheet()
+                                showToast(addedToPlaylistText, ToastGravity.Bottom)
+                            } else {
+                                showToast(createFailedText, ToastGravity.Bottom)
+                            }
+                        }
+                    },
+                ) {
+                    Text(text = stringResource(Res.string.create))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { if (!creatingPlaylist) showCreatePlaylistDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel))
+                }
+            },
+        )
+    }
+
     if (isBottomSheetVisible) {
         ModalBottomSheet(
             onDismissRequest = onDismiss,
@@ -2619,6 +3169,8 @@ fun AddToPlaylistModalBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -2643,8 +3195,20 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
 
                     val chipRowState = rememberScrollState()
-                    var isYouTubePlaylistClicked by remember { mutableStateOf(false) }
-                    if (listYouTubePlaylist.isNotEmpty()) {
+                    // 网易歌进不了 YT 歌单(数字 ID 发给 YT API 只能失败):只有选中含 YT 曲目才亮
+                    val visibleYouTubePlaylists =
+                        if (!selectionHasYouTube || youtubeLoggedIn != DataStoreManager.TRUE) {
+                            emptyList()
+                        } else {
+                            listYouTubePlaylist ?: emptyList()
+                        }
+                    val visibleNeteasePlaylists =
+                        if (selectionHasNetease && neteaseCookie.isNotBlank()) {
+                            listNeteasePlaylist ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+                    if (visibleYouTubePlaylists.isNotEmpty() || visibleNeteasePlaylists.isNotEmpty()) {
                         Row(
                             modifier =
                                 Modifier
@@ -2654,42 +3218,112 @@ fun AddToPlaylistModalBottomSheet(
                                     .background(Color.Transparent),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Chip(
-                                isAnimated = false,
-                                isSelected = !isYouTubePlaylistClicked,
-                                text = stringResource(Res.string.your_playlists),
-                                onClick = { isYouTubePlaylistClicked = false },
-                            )
-                            Chip(
-                                isAnimated = false,
-                                isSelected = isYouTubePlaylistClicked,
-                                text = stringResource(Res.string.your_youtube_playlists),
-                                onClick = { isYouTubePlaylistClicked = true },
-                            )
+                            if (SHOW_LOCAL_PLAYLIST_SECTION) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 0,
+                                    text = stringResource(Res.string.your_playlists),
+                                    onClick = { selectedLibrary = 0 },
+                                )
+                            }
+                            if (visibleYouTubePlaylists.isNotEmpty()) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 1,
+                                    text = "YouTube Music",
+                                    onClick = { selectedLibrary = 1 },
+                                )
+                            }
+                            if (visibleNeteasePlaylists.isNotEmpty()) {
+                                Chip(
+                                    isAnimated = false,
+                                    isSelected = selectedLibrary == 2,
+                                    text = stringResource(Res.string.netease),
+                                    onClick = { selectedLibrary = 2 },
+                                )
+                            }
                         }
                     }
 
-                    if ((listLocalPlaylist.isEmpty() && !isYouTubePlaylistClicked) ||
-                        (listYouTubePlaylist.isEmpty() && isYouTubePlaylistClicked)
+                    // 所选分区的云端账号已登录时,即使歌单列表为空也进入列表分支——
+                    // "新建歌单"行是列表的一部分,不能被空态文案挡掉
+                    val canCreateInSelectedLibrary =
+                        when (selectedLibrary) {
+                            1 -> youtubeLoggedIn == DataStoreManager.TRUE
+                            2 -> neteaseCookie.isNotBlank()
+                            else -> false
+                        }
+                    if (((SHOW_LOCAL_PLAYLIST_SECTION && listLocalPlaylist.isEmpty() && selectedLibrary == 0) ||
+                        (listYouTubePlaylist != null && visibleYouTubePlaylists.isEmpty() && selectedLibrary == 1) ||
+                        (listNeteasePlaylist != null && visibleNeteasePlaylists.isEmpty() && selectedLibrary == 2)
+                    ) && !canCreateInSelectedLibrary
                     ) {
+                        // !canCreate 在云端分区=该源未登录:说"登录后可用",别说"未找到歌单"
+                        val loggedIn =
+                            when (selectedLibrary) {
+                                1 -> youtubeLoggedIn == DataStoreManager.TRUE
+                                2 -> neteaseCookie.isNotBlank()
+                                else -> false
+                            }
                         Text(
-                            text = stringResource(Res.string.no_playlist_found),
+                            text =
+                                if (loggedIn) {
+                                    stringResource(Res.string.no_playlist_found)
+                                } else {
+                                    stringResource(
+                                        Res.string.login_required_short,
+                                        if (selectedLibrary == 2) stringResource(Res.string.netease) else "YouTube Music",
+                                    )
+                                },
                             style = typo().labelSmall,
                             modifier = Modifier.padding(20.dp),
                             color = rememberSurfaceDarkColors().disabled,
                         )
                     } else {
-                        Crossfade(isYouTubePlaylistClicked) { clicked ->
-                            if (clicked) {
+                        Crossfade(selectedLibrary) { library ->
+                            if (library == 1 || library == 2) {
+                                val cloudPlaylists =
+                                    if (library == 1) visibleYouTubePlaylists else visibleNeteasePlaylists
                                 LazyColumn {
-                                    items(listYouTubePlaylist) { playlist ->
+                                    // 列表顶部固定"新建歌单"行:直接建云端歌单并把这首歌塞进去
+                                    item(key = "create_new_playlist") {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .clickable(onClick = { showCreatePlaylistDialog = true }),
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(12.dp).align(Alignment.CenterStart),
+                                            ) {
+                                                Image(
+                                                    imageVector = SimpIcons.Add,
+                                                    contentDescription = "",
+                                                    colorFilter = ColorFilter.tint(rememberSurfaceDarkColors().content),
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = stringResource(Res.string.create_new_playlist),
+                                                    style = typo().labelSmall,
+                                                    color = rememberSurfaceDarkColors().content,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    items(cloudPlaylists) { playlist ->
                                         Box(
                                             modifier =
                                                 Modifier
                                                     .fillMaxWidth()
                                                     .padding(vertical = 3.dp)
                                                     .clickable(onClick = {
-                                                        onYTPlaylistClick(playlist)
+                                                        if (library == 1) {
+                                                            onYTPlaylistClick(playlist)
+                                                        } else {
+                                                            onNeteasePlaylistClick(playlist)
+                                                        }
                                                         hideModalBottomSheet()
                                                     }),
                                         ) {
@@ -2712,7 +3346,7 @@ fun AddToPlaylistModalBottomSheet(
                                         }
                                     }
                                 }
-                            } else {
+                            } else if (SHOW_LOCAL_PLAYLIST_SECTION) {
                                 LazyColumn {
                                     items(listLocalPlaylist) { playlist ->
                                         Box(
@@ -2801,6 +3435,8 @@ fun ArtistModalBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -2860,12 +3496,13 @@ fun PlaylistBottomSheet(
     playlistName: String,
     isYourYouTubePlaylist: Boolean,
     onEditTitle: (newTitle: String) -> Unit = {},
-    onSaveToLocal: () -> Unit,
     onAddToQueue: (() -> Unit)? = null,
-    localPlaylistRepository: LocalPlaylistRepository = koinInject(),
+    // 网易收藏歌单/专辑详情页"更多"菜单露出:取消收藏(云端 subscribe t=0)。调用方负责二次确认。
+    onUnsubscribe: (() -> Unit)? = null,
+    // 网易自建歌单详情页"更多"菜单露出:删除歌单(/playlist/delete,不可逆)。调用方负责强确认。
+    onDeletePlaylist: (() -> Unit)? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var isSavedToLocal by remember { mutableStateOf(false) }
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val hideModalBottomSheet: () -> Unit =
@@ -2937,12 +3574,6 @@ fun PlaylistBottomSheet(
         }
     }
 
-    LaunchedEffect(true) {
-        localPlaylistRepository.getAllLocalPlaylists().collect {
-            isSavedToLocal = it.any { playlist -> playlist.youtubePlaylistId == playlistId }
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = modelBottomSheetState,
@@ -2974,27 +3605,38 @@ fun PlaylistBottomSheet(
                         hideModalBottomSheet()
                     }
                 }
+                if (onUnsubscribe != null) {
+                    ActionButton(
+                        icon = SimpIcons.Delete,
+                        text = Res.string.unsubscribe_from_library,
+                    ) {
+                        // 先等本 sheet 完全收起再触发回调(确认弹窗)——回调里置
+                        // showXxxDialog=true 会立即重组,若在 hide() 完成前执行,
+                        // 确认框会叠在未收起的菜单上;一旦 hide 协程被重组打断,
+                        // onDismiss 永不执行,点掉确认框后菜单"重新弹回"(用户实测 bug)
+                        coroutineScope.launch {
+                            modelBottomSheetState.hide()
+                            onUnsubscribe()
+                            onDismiss()
+                        }
+                    }
+                }
+                if (onDeletePlaylist != null) {
+                    ActionButton(
+                        icon = SimpIcons.Delete,
+                        text = Res.string.netease_delete_playlist,
+                    ) {
+                        // 同上:删除歌单也弹确认框,必须在 sheet 收起后再弹
+                        coroutineScope.launch {
+                            modelBottomSheetState.hide()
+                            onDeletePlaylist()
+                            onDismiss()
+                        }
+                    }
+                }
                 if (isYourYouTubePlaylist) {
                     ActionButton(icon = SimpIcons.Edit, text = Res.string.edit_title) {
                         showEditTitle = true
-                    }
-                    ActionButton(
-                        icon =
-                            if (isSavedToLocal) {
-                                SimpIcons.SyncDisabled
-                            } else {
-                                SimpIcons.Sync
-                            },
-                        text =
-                            if (isSavedToLocal) {
-                                Res.string.saved_to_local_playlist
-                            } else {
-                                Res.string.save_to_local_playlist
-                            },
-                        enable = !isSavedToLocal,
-                    ) {
-                        onSaveToLocal.invoke()
-                        hideModalBottomSheet()
                     }
                 }
                 val shareTitle = stringResource(Res.string.share)
@@ -3134,6 +3776,8 @@ fun LocalPlaylistBottomSheet(
             contentColor = Color.Transparent,
             dragHandle = null,
             scrimColor = Color.Black.copy(alpha = .5f),
+            // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(添加到歌单/艺人/歌单面板共用形态)
+            modifier = Modifier.hapticTapFeedback(),
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Card(
@@ -3440,10 +4084,163 @@ sealed class DevLogInType {
 
     data object Discord : DevLogInType()
 
+    data object NetEase : DevLogInType()
+
     suspend fun getTitle(): String =
         when (this) {
             is Spotify -> getString(Res.string.your_sp_dc_param_of_spotify_cookie)
             is YouTube -> getString(Res.string.your_youtube_cookie)
             is Discord -> getString(Res.string.your_discord_token)
+            is NetEase -> getString(Res.string.netease_dev_login_title)
         }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NeteaseCommentsSheet(
+    onDismiss: () -> Unit,
+    songId: String,
+    totalCount: Int,
+    neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var comments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
+    // 初始必须 false:loadMore 的重入守卫读它,初始 true 会把首载拦死成永久转圈
+    var loading by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+
+    fun loadMore() {
+        if (loading || !hasMore) return
+        loading = true
+        coroutineScope.launch {
+            val page = neteaseRepository.getSongCommentsPage(songId, limit = 20, offset = comments.size)
+            if (page == null) {
+                hasMore = false
+            } else {
+                // 热评与最新评可能重叠(同一条既在热评也在最新),按内容去重
+                comments = (comments + page.first).distinctBy { it.content + (it.nickname ?: "") }
+                hasMore = page.second
+            }
+            loading = false
+        }
+    }
+
+    LaunchedEffect(songId) {
+        comments = emptyList()
+        hasMore = true
+        loadMore()
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.Transparent,
+        contentColor = Color.Transparent,
+        dragHandle = null,
+        scrimColor = Color.Black.copy(alpha = .5f),
+        // sheet=独立窗口,根点击观察器看不到——这里挂同款旁观观察器(网易评论面板)
+        modifier = Modifier.hapticTapFeedback(),
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+    ) {
+        Card(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    // 与其它弹框同款:拖拽条水平居中(Column 默认 Start 对齐,曾一直偏左)
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(60.dp)
+                            .height(4.dp),
+                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
+                    shape = RoundedCornerShape(50),
+                ) {}
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.comments_title,
+                            formatCompactCount(totalCount),
+                        ),
+                    style = typo().titleMedium,
+                    color = rememberSurfaceDarkColors().content,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                )
+                HorizontalDivider(color = rememberSurfaceDarkColors().handle, thickness = 0.5.dp)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                ) {
+                    items(comments) { comment ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                        ) {
+                            AsyncImage(
+                                model = comment.avatarUrl,
+                                contentDescription = null,
+                                modifier =
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(50)),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text =
+                                        listOfNotNull(comment.nickname, comment.location).joinToString(" · "),
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                                Text(
+                                    text = comment.content,
+                                    style = typo().bodyMedium,
+                                    color = rememberSurfaceDarkColors().content,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Icon(
+                                    imageVector = SimpIcons.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = rememberSurfaceDarkColors().subtitle,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Text(
+                                    text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            when {
+                                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                hasMore -> TextButton(onClick = { loadMore() }) {
+                                    Text(text = stringResource(Res.string.more), style = typo().labelMedium)
+                                }
+                                else -> Text(
+                                    text = stringResource(Res.string.end_of_list),
+                                    style = typo().labelSmall,
+                                    color = rememberSurfaceDarkColors().subtitle,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

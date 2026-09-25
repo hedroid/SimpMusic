@@ -1,7 +1,6 @@
 package com.maxrave.simpmusic.ui.component
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,20 +17,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.maxrave.domain.source.MusicSource
+import com.maxrave.simpmusic.expect.HapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.maxrave.simpmusic.extension.greyScale
+import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.HomeDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.MixForYouDestination
 import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.theme.typo
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.*
 import kotlin.reflect.KClass
@@ -47,11 +49,15 @@ import kotlin.reflect.KClass
 fun AppBottomNavigationBar(
     startDestination: Any = HomeDestination,
     navController: NavController,
-    isTranslucentBackground: Boolean = false,
     showAnalyticsTab: Boolean = false,
     showMixForYouTab: Boolean = false,
     reloadDestinationIfNeeded: (KClass<*>) -> Unit = { _ -> },
+    selectedSource: MusicSource = MusicSource.YOUTUBE_MUSIC,
+    neteaseLoggedIn: Boolean = false,
+    onSourceSelected: (MusicSource) -> Unit = { _ -> },
 ) {
+    // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
+    var showSourceMenu by remember { mutableStateOf(false) }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
     // Library here while keeping the ordinal they were declared with, so that the numbering stays
@@ -96,6 +102,9 @@ fun AppBottomNavigationBar(
             ?.let { selectedIndex = it.ordinal }
     }
     val selectTab: (BottomNavScreen) -> Unit = { screen ->
+        // 底栏 tab 的点击震感:根触感观察器的事件链到不了 bottomBar slot(实测既有边界),
+        // 直接在选中回调里震(用户点击专用路径,程序化导航不走这里,不会误震)
+        HapticFeedback.tap()
         if (selectedIndex == screen.ordinal) {
             if (currentBackStackEntry?.destination?.hierarchy?.any {
                     it.hasRoute(screen.destination::class)
@@ -120,14 +129,12 @@ fun AppBottomNavigationBar(
     // Search rides in its own circular button, so the capsule holds everything else.
     val barTabs = bottomNavScreens.filter { it != BottomNavScreen.Search }
 
-    // The translucent switch tints the CAPSULE ITSELF, never a strip behind it — the area around
-    // the floating cluster always shows the page. ON reads the content through the pill; OFF is a
-    // solid surface. The indicator stays nearer opaque so the selection survives busy artwork.
-    val capsuleColor =
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if (isTranslucentBackground) 0.72f else 1f)
-    val indicatorColor =
-        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (isTranslucentBackground) 0.85f else 1f)
+    // 85%: the page shows faintly through the floating cluster (the capsule and the search button);
+    // the indicator stays opaque so the selection survives busy artwork.
+    val capsuleColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+    val indicatorColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
+    Box {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         // One centred cluster — capsule, gap, FAB — exactly like the glass bar: fill = false keeps
@@ -209,7 +216,10 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .clickable { selectTab(BottomNavScreen.Search) },
+                    .sourceSwitchGesture(
+                        onLongPress = { showSourceMenu = true },
+                        onTap = { selectTab(BottomNavScreen.Search) },
+                    ),
             contentAlignment = Alignment.Center,
         ) {
             CompositionLocalProvider(
@@ -222,9 +232,21 @@ fun AppBottomNavigationBar(
             ) {
                 BottomNavScreen.Search.icon()
             }
+
+            // 音源菜单:锚定在搜索按钮上,标准 Material DropdownMenu —— 材质/配色随主题,
+            // 按钮在屏幕底部,菜单自动翻到按钮上方弹出。
+            SourceSwitchMenu(
+                expanded = showSourceMenu,
+                onDismiss = { showSourceMenu = false },
+                selectedSource = selectedSource,
+                neteaseLoggedIn = neteaseLoggedIn,
+                onSourceSelected = onSourceSelected,
+            )
         }
     }
+    }
 }
+
 
 // Mirrors the glass tab bar's geometry (TabWidth/BarHeight/BlobHeight/BarInset in
 // LiquidGlassTabBar.android.kt) so the two bars are one form in two materials.
@@ -240,6 +262,9 @@ fun AppNavigationRail(
     showAnalyticsTab: Boolean = false,
     showMixForYouTab: Boolean = false,
     reloadDestinationIfNeeded: (KClass<*>) -> Unit = { _ -> },
+    selectedSource: MusicSource = MusicSource.YOUTUBE_MUSIC,
+    neteaseLoggedIn: Boolean = false,
+    onSourceSelected: (MusicSource) -> Unit = { _ -> },
 ) {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     // See the note in AppBottomNavigationBar: `ordinal` is the tab's identity, not its position.
@@ -280,66 +305,114 @@ fun AppNavigationRail(
             .firstOrNull { screen -> hierarchy.any { it.hasRoute(screen.destination::class) } }
             ?.let { selectedIndex = it.ordinal }
     }
-    NavigationRail {
-        Spacer(Modifier.height(16.dp))
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center,
+    // 与 AppBottomNavigationBar.selectTab 同一套选中/导航语义,reload 逻辑也一致。
+    val selectTab: (BottomNavScreen) -> Unit = { screen ->
+        // 底栏 tab 的点击震感:根触感观察器的事件链到不了 bottomBar slot(实测既有边界),
+        // 直接在选中回调里震(用户点击专用路径,程序化导航不走这里,不会误震)
+        HapticFeedback.tap()
+        if (selectedIndex == screen.ordinal) {
+            if (currentBackStackEntry?.destination?.hierarchy?.any {
+                    it.hasRoute(screen.destination::class)
+                } == true
             ) {
-                Image(
-                    painter = painterResource(Res.drawable.mono),
-                    contentDescription = null,
-                    modifier =
-                        Modifier
-                            .height(32.dp)
-                            .clip(CircleShape),
-                )
+                reloadDestinationIfNeeded(screen.destination::class)
+            } else {
+                navController.navigate(screen.destination)
+            }
+        } else {
+            selectedIndex = screen.ordinal
+            navController.navigate(screen.destination) {
+                popUpTo(navController.graph.startDestinationId) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
             }
         }
+    }
+    // 音源菜单状态:横屏 rail 的搜索项长按弹出(与竖屏底栏同款交互,见 sourceSwitchGesture)
+    var showSourceMenu by remember { mutableStateOf(false) }
+    NavigationRail {
+        Spacer(Modifier.height(16.dp))
         Spacer(Modifier.weight(1f))
         bottomNavScreens.forEach { screen ->
-            NavigationRailItem(
-                icon = screen.icon,
-                label = {
-                    Text(
-                        stringResource(screen.title),
-                        style =
-                            if (selectedIndex == screen.ordinal) {
-                                typo().bodySmall
-                            } else {
-                                typo().bodySmall.greyScale()
-                            },
-                    )
-                },
-                selected = selectedIndex == screen.ordinal,
-                onClick = {
-                    if (selectedIndex == screen.ordinal) {
-                        if (currentBackStackEntry?.destination?.hierarchy?.any {
-                                it.hasRoute(screen.destination::class)
-                            } == true
+            if (screen == BottomNavScreen.Search) {
+                // 搜索项:NavigationRailItem 不开放 onLongClick,音源长按菜单挂不进去 ——
+                // 按竖屏底栏同款自绘(sourceSwitchGesture + SourceSwitchMenu),选中态画
+                // secondaryContainer 指示条对齐 NavigationRailItem 的默认观感。
+                val searchSelected = selectedIndex == BottomNavScreen.Search.ordinal
+                Column(
+                    modifier =
+                        Modifier
+                            .width(80.dp)
+                            .sourceSwitchGesture(
+                                onLongPress = { showSourceMenu = true },
+                                onTap = { selectTab(screen) },
+                            ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(width = 56.dp, height = 32.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    if (searchSelected) {
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    } else {
+                                        androidx.compose.ui.graphics.Color.Transparent
+                                    },
+                                ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompositionLocalProvider(
+                            LocalContentColor provides
+                                if (searchSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                         ) {
-                            reloadDestinationIfNeeded(
-                                screen.destination::class,
-                            )
-                        } else {
-                            navController.navigate(screen.destination)
-                        }
-                    } else {
-                        selectedIndex = screen.ordinal
-                        navController.navigate(screen.destination) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
+                            screen.icon()
                         }
                     }
-                },
-            )
+                    Text(
+                        stringResource(screen.title),
+                        style = typo().bodySmall,
+                        color =
+                            if (searchSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        maxLines = 1,
+                    )
+                    SourceSwitchMenu(
+                        expanded = showSourceMenu,
+                        onDismiss = { showSourceMenu = false },
+                        selectedSource = selectedSource,
+                        neteaseLoggedIn = neteaseLoggedIn,
+                        onSourceSelected = onSourceSelected,
+                    )
+                }
+            } else {
+                NavigationRailItem(
+                    icon = screen.icon,
+                    label = {
+                        Text(
+                            stringResource(screen.title),
+                            style =
+                                if (selectedIndex == screen.ordinal) {
+                                    typo().bodySmall
+                                } else {
+                                    typo().bodySmall.greyScale()
+                                },
+                        )
+                    },
+                    selected = selectedIndex == screen.ordinal,
+                    onClick = { selectTab(screen) },
+                )
+            }
         }
         Spacer(Modifier.height(32.dp))
     }

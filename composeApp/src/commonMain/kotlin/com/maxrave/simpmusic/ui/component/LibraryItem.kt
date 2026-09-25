@@ -231,7 +231,8 @@ fun LibraryItem(
                                                         }
                                                     }
                                                 },
-                                            )
+                                                // 最近添加是混源列表:歌单/专辑/歌曲/艺人都带双品牌角标
+                                                )
                                         }
                                     }
                                 }
@@ -272,9 +273,9 @@ fun LibraryItem(
                                         model =
                                             ImageRequest
                                                 .Builder(LocalPlatformContext.current)
-                                                .data(item.canvasThumbUrl)
+                                                .data(item.canvasThumbUrl ?: item.thumbnails)
                                                 .diskCachePolicy(CachePolicy.ENABLED)
-                                                .diskCacheKey(item.canvasThumbUrl)
+                                                .diskCacheKey(item.canvasThumbUrl ?: item.thumbnails)
                                                 .crossfade(true)
                                                 .build(),
                                         placeholder = rememberHolderPainter(),

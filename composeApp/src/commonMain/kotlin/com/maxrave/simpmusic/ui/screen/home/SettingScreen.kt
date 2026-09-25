@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -72,7 +73,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -112,17 +112,22 @@ import com.maxrave.domain.repository.ImportProgress
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.HapticFeedback
+import com.maxrave.simpmusic.expect.HapticFeedbackLevel
 import com.maxrave.simpmusic.expect.ui.directoryPickerResult
+import com.maxrave.simpmusic.expect.ui.LoginSyncDialog
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
 import com.maxrave.simpmusic.expect.ui.isLyricsBlurSupported
 import com.maxrave.simpmusic.expect.ui.isWallpaperDynamicColorSupported
+import com.maxrave.simpmusic.expect.ui.openEqResult
+import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.extension.bytesToMB
 import com.maxrave.simpmusic.extension.displayString
 import com.maxrave.simpmusic.extension.isLanguageCode
+import com.maxrave.simpmusic.extension.isTwoLetterCode
 import com.maxrave.simpmusic.extension.isValidProxyHost
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.ActionButton
-import com.maxrave.simpmusic.ui.component.AmbientThemeGlow
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.LoadingDialog
@@ -131,7 +136,6 @@ import com.maxrave.simpmusic.ui.component.ModelIdDropdownField
 import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SettingItem
 import com.maxrave.simpmusic.ui.component.languageDisplayName
-import com.maxrave.simpmusic.ui.component.rememberNowPlayingGlowTint
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.Error
@@ -142,6 +146,7 @@ import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
+import com.maxrave.simpmusic.ui.navigation.destination.login.NeteaseLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LastfmLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.SpotifyLoginDestination
@@ -166,11 +171,11 @@ import com.mohamedrejeb.calf.io.getPath
 import com.mohamedrejeb.calf.picker.FilePickerFileType
 import com.mohamedrejeb.calf.picker.FilePickerSelectionMode
 import com.mohamedrejeb.calf.picker.rememberFilePickerLauncher
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
+import kotlin.math.roundToInt
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -185,6 +190,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.simpmusic.aiservice.AIHost
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.netease_lyrics
 import simpmusic.composeapp.generated.resources.about_us
 import simpmusic.composeapp.generated.resources.add_an_account
 import simpmusic.composeapp.generated.resources.ai
@@ -206,6 +212,8 @@ import simpmusic.composeapp.generated.resources.auto_check_for_update_descriptio
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs_description
 import simpmusic.composeapp.generated.resources.backup
+import simpmusic.composeapp.generated.resources.backup_default_folder_name
+import simpmusic.composeapp.generated.resources.backup_description
 import simpmusic.composeapp.generated.resources.backup_location
 import simpmusic.composeapp.generated.resources.backup_location_default
 import simpmusic.composeapp.generated.resources.backup_downloaded
@@ -216,6 +224,7 @@ import simpmusic.composeapp.generated.resources.better_lyrics
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.animated_artwork_info
 import simpmusic.composeapp.generated.resources.canvas_info
+import simpmusic.composeapp.generated.resources.youtube_collection_sync_description
 import simpmusic.composeapp.generated.resources.categories_sponsor_block
 import simpmusic.composeapp.generated.resources.change
 import simpmusic.composeapp.generated.resources.change_language_warning
@@ -261,11 +270,19 @@ import simpmusic.composeapp.generated.resources.enable_sponsor_block
 import simpmusic.composeapp.generated.resources.enable_spotify_lyrics
 import simpmusic.composeapp.generated.resources.equalizer
 import simpmusic.composeapp.generated.resources.equalizer_description
+import simpmusic.composeapp.generated.resources.equalizer_type
+import simpmusic.composeapp.generated.resources.equalizer_type_built_in
+import simpmusic.composeapp.generated.resources.equalizer_type_system
 import simpmusic.composeapp.generated.resources.follow_app_language
 import simpmusic.composeapp.generated.resources.follow_app_language_current
 import simpmusic.composeapp.generated.resources.free_space
 import simpmusic.composeapp.generated.resources.gemini
 import simpmusic.composeapp.generated.resources.guest
+import simpmusic.composeapp.generated.resources.haptic_feedback
+import simpmusic.composeapp.generated.resources.haptic_feedback_description
+import simpmusic.composeapp.generated.resources.haptic_feedback_light
+import simpmusic.composeapp.generated.resources.haptic_feedback_medium
+import simpmusic.composeapp.generated.resources.haptic_feedback_strong
 import simpmusic.composeapp.generated.resources.http
 import simpmusic.composeapp.generated.resources.import_data
 import simpmusic.composeapp.generated.resources.import_data_intro
@@ -285,8 +302,6 @@ import simpmusic.composeapp.generated.resources.invalid_language_code
 import simpmusic.composeapp.generated.resources.invalid_port
 import simpmusic.composeapp.generated.resources.keep_backups
 import simpmusic.composeapp.generated.resources.keep_backups_format
-import simpmusic.composeapp.generated.resources.keep_service_alive
-import simpmusic.composeapp.generated.resources.keep_service_alive_description
 import simpmusic.composeapp.generated.resources.keep_your_youtube_playlist_offline
 import simpmusic.composeapp.generated.resources.keep_your_youtube_playlist_offline_description
 import simpmusic.composeapp.generated.resources.kill_service_on_exit
@@ -304,6 +319,29 @@ import simpmusic.composeapp.generated.resources.local_tracking_title
 import simpmusic.composeapp.generated.resources.log_in_to_discord
 import simpmusic.composeapp.generated.resources.log_in_to_lastfm
 import simpmusic.composeapp.generated.resources.log_in_to_spotify
+import simpmusic.composeapp.generated.resources.netease
+import simpmusic.composeapp.generated.resources.netease_account
+import simpmusic.composeapp.generated.resources.manage_your_netease_account
+import simpmusic.composeapp.generated.resources.netease_logout_warning
+import simpmusic.composeapp.generated.resources.log_in_to_netease
+import simpmusic.composeapp.generated.resources.log_out_from_netease
+import simpmusic.composeapp.generated.resources.intro_login_to_netease
+import simpmusic.composeapp.generated.resources.netease_quality
+import simpmusic.composeapp.generated.resources.netease_download_quality
+import simpmusic.composeapp.generated.resources.netease_play_report
+import simpmusic.composeapp.generated.resources.netease_play_report_description
+import simpmusic.composeapp.generated.resources.netease_unavailable_action
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_pause
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_skip
+import simpmusic.composeapp.generated.resources.netease_unavailable_action_switch
+import simpmusic.composeapp.generated.resources.netease_quality_standard
+import simpmusic.composeapp.generated.resources.netease_quality_higher
+import simpmusic.composeapp.generated.resources.netease_quality_exhigh
+import simpmusic.composeapp.generated.resources.netease_quality_lossless
+import simpmusic.composeapp.generated.resources.netease_quality_hires
+import simpmusic.composeapp.generated.resources.netease_quality_jyeffect
+import simpmusic.composeapp.generated.resources.netease_quality_sky
+import simpmusic.composeapp.generated.resources.netease_quality_jymaster
 import simpmusic.composeapp.generated.resources.log_out
 import simpmusic.composeapp.generated.resources.log_out_from_discord
 import simpmusic.composeapp.generated.resources.log_out_from_lastfm
@@ -311,9 +349,18 @@ import simpmusic.composeapp.generated.resources.log_out_from_spotify
 import simpmusic.composeapp.generated.resources.log_out_warning
 import simpmusic.composeapp.generated.resources.logged_in
 import simpmusic.composeapp.generated.resources.logged_in_as
+import simpmusic.composeapp.generated.resources.login_sync_android_description
+import simpmusic.composeapp.generated.resources.login_sync_android_title
+import simpmusic.composeapp.generated.resources.login_sync_desktop_description
+import simpmusic.composeapp.generated.resources.login_sync_desktop_title
+import simpmusic.composeapp.generated.resources.login_sync_section
 import simpmusic.composeapp.generated.resources.lrclib
 import simpmusic.composeapp.generated.resources.lyrics
 import simpmusic.composeapp.generated.resources.lyrics_style
+import simpmusic.composeapp.generated.resources.lyrics_offset
+import simpmusic.composeapp.generated.resources.lyrics_offset_invalid
+import simpmusic.composeapp.generated.resources.lyrics_offset_message
+import simpmusic.composeapp.generated.resources.lyrics_offset_value
 import simpmusic.composeapp.generated.resources.lyrics_romanization
 import simpmusic.composeapp.generated.resources.lyrics_romanization_description
 import simpmusic.composeapp.generated.resources.romanization_belarusian
@@ -332,7 +379,6 @@ import simpmusic.composeapp.generated.resources.romanization_serbian
 import simpmusic.composeapp.generated.resources.romanization_ukrainian
 import simpmusic.composeapp.generated.resources.lyrics_style_apple_music
 import simpmusic.composeapp.generated.resources.lyrics_style_classic
-import simpmusic.composeapp.generated.resources.main_lyrics_provider
 import simpmusic.composeapp.generated.resources.manage_your_youtube_accounts
 import simpmusic.composeapp.generated.resources.maxrave_dev
 import simpmusic.composeapp.generated.resources.monthly
@@ -345,14 +391,18 @@ import simpmusic.composeapp.generated.resources.now_playing_style_apple_music
 import simpmusic.composeapp.generated.resources.now_playing_style_m3_expressive
 import simpmusic.composeapp.generated.resources.now_playing_style_spotify
 import simpmusic.composeapp.generated.resources.ok
+import simpmusic.composeapp.generated.resources.open_system_equalizer
 import simpmusic.composeapp.generated.resources.openai
 import simpmusic.composeapp.generated.resources.openai_api_compatible
+import simpmusic.composeapp.generated.resources.original_audio
 import simpmusic.composeapp.generated.resources.other_app
 import simpmusic.composeapp.generated.resources.play_explicit_content
 import simpmusic.composeapp.generated.resources.play_explicit_content_description
 import simpmusic.composeapp.generated.resources.play_video_for_video_track_instead_of_audio_only
 import simpmusic.composeapp.generated.resources.playback
 import simpmusic.composeapp.generated.resources.player_cache
+import simpmusic.composeapp.generated.resources.preferred_audio_language
+import simpmusic.composeapp.generated.resources.preferred_audio_language_message
 import simpmusic.composeapp.generated.resources.proxy
 import simpmusic.composeapp.generated.resources.proxy_description
 import simpmusic.composeapp.generated.resources.proxy_host
@@ -372,9 +422,6 @@ import simpmusic.composeapp.generated.resources.restore_your_data
 import simpmusic.composeapp.generated.resources.restore_your_saved_data
 import simpmusic.composeapp.generated.resources.rich_presence_info
 import simpmusic.composeapp.generated.resources.save
-import simpmusic.composeapp.generated.resources.save_all_your_playlist_data
-import simpmusic.composeapp.generated.resources.save_last_played
-import simpmusic.composeapp.generated.resources.save_last_played_track_and_queue
 import simpmusic.composeapp.generated.resources.save_playback_state
 import simpmusic.composeapp.generated.resources.save_shuffle_and_repeat_mode
 import simpmusic.composeapp.generated.resources.scrobbling_info
@@ -394,8 +441,6 @@ import simpmusic.composeapp.generated.resources.spotify_canvas_cache
 import simpmusic.composeapp.generated.resources.spotify_lyrícs_info
 import simpmusic.composeapp.generated.resources.storage
 import simpmusic.composeapp.generated.resources.such_as_music_video_lyrics_video_podcasts_and_more
-import simpmusic.composeapp.generated.resources.sync_follow_to_youtube
-import simpmusic.composeapp.generated.resources.sync_follow_to_youtube_description
 import simpmusic.composeapp.generated.resources.theme
 import simpmusic.composeapp.generated.resources.theme_color
 import simpmusic.composeapp.generated.resources.theme_color_custom
@@ -408,11 +453,11 @@ import simpmusic.composeapp.generated.resources.third_party_libraries
 import simpmusic.composeapp.generated.resources.thumbnail_cache
 import simpmusic.composeapp.generated.resources.translation_language
 import simpmusic.composeapp.generated.resources.translation_language_message
-import simpmusic.composeapp.generated.resources.translucent_bottom_navigation_bar
 import simpmusic.composeapp.generated.resources.unknown
 import simpmusic.composeapp.generated.resources.upload_your_listening_history_to_youtube_music_server_it_will_make_yt_music_recommendation_system_better_working_only_if_logged_in
 import simpmusic.composeapp.generated.resources.use_ai_translation
 import simpmusic.composeapp.generated.resources.use_ai_translation_description
+import simpmusic.composeapp.generated.resources.use_your_system_equalizer
 import simpmusic.composeapp.generated.resources.user_interface
 import simpmusic.composeapp.generated.resources.version
 import simpmusic.composeapp.generated.resources.version_format
@@ -422,7 +467,6 @@ import simpmusic.composeapp.generated.resources.warning
 import simpmusic.composeapp.generated.resources.weekly
 import simpmusic.composeapp.generated.resources.zhipu
 import simpmusic.composeapp.generated.resources.what_segments_will_be_skipped
-import simpmusic.composeapp.generated.resources.you_can_see_the_content_below_the_bottom_bar
 import simpmusic.composeapp.generated.resources.youtube_account
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language
 import simpmusic.composeapp.generated.resources.youtube_subtitle_language_message
@@ -436,10 +480,37 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+// Discord Rich Presence is shelved (2026-09-20): the owner doesn't need the feature, so its
+// settings section is hidden. Everything behind it (login screen, SettingsViewModel state,
+// MediaServiceHandler RPC sender, kizzy module) stays compiled — flip this to true to restore
+// the section as-is.
+private const val SHOW_DISCORD_SETTINGS = false
+
+// "Backup downloaded data" is shelved (2026-09-20): downloads live in the private SimpleCache
+// and bloating backup zips with them isn't wanted. The DataStore flag (default off),
+// SettingsViewModel setter and the backup/restore pipeline branches all stay compiled — flip
+// this to true to restore the toggle as-is.
+private const val SHOW_BACKUP_DOWNLOADED_SETTINGS = false
+
+// "Import playlists" is shelved (2026-09-20): the owner doesn't migrate from Spotify/other YT
+// clients anymore. The file picker launcher, ImportViewModel and the progress dialog all stay
+// compiled — flip this to true to restore the section as-is.
+private const val SHOW_IMPORT_PLAYLIST_SETTINGS = false
+
+// "Keep showing your YouTube playlist when offline" is hidden (2026-09-20): the owner asked for
+// it to go. The DataStore key, SettingsViewModel state/setter and the PlaylistRepositoryImpl
+// offline-fallback branch all stay compiled — flip this to true to restore the toggle as-is.
+private const val SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE = false
+
+// "Devices" (login sync, QR sign-in handoff to desktop) is hidden (2026-09-25): the owner doesn't
+// use it yet — the sync only carries YT/Spotify/Discord/Lastfm sign-ins, no NetEase cookie. The
+// loginSync module, dialog, QrScanner and both view models all stay compiled — flip this to true
+// to restore the section as-is.
+private const val SHOW_LOGIN_SYNC_SETTINGS = false
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalCoilApi::class,
-    ExperimentalHazeMaterialsApi::class,
     FormatStringsInDatetimeFormats::class,
     ExperimentalCalfApi::class,
 )
@@ -499,20 +570,14 @@ fun SettingScreen(
     // KmpFile rather than a Uri, so no expect/actual is needed. The type stays All because a
     // converted .json arrives with whatever MIME its source assigned it, and an application/json
     // filter would hide it on some hosts.
+    // The launcher itself lives inside the SHOW_IMPORT_PLAYLIST_SETTINGS block below; the
+    // ViewModel/state stay here because the progress dialog at the bottom still consumes them.
     val importViewModel: ImportViewModel = koinViewModel()
     val importState by importViewModel.importState.collectAsStateWithLifecycle()
-    val importLauncher =
-        rememberFilePickerLauncher(
-            type =
-                FilePickerFileType.All,
-            selectionMode = FilePickerSelectionMode.Single,
-        ) { file ->
-            file.firstOrNull()?.let {
-                importViewModel.import(it, pl)
-            }
-        }
 
-    val enableTranslucentNavBar by remember { viewModel.translucentBottomBar.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
+    // Open equalizer
+    val resultLauncher = openEqResult(viewModel.getAudioSessionId())
+
     val language by viewModel.language.collectAsStateWithLifecycle()
     // Empty stored app language = follow the system locale; the runtime locale stands in for
     // it when naming the effective language.
@@ -526,7 +591,6 @@ fun SettingScreen(
     val videoDownloadQuality by viewModel.videoDownloadQuality.collectAsStateWithLifecycle()
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
     val playVideo by remember { viewModel.playVideoInsteadOfAudio.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val radioAudioOnly by remember { viewModel.radioAudioOnly.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
@@ -534,14 +598,25 @@ fun SettingScreen(
     val normalizeVolume by remember { viewModel.normalizeVolume.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSilent by remember { viewModel.skipSilent.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val savePlaybackState by remember { viewModel.savedPlaybackState.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
-    val saveLastPlayed by remember { viewModel.saveRecentSongAndQueue.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val killServiceOnExit by remember { viewModel.killServiceOnExit.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = true)
     val mainLyricsProvider by viewModel.mainLyricsProvider.collectAsStateWithLifecycle()
+    val lyricsOffsetMs by viewModel.lyricsOffsetMs.collectAsStateWithLifecycle()
     val youtubeSubtitleLanguage by viewModel.youtubeSubtitleLanguage.collectAsStateWithLifecycle()
+    val preferredAudioLanguage by viewModel.preferredAudioLanguage.collectAsStateWithLifecycle()
     val spotifyLoggedIn by viewModel.spotifyLogIn.collectAsStateWithLifecycle()
     val spotifyLyrics by viewModel.spotifyLyrics.collectAsStateWithLifecycle()
     val spotifyCanvas by viewModel.spotifyCanvas.collectAsStateWithLifecycle()
     val amAnimatedArtwork by viewModel.amAnimatedArtwork.collectAsStateWithLifecycle()
+    val neteaseLoggedIn by viewModel.neteaseLogIn.collectAsStateWithLifecycle()
+    val neteaseAccountName by viewModel.neteaseAccountName.collectAsStateWithLifecycle()
+    val neteaseAccountThumbUrl by viewModel.neteaseAccountThumbUrlState.collectAsStateWithLifecycle()
+    var showNeteaseAccountDialog by rememberSaveable { mutableStateOf(false) }
+    val neteaseQuality by viewModel.neteaseQuality.collectAsStateWithLifecycle()
+    val neteaseDownloadQuality by viewModel.neteaseDownloadQuality.collectAsStateWithLifecycle()
+    val neteasePlayReport by viewModel.neteasePlayReport.collectAsStateWithLifecycle()
+    val neteaseUnavailableAction by viewModel.neteaseUnavailableAction.collectAsStateWithLifecycle()
+    val hapticFeedbackLevel by viewModel.hapticFeedbackLevel.collectAsStateWithLifecycle()
+    val hapticEnabled by viewModel.hapticEnabled.collectAsStateWithLifecycle()
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
@@ -569,7 +644,6 @@ fun SettingScreen(
     val customOpenAIHeaders by viewModel.customOpenAIHeaders.collectAsStateWithLifecycle()
     val notificationLyrics by viewModel.notificationLyrics.collectAsStateWithLifecycle()
     val notificationLyricsMode by viewModel.notificationLyricsMode.collectAsStateWithLifecycle()
-    val backupDownloaded by viewModel.backupDownloaded.collectAsStateWithLifecycle()
     val backupLocation by viewModel.backupLocation.collectAsStateWithLifecycle()
     val autoBackupEnabled by viewModel.autoBackupEnabled.collectAsStateWithLifecycle()
     val autoBackupFrequency by viewModel.autoBackupFrequency.collectAsStateWithLifecycle()
@@ -584,17 +658,15 @@ fun SettingScreen(
     val romanizationStored by sharedViewModel.getRomanizationLanguages().collectAsStateWithLifecycle("")
     val japaneseDictionaryState by viewModel.japaneseDictionaryState.collectAsStateWithLifecycle()
     var showColorPickerDialog by rememberSaveable { mutableStateOf(false) }
-    val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
     val loggedIn by viewModel.loggedIn.collectAsStateWithLifecycle()
-    val syncFollowToYouTube by viewModel.syncFollowToYouTube.collectAsStateWithLifecycle()
     val equalizerEnabled by viewModel.equalizerEnabled.collectAsStateWithLifecycle()
+    val equalizerType by viewModel.equalizerType.collectAsStateWithLifecycle()
     val delayEnabled by viewModel.delayEnabled.collectAsStateWithLifecycle()
     val reverbEnabled by viewModel.reverbEnabled.collectAsStateWithLifecycle()
     val lastfmLoggedIn by viewModel.lastfmLoggedIn.collectAsStateWithLifecycle()
     val lastfmUsername by viewModel.lastfmUsername.collectAsStateWithLifecycle()
     val lastfmScrobbleEnabled by viewModel.lastfmScrobbleEnabled.collectAsStateWithLifecycle()
     val richPresenceEnabled by viewModel.richPresenceEnabled.collectAsStateWithLifecycle()
-    val keepServiceAlive by viewModel.keepServiceAlive.collectAsStateWithLifecycle()
 
     val crossfadeEnabled by viewModel.crossfadeEnabled.collectAsStateWithLifecycle()
     val crossfadeDuration by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
@@ -605,9 +677,7 @@ fun SettingScreen(
     val isCheckingUpdate by sharedViewModel.isCheckingUpdate.collectAsStateWithLifecycle()
 
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
 
     val checkForUpdateSubtitle by remember {
         derivedStateOf {
@@ -630,6 +700,9 @@ fun SettingScreen(
     var showYouTubeAccountDialog by rememberSaveable {
         mutableStateOf(false)
     }
+    var showLoginSyncDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
     var showThirdPartyLibraries by rememberSaveable {
         mutableStateOf(false)
     }
@@ -645,28 +718,14 @@ fun SettingScreen(
 
     val settingListState = rememberLazyListState()
     // Home's rule: transparent only while pixel-0 is on screen. The frost itself is kept LIGHT
-    // (below) so frosting over the glow reads as a veil, not a lid.
+    // (below) so the title stays readable while rows scroll under the bar.
     val isAtTop by remember {
         derivedStateOf { settingListState.firstVisibleItemIndex == 0 && settingListState.firstVisibleItemScrollOffset == 0 }
     }
-    // Home-family ambient ground, and like Home's it SCROLLS AWAY with the content instead of
-    // hanging off the ceiling. Still a sibling (so it sits behind the floating bar), but its draw
-    // rides the list: exact tracking while item 0 is on screen, parked off-screen after. Item 0 is
-    // taller than the glow, so the glow has fully left before the branch ever switches — no jump.
-    // graphicsLayer reads the state in the DRAW phase, so scrolling redraws without recomposing.
-    val glowNowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
-    AmbientThemeGlow(
-        tint = rememberNowPlayingGlowTint(glowNowPlaying?.songEntity?.thumbnails),
-        modifier =
-            Modifier.graphicsLayer {
-                translationY =
-                    if (settingListState.firstVisibleItemIndex == 0) {
-                        -settingListState.firstVisibleItemScrollOffset.toFloat()
-                    } else {
-                        -size.height
-                    }
-            },
-    )
+    // No AmbientThemeGlow here (unlike Home/Notification/Mix): the now-playing tint, darkened
+    // for dark theme or hushed for light, read as a grayish veil dulling the settings header —
+    // a tool page earns its clarity back by skipping the mood lighting. The floating bar's
+    // haze frost below stays: it is what keeps the title readable while rows scroll under it.
     LazyColumn(
         state = settingListState,
         contentPadding = innerPadding,
@@ -682,6 +741,27 @@ fun SettingScreen(
                 // 64dp item 0 would have switched branches while the glow was still half-visible.
                 Spacer(Modifier.height(64.dp))
                 Spacer(Modifier.height(16.dp))
+                // Above every section, and inside item 0 rather than an item of its own, for the
+                // glow reason above.
+                if (SHOW_LOGIN_SYNC_SETTINGS) {
+                    Text(text = stringResource(Res.string.login_sync_section), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
+                    SettingItem(
+                        title =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) Res.string.login_sync_android_title else Res.string.login_sync_desktop_title,
+                            ),
+                        subtitle =
+                            stringResource(
+                                if (getPlatform() == Platform.Android) {
+                                    Res.string.login_sync_android_description
+                                } else {
+                                    Res.string.login_sync_desktop_description
+                                },
+                            ),
+                        onClick = { showLoginSyncDialog = true },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = MaterialTheme.colorScheme.onBackground)
                 val themeModeLabels =
                     listOf(
@@ -803,6 +883,15 @@ fun SettingScreen(
                         RomanizationLanguage.MACEDONIAN to stringResource(Res.string.romanization_macedonian),
                     )
                 val romanizationSelected = RomanizationLanguage.parse(romanizationStored)
+                // 弹窗只提供日/韩/中三个常用语言(2026-09-25 用户定案);其余 9 种长尾语言
+                // (印地/旁遮普/西里尔系…)仍在 enum/引擎/DataStore 里——老用户已选的照常
+                // 罗马音化,只是不能再新勾选。副标题名单用全量 labels,已选长尾项有名字显示。
+                val romanizationChoices =
+                    listOf(
+                        RomanizationLanguage.JAPANESE,
+                        RomanizationLanguage.KOREAN,
+                        RomanizationLanguage.CHINESE,
+                    )
                 SettingItem(
                     title = stringResource(Res.string.lyrics_romanization),
                     // Two different jobs for one line. Off, the row has to explain what the
@@ -839,15 +928,20 @@ fun SettingScreen(
                                 multipleSelect =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            romanizationLabels.map { (language, label) ->
-                                                (language in romanizationSelected) to label
+                                            romanizationChoices.map { language ->
+                                                (language in romanizationSelected) to
+                                                    romanizationLabels.first { it.first == language }.second
                                             },
                                     ),
                                 confirm =
                                     runBlocking { getString(Res.string.save) } to { state ->
                                         val chosen = state.multipleSelect?.getListSelected().orEmpty()
+                                        // 弹窗没列出的长尾语言若此前已选,保留不动(用户没机会
+                                        // 看到它们的勾选框,不该因保存常用项而被清掉)
+                                        val unlisted =
+                                            romanizationSelected.filter { it !in romanizationChoices }.toSet()
                                         val languages =
-                                            romanizationLabels.filter { it.second in chosen }.map { it.first }.toSet()
+                                            (romanizationLabels.filter { it.second in chosen }.map { it.first } + unlisted).toSet()
                                         sharedViewModel.setRomanizationLanguages(languages)
                                         // Japanese needs its dictionary pack on disk. A no-op when
                                         // it is already there (or bundled, as on Desktop) — and the
@@ -903,12 +997,6 @@ fun SettingScreen(
                         onClick = { showColorPickerDialog = true },
                     )
                 }
-                SettingItem(
-                    title = stringResource(Res.string.translucent_bottom_navigation_bar),
-                    subtitle = stringResource(Res.string.you_can_see_the_content_below_the_bottom_bar),
-                    smallSubtitle = true,
-                    switch = (enableTranslucentNavBar to { viewModel.setTranslucentBottomBar(it) }),
-                )
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.enable_liquid_glass_effect),
@@ -917,6 +1005,81 @@ fun SettingScreen(
                         switch = (enableLiquidGlass to { viewModel.setEnableLiquidGlass(it) }),
                         isEnable = getPlatform() == Platform.Android,
                     )
+                    // 触感反馈:总开关(默认关)+ 开启后三档强度滑动条。
+                    // 常规点击的震感由 App 根布局的 hapticTapFeedback 观察器统一提供;
+                    // 这里只有两处专属调用——打开开关的确认(见下)与滑动条刻度预览。
+                    // 确认震感必须走显式档位的 tap(level)(不受总开关门控)——观察器
+                    // 的 Initial 通道先于 onClick 执行,而开关自己刚翻开,enabled 标志
+                    // 要等 DataStore 写入→collect 传播,无参 tap() 会被尚未翻转的门拦掉。
+                    SettingItem(
+                        title = stringResource(Res.string.haptic_feedback),
+                        subtitle = stringResource(Res.string.haptic_feedback_description),
+                        smallSubtitle = true,
+                        switch =
+                            (hapticEnabled to { enabled ->
+                                viewModel.setHapticEnabled(enabled)
+                                if (enabled) HapticFeedback.tap(HapticFeedbackLevel.parseOr(hapticFeedbackLevel))
+                            }),
+                    )
+                    AnimatedVisibility(visible = hapticEnabled) {
+                        val hapticStepLabels =
+                            listOf(
+                                Res.string.haptic_feedback_light,
+                                Res.string.haptic_feedback_medium,
+                                Res.string.haptic_feedback_strong,
+                            )
+                        val savedStep =
+                            HapticFeedbackLevel.parseOr(hapticFeedbackLevel).ordinal
+                        var draftStep by remember { mutableStateOf<Int?>(null) }
+                        LaunchedEffect(hapticFeedbackLevel) { draftStep = null }
+                        val shownStep = draftStep ?: savedStep
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                        ) {
+                            Slider(
+                                value = shownStep.toFloat(),
+                                onValueChange = { raw ->
+                                    val step = raw.roundToInt().coerceIn(0, 2)
+                                    if (step != draftStep) {
+                                        draftStep = step
+                                        // 滑过刻度即时预览该档震感(枚举序=LIGHT/MEDIUM/STRONG)
+                                        HapticFeedback.tap(HapticFeedbackLevel.entries[step])
+                                    }
+                                },
+                                onValueChangeFinished = {
+                                    draftStep?.let { step ->
+                                        viewModel.setHapticFeedbackLevel(HapticFeedbackLevel.entries[step].name)
+                                    }
+                                },
+                                valueRange = 0f..2f,
+                                // steps 是端点之间的中间刻度数,总档位=steps+2;
+                                // 三档(0/1/2 恰好整数对齐 roundToInt)必须用 1,写成 2 会变 4 档
+                                steps = 1,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                hapticStepLabels.forEachIndexed { index, label ->
+                                    Text(
+                                        text = stringResource(label),
+                                        style = typo().bodySmall,
+                                        color =
+                                            if (index == shownStep) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1009,6 +1172,45 @@ fun SettingScreen(
                                         )
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.preferred_audio_language),
+                    // 与 YouTube 字幕翻译语言行同款形态(2026-09-25 用户定案):已选值显示语言
+                    // 名而非裸代码,弹窗用 languagePicker(常用语言下拉 + 手填代码),取值列表与
+                    // 校验和翻译语言共用同一套(LanguageDropdownField / isLanguageCode)。空值
+                    // 的语义两边不同——翻译=跟随应用语言,音轨=播原声。
+                    subtitle =
+                        preferredAudioLanguage.takeIf { it.isNotEmpty() }?.let { languageDisplayName(it) }
+                            ?: stringResource(Res.string.original_audio),
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.preferred_audio_language) },
+                                textField =
+                                    SettingAlertState.TextFieldData(
+                                        // No label — same reasoning as the translation language dialog.
+                                        label = "",
+                                        value = preferredAudioLanguage,
+                                        // Empty is valid here: it means "original audio". The check
+                                        // itself is the translation language's (isLanguageCode) so a
+                                        // zh-Hant-style tag is accepted; the track matcher only
+                                        // compares the primary subtag, so the extra part is inert.
+                                        verifyCodeBlock = {
+                                            (it.isEmpty() || it.isLanguageCode()) to
+                                                runBlocking { getString(Res.string.invalid_language_code) }
+                                        },
+                                        placeholder = runBlocking { getString(Res.string.original_audio) },
+                                    ),
+                                message = runBlocking { getString(Res.string.preferred_audio_language_message) },
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        viewModel.setPreferredAudioLanguage(state.textField?.value ?: "")
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                languagePicker = true,
                             ),
                         )
                     },
@@ -1126,16 +1328,17 @@ fun SettingScreen(
                     switch = (radioAudioOnly to { viewModel.setRadioAudioOnly(it) }),
                 )
                 SettingItem(
-                    title = stringResource(Res.string.sync_follow_to_youtube),
-                    subtitle = stringResource(Res.string.sync_follow_to_youtube_description),
-                    smallSubtitle = true,
-                    switch = (syncFollowToYouTube to { viewModel.setSyncFollowToYouTube(it) }),
-                    // Writing to someone's YouTube account needs a session, so the row is dead
-                    // while signed out. Clearing the stored flag is NOT done from here: the reset
-                    // belongs to the logout itself (SettingsViewModel.setUsedAccount /
-                    // logOutAllYouTube), which runs whether or not Settings is ever opened.
-                    isEnable = loggedIn == DataStoreManager.TRUE,
+                    title = stringResource(Res.string.play_explicit_content),
+                    subtitle = stringResource(Res.string.play_explicit_content_description),
+                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
                 )
+                if (SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE) {
+                    SettingItem(
+                        title = stringResource(Res.string.keep_your_youtube_playlist_offline),
+                        subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
+                        switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
+                    )
+                }
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
                     subtitle =
@@ -1146,23 +1349,6 @@ fun SettingScreen(
                     smallSubtitle = true,
                     switch = (sendData to { viewModel.setSendBackToGoogle(it) }),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.play_explicit_content),
-                    subtitle = stringResource(Res.string.play_explicit_content_description),
-                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.keep_your_youtube_playlist_offline),
-                    subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
-                    switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
-                )
-                /*
-                SettingItem(
-                    title = stringResource(Res.string.combine_local_and_youtube_liked_songs),
-                    subtitle = stringResource(Res.string.combine_local_and_youtube_liked_songs_description),
-                    switch = (combineLocalAndYouTubeLiked to { viewModel.setCombineLocalAndYouTubeLiked(it) })
-                )
-                 */
                 SettingItem(
                     title = stringResource(Res.string.proxy),
                     subtitle = stringResource(Res.string.proxy_description),
@@ -1333,6 +1519,141 @@ fun SettingScreen(
                 }
             }
         }
+        item(key = "netease") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.netease),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_account),
+                    subtitle = stringResource(Res.string.manage_your_netease_account),
+                    onClick = { showNeteaseAccountDialog = true },
+                )
+                // 与 YTM 音质同款 SettingAlertState 单选弹框
+                val neteaseQualityOptions =
+                    mapOf(
+                        "JYMASTER" to Res.string.netease_quality_jymaster,
+                        "SKY" to Res.string.netease_quality_sky,
+                        "JYEFFECT" to Res.string.netease_quality_jyeffect,
+                        "HIRES" to Res.string.netease_quality_hires,
+                        "LOSSLESS" to Res.string.netease_quality_lossless,
+                        "EXHIGH" to Res.string.netease_quality_exhigh,
+                        "HIGHER" to Res.string.netease_quality_higher,
+                        "STANDARD" to Res.string.netease_quality_standard,
+                    )
+                val qualityLabelToKey =
+                    neteaseQualityOptions.entries.associate { (key, res) ->
+                        runBlocking { getString(res) } to key
+                    }
+                SettingItem(
+                    title = stringResource(Res.string.quality),
+                    subtitle =
+                        neteaseQualityOptions[neteaseQuality]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_quality_exhigh),
+                    smallSubtitle = true,
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                                (key == neteaseQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        qualityLabelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseQuality(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_quality),
+                    subtitle =
+                        neteaseQualityOptions[neteaseDownloadQuality]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_quality_lossless),
+                    smallSubtitle = true,
+                    isEnable = neteaseLoggedIn,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_download_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                                (key == neteaseDownloadQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        qualityLabelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseDownloadQuality(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.netease_play_report),
+                    subtitle = stringResource(Res.string.netease_play_report_description),
+                    switch = (neteasePlayReport to { viewModel.setNeteasePlayReport(it) }),
+                    isEnable = neteaseLoggedIn,
+                )
+                // 播放遇到无版权/取不到流的网易歌时的动作(NETEASE_M9 灰歌处理):
+                // 自动跳过(默认,网易官方行为)/ 暂停 / 跨源回退 YouTube Music 同名曲
+                val neteaseUnavailableActionOptions =
+                    mapOf(
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SKIP to Res.string.netease_unavailable_action_skip,
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_PAUSE to Res.string.netease_unavailable_action_pause,
+                        DataStoreManager.Values.NETEASE_UNAVAILABLE_ACTION_SWITCH_YT to Res.string.netease_unavailable_action_switch,
+                    )
+                SettingItem(
+                    title = stringResource(Res.string.netease_unavailable_action),
+                    subtitle =
+                        neteaseUnavailableActionOptions[neteaseUnavailableAction]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_unavailable_action_skip),
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.netease_unavailable_action) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            neteaseUnavailableActionOptions.entries.map { (key, res) ->
+                                                (key == neteaseUnavailableAction) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val labelToKey =
+                                            neteaseUnavailableActionOptions.entries.associate { (key, res) ->
+                                                runBlocking { getString(res) } to key
+                                            }
+                                        labelToKey[state.selectOne?.getSelected()]?.let {
+                                            viewModel.setNeteaseUnavailableAction(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+            }
+        }
         if (getPlatform() == Platform.Android) {
             item(key = "audio") {
                 Column {
@@ -1352,6 +1673,51 @@ fun SettingScreen(
                         subtitle = stringResource(Res.string.skip_no_music_part),
                         switch = (skipSilent to { viewModel.setSkipSilent(it) }),
                     )
+                    val equalizerTypeLabels =
+                        listOf(
+                            DataStoreManager.EQUALIZER_TYPE_BUILT_IN to stringResource(Res.string.equalizer_type_built_in),
+                            DataStoreManager.EQUALIZER_TYPE_SYSTEM to stringResource(Res.string.equalizer_type_system),
+                        )
+                    SettingItem(
+                        title = stringResource(Res.string.equalizer_type),
+                        subtitle = equalizerTypeLabels.firstOrNull { it.first == equalizerType }?.second ?: "",
+                        onClick = {
+                            viewModel.setAlertData(
+                                SettingAlertState(
+                                    title = runBlocking { getString(Res.string.equalizer_type) },
+                                    selectOne =
+                                        SettingAlertState.SelectData(
+                                            listSelect = equalizerTypeLabels.map { (it.first == equalizerType) to it.second },
+                                        ),
+                                    confirm =
+                                        runBlocking { getString(Res.string.change) } to { state ->
+                                            val selected = state.selectOne?.getSelected()
+                                            equalizerTypeLabels.firstOrNull { it.second == selected }?.first?.let {
+                                                viewModel.setEqualizerType(it)
+                                            }
+                                        },
+                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                ),
+                            )
+                        },
+                    )
+                    AnimatedVisibility(visible = equalizerType == DataStoreManager.EQUALIZER_TYPE_SYSTEM) {
+                        SettingItem(
+                            title = stringResource(Res.string.open_system_equalizer),
+                            subtitle =
+                                if (castState.isRemote) {
+                                    stringResource(Res.string.not_available_while_casting)
+                                } else {
+                                    stringResource(Res.string.use_your_system_equalizer)
+                                },
+                            isEnable = !castState.isRemote,
+                            onClick = {
+                                coroutineScope.launch {
+                                    resultLauncher.launch()
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -1367,17 +1733,21 @@ fun SettingScreen(
                 // Android-only branch — "Open system equalizer" is an Android feature — and this
                 // one is on both platforms: mpv's `af` chain on Desktop, an AudioProcessor in the
                 // Media3 sink on Android, driven from the same stored curve.
-                SettingItem(
-                    title = stringResource(Res.string.equalizer),
-                    subtitle = stringResource(Res.string.equalizer_description),
-                    smallSubtitle = true,
-                    switch = (equalizerEnabled to { viewModel.setEqualizerEnabled(it) }),
-                )
-                // Only while on. A curve that visibly does nothing is worse than no curve —
-                // and the stored bands survive the switch, so turning it back on returns to
-                // the shape the user built rather than to flat.
-                AnimatedVisibility(visible = equalizerEnabled) {
-                    EqualizerSection()
+                AnimatedVisibility(visible = getPlatform() != Platform.Android || equalizerType != DataStoreManager.EQUALIZER_TYPE_SYSTEM) {
+                    Column {
+                        SettingItem(
+                            title = stringResource(Res.string.equalizer),
+                            subtitle = stringResource(Res.string.equalizer_description),
+                            smallSubtitle = true,
+                            switch = (equalizerEnabled to { viewModel.setEqualizerEnabled(it) }),
+                        )
+                        // Only while on. A curve that visibly does nothing is worse than no curve —
+                        // and the stored bands survive the switch, so turning it back on returns to
+                        // the shape the user built rather than to flat.
+                        AnimatedVisibility(visible = equalizerEnabled) {
+                            EqualizerSection()
+                        }
+                    }
                 }
                 // Beside the equalizer rather than in its own group: all three are the same kind of
                 // thing — one stored setting reshaping the audio on both backends — and a user
@@ -1409,21 +1779,11 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.save_shuffle_and_repeat_mode),
                     switch = (savePlaybackState to { viewModel.setSavedPlaybackState(it) }),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.save_last_played),
-                    subtitle = stringResource(Res.string.save_last_played_track_and_queue),
-                    switch = (saveLastPlayed to { viewModel.setSaveLastPlayed(it) }),
-                )
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.kill_service_on_exit),
                         subtitle = stringResource(Res.string.kill_service_on_exit_description),
                         switch = (killServiceOnExit to { viewModel.setKillServiceOnExit(it) }),
-                    )
-                    SettingItem(
-                        title = stringResource(Res.string.keep_service_alive),
-                        subtitle = stringResource(Res.string.keep_service_alive_description),
-                        switch = (keepServiceAlive to { viewModel.setKeepServiceAlive(it) }),
                     )
                 }
             }
@@ -1580,44 +1940,41 @@ fun SettingScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
+                // 主歌词提供商入口已隐藏(2026-09-15):网易歌恒走 NETEASE 官方专线,
+                // YT 歌改在播放页三点菜单选;跨源供应商(netease 歌词 for YT)按 TODO 另做
                 SettingItem(
-                    title = stringResource(Res.string.main_lyrics_provider),
+                    title = stringResource(Res.string.lyrics_offset),
                     subtitle =
-                        when (mainLyricsProvider) {
-                            DataStoreManager.SIMPMUSIC -> stringResource(Res.string.simpmusic_lyrics)
-                            DataStoreManager.YOUTUBE -> stringResource(Res.string.youtube_transcript)
-                            DataStoreManager.LRCLIB -> stringResource(Res.string.lrclib)
-                            DataStoreManager.BETTER_LYRICS -> stringResource(Res.string.better_lyrics)
-                            else -> stringResource(Res.string.unknown)
-                        },
+                        stringResource(
+                            Res.string.lyrics_offset_value,
+                            if (lyricsOffsetMs > 0) "+$lyricsOffsetMs" else lyricsOffsetMs.toString(),
+                        ),
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.main_lyrics_provider) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            listOf(
-                                                (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to
-                                                    runBlocking { getString(Res.string.simpmusic_lyrics) },
-                                                (mainLyricsProvider == DataStoreManager.YOUTUBE) to
-                                                    runBlocking { getString(Res.string.youtube_transcript) },
-                                                (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
-                                                (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
-                                                    runBlocking { getString(Res.string.better_lyrics) },
-                                            ),
+                                title = runBlocking { getString(Res.string.lyrics_offset) },
+                                // The dialog renders its text field INSIDE the `message != null`
+                                // branch, so a state carrying a textField and no message opens an
+                                // empty box with no error anywhere.
+                                message = runBlocking { getString(Res.string.lyrics_offset_message) },
+                                textField =
+                                    SettingAlertState.TextFieldData(
+                                        label = runBlocking { getString(Res.string.lyrics_offset) },
+                                        value = lyricsOffsetMs.toString(),
+                                        // Only that it is a whole number — no range. How far a
+                                        // listener's own audio path lags is theirs to say.
+                                        verifyCodeBlock = {
+                                            (it.trim().toIntOrNull() != null) to
+                                                runBlocking { getString(Res.string.lyrics_offset_invalid) }
+                                        },
                                     ),
                                 confirm =
                                     runBlocking { getString(Res.string.change) } to { state ->
-                                        viewModel.setLyricsProvider(
-                                            when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.simpmusic_lyrics) } -> DataStoreManager.SIMPMUSIC
-                                                runBlocking { getString(Res.string.youtube_transcript) } -> DataStoreManager.YOUTUBE
-                                                runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
-                                                runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS
-                                                else -> DataStoreManager.SIMPMUSIC
-                                            },
-                                        )
+                                        state.textField
+                                            ?.value
+                                            ?.trim()
+                                            ?.toIntOrNull()
+                                            ?.let { viewModel.setLyricsOffsetMs(it) }
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
                             ),
@@ -1997,43 +2354,47 @@ fun SettingScreen(
                 )
             }
         }
-        item(key = "discord") {
-            Column {
-                Text(
-                    text = stringResource(Res.string.discord_integration),
-                    style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                SettingItem(
-                    title =
-                        if (discordLoggedIn) {
-                            stringResource(Res.string.log_out_from_discord)
-                        } else {
-                            stringResource(Res.string.log_in_to_discord)
+        if (SHOW_DISCORD_SETTINGS) {
+            item(key = "discord") {
+                val discordLoggedIn by viewModel.discordLoggedIn.collectAsStateWithLifecycle()
+                val richPresenceEnabled by viewModel.richPresenceEnabled.collectAsStateWithLifecycle()
+                Column {
+                    Text(
+                        text = stringResource(Res.string.discord_integration),
+                        style = typo().labelMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                    SettingItem(
+                        title =
+                            if (discordLoggedIn) {
+                                stringResource(Res.string.log_out_from_discord)
+                            } else {
+                                stringResource(Res.string.log_in_to_discord)
+                            },
+                        subtitle =
+                            if (discordLoggedIn) {
+                                stringResource(Res.string.logged_in)
+                            } else {
+                                stringResource(Res.string.intro_login_to_discord)
+                            },
+                        onClick = {
+                            if (discordLoggedIn) {
+                                viewModel.confirmLogOut(
+                                    confirmLabel = runBlocking { getString(Res.string.log_out_from_discord) },
+                                ) { viewModel.logOutDiscord() }
+                            } else {
+                                navController.navigate(DiscordLoginDestination)
+                            }
                         },
-                    subtitle =
-                        if (discordLoggedIn) {
-                            stringResource(Res.string.logged_in)
-                        } else {
-                            stringResource(Res.string.intro_login_to_discord)
-                        },
-                    onClick = {
-                        if (discordLoggedIn) {
-                            viewModel.confirmLogOut(
-                                confirmLabel = runBlocking { getString(Res.string.log_out_from_discord) },
-                            ) { viewModel.logOutDiscord() }
-                        } else {
-                            navController.navigate(DiscordLoginDestination)
-                        }
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.enable_rich_presence),
-                    subtitle = stringResource(Res.string.rich_presence_info),
-                    switch = (richPresenceEnabled to { viewModel.setDiscordRichPresenceEnabled(it) }),
-                    isEnable = discordLoggedIn,
-                )
+                    )
+                    SettingItem(
+                        title = stringResource(Res.string.enable_rich_presence),
+                        subtitle = stringResource(Res.string.rich_presence_info),
+                        switch = (richPresenceEnabled to { viewModel.setDiscordRichPresenceEnabled(it) }),
+                        isEnable = discordLoggedIn,
+                    )
+                }
             }
         }
         // Hidden entirely when the build carries no Last.fm credentials — a FOSS build, or a full
@@ -2470,22 +2831,35 @@ fun SettingScreen(
         }
         item(key = "backup") {
             Column {
+                val backupFolderName =
+                    backupLocation
+                        ?.substringAfterLast("tree/")
+                        ?.replace("%3A", ":")
+                        ?.replace("%2F", "/")
+                        ?.removePrefix("primary:")
                 Text(
                     text = stringResource(Res.string.backup),
                     style = typo().labelMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
-                SettingItem(
-                    title = stringResource(Res.string.backup_downloaded),
-                    subtitle = stringResource(Res.string.backup_downloaded_description),
-                    switch = (backupDownloaded to { viewModel.setBackupDownloaded(it) }),
-                )
+                if (SHOW_BACKUP_DOWNLOADED_SETTINGS) {
+                    val backupDownloaded by viewModel.backupDownloaded.collectAsStateWithLifecycle()
+                    SettingItem(
+                        title = stringResource(Res.string.backup_downloaded),
+                        subtitle = stringResource(Res.string.backup_downloaded_description),
+                        switch = (backupDownloaded to { viewModel.setBackupDownloaded(it) }),
+                    )
+                }
                 // Auto Backup (Android only)
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.auto_backup),
-                        subtitle = stringResource(Res.string.auto_backup_description),
+                        subtitle =
+                            stringResource(
+                                Res.string.auto_backup_description,
+                                backupFolderName ?: stringResource(Res.string.backup_default_folder_name),
+                            ),
                         switch = (autoBackupEnabled to { viewModel.setAutoBackupEnabled(it) }),
                     )
                     AnimatedVisibility(visible = autoBackupEnabled) {
@@ -2592,11 +2966,7 @@ fun SettingScreen(
                     SettingItem(
                         title = stringResource(Res.string.backup_location),
                         subtitle =
-                            backupLocation
-                                ?.substringAfterLast("tree/")
-                                ?.replace("%3A", ":")
-                                ?.replace("%2F", "/")
-                                ?.removePrefix("primary:")
+                            backupFolderName
                                 ?: stringResource(Res.string.backup_location_default),
                         onClick = {
                             backupLocationPicker.launch()
@@ -2605,7 +2975,7 @@ fun SettingScreen(
                 }
                 SettingItem(
                     title = stringResource(Res.string.backup),
-                    subtitle = stringResource(Res.string.save_all_your_playlist_data),
+                    subtitle = stringResource(Res.string.backup_description),
                     onClick = {
                         if (getPlatform() == Platform.Android) {
                             viewModel.backupNow()
@@ -2625,33 +2995,45 @@ fun SettingScreen(
                         }
                     },
                 )
-                SettingItem(
-                    title = stringResource(Res.string.import_data),
-                    subtitle = stringResource(Res.string.import_playlists_from_other_apps),
-                    onClick = {
-                        coroutineScope.launch {
-                            importLauncher.launch()
+                if (SHOW_IMPORT_PLAYLIST_SETTINGS) {
+                    val importLauncher =
+                        rememberFilePickerLauncher(
+                            type =
+                                FilePickerFileType.All,
+                            selectionMode = FilePickerSelectionMode.Single,
+                        ) { file ->
+                            file.firstOrNull()?.let {
+                                importViewModel.import(it, pl)
+                            }
                         }
-                    },
-                )
-                val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.simpmusic.org/tools")
-                val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.simpmusic.org/tools")
-                Text(
-                    buildAnnotatedString {
-                        append(beforeUrl)
-                        withLink(
-                            LinkAnnotation.Url(
-                                "https://www.simpmusic.org/tools",
-                                TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
-                            ),
-                        ) {
-                            append("https://www.simpmusic.org/tools")
-                        }
-                        append(afterUrl)
-                    },
-                    style = typo().bodySmall,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-                )
+                    SettingItem(
+                        title = stringResource(Res.string.import_data),
+                        subtitle = stringResource(Res.string.import_playlists_from_other_apps),
+                        onClick = {
+                            coroutineScope.launch {
+                                importLauncher.launch()
+                            }
+                        },
+                    )
+                    val beforeUrl = stringResource(Res.string.import_data_intro).substringBefore("https://www.simpmusic.org/tools")
+                    val afterUrl = stringResource(Res.string.import_data_intro).substringAfter("https://www.simpmusic.org/tools")
+                    Text(
+                        buildAnnotatedString {
+                            append(beforeUrl)
+                            withLink(
+                                LinkAnnotation.Url(
+                                    "https://www.simpmusic.org/tools",
+                                    TextLinkStyles(style = SpanStyle(color = MaterialTheme.colorScheme.primary)),
+                                ),
+                            ) {
+                                append("https://www.simpmusic.org/tools")
+                            }
+                            append(afterUrl)
+                        },
+                        style = typo().bodySmall,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    )
+                }
             }
         }
         item(key = "about_us") {
@@ -2825,6 +3207,162 @@ fun SettingScreen(
             },
         )
     }
+    if (showNeteaseAccountDialog) {
+        BasicAlertDialog(
+            onDismissRequest = { },
+            modifier = Modifier.wrapContentSize(),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = AlertDialogDefaults.TonalElevation,
+                shadowElevation = 1.dp,
+            ) {
+                // 与 YouTube 账户弹框同构:账户列表(点击切换) + 添加帐户/退出登录页脚
+                LaunchedEffect(Unit) { viewModel.getAllNeteaseAccounts() }
+                val neteaseAccounts by viewModel.neteaseAccounts.collectAsStateWithLifecycle(
+                    minActiveState = Lifecycle.State.RESUMED,
+                )
+                LaunchedEffect(neteaseAccounts) {
+                    Logger.w("SettingScreen", "neteaseAccounts: ${neteaseAccounts.map { it.nickname to it.isUsed }}")
+                }
+                LazyColumn(modifier = Modifier.padding(8.dp)) {
+                    item {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                        ) {
+                            IconButton(
+                                onClick = { showNeteaseAccountDialog = false },
+                                colors =
+                                    IconButtonDefaults.iconButtonColors().copy(
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight(),
+                            ) {
+                                Icon(SimpIcons.Close, null, tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Text(
+                                stringResource(Res.string.netease_account),
+                                style = typo().titleMedium,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.Center)
+                                        .wrapContentHeight(align = Alignment.CenterVertically)
+                                        .wrapContentWidth(),
+                            )
+                        }
+                    }
+                    if (neteaseAccounts.isEmpty()) {
+                        item {
+                            Text(
+                                stringResource(Res.string.no_account),
+                                style = typo().bodyMedium,
+                                textAlign = TextAlign.Center,
+                                modifier =
+                                    Modifier
+                                        .padding(12.dp)
+                                        .fillMaxWidth(),
+                            )
+                        }
+                    } else {
+                        items(neteaseAccounts) { account ->
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .padding(vertical = 8.dp)
+                                        .clickable { viewModel.setUsedNeteaseAccount(account) },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Spacer(Modifier.width(24.dp))
+                                AsyncImage(
+                                    model =
+                                        ImageRequest
+                                            .Builder(LocalPlatformContext.current)
+                                            .data(account.avatarUrl.ifEmpty { null })
+                                            .crossfade(550)
+                                            .build(),
+                                    placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                    error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                                    contentDescription = account.nickname,
+                                    modifier =
+                                        Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        account.nickname,
+                                        style = typo().labelMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                    )
+                                    Text("ID: ${account.userId}", style = typo().bodySmall)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                AnimatedVisibility(account.isUsed) {
+                                    Text(
+                                        stringResource(Res.string.signed_in),
+                                        style = typo().bodySmall,
+                                        maxLines = 2,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.widthIn(0.dp, 64.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(24.dp))
+                            }
+                        }
+                    }
+                    item {
+                        Column {
+                            ActionButton(
+                                icon = SimpIcons.PeopleAlt,
+                                text = Res.string.guest,
+                            ) {
+                                viewModel.useGuestNetease()
+                                showNeteaseAccountDialog = false
+                            }
+                            ActionButton(
+                                icon = SimpIcons.PlaylistAdd,
+                                text = Res.string.add_an_account,
+                            ) {
+                                showNeteaseAccountDialog = false
+                                navController.navigate(NeteaseLoginDestination)
+                            }
+                            ActionButton(
+                                icon = SimpIcons.Close,
+                                text = Res.string.log_out_from_netease,
+                                enable = neteaseLoggedIn,
+                            ) {
+                                viewModel.setBasicAlertData(
+                                    SettingBasicAlertState(
+                                        title = runBlocking { getString(Res.string.warning) },
+                                        message = runBlocking { getString(Res.string.netease_logout_warning) },
+                                        confirm =
+                                            runBlocking { getString(Res.string.log_out_from_netease) } to {
+                                                viewModel.logOutAllNetease()
+                                                showNeteaseAccountDialog = false
+                                            },
+                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showLoginSyncDialog) {
+        LoginSyncDialog(onDismiss = { showLoginSyncDialog = false })
+    }
     if (showYouTubeAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
@@ -2963,6 +3501,7 @@ fun SettingScreen(
                             ActionButton(
                                 icon = SimpIcons.Close,
                                 text = Res.string.log_out,
+                                enable = loggedIn == DataStoreManager.TRUE,
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(
@@ -3420,12 +3959,10 @@ fun SettingScreen(
                             // The house recipe from AlbumScreen's bars, thinned: ultraThin's built-in
                             // tint stacked on this page's dark ground read as a solid lid. 0.3 keeps
                             // the blur doing the work and the tint only settling legibility.
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = settingBarTint
-                                tints = listOf(HazeTint(settingBarTint.copy(alpha = 0.3f)))
-                            }
+                            // blurRadius is halved inside barBlurStyle (a 24dp blur bleeds
+                            // ~50px past the bar's 64dp bounds and the frost read as a band twice
+                            // as tall as every other page's ultraThin bar).
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(settingBarTint, 0.3f))
                         },
                     ),
             colors =
@@ -3527,3 +4064,6 @@ private fun ImportProgressDialog(
         },
     )
 }
+// ----------------------------------------------------------------------------
+// 网易云音质选择(feat/netease-source)
+// ----------------------------------------------------------------------------

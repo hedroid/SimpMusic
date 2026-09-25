@@ -13,16 +13,21 @@ import com.maxrave.domain.data.type.SearchResultType
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.HomeRepository
 import com.maxrave.domain.repository.SearchRepository
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.utils.Resource
 import com.maxrave.domain.utils.toQueryList
+import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
+import com.maxrave.netease.model.NeteaseHotWord
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +56,9 @@ data class SearchScreenState(
     val searchPodcastsResult: List<PlaylistsResult> = emptyList(),
     val suggestQueries: List<String> = emptyList(),
     val suggestYTItems: List<SearchResultType> = emptyList(),
+    // SONGS tab 分页:下一页令牌(null=没有更多)+追加中标记;其余 tab 一次拉完无分页
+    val songsNextPageToken: String? = null,
+    val songsLoadingMore: Boolean = false,
 )
 
 // Loại tìm kiếm
@@ -92,6 +100,7 @@ class SearchViewModel(
     private val dataStoreManager: DataStoreManager,
     private val searchRepository: SearchRepository,
     private val homeRepository: HomeRepository,
+    private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
     private val _searchScreenUIState = MutableStateFlow<SearchScreenUIState>(SearchScreenUIState.Empty)
     val searchScreenUIState: StateFlow<SearchScreenUIState> get() = _searchScreenUIState.asStateFlow()
@@ -112,6 +121,10 @@ class SearchViewModel(
 
     private val requestedArtwork = mutableSetOf<String>()
 
+    /** 网易热搜词(搜索空态页;YT 源恒空) */
+    private val _hotSearch: MutableStateFlow<List<NeteaseHotWord>> = MutableStateFlow(emptyList())
+    val hotSearch: StateFlow<List<NeteaseHotWord>> get() = _hotSearch.asStateFlow()
+
     var regionCode: String? = null
     var language: String? = null
 
@@ -120,6 +133,28 @@ class SearchViewModel(
         language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
         getSearchHistory()
         getMoodAndGenres()
+        loadHotSearch()
+        // 本 VM 是 Koin single,换源后空态数据必须重取(drop(1) 跳过首发射,
+        // 避免与上面的 init 拉取重复):mood 置 null 触发重拉,热搜按新源重载
+        viewModelScope.launch {
+            dataStoreManager.selectedSource.drop(1).distinctUntilChanged().collect {
+                _moodAndGenres.value = null
+                requestedArtwork.clear()
+                _moodArtwork.value = emptyMap()
+                getMoodAndGenres()
+                loadHotSearch()
+            }
+        }
+    }
+
+    private fun loadHotSearch() {
+        viewModelScope.launch {
+            if (dataStoreManager.selectedSource.first() != MusicSource.NETEASE.name) {
+                _hotSearch.value = emptyList()
+                return@launch
+            }
+            neteaseRepository.searchHotWords().onSuccess { _hotSearch.value = it }
+        }
     }
 
     /**
@@ -187,15 +222,23 @@ class SearchViewModel(
         }
     }
 
+    /** 最近一次提交的搜索词(SONGS tab 加载更多要带着它续页) */
+    private var lastQuery: String = ""
+
     fun searchSongs(query: String) {
+        lastQuery = query
         _searchScreenUIState.value = SearchScreenUIState.Loading
         viewModelScope.launch {
-            searchRepository.getSearchDataSong(query).collect { values ->
+            searchRepository.getSearchDataSongPage(query, null).collect { values ->
                 when (values) {
                     is Resource.Success -> {
-                        values.data?.let { songsList ->
+                        values.data?.let { (songsList, nextToken) ->
                             _searchScreenState.update { state ->
-                                state.copy(searchSongsResult = songsList)
+                                state.copy(
+                                    searchSongsResult = songsList,
+                                    songsNextPageToken = nextToken,
+                                    songsLoadingMore = false,
+                                )
                             }
                         }
                         _searchScreenUIState.value = SearchScreenUIState.Success
@@ -203,6 +246,35 @@ class SearchViewModel(
 
                     is Resource.Error -> {
                         _searchScreenUIState.value = SearchScreenUIState.Error
+                    }
+                }
+            }
+        }
+    }
+
+    /** SONGS tab 滚动近底追加下一页;失败静默保留已加载内容(token 不动,再滚可重试) */
+    fun loadMoreSongs() {
+        val state = _searchScreenState.value
+        val token = state.songsNextPageToken ?: return
+        if (state.songsLoadingMore || state.searchType != SearchType.SONGS) return
+        _searchScreenState.update { it.copy(songsLoadingMore = true) }
+        viewModelScope.launch {
+            searchRepository.getSearchDataSongPage(lastQuery, token).collect { values ->
+                when (values) {
+                    is Resource.Success -> {
+                        values.data?.let { (more, nextToken) ->
+                            _searchScreenState.update { s ->
+                                s.copy(
+                                    searchSongsResult = s.searchSongsResult + more,
+                                    songsNextPageToken = nextToken,
+                                    songsLoadingMore = false,
+                                )
+                            }
+                        }
+                    }
+
+                    is Resource.Error -> {
+                        _searchScreenState.update { it.copy(songsLoadingMore = false) }
                     }
                 }
             }

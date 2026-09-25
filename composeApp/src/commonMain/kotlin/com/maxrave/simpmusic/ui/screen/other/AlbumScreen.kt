@@ -34,13 +34,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -70,6 +68,8 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.kmpalette.rememberPaletteState
 import com.kyant.backdrop.highlight.Highlight
+import com.maxrave.simpmusic.extension.barBlurStyle
+import com.maxrave.simpmusic.ui.component.DownloadingIndicator
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
@@ -93,7 +93,7 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
-import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -113,14 +113,10 @@ import com.maxrave.simpmusic.viewModel.LocalPlaylistState
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import com.maxrave.simpmusic.viewModel.UIEvent
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import io.github.alexzhirkevich.compottie.Compottie
-import io.github.alexzhirkevich.compottie.LottieCompositionSpec
-import io.github.alexzhirkevich.compottie.rememberLottieComposition
-import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.runBlocking
@@ -130,20 +126,13 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.cancel_download_title
-import simpmusic.composeapp.generated.resources.cancel_download_message
-import simpmusic.composeapp.generated.resources.cancel_download_confirm
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.album_length
 import simpmusic.composeapp.generated.resources.baseline_downloaded
-import simpmusic.composeapp.generated.resources.cancel
-import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.no_description
 import simpmusic.composeapp.generated.resources.other_version
-import simpmusic.composeapp.generated.resources.remove_download_message
-import simpmusic.composeapp.generated.resources.remove_download_title
 import simpmusic.composeapp.generated.resources.year_and_category
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -175,16 +164,7 @@ fun AlbumScreen(
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
-    val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
-    LaunchedEffect(showSelectionSheet) {
-        if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
-    }
 
-    val composition by rememberLottieComposition {
-        LottieCompositionSpec.JsonString(
-            Res.readBytes("files/downloading_animation.json").decodeToString(),
-        )
-    }
 
     LaunchedEffect(browseId) {
         viewModel.updateBrowseId(browseId)
@@ -197,16 +177,12 @@ fun AlbumScreen(
         }
     }
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
-    var showRemoveDownloadDialog by rememberSaveable { mutableStateOf(false) }
-    var showCancelDownloadDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(key1 = firstItemVisible) {
         shouldHideTopBar = !firstItemVisible
     }
     val paletteState = rememberPaletteState()
     val hazeState =
-        rememberHazeState(
-            blurEnabled = true,
-        )
+        rememberHazeState()
     var bitmap by remember {
         mutableStateOf<ImageBitmap?>(null)
     }
@@ -284,15 +260,17 @@ fun AlbumScreen(
                                         ) {
                                             // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                             Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                                // 头图全屏宽展示,专辑封面源通常 w544 —— 请求侧升 1080
+                                                val hiResThumb = uiState.thumbnail.toHiResArtworkUrl()
                                                 AsyncImage(
                                                     model =
                                                         ImageRequest
                                                             .Builder(LocalPlatformContext.current)
-                                                            .data(uiState.thumbnail)
+                                                            .data(hiResThumb)
                                                             .diskCachePolicy(CachePolicy.ENABLED)
                                                             .memoryCachePolicy(CachePolicy.ENABLED)
-                                                            .diskCacheKey(uiState.thumbnail)
-                                                            .memoryCacheKey(uiState.thumbnail)
+                                                            .diskCacheKey(hiResThumb)
+                                                            .memoryCacheKey(hiResThumb)
                                                             .crossfade(false)
                                                             .build(),
                                                     placeholder = rememberHolderPainter(),
@@ -581,7 +559,11 @@ fun AlbumScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showRemoveDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                runBlocking {
+                                                                                                    getString(Res.string.downloaded)
+                                                                                                },
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
@@ -600,17 +582,15 @@ fun AlbumScreen(
                                                                                     Modifier
                                                                                         .fillMaxSize()
                                                                                         .clickable {
-                                                                                            showCancelDownloadDialog = true
+                                                                                            viewModel.makeToast(
+                                                                                                runBlocking {
+                                                                                                    getString(Res.string.downloading)
+                                                                                                },
+                                                                                            )
                                                                                         },
                                                                                 contentAlignment = Alignment.Center,
                                                                             ) {
-                                                                                Image(
-                                                                                    painter =
-                                                                                        rememberLottiePainter(
-                                                                                            composition = composition,
-                                                                                            iterations = Compottie.IterateForever,
-                                                                                        ),
-                                                                                    contentDescription = "Lottie animation",
+                                                                                DownloadingIndicator(
                                                                                     modifier = Modifier.size(28.dp),
                                                                                 )
                                                                             }
@@ -783,7 +763,11 @@ fun AlbumScreen(
                                                                             Modifier
                                                                                 .fillMaxSize()
                                                                                 .clickable {
-                                                                                    showRemoveDownloadDialog = true
+                                                                                    viewModel.makeToast(
+                                                                                        runBlocking {
+                                                                                            getString(Res.string.downloaded)
+                                                                                        },
+                                                                                    )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
                                                                     ) {
@@ -802,17 +786,15 @@ fun AlbumScreen(
                                                                             Modifier
                                                                                 .fillMaxSize()
                                                                                 .clickable {
-                                                                                    showCancelDownloadDialog = true
+                                                                                    viewModel.makeToast(
+                                                                                        runBlocking {
+                                                                                            getString(Res.string.downloading)
+                                                                                        },
+                                                                                    )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
                                                                     ) {
-                                                                        Image(
-                                                                            painter =
-                                                                                rememberLottiePainter(
-                                                                                    composition = composition,
-                                                                                    iterations = Compottie.IterateForever,
-                                                                                ),
-                                                                            contentDescription = "Lottie animation",
+                                                                        DownloadingIndicator(
                                                                             modifier = Modifier.size(28.dp),
                                                                         )
                                                                     }
@@ -989,12 +971,7 @@ fun AlbumScreen(
                                 containerColor = Color.Transparent,
                             ),
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 AnimatedVisibility(
@@ -1009,12 +986,7 @@ fun AlbumScreen(
                         },
                         onOpenActions = { showSelectionSheet = true },
                         modifier =
-                            Modifier.hazeEffect(hazeState) {
-                                blurEnabled = true
-                                blurRadius = 24.dp
-                                backgroundColor = mutedPaletteBg
-                                tints = listOf(HazeTint(mutedPaletteBg.copy(alpha = 0.55f)))
-                            },
+                            Modifier.hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     )
                 }
                 if (showSelectionSheet) {
@@ -1035,11 +1007,6 @@ fun AlbumScreen(
                         onAddToPlaylist = { showSelectionAddToPlaylist = true },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
-                            selectionState.exit()
-                        },
-                        allDownloaded = allSelectedDownloaded,
-                        onRemoveDownload = {
-                            selectionViewModel.removeDownload(selectedIds)
                             selectionState.exit()
                         },
                         onAddToFavorite = {
@@ -1079,7 +1046,6 @@ fun AlbumScreen(
                         playlistId = browseId,
                         playlistName = uiState.title,
                         isYourYouTubePlaylist = false,
-                        onSaveToLocal = {},
                         onAddToQueue = {
                             sharedViewModel.addListToQueue(
                                 uiState.listTrack.toCollection(arrayListOf()),
@@ -1099,53 +1065,5 @@ fun AlbumScreen(
                 )
             }
         }
-    }
-    if (showCancelDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.cancel_download_title)) },
-            text = { Text(text = stringResource(Res.string.cancel_download_message)) },
-            onDismissRequest = { showCancelDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.cancelDownloadingAlbum()
-                    showCancelDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel_download_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCancelDownloadDialog = false }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
-    }
-    if (showRemoveDownloadDialog) {
-        AlertDialog(
-            containerColor = rememberSurfaceDarkColors().container,
-            titleContentColor = rememberSurfaceDarkColors().content,
-            textContentColor = rememberSurfaceDarkColors().content,
-            title = { Text(text = stringResource(Res.string.remove_download_title)) },
-            text = { Text(text = stringResource(Res.string.remove_download_message)) },
-            onDismissRequest = { showRemoveDownloadDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.removeDownloadedAlbum()
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showRemoveDownloadDialog = false
-                }) {
-                    Text(text = stringResource(Res.string.cancel))
-                }
-            },
-        )
     }
 }

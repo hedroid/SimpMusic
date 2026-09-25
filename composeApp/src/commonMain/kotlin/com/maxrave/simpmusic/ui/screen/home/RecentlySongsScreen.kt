@@ -54,10 +54,10 @@ import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.RecentlySongsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
@@ -67,7 +67,7 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.recently_added
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecentlySongsScreen(
     innerPadding: PaddingValues,
@@ -238,9 +238,7 @@ fun RecentlySongsScreen(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
-                    .hazeEffect(state = hazeState, style = HazeMaterials.ultraThin()) {
-                        blurEnabled = true
-                    },
+                    .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }),
             title = {
                 Text(
                     text = stringResource(Res.string.recently_added),
@@ -285,6 +283,7 @@ fun RecentlySongsScreen(
         val selectedIds = selectionState.selected.toList()
         SelectedSongsBottomSheet(
             count = selectedIds.size,
+            selectionIds = selectedIds,
             onDismiss = { showSelectionSheet = false },
             onPlayNext = {
                 selectionViewModel.playNext(selectedIds)
@@ -294,7 +293,10 @@ fun RecentlySongsScreen(
                 selectionViewModel.addToQueue(selectedIds)
                 selectionState.exit()
             },
-            onAddToPlaylist = { showSelectionAddToPlaylist = true },
+            onAddToPlaylist = {
+                selectionViewModel.loadCloudPlaylists()
+                showSelectionAddToPlaylist = true
+            },
             onDownload = {
                 selectionViewModel.download(selectedIds)
                 selectionState.exit()
@@ -313,16 +315,26 @@ fun RecentlySongsScreen(
     if (showSelectionAddToPlaylist) {
         val selectedIds = selectionState.selected.toList()
         val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+        val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+        val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
         AddToPlaylistModalBottomSheet(
             isBottomSheetVisible = true,
-            listLocalPlaylist = localPlaylists,
-            listYouTubePlaylist = emptyList(),
+            // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
+            // 2026-09-24 多选路径接云端分区,与单曲弹窗同款
+            listLocalPlaylist = emptyList(),
+            listYouTubePlaylist = youTubePlaylists,
+            listNeteasePlaylist = neteasePlaylists,
+            videoIds = selectedIds,
             onDismiss = { showSelectionAddToPlaylist = false },
-            onClick = { playlist ->
-                selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+            onClick = {},
+            onYTPlaylistClick = { playlist ->
+                selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
                 selectionState.exit()
             },
-            onYTPlaylistClick = {},
+            onNeteasePlaylistClick = { playlist ->
+                selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                selectionState.exit()
+            },
         )
     }
 }

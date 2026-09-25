@@ -20,7 +20,9 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -72,6 +74,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
+import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.DeviceVolumeController
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
@@ -86,12 +89,17 @@ import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
 import com.maxrave.simpmusic.ui.icon.FastForward
 import com.maxrave.simpmusic.ui.icon.FastRewind
+import com.maxrave.simpmusic.ui.icon.Favorite
+import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.GraphicEq
 import com.maxrave.simpmusic.ui.icon.Lyrics
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.QueueMusic
+import com.maxrave.simpmusic.ui.icon.Repeat
+import com.maxrave.simpmusic.ui.icon.RepeatOne
+import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Star
 import com.maxrave.simpmusic.ui.icon.StarBorder
@@ -135,6 +143,32 @@ internal val AppleMusicTextSecondary = Color.White.copy(alpha = 0.72f)
 internal val AppleMusicPillInactive = Color.White.copy(alpha = 0.24f)
 internal val AppleMusicTrackInactive = Color.White.copy(alpha = 0.26f)
 internal val AppleMusicTrackActive = Color.White.copy(alpha = 0.92f)
+
+/**
+ * Small translucent circle for overlay buttons floating over the artwork-derived background
+ * (lyrics share/vote/fullscreen, queue locate). Was private in AppleMusicLyricsView; promoted
+ * when the queue view needed the same button.
+ */
+@Composable
+internal fun AppleMusicFloatingCircleButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "",
+) {
+    Box(
+        modifier =
+            modifier
+                .appleMusicPressInflate()
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.24f))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(18.dp))
+    }
+}
 
 @Immutable
 internal data class AppleMusicTypography(
@@ -279,48 +313,31 @@ internal fun AppleMusicHeaderActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (state.isUserLoggedIn) {
-            // 40dp target around a 22dp glyph: a bare 22dp clickable is under half the Material
-            // minimum, on the row that gets tapped most.
+        val likeBurst = rememberHeartBurstState()
+        // 红心(星)=云端账号喜欢态;未登录源置灰,点击提示登录
+        run {
             Box(
                 modifier =
                     Modifier
                         .appleMusicPressInflate()
-                        .size(24.dp)
+                        .size(32.dp)
+                        .heartBurst(likeBurst)
+                        .alpha(if (state.likeEnabled) 1f else 0.38f)
                         .clip(CircleShape)
-                        .clickable { actions.onAddToYouTubeLiked() },
+                        .clickable(enabled = state.likeEnabled) {
+                            if (!state.controllerState.isLiked) likeBurst.fire()
+                            actions.onUIEvent(UIEvent.ToggleLike)
+                        },
                 contentAlignment = Alignment.Center,
             ) {
-                Crossfade(targetState = state.likeStatus, label = "appleMusicYtLiked") { liked ->
+                Crossfade(targetState = state.controllerState.isLiked, label = "appleMusicFavorite") { liked ->
                     Icon(
-                        imageVector = if (liked) SimpIcons.CheckCircle else SimpIcons.AddCircleOutline,
+                        imageVector = if (liked) SimpIcons.Star else SimpIcons.StarBorder,
                         contentDescription = "",
                         tint = Color.White,
+                        modifier = Modifier.size(32.dp),
                     )
                 }
-            }
-        }
-        val likeBurst = rememberHeartBurstState()
-        Box(
-            modifier =
-                Modifier
-                    .appleMusicPressInflate()
-                    .size(32.dp)
-                    .heartBurst(likeBurst)
-                    .clip(CircleShape)
-                    .clickable {
-                        if (!state.controllerState.isLiked) likeBurst.fire()
-                        actions.onUIEvent(UIEvent.ToggleLike)
-                    },
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(targetState = state.controllerState.isLiked, label = "appleMusicFavorite") { liked ->
-                Icon(
-                    imageVector = if (liked) SimpIcons.Star else SimpIcons.StarBorder,
-                    contentDescription = "",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp),
-                )
             }
         }
         AppleMusicGlyphButton(icon = SimpIcons.MoreVert, onClick = { actions.onShowMoreSheet() })
@@ -329,7 +346,9 @@ internal fun AppleMusicHeaderActions(
 
 /**
  * 56dp rounded thumbnail + title/artist column + [AppleMusicHeaderActions], used where the
- * artwork isn't on screen (LYRICS and QUEUE bodies).
+ * artwork isn't on screen (LYRICS and QUEUE bodies). [compact] shrinks the thumbnail and its
+ * vertical padding for the landscape side panel, where this header plus the ~378dp bottom
+ * cluster overflowed the panel and squeezed the list to nothing.
  */
 @Composable
 internal fun AppleMusicCompactHeader(
@@ -337,9 +356,16 @@ internal fun AppleMusicCompactHeader(
     actions: NowPlayingContentActions,
     typography: AppleMusicTypography,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = if (compact) 16.dp else 20.dp,
+                    vertical = if (compact) 8.dp else 12.dp,
+                ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
@@ -354,7 +380,10 @@ internal fun AppleMusicCompactHeader(
             placeholder = rememberHolderPainter(),
             error = rememberHolderPainter(),
             contentDescription = null,
-            modifier = Modifier.size(55.dp).clip(RoundedCornerShape(4.dp)),
+            modifier =
+                Modifier
+                    .size(if (compact) 44.dp else 55.dp)
+                    .clip(RoundedCornerShape(4.dp)),
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -576,62 +605,120 @@ internal fun AppleMusicTimesRow(
     }
 }
 
-/** FastRewind(44dp) → Previous, Play/Pause(62dp, plain white — no container disc), FastForward(44dp) → Next. */
+/**
+ * FastRewind(44dp) → Previous, Play/Pause(62dp, plain white — no container disc), FastForward(44dp) → Next.
+ *
+ * The 58dp gap is a PORTRAIT number: the row's fixed parts (56+76+56) plus two of them need 344dp,
+ * which the landscape side panel (~268dp) cannot hold — the prev/next buttons ended up clipped at
+ * the panel edges. So the gap scales DOWN with the available width first, and below a 24dp gap the
+ * whole row drops to a small-button tier (48/64dp) the way Apple's own compact players do. Portrait
+ * keeps the 58dp gap untouched: its available width never falls that far.
+ */
 @Composable
 internal fun AppleMusicTransportRow(
     controllerState: ControlState,
     onUIEvent: (UIEvent) -> Unit,
     modifier: Modifier = Modifier,
+    // Only the fullscreen lyrics page asks for these; the Now Playing page keeps its three buttons.
+    showShuffleAndRepeat: Boolean = false,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        // Mock: a tight centered cluster with a 58dp gap — NOT SpaceEvenly, which spreads the
-        // rewind/forward glyphs to the screen edges (first device screenshots).
-        horizontalArrangement = Arrangement.spacedBy(58.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(
-            onClick = { if (controllerState.isPreviousAvailable) onUIEvent(UIEvent.Previous) },
-            modifier = Modifier.appleMusicPressInflate().size(56.dp).clip(CircleShape),
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val sideButton = 56.dp
+        val playButton = 76.dp
+        val wideContent = sideButton * 2 + playButton
+        val wideGap = ((maxWidth - wideContent) / 2).coerceIn(12.dp, 58.dp)
+        // Gap would fall under 24dp: squeeze the buttons themselves rather than the air between
+        // them. 48dp stays above M3's minimum touch target.
+        val small = maxWidth < wideContent + 48.dp
+        val (prevNextSize, playSize, iconPrevNext, iconPlay) =
+            if (small) listOf(48.dp, 64.dp, 38.dp, 54.dp) else listOf(sideButton, playButton, 46.dp, 66.dp)
+        val gap =
+            if (small) {
+                ((maxWidth - (48.dp * 2 + 64.dp)) / 2).coerceIn(16.dp, 58.dp)
+            } else {
+                wideGap
+            }
+        Row(
+            // Mock: a tight centered cluster — NOT SpaceEvenly, which spreads the
+            // rewind/forward glyphs to the screen edges (first device screenshots).
+            // With shuffle and repeat on the two ends the five span the row instead, the way
+            // Apple's desktop player lays them out.
+            horizontalArrangement =
+                if (showShuffleAndRepeat) {
+                    Arrangement.SpaceBetween
+                } else {
+                    Arrangement.spacedBy(gap, Alignment.CenterHorizontally)
+                },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = SimpIcons.FastRewind,
-                contentDescription = "",
-                tint = Color.White.copy(alpha = if (controllerState.isPreviousAvailable) 1f else 0.4f),
-                modifier = Modifier.size(46.dp),
-            )
-        }
-        // No loading state on this button. It is play/pause and nothing else: it stays pressable
-        // and keeps showing the transport glyph even while the player is buffering, so the control
-        // never disappears out from under a finger reaching for it.
-        Box(
-            modifier =
-                Modifier
-                    .appleMusicPressInflate()
-                    .size(76.dp)
-                    .clip(CircleShape)
-                    .clickable { onUIEvent(UIEvent.PlayPause) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(targetState = controllerState.isPlaying, label = "appleMusicPlayPauseIcon") { isPlaying ->
-                Icon(
-                    imageVector = if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = "",
-                    tint = Color.White,
-                    modifier = Modifier.size(66.dp),
+            if (showShuffleAndRepeat) {
+                AppleMusicGlyphButton(
+                    icon = SimpIcons.Shuffle,
+                    onClick = { onUIEvent(UIEvent.Shuffle) },
+                    size = 40.dp,
+                    tint = Color.White.copy(alpha = if (controllerState.isShuffle) 1f else 0.4f),
                 )
             }
-        }
-        IconButton(
-            onClick = { if (controllerState.isNextAvailable) onUIEvent(UIEvent.Next) },
-            modifier = Modifier.appleMusicPressInflate().size(56.dp).clip(CircleShape),
-        ) {
-            Icon(
-                imageVector = SimpIcons.FastForward,
-                contentDescription = "",
-                tint = Color.White.copy(alpha = if (controllerState.isNextAvailable) 1f else 0.4f),
-                modifier = Modifier.size(46.dp),
-            )
+            IconButton(
+                onClick = {
+                    if (controllerState.isPreviousAvailable) {
+                        onUIEvent(UIEvent.Previous)
+                    }
+                },
+                modifier = Modifier.appleMusicPressInflate().size(prevNextSize).clip(CircleShape),
+            ) {
+                Icon(
+                    imageVector = SimpIcons.FastRewind,
+                    contentDescription = "",
+                    tint = Color.White.copy(alpha = if (controllerState.isPreviousAvailable) 1f else 0.4f),
+                    modifier = Modifier.size(iconPrevNext),
+                )
+            }
+            // No loading state on this button. It is play/pause and nothing else: it stays pressable
+            // and keeps showing the transport glyph even while the player is buffering, so the control
+            // never disappears out from under a finger reaching for it.
+            Box(
+                modifier =
+                    Modifier
+                        .appleMusicPressInflate()
+                        .size(playSize)
+                        .clip(CircleShape)
+                        .clickable { onUIEvent(UIEvent.PlayPause) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Crossfade(targetState = controllerState.isPlaying, label = "appleMusicPlayPauseIcon") { isPlaying ->
+                    Icon(
+                        imageVector = if (isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
+                        contentDescription = "",
+                        tint = Color.White,
+                        modifier = Modifier.size(iconPlay),
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    if (controllerState.isNextAvailable) {
+                        onUIEvent(UIEvent.Next)
+                    }
+                },
+                modifier = Modifier.appleMusicPressInflate().size(prevNextSize).clip(CircleShape),
+            ) {
+                Icon(
+                    imageVector = SimpIcons.FastForward,
+                    contentDescription = "",
+                    tint = Color.White.copy(alpha = if (controllerState.isNextAvailable) 1f else 0.4f),
+                    modifier = Modifier.size(iconPrevNext),
+                )
+            }
+            if (showShuffleAndRepeat) {
+                val repeatState = controllerState.repeatState
+                AppleMusicGlyphButton(
+                    icon = if (repeatState is RepeatState.One) SimpIcons.RepeatOne else SimpIcons.Repeat,
+                    onClick = { onUIEvent(UIEvent.Repeat) },
+                    size = 40.dp,
+                    tint = Color.White.copy(alpha = if (repeatState !is RepeatState.None) 1f else 0.4f),
+                )
+            }
         }
     }
 }
@@ -754,9 +841,48 @@ internal fun AppleMusicDock(
 }
 
 /**
+ * Progress bar + times + transport — the playback half of [AppleMusicBottomCluster], shared with
+ * the fullscreen lyrics landscape layout. Emits straight into the caller's Column; the horizontal
+ * gutter belongs to that Column, as it does in the cluster.
+ */
+@Composable
+internal fun ColumnScope.AppleMusicPlaybackControls(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+    typography: AppleMusicTypography,
+    showShuffleAndRepeat: Boolean = false,
+) {
+    // Fixed 18dp shell: the track swells on touch, but inside a CONSTANT footprint —
+    // otherwise the growing slider re-measures this whole column and the artwork above
+    // it visibly jumps. It also gives the bar a real 18dp touch target instead of 7dp.
+    Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
+        AppleMusicThinSlider(
+            value = state.sliderValue / 100f,
+            activeColor = if (state.timelineState.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
+            onValueChange = { actions.onSliderChange(it * 100f) },
+            onValueChangeFinished = actions.onSliderChangeFinished,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    AppleMusicTimesRow(state = state, typography = typography, modifier = Modifier.padding(top = 8.dp))
+    Spacer(modifier = Modifier.height(12.dp))
+    AppleMusicTransportRow(
+        controllerState = state.controllerState,
+        onUIEvent = actions.onUIEvent,
+        showShuffleAndRepeat = showShuffleAndRepeat,
+    )
+}
+
+/**
  * Progress bar + times + transport + volume + dock — the fixed block every Apple Music body
  * (MAIN, LYRICS, QUEUE) renders at the bottom, identically. On Desktop only the dock renders
  * (no slider/transport/volume), matching the `Platform.Android` gate the other two styles use.
+ *
+ * [compact] (landscape side panel and other sub-450dp bodies): tighter gutters/spacers and no
+ * volume row — the block is ~378dp tall as designed, which alone overflows a ~411dp panel and
+ * was crushing the Lyrics/Queue lists to nothing. [transportOnly] goes further for QUEUE, whose
+ * list has no tap-to-toggle surface the way the lyrics page does: it drops the slider, times and
+ * volume so the list keeps a usable slice of the panel.
  */
 @Composable
 internal fun AppleMusicBottomCluster(
@@ -769,32 +895,44 @@ internal fun AppleMusicBottomCluster(
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    transportOnly: Boolean = false,
 ) {
     val localDensity = LocalDensity.current
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 8.dp)) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (compact) 16.dp else 20.dp)
+                .padding(top = 8.dp),
+    ) {
         if (getPlatform() == Platform.Android) {
-            // Fixed 18dp shell: the track swells on touch, but inside a CONSTANT footprint —
-            // otherwise the growing slider re-measures this whole column and the artwork above
-            // it visibly jumps. It also gives the bar a real 18dp touch target instead of 7dp.
-            Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
-                AppleMusicThinSlider(
-                    value = state.sliderValue / 100f,
-                    activeColor = if (state.timelineState.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
-                    onValueChange = { actions.onSliderChange(it * 100f) },
-                    onValueChangeFinished = actions.onSliderChangeFinished,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            if (!transportOnly) {
+                // Fixed 18dp shell: the track swells on touch, but inside a CONSTANT footprint —
+                // otherwise the growing slider re-measures this whole column and the artwork above
+                // it visibly jumps. It also gives the bar a real 18dp touch target instead of 7dp.
+                Box(modifier = Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
+                    AppleMusicThinSlider(
+                        value = state.sliderValue / 100f,
+                        activeColor = if (state.timelineState.isCrossfading) state.sliderTrackColor else AppleMusicTrackActive,
+                        onValueChange = { actions.onSliderChange(it * 100f) },
+                        onValueChangeFinished = actions.onSliderChangeFinished,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                AppleMusicTimesRow(state = state, typography = typography, modifier = Modifier.padding(top = if (compact) 4.dp else 8.dp))
+                Spacer(modifier = Modifier.height(if (compact) 8.dp else 12.dp))
             }
-            AppleMusicTimesRow(state = state, typography = typography, modifier = Modifier.padding(top = 8.dp))
-            Spacer(modifier = Modifier.height(12.dp))
             AppleMusicTransportRow(
                 controllerState = state.controllerState,
                 onUIEvent = actions.onUIEvent,
             )
-            Spacer(modifier = Modifier.height(14.dp))
-            deviceVolumeController?.let { controller ->
-                AppleMusicVolumeRow(controller = controller)
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(if (compact) 8.dp else 14.dp))
+            if (!compact) {
+                deviceVolumeController?.let { controller ->
+                    AppleMusicVolumeRow(controller = controller)
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
             }
         } else {
             Spacer(modifier = Modifier.height(16.dp))

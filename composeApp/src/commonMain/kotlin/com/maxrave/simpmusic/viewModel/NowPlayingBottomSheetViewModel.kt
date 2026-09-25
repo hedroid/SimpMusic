@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
+import com.maxrave.common.songRadioPlaylistId
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
@@ -29,11 +30,11 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
-import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
@@ -45,6 +46,12 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
+import simpmusic.composeapp.generated.resources.added_to_netease_playlist
+import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
+import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
+import simpmusic.composeapp.generated.resources.netease_action_failed
+import simpmusic.composeapp.generated.resources.netease_rate_limited
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
@@ -63,11 +70,13 @@ class NowPlayingBottomSheetViewModel(
 ) : BaseViewModel() {
     private val downloadUtils: DownloadHandler by inject()
     private val albumRepository: AlbumRepository by inject()
+    private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl by inject()
     private val _uiState: MutableStateFlow<NowPlayingBottomSheetUIState> =
         MutableStateFlow(
             NowPlayingBottomSheetUIState(
                 listLocalPlaylist = emptyList(),
                 listYouTubePlaylist = emptyList(),
+                listNeteasePlaylist = emptyList(),
                 mainLyricsProvider = SIMPMUSIC,
                 sleepTimer =
                     SleepTimerState(
@@ -163,6 +172,12 @@ class NowPlayingBottomSheetViewModel(
     fun setSongEntity(songEntity: SongEntity?) {
         val songOrNowPlaying = songEntity ?: (mediaPlayerHandler.nowPlayingState.value.songEntity ?: return)
         viewModelScope.launch {
+            _uiState.update { it.copy(listNeteasePlaylist = emptyList()) }
+            if (songOrNowPlaying.videoId.toLongOrNull() != null) {
+                _uiState.update {
+                    it.copy(listNeteasePlaylist = neteaseRepository.getOwnNeteasePlaylists())
+                }
+            }
             songOrNowPlaying.videoId.let {
                 _uiState.update { state ->
                     state.copy(
@@ -185,9 +200,23 @@ class NowPlayingBottomSheetViewModel(
         }
     }
 
+    /**
+     * 云端账号红心态(三点菜单"喜欢到云端账号"行):登录才拉得到,未登录保持 null=不显示行。
+     * 与本地红心完全独立——显式操作云端,不 adopt 不镜像。
+     */
+    private val _cloudLiked = MutableStateFlow<Boolean?>(null)
+    val cloudLiked: StateFlow<Boolean?> = _cloudLiked
+
+    private fun refreshCloudLiked(videoId: String) {
+        viewModelScope.launch {
+            _cloudLiked.value = songRepository.getRemoteLikeStatus(videoId)
+        }
+    }
+
     private fun getSongEntityFlow(videoId: String) {
         getSongAsFlow?.cancel()
         if (videoId.isEmpty()) return
+        refreshCloudLiked(videoId)
         getSongAsFlow =
             viewModelScope.launch {
                 songRepository.getSongAsFlow(videoId).collectLatest { song ->
@@ -263,21 +292,50 @@ class NowPlayingBottomSheetViewModel(
                             youtubePlaylistId = ev.browseId,
                             videoId = songUIState.videoId,
                         ).collectLatestResource(
+                            // Success 载荷是响应里的状态枚举名("STATUS_SUCCEEDED"),不是给人读的文案,
+                            // 曾被直接 toast 出裸 key;失败载荷同理是仓库写死的 "FAILED"
                             onSuccess = {
-                                makeToast(it)
+                                makeToast(getString(Res.string.added_to_youtube_playlist))
                             },
                             onError = {
-                                makeToast(it)
+                                makeToast(getString(Res.string.error_occurred))
                             },
                         )
                 }
 
-                is NowPlayingBottomSheetUIEvent.ToggleLike -> {
-                    songRepository.updateLikeStatus(
-                        songUIState.videoId,
-                        if (songUIState.liked) 0 else 1,
-                    )
+                is NowPlayingBottomSheetUIEvent.AddToNeteasePlaylist -> {
+                    neteaseRepository
+                        .addTracksToNeteasePlaylist(ev.playlistId, listOf(songUIState.videoId))
+                        .fold(
+                            onSuccess = { ok ->
+                                makeToast(getString(if (ok) Res.string.added_to_netease_playlist else Res.string.netease_action_failed))
+                            },
+                            onFailure = { makeToast(getString(neteaseWriteErrorString(it, Res.string.netease_action_failed))) },
+                        )
                 }
+
+                is NowPlayingBottomSheetUIEvent.ToggleLike -> {
+                    // 点赞=云端账号红心;成功后镜像本地缓存行(库页"喜欢的歌曲"读它)
+                    val target = !(_cloudLiked.value ?: songUIState.liked)
+                    val result = songRepository.setRemoteLikeStatus(songUIState.videoId, target)
+                    val ok = result.getOrDefault(false)
+                    if (ok) {
+                        _cloudLiked.value = target
+                        songRepository.setLikedLocal(songUIState.videoId, if (target) 1 else 0)
+                    } else {
+                        makeToast(
+                            getString(
+                                when {
+                                    result.exceptionOrNull() is com.maxrave.netease.NeteaseRateLimitException ->
+                                        Res.string.netease_rate_limited
+                                    songUIState.videoId.toLongOrNull() != null -> Res.string.cloud_action_failed_netease
+                                    else -> Res.string.cloud_action_failed_youtube
+                                },
+                            ),
+                        )
+                    }
+                }
+
 
                 is NowPlayingBottomSheetUIEvent.Download -> {
                     when (songUIState.downloadState) {
@@ -380,7 +438,13 @@ class NowPlayingBottomSheetViewModel(
                 }
 
                 is NowPlayingBottomSheetUIEvent.Share -> {
-                    val url = "https://music.youtube.com/watch?v=${songUIState.videoId}"
+                    // 网易数字 ID 拼进 YT 链接是无效地址;按 ID 形状分源拼分享链接
+                    val url =
+                        if (songUIState.videoId.toLongOrNull() != null) {
+                            "https://music.163.com/song?id=${songUIState.videoId}"
+                        } else {
+                            "https://music.youtube.com/watch?v=${songUIState.videoId}"
+                        }
                     shareUrl(
                         title = getString(Res.string.share_url),
                         url,
@@ -392,7 +456,7 @@ class NowPlayingBottomSheetViewModel(
                         .getRadioFromEndpoint(
                             YouTubeWatchEndpoint(
                                 videoId = ev.videoId,
-                                playlistId = "RDAMVM${ev.videoId}",
+                                playlistId = songRadioPlaylistId(ev.videoId),
                             ),
                         ).collectLatest { res ->
                             val data = res.data
@@ -402,7 +466,7 @@ class NowPlayingBottomSheetViewModel(
                                         QueueData.Data(
                                             listTracks = data.first,
                                             firstPlayedTrack = data.first.first(),
-                                            playlistId = "RDAMVM${ev.videoId}",
+                                            playlistId = songRadioPlaylistId(ev.videoId),
                                             playlistName = ev.name,
                                             playlistType = PlaylistType.RADIO,
                                             continuation = data.second,
@@ -430,6 +494,7 @@ data class NowPlayingBottomSheetUIState(
     val songUIState: SongUIState = SongUIState(),
     val listLocalPlaylist: List<LocalPlaylistEntity>,
     val listYouTubePlaylist: List<PlaylistsResult>,
+    val listNeteasePlaylist: List<PlaylistsResult>,
     val mainLyricsProvider: String,
     val sleepTimer: SleepTimerState,
 ) {
@@ -453,6 +518,7 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     data object ToggleLike : NowPlayingBottomSheetUIEvent()
 
+
     data object Download : NowPlayingBottomSheetUIEvent()
 
     data class AddToPlaylist(
@@ -461,6 +527,10 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     data class AddToYouTubePlaylist(
         val browseId: String,
+    ) : NowPlayingBottomSheetUIEvent()
+
+    data class AddToNeteasePlaylist(
+        val playlistId: String,
     ) : NowPlayingBottomSheetUIEvent()
 
     data object PlayNext : NowPlayingBottomSheetUIEvent()
