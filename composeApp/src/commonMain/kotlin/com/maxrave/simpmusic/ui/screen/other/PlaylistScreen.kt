@@ -94,6 +94,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SearchBarEnter
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.expect.ui.layerBackdrop
 import com.maxrave.simpmusic.expect.ui.rememberBackdrop
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
@@ -401,15 +402,17 @@ fun PlaylistScreen(
                                             ) {
                                                 // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                                 Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                                    // 头图全屏宽展示,数据侧 URL 只有 544/500 —— 请求侧升 1080
+                                                    val hiResThumb = data.thumbnail.toHiResArtworkUrl()
                                                     AsyncImage(
                                                         model =
                                                             ImageRequest
                                                                 .Builder(LocalPlatformContext.current)
-                                                                .data(data.thumbnail)
+                                                                .data(hiResThumb)
                                                                 .diskCachePolicy(CachePolicy.ENABLED)
                                                                 .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                .diskCacheKey(data.thumbnail)
-                                                                .memoryCacheKey(data.thumbnail)
+                                                                .diskCacheKey(hiResThumb)
+                                                                .memoryCacheKey(hiResThumb)
                                                                 .crossfade(false)
                                                                 .build(),
                                                         placeholder = rememberHolderPainter(),
@@ -579,15 +582,17 @@ fun PlaylistScreen(
                                                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                                                         verticalAlignment = Alignment.Top,
                                                     ) {
+                                                        // 280dp≈735px 槽位,同样请求侧升 1080(与竖屏头图同源同缓存)
+                                                        val landscapeThumb = data.thumbnail.toHiResArtworkUrl()
                                                         AsyncImage(
                                                             model =
                                                                 ImageRequest
                                                                     .Builder(LocalPlatformContext.current)
-                                                                    .data(data.thumbnail)
+                                                                    .data(landscapeThumb)
                                                                     .diskCachePolicy(CachePolicy.ENABLED)
                                                                     .memoryCachePolicy(CachePolicy.ENABLED)
-                                                                    .diskCacheKey(data.thumbnail)
-                                                                    .memoryCacheKey(data.thumbnail)
+                                                                    .diskCacheKey(landscapeThumb)
+                                                                    .memoryCacheKey(landscapeThumb)
                                                                     .crossfade(false)
                                                                     .build(),
                                                             placeholder = rememberHolderPainter(),

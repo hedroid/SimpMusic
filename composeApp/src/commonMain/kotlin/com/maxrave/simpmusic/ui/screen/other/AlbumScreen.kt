@@ -93,6 +93,7 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.liquidGlass
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
+import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -259,15 +260,17 @@ fun AlbumScreen(
                                         ) {
                                             // Inner Box — backdrop SOURCE (artwork + overlays only, NO glass)
                                             Box(modifier = Modifier.fillMaxSize().layerBackdrop(artworkBackdrop)) {
+                                                // 头图全屏宽展示,专辑封面源通常 w544 —— 请求侧升 1080
+                                                val hiResThumb = uiState.thumbnail.toHiResArtworkUrl()
                                                 AsyncImage(
                                                     model =
                                                         ImageRequest
                                                             .Builder(LocalPlatformContext.current)
-                                                            .data(uiState.thumbnail)
+                                                            .data(hiResThumb)
                                                             .diskCachePolicy(CachePolicy.ENABLED)
                                                             .memoryCachePolicy(CachePolicy.ENABLED)
-                                                            .diskCacheKey(uiState.thumbnail)
-                                                            .memoryCacheKey(uiState.thumbnail)
+                                                            .diskCacheKey(hiResThumb)
+                                                            .memoryCacheKey(hiResThumb)
                                                             .crossfade(false)
                                                             .build(),
                                                     placeholder = rememberHolderPainter(),
