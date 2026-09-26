@@ -367,7 +367,11 @@ fun PlaylistScreen(
                 LazyColumn(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
+                            // fillMaxSize 而非 fillMaxWidth:页面深色底画在 LazyColumn 自身,
+                            // 搜索过滤后内容变短时它会被重测成内容高度(实测 506 行→1 行时
+                            // 2424→1250),底色随内容一起缩,之下漏出浅色窗口底=「下半部白屏」
+                            // (红心歌单搜歌必现)。钉满视口高度,短内容时底色仍然全屏。
+                            .fillMaxSize()
                             .background(mutedPaletteBg)
                             .hazeSource(hazeState),
                     state = lazyState,
