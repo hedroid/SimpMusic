@@ -44,6 +44,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -91,10 +92,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -154,6 +156,7 @@ import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.AddPhotoAlternate
 import com.maxrave.simpmusic.ui.icon.Album
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.ContentCopy
 import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.Done
@@ -251,6 +254,7 @@ import simpmusic.composeapp.generated.resources.post_comment_success
 import simpmusic.composeapp.generated.resources.publish
 import simpmusic.composeapp.generated.resources.reply_hint
 import simpmusic.composeapp.generated.resources.retry
+import simpmusic.composeapp.generated.resources.send
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
@@ -4358,33 +4362,16 @@ fun NeteaseCommentsSheet(
                     colors = CardDefaults.cardColors().copy(containerColor = dark.handle),
                     shape = RoundedCornerShape(50),
                 ) {}
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text =
-                            stringResource(
-                                Res.string.comments_title,
-                                formatCompactCount(totalCount),
-                            ),
-                        style = typo().titleMedium,
-                        color = dark.content,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // 发表评论入口(点评论行=回复该条,这里=发新评论)
-                    IconButton(onClick = { replyTarget = null; showPostDialog = true }) {
-                        Icon(
-                            imageVector = SimpIcons.Edit,
-                            contentDescription = "Post comment",
-                            tint = dark.subtitle,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
+                Text(
+                    text =
+                        stringResource(
+                            Res.string.comments_title,
+                            formatCompactCount(totalCount),
+                        ),
+                    style = typo().titleMedium,
+                    color = dark.content,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                )
                 // 热门/最新排序切换:热门=服务端精华热评一次拉全,最新=offset 翻页
                 Row(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -4680,61 +4667,89 @@ fun NeteaseCommentsSheet(
                         }
                     }
                 }
-            }
-        }
-    }
-    // 发布/回复对话框:居中 AlertDialog(库页 CreatePlaylistDialog 同款形态,IME 安全)
-    if (showPostDialog) {
-        val focusRequester = remember { FocusRequester() }
-        AlertDialog(
-            onDismissRequest = {
-                showPostDialog = false
-                replyTarget = null
-            },
-            title = {
-                Text(
-                    text =
-                        replyTarget?.let { target ->
-                            stringResource(Res.string.reply_hint, target.nickname ?: "")
-                        } ?: stringResource(Res.string.comments),
-                    style = typo().titleMedium,
-                )
-            },
-            text = {
-                OutlinedTextField(
-                    value = postText,
-                    onValueChange = { postText = it },
-                    placeholder = { Text(stringResource(Res.string.post_comment_hint), style = typo().bodyMedium) },
-                    minLines = 3,
-                    maxLines = 5,
+                // 底部输入栏(Melodia/官方同款):常驻,右侧发送;点评论行进入"回复 @xxx"模式
+                Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = postText.isNotBlank() && !posting,
-                    onClick = { submitPost() },
+                            .imePadding()
+                            .background(dark.container)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(stringResource(Res.string.publish))
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = dark.handle.copy(alpha = 0.35f),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                            // 回复目标在输入框内部展示(用户定案,不单独出按钮)
+                            replyTarget?.let { target ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        text = stringResource(Res.string.reply_hint, target.nickname ?: ""),
+                                        style = typo().labelSmall,
+                                        color = dark.content,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = SimpIcons.Close,
+                                        contentDescription = "Cancel reply",
+                                        tint = dark.subtitle,
+                                        modifier =
+                                            Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .clickable { replyTarget = null }
+                                                .padding(2.dp),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                            Box(
+                                contentAlignment = Alignment.CenterStart,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 32.dp),
+                            ) {
+                                if (postText.isEmpty()) {
+                                    Text(
+                                        text = stringResource(Res.string.post_comment_hint),
+                                        style = typo().bodyMedium,
+                                        color = dark.subtitle,
+                                        maxLines = 1,
+                                    )
+                                }
+                                BasicTextField(
+                                    value = postText,
+                                    onValueChange = { postText = it },
+                                    textStyle = typo().bodyMedium.copy(color = dark.content),
+                                    cursorBrush = SolidColor(dark.content),
+                                    maxLines = 3,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        enabled = postText.isNotBlank() && !posting,
+                        onClick = { submitPost() },
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.send),
+                            style = typo().labelMedium,
+                            color = if (postText.isNotBlank()) dark.content else dark.subtitle,
+                        )
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showPostDialog = false
-                        replyTarget = null
-                    },
-                ) {
-                    Text(stringResource(Res.string.cancel))
-                }
-            },
-            modifier = Modifier.hapticTapFeedback(),
-        )
-        LaunchedEffect(showPostDialog) {
-            focusRequester.requestFocus()
+            }
         }
     }
 }
