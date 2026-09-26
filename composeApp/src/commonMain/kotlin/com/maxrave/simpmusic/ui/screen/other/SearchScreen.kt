@@ -93,6 +93,7 @@ import coil3.request.crossfade
 import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
+import com.maxrave.logger.Logger
 import com.maxrave.domain.data.model.intent.GenericIntent
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
@@ -192,11 +193,6 @@ fun SearchScreen(
 
     // 网易源下只保留有对应能力的 tab;若停在已隐藏的 tab(换源后 VM single 保留旧状态)回落 ALL
     val visibleSearchTabs = if (isNeteaseSource) NETEASE_SEARCH_TABS else SearchType.entries
-    LaunchedEffect(isNeteaseSource) {
-        if (isNeteaseSource && searchScreenState.searchType !in NETEASE_SEARCH_TABS) {
-            searchViewModel.setSearchType(SearchType.ALL)
-        }
-    }
 
     var searchUIType by rememberSaveable { mutableStateOf(SearchUIType.EMPTY) }
     var searchText by rememberSaveable { mutableStateOf("") }
@@ -206,6 +202,36 @@ fun SearchScreen(
     val focusRequester = remember { FocusRequester() }
 
     var isFocused by rememberSaveable { mutableStateOf(false) }
+
+    // 切源原地刷新(2026-09-26 修复):tab 回落 + 已在结果页时按新源重跑当前 tab 的搜索。
+    // 原实现只回落 tab 从不重搜——切源后结果页永远停留旧源内容(SEARCHPROBE 实测:
+    // effect 正常触发但无任何 searchXxx 调用,网易结果在 YTM 源下停留 5s+ 不动)。
+    LaunchedEffect(isNeteaseSource) {
+        Logger.w(
+            "SEARCHPROBE",
+            "source effect fired: isNetease=$isNeteaseSource tab=${searchScreenState.searchType} uiType=$searchUIType",
+        )
+        val effectiveTab =
+            if (isNeteaseSource && searchScreenState.searchType !in NETEASE_SEARCH_TABS) {
+                searchViewModel.setSearchType(SearchType.ALL)
+                SearchType.ALL
+            } else {
+                searchScreenState.searchType
+            }
+        if (searchText.isNotEmpty() && searchUIType == SearchUIType.SEARCH_RESULTS) {
+            Logger.w("SEARCHPROBE", "re-dispatch '$searchText' on source switch, tab=$effectiveTab")
+            when (effectiveTab) {
+                SearchType.ALL -> searchViewModel.searchAll(searchText)
+                SearchType.SONGS -> searchViewModel.searchSongs(searchText)
+                SearchType.VIDEOS -> searchViewModel.searchVideos(searchText)
+                SearchType.ALBUMS -> searchViewModel.searchAlbums(searchText)
+                SearchType.ARTISTS -> searchViewModel.searchArtists(searchText)
+                SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(searchText)
+                SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(searchText)
+                SearchType.PODCASTS -> searchViewModel.searchPodcast(searchText)
+            }
+        }
+    }
 
     // The bar floats OVER the content (a Box, not a Column) so there is something behind it to
     // blur — same arrangement HomeScreen uses. Each branch owns a scroll state, hoisted here so

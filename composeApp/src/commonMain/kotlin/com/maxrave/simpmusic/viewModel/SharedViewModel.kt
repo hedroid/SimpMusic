@@ -65,11 +65,12 @@ import com.maxrave.domain.utils.toSyncedLyrics
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
+import kotlinx.coroutines.flow.onEach
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.getDownloadFolderPath
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
-import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readAvailable
 import com.maxrave.simpmusic.expect.ui.toByteArray
@@ -125,6 +126,7 @@ import simpmusic.composeapp.generated.resources.shared
 import simpmusic.composeapp.generated.resources.unliked_toast
 import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
+import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
 import kotlin.reflect.KClass
@@ -148,6 +150,7 @@ class SharedViewModel(
     /** 当前激活音源,扇形菜单与各页面 TODO 分支共用这一份状态 */
     val selectedSource: StateFlow<String> =
         dataStoreManager.selectedSource
+            .onEach { Logger.w("SRCPROBE", "selectedSource emission: $it") }
             .stateIn(viewModelScope, SharingStarted.Eagerly, com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC.name)
 
     val neteaseLoggedIn: StateFlow<Boolean> =
@@ -167,12 +170,14 @@ class SharedViewModel(
      * 则跳过)兜住。同源重复调用无副作用。
      */
     fun switchSource(source: com.maxrave.domain.source.MusicSource) {
+        Logger.w("SRCPROBE", "switchSource -> $source (current=${selectedSource.value})")
         if (selectedSource.value == source.name) return
         viewModelScope.launch {
             // 网易未登录选网易源:不切换,toast 引导登录(菜单项保持可点,别毫无反应)
             if (source == com.maxrave.domain.source.MusicSource.NETEASE &&
                 dataStoreManager.neteaseCookie.first().isBlank()
             ) {
+                Logger.w("SRCPROBE", "switchSource blocked: netease not logged in")
                 makeToast(getString(Res.string.login_netease_first))
                 return@launch
             }
@@ -2266,31 +2271,42 @@ class SharedViewModel(
         val path =
             "${getDownloadFolderPath()}/$fileName"
         viewModelScope.launch {
-            nowPlayingState.value?.track?.let { track ->
+            // track 在队列重建窗口(冷启恢复队列/重进后点当前曲)会查空且永不回填,
+            // 之前整段 ?.let 静默跳过就是"点了没反应"的病根;songEntity 恒有值,回落它
+            val track =
+                nowPlayingState.value?.track
+                    ?: nowPlayingState.value?.songEntity?.toTrack()
+                    ?: return@launch
+            withContext(Dispatchers.IO) {
                 val bytesArray = bitmap.toByteArray()
+                // 公共 Download 走 FUSE:同名目标再建可能 EEXIST(重复下载/外部删过文件
+                // 但 MediaStore 残行的场景)。先删旧目标;仍失败落到错误弹窗,不再裸
+                // throw——那会把整个 app 带崩(实测崩溃栈就在这)
+                val jpgFile = File("$path.jpg")
+                if (jpgFile.exists()) jpgFile.delete()
                 try {
-                    val fileOutputStream = FileOutputStream("$path.jpg")
-                    fileOutputStream.write(bytesArray)
-                    fileOutputStream.close()
+                    FileOutputStream(jpgFile).use { it.write(bytesArray) }
                     Logger.d(tag, "Thumbnail saved to $path.jpg")
                 } catch (e: Exception) {
-                    throw RuntimeException(e)
+                    Logger.e(tag, "thumbnail write failed: ${e.message}")
+                    _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "thumbnail write failed")
+                    return@withContext
                 }
                 // 网易歌:CDN 直链音频(mpeg/flac),youTube.download 的 itag 合并管线不适用,
                 // 直接取流下载写文件;进度喂同一个 DownloadProgress 弹窗
                 if (track.videoId.toLongOrNull() != null) {
                     downloadNeteaseFile(track.videoId, path)
-                    return@let
+                } else {
+                    songRepository
+                        .downloadToFile(
+                            track = track,
+                            videoId = track.videoId,
+                            path = path,
+                            isVideo = nowPlayingScreenData.value.isVideo,
+                        ).collectLatest {
+                            _downloadFileProgress.value = it
+                        }
                 }
-                songRepository
-                    .downloadToFile(
-                        track = track,
-                        videoId = track.videoId,
-                        path = path,
-                        isVideo = nowPlayingScreenData.value.isVideo,
-                    ).collectLatest {
-                        _downloadFileProgress.value = it
-                    }
             }
         }
     }
@@ -2309,32 +2325,45 @@ class SharedViewModel(
         }
         val ext = if (stream.mimeType?.contains("flac", ignoreCase = true) == true) "flac" else "mp3"
         try {
-            HttpClient(CIO).use { client ->
-                val response = client.get(stream.url)
-                // ktor2 的 ByteReadChannel 没有总长属性,Content-Length 头兜底(缺头则只报速度不报百分比)
-                val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
-                val channel = response.bodyAsChannel()
-                val output = FileOutputStream("$path.$ext")
-                val buffer = ByteArray(64 * 1024)
-                var read = 0L
-                val startedAt = System.currentTimeMillis()
-                while (true) {
-                    val n = channel.readAvailable(buffer, 0, buffer.size)
-                    if (n <= 0) break
-                    output.write(buffer, 0, n)
-                    read += n
-                    if (total > 0) {
-                        val elapsedS = (System.currentTimeMillis() - startedAt).coerceAtLeast(1) / 1000f
-                        _downloadFileProgress.value =
-                            DownloadProgress(
-                                audioDownloadProgress = (read.toFloat() / total).coerceIn(0f, 1f),
-                                downloadSpeed = (read / 1024f / elapsedS).toInt(),
-                            )
+            // prepareGet+execute 才是真流式:ktor3 的 client.get() 会把整个响应体先
+            // save 进内存(SavedCall),无损 flac 动辄几十 MB,曾在 ~192MB 堆上直接 OOM
+            // (SavedCallKt.save→readByteArray,主线程);Content-Length 头兜底算百分比。
+            // 超时:裸 CIO 默认 15s 整请求上限,百 MB 级无损在慢链路必超时——放宽到
+            // 10min 总上限+60s socket 空闲(进度在走就不会触发)
+            HttpClient(CIO) {
+                install(io.ktor.client.plugins.HttpTimeout) {
+                    requestTimeoutMillis = 10 * 60_000L
+                    socketTimeoutMillis = 60_000L
+                }
+            }.use { client ->
+                client.prepareGet(stream.url).execute { response ->
+                    val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
+                    val channel = response.bodyAsChannel()
+                    // 同 jpg:先删同名旧音频目标,防 FUSE EEXIST(重复下载场景)
+                    val audioFile = File("$path.$ext")
+                    if (audioFile.exists()) audioFile.delete()
+                    FileOutputStream(audioFile).use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var read = 0L
+                        val startedAt = System.currentTimeMillis()
+                        while (true) {
+                            val n = channel.readAvailable(buffer, 0, buffer.size)
+                            if (n <= 0) break
+                            output.write(buffer, 0, n)
+                            read += n
+                            if (total > 0) {
+                                val elapsedS = (System.currentTimeMillis() - startedAt).coerceAtLeast(1) / 1000f
+                                _downloadFileProgress.value =
+                                    DownloadProgress(
+                                        audioDownloadProgress = (read.toFloat() / total).coerceIn(0f, 1f),
+                                        downloadSpeed = (read / 1024f / elapsedS).toInt(),
+                                    )
+                            }
+                        }
                     }
                 }
-                output.close()
-                _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
             }
+            _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
             Logger.d(tag, "Netease file saved to $path.$ext")
         } catch (e: Exception) {
             Logger.e(tag, "netease download failed: ${e.message}")

@@ -58,6 +58,7 @@ import com.maxrave.simpmusic.ui.screen.home.NeteaseAlbumRow
 import com.maxrave.simpmusic.ui.screen.home.NeteaseArtistRow
 import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.logger.Logger
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.confirm
@@ -119,6 +120,16 @@ internal fun LibraryNeteaseTab(
             }
     }
     val pullToRefreshState = rememberPullToRefreshState()
+
+    // 排针(临时):三分区状态每次变化打一行,排查"切 YTM 后歌单分区不渲染"
+    LaunchedEffect(playlists, artists, albums) {
+        Logger.w(
+            "LIBPROBE",
+            "NeteaseTab states: playlists=${playlists::class.simpleName}(${(playlists as? LocalResource.Success)?.data?.size}) " +
+                "artists=${artists::class.simpleName}(${(artists as? LocalResource.Success)?.data?.size}) " +
+                "albums=${albums::class.simpleName}(${(albums as? LocalResource.Success)?.data?.size})",
+        )
+    }
 
     val playlistList = (playlists as? LocalResource.Success)?.data.orEmpty()
     val artistList = (artists as? LocalResource.Success)?.data.orEmpty()

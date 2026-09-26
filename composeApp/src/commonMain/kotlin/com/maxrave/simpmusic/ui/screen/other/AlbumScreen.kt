@@ -226,7 +226,7 @@ fun AlbumScreen(
                 LazyColumn(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .background(mutedPaletteBg)
                             .hazeSource(hazeState),
                     state = lazyState,

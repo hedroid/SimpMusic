@@ -367,7 +367,11 @@ fun PlaylistScreen(
                 LazyColumn(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
+                            // fillMaxSize 而非 fillMaxWidth:页面深色底画在 LazyColumn 自身,
+                            // 搜索过滤后内容变短时它会被重测成内容高度(实测 506 行→1 行时
+                            // 2424→1250),底色随内容一起缩,之下漏出浅色窗口底=「下半部白屏」
+                            // (红心歌单搜歌必现)。钉满视口高度,短内容时底色仍然全屏。
+                            .fillMaxSize()
                             .background(mutedPaletteBg)
                             .hazeSource(hazeState),
                     state = lazyState,
@@ -1178,6 +1182,11 @@ fun PlaylistScreen(
                         Modifier
                             .fillMaxWidth()
                             .onGloballyPositioned { searchBarHeightPx = it.size.height }
+                            // 不透明兜底底色:haze 2.0 的 hazeBlur 层在覆盖层刚出现时会渲染成
+                            // 未初始化的纯白(实测:开搜索条后 y~355-475 全宽 #FFFFFF 静态白带,
+                            // 滚动触发 haze source 重绘后自愈)。垫上 palette 底色后 blur 失灵
+                            // 最多退化成实色条,不再漏白
+                            .background(mutedPaletteBg)
                             .hazeBlur(HazeInput.Sources(hazeState), barBlurStyle(mutedPaletteBg, 0.55f)),
                     ) {
                         Row(

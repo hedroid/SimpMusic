@@ -842,13 +842,29 @@ dump bounds 取,目测两次全偏)。
 > 模拟器实测注意:AM/M3E 播放页 below-the-fold 详情卡要滚过全部歌词区(歌词跟歌回弹,fling 追不上,
 > 慢滚+逐次 dump)；设置入口只在 YT 主页顶栏(网易主页无)。
 
-- **haze 顶栏闪烁修复推广**：库页四宫格页已修（底色兜底+fade 转场，065f3ca1），同款玻璃顶栏
-  的高频页（歌单/专辑详情等）可照搬两步修法。
+- ~~haze 顶栏闪烁修复推广~~ **前提已变（2026-09-26 更新）**：065f3ca1（底色兜底+fade 转场）已按
+  用户要求 revert（592c7103，闪烁另有原因，重新定性待专项）；但 haze 2.0 迁移的**白带失灵已修
+  一处**——歌单内搜索覆盖层 blur 层未初始化纯白（主仓 1f088579 垫 palette 底色兜底，实测复现
+  并压测通过）。同页另两处 hazeBlur（常态顶栏/多选栏）未加兜底，再报白可同法修。
 - 无限队列网易尾曲续播：**已打通（2026-09-20）**——无尽钩子按 ID 形状分流（YT=RDAMVM+getRelated，
   网易=NETEASE_RADIO_ 哨兵+simiSong 首批），simiSong 见底后以当前尾曲换种子续链
   （种子没变即整批撞重则停，防循环）；android+jvm 双端。详见"播放队列页增强"小节。
-- 陈旧 TODO 注释清理：HomeViewModel:184（与"独立屏"定稿相悖已过时）；MusicSourceProvider
-  C_TIER（评论/艺人详情已实现，只剩云盘与播客）。
+
+### 源码 TODO 盘点（2026-09-26 全量核实）
+
+> 逐条对照实现状态核实过；"应清理"= 注释描述已被后续实现/定案覆盖，删注释不影响行为。
+
+- **已清理（2026-09-26 删除注释，均被实现覆盖）**：`NowPlayingScreen.kt` 原 :711
+  TODO(NETEASE_NEXT)（歌词专线 M1 已落地/Canvas 定案按名搜降级保留/艺人跳转数字路由已通，
+  三项全过时）；`LibraryViewModel.kt` 原 :990 TODO(NETEASE_NEXT)（本地 Room 统计天然覆盖网易，
+  仅剩可选增强——交叉 /user/record 账号级听歌排行校准，做 Wrapped/分析页数据交叉校准时再考虑）。
+- **真实剩余**：iOS 平台 `TODO("Not yet implemented")` 多处——BrotliEncoder/Hmac/
+  ExpectMediaHandler/SpotifyTotp 各 ios source set（未支持的 iOS 平台能力，fork 无 iOS 发布
+  计划则长期搁置）；`BetterShuffleOrder.kt:69-70`（"Fix scuffed hacky logic"+Play Next 顺序
+  在取消随机后保持——注意物理洗牌(2026-09-22)后 Android 主路已不经该组件，仅 jvm 仍走
+  adapter flag 旧路，做对称化时一并处理）。
+- **已准确的存量**：`MusicSourceProvider.kt:91` C_TIER 已改写为"仅剩云盘(cloudDisk)与播客
+  (dj 生态)未接"，与未做清单一致，保留。HomeViewModel:184 已于 2026-09-24 清掉。
 
 ### 可优化
 
