@@ -643,31 +643,37 @@ fun InfoPlayerBottomSheet(
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = stringResource(Res.string.itag),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 10.dp),
-                    textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
-                    color = rememberSurfaceDarkColors().content,
-                )
-                Text(
-                    text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.CenterVertically)
-                            .basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                animationMode = MarqueeAnimationMode.Immediately,
-                            ).focusable()
-                            .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center,
-                )
+                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);播放量/赞踩换
+                // 红心总数+评论数(热评内容从播放页详情卡进入评论列表看)。
+                val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
+                // 标签(itag)是 YouTube 流格式编号,网易取流无此概念(占位 0),隐藏
+                if (!isNeteaseSong) {
+                    Text(
+                        text = stringResource(Res.string.itag),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = typo().labelMedium,
+                        color = rememberSurfaceDarkColors().content,
+                    )
+                    Text(
+                        text = format?.itag?.toString() ?: stringResource(Res.string.unknown),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(align = Alignment.CenterVertically)
+                                .basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    animationMode = MarqueeAnimationMode.Immediately,
+                                ).focusable()
+                                .padding(horizontal = 10.dp),
+                        style = typo().bodyMedium,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Text(
                     text = stringResource(Res.string.mime_type),
                     modifier =
@@ -845,9 +851,6 @@ fun InfoPlayerBottomSheet(
                     textAlign = TextAlign.Center,
                 )
 
-                // 网易歌:来源链接是 music.163.com(YT 链接对数字 ID 无效);播放量/赞踩换
-                // 红心总数+评论数(热评内容从播放页详情卡进入评论列表看)。
-                val isNeteaseSong = songEntity?.videoId?.toLongOrNull() != null
                 val neteaseMeta = screenDataState.neteaseSongData
                 if (isNeteaseSong && neteaseMeta != null) {
                     neteaseMeta.likeCount?.let { likeCount ->
