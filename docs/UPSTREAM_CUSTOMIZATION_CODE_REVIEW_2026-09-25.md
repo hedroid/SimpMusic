@@ -44,9 +44,9 @@
 | CR-10 QR client 泄漏 | **顺延下一轮** | 属实（每 HttpClient 独立 OkHttp 引擎，onCleared 只取消轮询），但仅反复进出登录页才积累，Closeable+close 很便宜 |
 | CR-14 通知差集 | **顺延下一轮** | O(n²) 绝对量小（每艺人几十项）；真实问题是"空快照=从未有发行的艺人第一张专辑漏通知"，随循环外预计算一并重构 |
 | CR-18 网易发行扫描重复分页 | **已修（core 4862d64）** | NotifyWork 的 ALBUM/SINGLE 两条 flow 各自调用同一全量分页端点，每位艺人最多并发两套×10 页请求。修法=`getArtistMoreAlbums` 同艺人**单飞+30s 短窗复用**（先到者锁内翻页，后来者直接拿同一份再按 type 拆分；失败不缓存；跨 12h 扫描轮次必然重拉）——不动 NotifyWork 的双源通用结构，全量分页每艺人只跑一遍，风控暴露减半。 |
-| CR-19 网易下载未校验 HTTP 状态 | **待修（P1）** | `HttpClient` 默认不按状态码判失败；CDN 返回 403/404/5xx 时会把错误正文保存成 mp3/flac，随后仍显示下载完成。必须在创建目标文件前检查 `response.status`，并在声明了 Content-Length 时核对最终字节数。 |
-| CR-20 网易重复下载会先破坏旧文件 | **待修（P2）** | 当前先删除正式文件，再直接向正式路径流式写入；超时、断网或磁盘写失败会丢失旧完整文件并留下半截新文件。应写同目录临时文件，校验成功后再替换。封面 jpg 同理。 |
-| CR-21 下载文件名漏过滤 `/` | **待修（P2，旧问题）** | 文件名清理过滤了反斜杠但漏掉 Android/Linux 路径分隔符 `/`；如艺人 `AC/DC` 会被解释为子目录，导致创建文件失败。不是 `f96c7278` 新增，但仍是本次“全线修复”的残留失败条件。 |
+| CR-19 网易下载未校验 HTTP 状态 | **已修（主仓 5004b42a）** | execute 回调入口 `response.status.isSuccess()` 检查（audioUrl 有 10 分钟有效期，过期/区域拒绝的 4xx/5xx 错误正文此前会被存成 mp3/flac 还报完成）；读完核对 Content-Length，没读满抛 `incomplete download: read/total`。模拟器飞行模式实测两分支均见错误弹窗 |
+| CR-20 网易重复下载会先破坏旧文件 | **已修（主仓 5004b42a）** | 封面/音频改 staged write：先写同目录 `.part`，写满 close 后 rename 提交——同目录 rename 对已存在目标是原子覆盖，替代"先删旧文件再直写"，顺带绕开 FUSE 新建同名 EEXIST；失败/取消 finally 清 `.part`，catch 重抛 CancellationException。实测：下载 54% 断网，旧 flac md5 全程不变、无 `.part` 残留 |
+| CR-21 下载文件名漏过滤 `/` | **已修（主仓 5004b42a）** | 清理正则补 `/` 与 `\x00-\x1f` 控制字符、尾部点号修剪、清空兜底 `download_<videoId>`、截 100 字符防超长。`AC/DC`→`ACDC` 已验证（正则断言） |
 
 另：`PlaylistViewModel.kt` 4 处尾随空格与 3 处文件尾空行已清理（`8232f405`）。
 
@@ -284,7 +284,7 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 
 但成功判定和落盘事务性尚未收口，因此暂不应把该路径标记为“全线修复”。
 
-### CR-19 非 2xx CDN 响应会被保存为音频并误报成功【P1·待修】
+### CR-19 非 2xx CDN 响应会被保存为音频并误报成功【已修 5004b42a】
 
 - 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SharedViewModel.kt:2354`
 - 成功落状态：同文件 `:2381`
@@ -305,7 +305,7 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 3. 可额外校验 Content-Type 是否与解析出的网易音频格式相符，避免 2xx 错误页被当成音频。
 4. 增加 MockEngine 测试，至少覆盖 200 音频、403 错误正文、500、声明长度大于实际正文四种响应。
 
-### CR-20 覆盖下载失败会丢失旧文件并留下半成品【P2·待修】
+### CR-20 覆盖下载失败会丢失旧文件并留下半成品【已修 5004b42a】
 
 - 音频位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SharedViewModel.kt:2357`
 - 封面位置：同文件 `:2300`
@@ -320,7 +320,7 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 4. 任何异常只删除 `.part`，保留旧文件；取消协程时重新抛出 `CancellationException`。
 5. 音频成功后再提交封面，或让音频与封面共享一次最终提交阶段，避免一新一旧。
 
-### CR-21 文件名清理漏掉 `/`，合法歌曲信息可被解释为子目录【P2·待修，非本提交新增】
+### CR-21 文件名清理漏掉 `/`，合法歌曲信息可被解释为子目录【已修 5004b42a，非本提交新增】
 
 - 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SharedViewModel.kt:2282`
 
@@ -336,8 +336,15 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 
 - `git diff-tree --check f96c7278^ f96c7278`：通过。
 - `f96c7278` 只修改 `SharedViewModel.kt`，未增加自动化测试。
-- 尝试执行 `./gradlew :composeApp:compileAndroidMain --no-daemon`；当前工作区在与下载提交无关的未提交更新检查改动处失败：`SharedViewModel.kt:1370` 引用的 `update_check_failed` 资源访问器未生成。因此该结果不能归因于 `f96c7278`，也不能作为该提交已完成编译验证的证据。
+- ~~尝试执行 `./gradlew :composeApp:compileAndroidMain --no-daemon`；当前工作区在与下载提交无关的未提交更新检查改动处失败~~（该障碍随检查更新改动提交 cfc3ebfa 消除；2026-09-26 复验 `:composeApp:compileAndroidMain` BUILD SUCCESSFUL）。
 - Ktor 官方行为核对：默认不根据 HTTP 状态验证响应；需启用 `expectSuccess` 或手工检查状态码。参考：<https://ktor.io/docs/client-response-validation.html>。
+
+### CR-19/20/21 修复验证记录（2026-09-26，主仓 5004b42a，模拟器 Universal_API36 实测）
+
+- 正常回归：网易 flac（32.7MB）+jpg 落地，`fLaC` 魔数正确；重复下载 rename 覆盖成功、无 FUSE EEXIST。
+- 实验 A（飞行模式全断网点导出）：取流失败弹"出错了 / netease stream unavailable"，旧文件不动。
+- 实验 B（下载 54% 时飞行模式切断）：~30s 后弹"出错了 / incomplete download: 17693872/32709079"（Content-Length 核对生效，数字与断网时刻 .part 大字节数精确一致）；旧 flac md5 全程不变（a6d2cadd…），`.part` 无残留。
+- 方法论更正：**模拟器上 `svc wifi disable` 不断网**（网络走虚拟 eth0），下载会继续完成——前两轮"断网实验"实为重复下载成功覆盖，恰好内容相同 md5 一致而误像"失败保留旧文件"；断网实验必须用 `cmd connectivity airplane-mode enable` 并先 ping 确认。
 
 ## 工程质量与验证结果
 
@@ -376,7 +383,7 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 - [x] CR-03 红心假成功缓存。（core `6a28091`）
 - [x] CR-09 重复非空游标停止。（基础循环 `a98f2af`；同值游标二轮收口 core `e0a7b36`）
 - [x] CR-08 自动备份假成功与清理 URI。（主仓 `fd2b5a94`：null 流不再记成功+删除 URI 改回 Files 集合）
-- [ ] CR-19 网易下载校验 HTTP 状态与响应完整性。（主仓 `f96c7278` 补充 CR，P1）
+- [x] CR-19 网易下载校验 HTTP 状态与响应完整性。（主仓 `5004b42a`：status 检查+Content-Length 核对，飞行模式实测两分支）
 
 第二批，处理数据一致性：
 
@@ -400,7 +407,7 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 - [~] CR-15 真正懒加载网易仓库。（不修：毫秒级，有实测数据再动）
 - [~] CR-16 拆分分类封面锁。（不修：刻意的 405 频控设计）
 - [x] CR-17 位图内存压测。（B2 已修 11984ce1；B1 降采样不做；模拟器实测 150 切：Bitmap 计数 74→71 持平=LRU 有界非泄漏，关播放页 74→46 实证释放——2026-09-25 完成）
-- [ ] CR-20 网易下载改为临时文件写入、成功后替换，失败保留旧文件。
-- [ ] CR-21 下载文件名补齐 `/` 等路径字符与长度边界处理。
+- [x] CR-20 网易下载改为临时文件写入、成功后替换，失败保留旧文件。（主仓 `5004b42a`：staged write，实测 54% 断网旧文件 md5 不变）
+- [x] CR-21 下载文件名补齐 `/` 等路径字符与长度边界处理。（主仓 `5004b42a`：补 `/`+控制字符+尾部点+空名兜底 videoId+100 字符截断）
 
 建议完成前两批后先跑一次回归；全部完成后再做真机长时间播放、快速切歌、后台通知、低内存和 Android 8/9 兼容测试。
