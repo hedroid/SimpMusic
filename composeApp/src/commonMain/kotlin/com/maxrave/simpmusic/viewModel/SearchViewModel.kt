@@ -282,6 +282,7 @@ class SearchViewModel(
     }
 
     fun searchAll(query: String) {
+        Logger.w("SEARCHPROBE", "searchAll: '$query'")
         _searchScreenUIState.value = SearchScreenUIState.Loading
         viewModelScope.launch {
             var song = ArrayList<SongsResult>()
@@ -583,6 +584,7 @@ class SearchViewModel(
     }
 
     fun setSearchType(searchType: SearchType) {
+        Logger.w("SEARCHPROBE", "setSearchType -> $searchType")
         _searchScreenState.update { state ->
             state.copy(searchType = searchType)
         }

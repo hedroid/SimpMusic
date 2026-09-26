@@ -272,7 +272,9 @@ class LibraryViewModel(
                 launch {
                     // 运行中登出网易:停在"您的网易云"tab 时弹回,并清数据防下次登入闪旧内容
                     dataStoreManager.neteaseCookie.distinctUntilChanged().collect { cookie ->
+                        com.maxrave.logger.Logger.w("LIBPROBE", "cookie emission len=${cookie.length}")
                         if (cookie.isEmpty()) {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "logout reset: clearing netease sections (was on ${_currentScreen.value})")
                             if (_currentScreen.value == LibraryChipType.NETEASE_PLAYLIST) {
                                 setCurrentScreen(defaultLibraryChip())
                             }
@@ -324,6 +326,7 @@ class LibraryViewModel(
         )
 
     fun setCurrentScreen(chipType: LibraryChipType) {
+        com.maxrave.logger.Logger.w("LIBPROBE", "setCurrentScreen -> $chipType")
         _currentScreen.value = chipType
         viewModelScope.launch {
             dataStoreManager.putString("library_current_screen", chipType.toStringValue())
@@ -454,6 +457,7 @@ class LibraryViewModel(
             _neteasePlaylist.value.data == null &&
                 _subscribedArtists.value.data == null &&
                 _starredAlbums.value.data == null
+        com.maxrave.logger.Logger.w("LIBPROBE", "getNeteaseLibrary force=$force firstLoad=$firstLoad (pl=${_neteasePlaylist.value::class.simpleName})")
         if (firstLoad) {
             _neteasePlaylist.value = LocalResource.Loading()
             _subscribedArtists.value = LocalResource.Loading()
@@ -465,6 +469,7 @@ class LibraryViewModel(
                 launch {
                     neteaseRepository.getLibraryPlaylists().fold(
                         onSuccess = {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "playlists ok size=${it.size}")
                             _neteasePlaylist.value = LocalResource.Success(it)
                             _ownNeteasePlaylistIds.value = neteaseRepository.getOwnNeteasePlaylistIds()
                             _neteaseLikedPlaylistId.value = neteaseRepository.getNeteaseLikedPlaylistIdCached()
@@ -472,19 +477,31 @@ class LibraryViewModel(
                             // app 外取消收藏自动收敛;列表为空(拉取异常形状)时上面直接 return 不过这里
                             playlistRepository.reconcileLikedNeteasePlaylists(it.map { p -> p.id }.toSet())
                         },
-                        onFailure = { _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed") },
+                        onFailure = {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "playlists FAIL: ${it.message}")
+                            _neteasePlaylist.value = LocalResource.Error(it.message ?: "netease playlists failed")
+                        },
                     )
                 }
                 launch {
                     neteaseRepository.getSubscribedArtists(force).fold(
-                        onSuccess = { _subscribedArtists.value = LocalResource.Success(it.toList()) },
+                        onSuccess = {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "artists ok size=${it.size}")
+                            _subscribedArtists.value = LocalResource.Success(it.toList())
+                        },
                         onFailure = { _subscribedArtists.value = LocalResource.Error(it.message ?: "subscribed artists failed") },
                     )
                 }
                 launch {
                     neteaseRepository.getStarredAlbums(force).fold(
-                        onSuccess = { _starredAlbums.value = LocalResource.Success(it.toList()) },
-                        onFailure = { _starredAlbums.value = LocalResource.Error(it.message ?: "starred albums failed") },
+                        onSuccess = {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "albums ok size=${it.size}")
+                            _starredAlbums.value = LocalResource.Success(it.toList())
+                        },
+                        onFailure = {
+                            com.maxrave.logger.Logger.w("LIBPROBE", "albums/artists FAIL: ${it.message}")
+                            _starredAlbums.value = LocalResource.Error(it.message ?: "starred albums failed")
+                        },
                     )
                 }
             }

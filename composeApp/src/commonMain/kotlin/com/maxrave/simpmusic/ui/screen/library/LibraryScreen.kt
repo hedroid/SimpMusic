@@ -218,6 +218,10 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(currentFilter) {
+        Logger.w(
+            "LIBPROBE",
+            "currentFilter=$currentFilter netease=${neteasePlaylist::class.simpleName}/${subscribedArtists::class.simpleName}/${starredAlbums::class.simpleName}",
+        )
         when (currentFilter) {
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
                 // 未加载过、或"登录态下系统歌单置顶行为空"(首拉撞上 cookie 恢复竞态/

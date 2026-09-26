@@ -65,6 +65,7 @@ import com.maxrave.domain.utils.toSyncedLyrics
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
+import kotlinx.coroutines.flow.onEach
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.getDownloadFolderPath
 import io.ktor.client.HttpClient
@@ -148,6 +149,7 @@ class SharedViewModel(
     /** 当前激活音源,扇形菜单与各页面 TODO 分支共用这一份状态 */
     val selectedSource: StateFlow<String> =
         dataStoreManager.selectedSource
+            .onEach { Logger.w("SRCPROBE", "selectedSource emission: $it") }
             .stateIn(viewModelScope, SharingStarted.Eagerly, com.maxrave.domain.source.MusicSource.YOUTUBE_MUSIC.name)
 
     val neteaseLoggedIn: StateFlow<Boolean> =
@@ -167,12 +169,14 @@ class SharedViewModel(
      * 则跳过)兜住。同源重复调用无副作用。
      */
     fun switchSource(source: com.maxrave.domain.source.MusicSource) {
+        Logger.w("SRCPROBE", "switchSource -> $source (current=${selectedSource.value})")
         if (selectedSource.value == source.name) return
         viewModelScope.launch {
             // 网易未登录选网易源:不切换,toast 引导登录(菜单项保持可点,别毫无反应)
             if (source == com.maxrave.domain.source.MusicSource.NETEASE &&
                 dataStoreManager.neteaseCookie.first().isBlank()
             ) {
+                Logger.w("SRCPROBE", "switchSource blocked: netease not logged in")
                 makeToast(getString(Res.string.login_netease_first))
                 return@launch
             }
