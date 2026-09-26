@@ -64,6 +64,9 @@ LazyColumn size=1080 x 1250 (query='慕夏', filtered=1)  ← ~360ms 后塌缩
 ```
 
 钉满视口高度：短内容时底色仍然全屏。对长列表零行为差异（未过滤时本来就是这个高度）。
+**同病推平（8728d3dc）**：AlbumScreen 与 LocalPlaylistScreen 的 LazyColumn 是同款
+`fillMaxWidth().background(mutedPaletteBg)` 病根（专辑页短专辑"头图+行+页脚不足一屏"可触发、
+本地歌单页带同款页内搜索），已一并修为 `fillMaxSize`。
 
 ### 验证
 
@@ -148,3 +151,4 @@ blur 正常时视觉几乎无差（底色与模糊 tint 同源）；blur 失灵�
 
 - `1f088579` fix(playlist): 搜索条 hazeBlur 白带防御（模式 B）
 - `31da652e` fix(playlist): 过滤态下半屏白屏——fillMaxSize 钉满视口高（模式 A，含完整二分证据）
+- `8728d3dc` fix(playlist): 同病推平——AlbumScreen/LocalPlaylistScreen 一并 fillMaxSize
