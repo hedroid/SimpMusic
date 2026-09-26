@@ -232,7 +232,10 @@ fun NowPlayingScreenContent(
     }
     // ⚠️ Use track.videoId (already prefix-stripped at MediaServiceHandlerImpl.kt:386).
     // Do NOT use mediaItem.mediaId — it carries the "Video" prefix for video items.
-    val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId
+    // track 在装队列清空-回填窗口会短暂为 null 且被 VM 的 distinctUntilChangedBy(videoId)
+    // 拦住不再回发——songEntity 与 track 同指当前曲,回退取它(否则 isNeteaseSong/红心门控
+    // 在冷启恢复队列等场景全部误判成 YT)。
+    val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId ?: nowPlayingState?.songEntity?.videoId
     // currentOrderIndex() is a plain getter over the player, NOT Compose state, so it is read
     // inside this remember block — whose keys (the queue, and the track now playing) are exactly
     // the two things that can move the player's position. nowPlayingState is published FROM the

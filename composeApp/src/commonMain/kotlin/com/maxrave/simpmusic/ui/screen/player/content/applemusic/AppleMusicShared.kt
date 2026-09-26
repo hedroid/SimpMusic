@@ -92,6 +92,7 @@ import com.maxrave.simpmusic.ui.icon.FastRewind
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.GraphicEq
+import com.maxrave.simpmusic.ui.icon.Comment
 import com.maxrave.simpmusic.ui.icon.Lyrics
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.Pause
@@ -790,9 +791,11 @@ internal fun AppleMusicDockButton(
 }
 
 /**
- * Lyrics · Cast · Queue. The Cast slot renders [PlatformCastButton] itself (which hides when
- * Cast is unavailable) and takes no "active" tint of its own — same rule M3E's connected group
- * follows for its Cast slot.
+ * Lyrics · Cast · Queue · Comments(网易歌才出现第四枚)。The Cast slot renders
+ * [PlatformCastButton] itself (which hides when Cast is unavailable) and takes no "active" tint of
+ * its own — same rule M3E's connected group follows for its Cast slot. Comments opens
+ * NeteaseCommentsSheet directly (no view switch, no active state), so it only appears for netease
+ * songs and YT queues keep the three-slot dock.
  */
 @Composable
 internal fun AppleMusicDock(
@@ -802,6 +805,8 @@ internal fun AppleMusicDock(
     lyricsAvailable: Boolean,
     activeColor: Color,
     activeContentColor: Color,
+    showComments: Boolean = false,
+    onShowComments: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -837,6 +842,15 @@ internal fun AppleMusicDock(
                 onSelectView(if (viewState == AppleMusicView.QUEUE) AppleMusicView.MAIN else AppleMusicView.QUEUE)
             },
         )
+        if (showComments) {
+            AppleMusicDockButton(
+                icon = SimpIcons.Comment,
+                active = false,
+                activeColor = activeColor,
+                activeContentColor = activeContentColor,
+                onClick = onShowComments,
+            )
+        }
     }
 }
 
@@ -944,6 +958,8 @@ internal fun AppleMusicBottomCluster(
             lyricsAvailable = state.screenData.lyricsData != null,
             activeColor = activePillContainer,
             activeContentColor = activePillContent,
+            showComments = state.isNeteaseSong,
+            onShowComments = actions.onShowNeteaseComments,
         )
         Spacer(
             modifier =

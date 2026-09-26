@@ -103,6 +103,7 @@ import com.maxrave.simpmusic.ui.component.rememberHeartBurstState
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Comment
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.Info
@@ -780,6 +781,26 @@ internal fun ExpressiveTrackInfoRow(
                 }
             }
         }
+        }
+        // 评论=网易歌专属常驻入口,放红心右侧与互动区同行(详情卡里的旧入口已删);
+        // 视觉语言与左侧红心圆钮同款(tonal 圆面+暗图标)
+        if (state.isNeteaseSong) {
+            Spacer(modifier = Modifier.size(8.dp))
+            Surface(
+                onClick = { actions.onShowNeteaseComments() },
+                shape = CircleShape,
+                color = colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = SimpIcons.Comment,
+                        contentDescription = "Comments",
+                        tint = colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
         }
     }
 }

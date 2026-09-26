@@ -104,6 +104,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -235,9 +236,13 @@ import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
 import simpmusic.composeapp.generated.resources.comments
 import simpmusic.composeapp.generated.resources.comments_title
+import simpmusic.composeapp.generated.resources.collapse_replies
 import simpmusic.composeapp.generated.resources.end_of_list
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
+import simpmusic.composeapp.generated.resources.n_replies
+import simpmusic.composeapp.generated.resources.no_comments
+import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
@@ -304,6 +309,8 @@ import simpmusic.composeapp.generated.resources.sleep_timer_off
 import simpmusic.composeapp.generated.resources.sleep_timer_set_error
 import simpmusic.composeapp.generated.resources.sleep_timer_warning
 import simpmusic.composeapp.generated.resources.sort_by
+import simpmusic.composeapp.generated.resources.sort_by_newest
+import simpmusic.composeapp.generated.resources.sort_hot
 import simpmusic.composeapp.generated.resources.start_radio
 import simpmusic.composeapp.generated.resources.similar_songs
 import simpmusic.composeapp.generated.resources.sync
@@ -4097,6 +4104,15 @@ sealed class DevLogInType {
             is NetEase -> getString(Res.string.netease_dev_login_title)
         }
 }
+/**
+ * 评论弹窗排序档:wire=v2 sortType(2=最热/3=最新),firstCursor=首页游标(服务端算下一页,
+ * 直接透传)。楼层数(replyCount)只有 v2 响应有,列表已切 v2。
+ */
+private enum class NeteaseCommentSort(val wire: Int, val firstCursor: String) {
+    HOT(2, "normalHot#0"),
+    LATEST(3, "0"),
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeteaseCommentsSheet(
@@ -4107,31 +4123,108 @@ fun NeteaseCommentsSheet(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dark = rememberSurfaceDarkColors()
+    var sort by remember { mutableStateOf(NeteaseCommentSort.HOT) }
     var comments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
-    // 初始必须 false:loadMore 的重入守卫读它,初始 true 会把首载拦死成永久转圈
+    // 首载/切档=loading,追加=loadingMore(重入守卫读两者);失败置 failed 出重试行——
+    // 旧版失败直接 hasMore=false 假装到底,网络抖一下评论列表就"没了"
     var loading by remember { mutableStateOf(false) }
+    var loadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
+    var failed by remember { mutableStateOf(false) }
+    // v2 cursor 分页:服务端算好下一页游标,透传即可(null=没有更多)
+    var cursor by remember { mutableStateOf<String?>(null) }
+    // 楼中楼:同时只展开一条,收起即清
+    var expandedCommentId by remember { mutableStateOf<Long?>(null) }
+    var floorComments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
+    var floorCursor by remember { mutableStateOf<Long?>(null) }
+    var floorLoading by remember { mutableStateOf(false) }
+    var floorFailed by remember { mutableStateOf(false) }
 
-    fun loadMore() {
-        if (loading || !hasMore) return
+    fun loadFirst(target: NeteaseCommentSort) {
+        if (loading) return
         loading = true
+        failed = false
+        cursor = null
         coroutineScope.launch {
-            val page = neteaseRepository.getSongCommentsPage(songId, limit = 20, offset = comments.size)
+            val page =
+                neteaseRepository.getSongCommentsPage(
+                    songId,
+                    sortType = target.wire,
+                    cursor = target.firstCursor,
+                )
             if (page == null) {
-                hasMore = false
+                failed = true
             } else {
-                // 热评与最新评可能重叠(同一条既在热评也在最新),按内容去重
-                comments = (comments + page.first).distinctBy { it.content + (it.nickname ?: "") }
-                hasMore = page.second
+                comments = page.items
+                hasMore = page.hasMore
+                cursor = page.nextCursor
             }
             loading = false
         }
     }
 
+    fun loadMore() {
+        if (loading || loadingMore || !hasMore) return
+        val next = cursor ?: return
+        loadingMore = true
+        coroutineScope.launch {
+            val page =
+                neteaseRepository.getSongCommentsPage(
+                    songId,
+                    sortType = sort.wire,
+                    cursor = next,
+                )
+            if (page == null) {
+                failed = true
+            } else {
+                // 同一条评论跨页/跨档可能重复,按评论 id 去重
+                comments = (comments + page.items).distinctBy { it.commentId }
+                hasMore = page.hasMore
+                cursor = page.nextCursor
+                failed = false
+            }
+            loadingMore = false
+        }
+    }
+
+    fun collapseFloor() {
+        expandedCommentId = null
+        floorComments = emptyList()
+        floorCursor = null
+        floorLoading = false
+        floorFailed = false
+    }
+
+    fun loadFloorPage(
+        parentId: Long,
+        time: Long,
+        isFirstPage: Boolean,
+    ) {
+        if (floorLoading) return
+        floorLoading = true
+        floorFailed = false
+        coroutineScope.launch {
+            val page =
+                neteaseRepository.getSongCommentFloorPage(
+                    songId,
+                    parentCommentId = parentId,
+                    limit = 20,
+                    time = time,
+                )
+            if (page == null) {
+                floorFailed = true
+            } else {
+                floorComments =
+                    if (isFirstPage) page.first else (floorComments + page.first).distinctBy { it.commentId }
+                floorCursor = page.second
+            }
+            floorLoading = false
+        }
+    }
+
     LaunchedEffect(songId) {
-        comments = emptyList()
-        hasMore = true
-        loadMore()
+        loadFirst(sort)
     }
 
     ModalBottomSheet(
@@ -4151,7 +4244,7 @@ fun NeteaseCommentsSheet(
                     .fillMaxWidth()
                     .fillMaxHeight(0.8f),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
+            colors = CardDefaults.cardColors().copy(containerColor = dark.container),
         ) {
             Column(Modifier.fillMaxSize()) {
                 Spacer(modifier = Modifier.height(14.dp))
@@ -4162,7 +4255,7 @@ fun NeteaseCommentsSheet(
                             .align(Alignment.CenterHorizontally)
                             .width(60.dp)
                             .height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
+                    colors = CardDefaults.cardColors().copy(containerColor = dark.handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Text(
@@ -4172,55 +4265,208 @@ fun NeteaseCommentsSheet(
                             formatCompactCount(totalCount),
                         ),
                     style = typo().titleMedium,
-                    color = rememberSurfaceDarkColors().content,
+                    color = dark.content,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 )
-                HorizontalDivider(color = rememberSurfaceDarkColors().handle, thickness = 0.5.dp)
+                // 热门/最新排序切换:热门=服务端精华热评一次拉全,最新=offset 翻页
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    NeteaseCommentSort.entries.forEach { candidate ->
+                        Surface(
+                            onClick = {
+                                if (sort != candidate && !loading) {
+                                    sort = candidate
+                                    collapseFloor()
+                                    comments = emptyList()
+                                    hasMore = true
+                                    failed = false
+                                    loadFirst(candidate)
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = if (sort == candidate) dark.handle.copy(alpha = 0.45f) else Color.Transparent,
+                        ) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (candidate == NeteaseCommentSort.HOT) Res.string.sort_hot else Res.string.sort_by_newest,
+                                    ),
+                                style = typo().labelMedium,
+                                color = if (sort == candidate) dark.content else dark.subtitle,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(color = dark.handle, thickness = 0.5.dp)
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
                     items(comments) { comment ->
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                        ) {
-                            AsyncImage(
-                                model = comment.avatarUrl,
-                                contentDescription = null,
+                        Column(Modifier.fillMaxWidth()) {
+                            Row(
                                 modifier =
                                     Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(50)),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text =
-                                        listOfNotNull(comment.nickname, comment.location).joinToString(" · "),
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
-                                )
-                                Text(
-                                    text = comment.content,
-                                    style = typo().bodyMedium,
-                                    color = rememberSurfaceDarkColors().content,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Icon(
-                                    imageVector = SimpIcons.FavoriteBorder,
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                            ) {
+                                AsyncImage(
+                                    model = comment.avatarUrl,
                                     contentDescription = null,
-                                    tint = rememberSurfaceDarkColors().subtitle,
-                                    modifier = Modifier.size(14.dp),
+                                    modifier =
+                                        Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(50)),
                                 )
-                                Text(
-                                    text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
-                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text =
+                                            listOfNotNull(
+                                                comment.nickname,
+                                                comment.location,
+                                                comment.timeStr,
+                                            ).joinToString(" · "),
+                                        style = typo().labelSmall,
+                                        color = dark.subtitle,
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = comment.content,
+                                        style = typo().bodyMedium,
+                                        color = dark.content,
+                                    )
+                                    // 本条是回复时引用的父评论摘要(官方 app "回复 @xx: ..." 同款)
+                                    comment.beRepliedNickname?.let { repliedTo ->
+                                        Text(
+                                            text = "回复 @${repliedTo}: ${comment.beRepliedContent.orEmpty()}",
+                                            style = typo().labelSmall,
+                                            color = dark.subtitle,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        )
+                                    }
+                                    val commentId = comment.commentId
+                                    if (comment.replyCount > 0 && commentId != null) {
+                                        TextButton(
+                                            onClick = {
+                                                if (expandedCommentId == commentId) {
+                                                    collapseFloor()
+                                                } else {
+                                                    collapseFloor()
+                                                    expandedCommentId = commentId
+                                                    loadFloorPage(commentId, -1L, isFirstPage = true)
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 4.dp),
+                                            modifier = Modifier.height(26.dp),
+                                        ) {
+                                            Text(
+                                                text =
+                                                    stringResource(
+                                                        Res.string.n_replies,
+                                                        formatCompactCount(comment.replyCount),
+                                                    ) + " ›",
+                                                style = typo().labelMedium,
+                                                color = dark.subtitle,
+                                            )
+                                        }
+                                    }
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Icon(
+                                        imageVector = SimpIcons.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = dark.subtitle,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Text(
+                                        text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
+                                        style = typo().labelSmall,
+                                        color = dark.subtitle,
+                                    )
+                                }
+                            }
+                            // 楼中楼展开区:缩进对齐主评论内容列(20+36+12)
+                            val expandedId = comment.commentId
+                            if (expandedId != null && expandedCommentId == expandedId) {
+                                Column(Modifier.padding(start = 68.dp)) {
+                                    floorComments.forEach { reply ->
+                                        Row(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(end = 20.dp, bottom = 8.dp),
+                                        ) {
+                                            AsyncImage(
+                                                model = reply.avatarUrl,
+                                                contentDescription = null,
+                                                modifier =
+                                                    Modifier
+                                                        .size(24.dp)
+                                                        .clip(RoundedCornerShape(50)),
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text =
+                                                        listOfNotNull(
+                                                            reply.nickname,
+                                                            reply.location,
+                                                            reply.timeStr,
+                                                        ).joinToString(" · "),
+                                                    style = typo().labelSmall,
+                                                    color = dark.subtitle,
+                                                )
+                                                Text(
+                                                    text = reply.content,
+                                                    style = typo().bodySmall,
+                                                    color = dark.content,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    when {
+                                        floorFailed ->
+                                            TextButton(
+                                                onClick = {
+                                                    loadFloorPage(
+                                                        expandedId,
+                                                        floorCursor ?: -1L,
+                                                        isFirstPage = floorComments.isEmpty(),
+                                                    )
+                                                },
+                                            ) {
+                                                Text(text = stringResource(Res.string.retry), style = typo().labelMedium)
+                                            }
+                                        floorLoading -> Box(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                        }
+                                        // 尾部占位滚进组合视口即自动续拉(时间戳游标),拉完为止
+                                        floorCursor != null -> Box(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            LaunchedEffect(floorComments.size) {
+                                                loadFloorPage(expandedId, floorCursor ?: -1L, isFirstPage = false)
+                                            }
+                                        }
+                                        floorComments.isNotEmpty() -> TextButton(onClick = { collapseFloor() }) {
+                                            Text(
+                                                text = stringResource(Res.string.collapse_replies),
+                                                style = typo().labelMedium,
+                                                color = dark.subtitle,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -4230,15 +4476,34 @@ fun NeteaseCommentsSheet(
                             contentAlignment = Alignment.Center,
                         ) {
                             when {
-                                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                hasMore -> TextButton(onClick = { loadMore() }) {
-                                    Text(text = stringResource(Res.string.more), style = typo().labelMedium)
+                                failed ->
+                                    TextButton(
+                                        onClick = { if (comments.isEmpty()) loadFirst(sort) else loadMore() },
+                                    ) {
+                                        Text(text = stringResource(Res.string.retry), style = typo().labelMedium)
+                                    }
+                                loading && comments.isEmpty() ->
+                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                comments.isEmpty() ->
+                                    Text(
+                                        text = stringResource(Res.string.no_comments),
+                                        style = typo().labelMedium,
+                                        color = dark.subtitle,
+                                    )
+                                hasMore -> {
+                                    // 尾部占位滚进组合视口(LazyColumn 预组合=近底)即自动翻页;
+                                    // key 挂列表长度,每页落地后自然续拉下一页
+                                    LaunchedEffect(comments.size, sort) { loadMore() }
+                                    if (loadingMore) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    }
                                 }
-                                else -> Text(
-                                    text = stringResource(Res.string.end_of_list),
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
-                                )
+                                else ->
+                                    Text(
+                                        text = stringResource(Res.string.end_of_list),
+                                        style = typo().labelSmall,
+                                        color = dark.subtitle,
+                                    )
                             }
                         }
                     }

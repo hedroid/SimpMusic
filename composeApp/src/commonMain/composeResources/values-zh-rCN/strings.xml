@@ -154,6 +154,9 @@
     <string name="similar_songs">相似歌曲</string>
     <string name="track_count_short">%1$s 首</string>
     <string name="comments_title">评论 · %1$s</string>
+    <string name="n_replies">%1$s 条回复</string>
+    <string name="collapse_replies">收起回复</string>
+    <string name="no_comments">还没有评论</string>
     <string name="end_of_list">已经到底了</string>
     <string name="comments">评论</string>
     <string name="download_url">下载链接</string>

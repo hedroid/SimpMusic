@@ -145,6 +145,7 @@ import com.maxrave.simpmusic.ui.icon.Fullscreen
 import com.maxrave.simpmusic.ui.icon.Info
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
+import com.maxrave.simpmusic.ui.icon.Comment
 import com.maxrave.simpmusic.ui.icon.QueueMusic
 import com.maxrave.simpmusic.ui.icon.Replay5
 import com.maxrave.simpmusic.ui.icon.Share
@@ -960,97 +961,124 @@ fun NowPlayingContentSpotify(
                                     } else {
                                         Spacer(Modifier.height(16.dp))
                                     }
-                                    // List Bottom Buttons - MODIFIED TO ADD PLAYLIST BUTTON
+                                    // List Bottom Buttons: Info+Cast 左 · 评论 中(仅网易歌) · 加歌+队列 右
                                     Row(
                                         modifier =
                                             Modifier
                                                 .height(32.dp)
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 20.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         // Info + Cast Buttons (Left)
-                                        // weight(fill = false) keeps a long device name from shoving the
-                                        // playlist/queue buttons off the end of this SpaceBetween row.
-                                        Row(
-                                            modifier = Modifier.weight(1f, fill = false),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                onClick = {
-                                                    actions.onShowInfo()
-                                                },
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                modifier = Modifier.align(Alignment.CenterStart),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
-                                            }
-                                            // Cyan rather than colorScheme.primary: this screen is force-dark whatever
-                                            // the app theme is, so a light-theme primary would sink into the black
-                                            // backdrop. Mirrors the `if (forceDark) Color.Cyan` rule in FullWidthItems.
-                                            PlatformCastButton(
-                                                modifier = Modifier.size(24.dp),
-                                                tint = if (state.castState.isRemote) Color.Cyan else Color.White,
-                                            )
-                                            AnimatedVisibility(visible = state.castState.isRemote) {
-                                                Text(
-                                                    text =
-                                                        stringResource(
-                                                            Res.string.playing_on_device,
-                                                            state.castState.deviceName ?: "Cast",
-                                                        ),
-                                                    style = typo().bodySmall,
-                                                    color = Color.Cyan,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    onClick = {
+                                                        actions.onShowInfo()
+                                                    },
+                                                ) {
+                                                    Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
+                                                }
+                                                // Cyan rather than colorScheme.primary: this screen is force-dark whatever
+                                                // the app theme is, so a light-theme primary would sink into the black
+                                                // backdrop. Mirrors the `if (forceDark) Color.Cyan` rule in FullWidthItems.
+                                                PlatformCastButton(
+                                                    modifier = Modifier.size(24.dp),
+                                                    tint = if (state.castState.isRemote) Color.Cyan else Color.White,
                                                 )
+                                                AnimatedVisibility(visible = state.castState.isRemote) {
+                                                    Text(
+                                                        text =
+                                                            stringResource(
+                                                                Res.string.playing_on_device,
+                                                                state.castState.deviceName ?: "Cast",
+                                                            ),
+                                                        style = typo().bodySmall,
+                                                        color = Color.Cyan,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
                                             }
                                         }
 
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
+                                        // Comments Button (Center) — 网易歌专属,三主题统一开 NeteaseCommentsSheet
+                                        Box(
+                                            modifier = Modifier.weight(1f),
+                                            contentAlignment = Alignment.Center,
                                         ) {
-                                            // NEW: Add to Playlist Button (Center-Right)
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                enabled = state.likeEnabled,
-                                                onClick = {
-                                                    actions.onShowAddToPlaylist()
-                                                },
-                                            ) {
-                                                Icon(
-                                                    imageVector = SimpIcons.PlaylistAdd,
-                                                    tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
-                                                    contentDescription = "Add to Playlist",
-                                                )
+                                            if (state.isNeteaseSong) {
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    onClick = {
+                                                        actions.onShowNeteaseComments()
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = SimpIcons.Comment,
+                                                        tint = Color.White,
+                                                        contentDescription = "Comments",
+                                                    )
+                                                }
                                             }
+                                        }
 
-                                            // Queue Button (Right)
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                onClick = {
-                                                    actions.onShowQueue()
-                                                },
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                modifier = Modifier.align(Alignment.CenterEnd),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Icon(
-                                                    imageVector = SimpIcons.QueueMusic,
-                                                    tint = Color.White,
-                                                    contentDescription = "",
-                                                )
+                                                // Add to Playlist Button (Right)
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    enabled = state.likeEnabled,
+                                                    onClick = {
+                                                        actions.onShowAddToPlaylist()
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = SimpIcons.PlaylistAdd,
+                                                        tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
+                                                        contentDescription = "Add to Playlist",
+                                                    )
+                                                }
+
+                                                // Queue Button (Right)
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    onClick = {
+                                                        actions.onShowQueue()
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = SimpIcons.QueueMusic,
+                                                        tint = Color.White,
+                                                        contentDescription = "",
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1438,7 +1466,7 @@ fun NowPlayingContentSpotify(
                                     Spacer(modifier = Modifier.height(5.dp))
                                     if (neteaseMeta != null) {
                                         // 网易版说明卡三层:发行信息(日期·曲目数·唱片公司) →
-                                        // 数据行(评论数可点开列表 · 相似歌曲入口) → 简介(艺人优先,专辑兜底)
+                                        // 数据行(红心总数;评论入口已上移到底部行中间,评论数在评论弹窗标题) → 简介(艺人优先,专辑兜底)
                                         val releaseInfo =
                                             listOfNotNull(
                                                 neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
@@ -1462,13 +1490,6 @@ fun NowPlayingContentSpotify(
                                                 color = Color.White,
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
-                                        }
-                                        if (neteaseMeta.commentCount > 0) {
-                                            Text(
-                                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
-                                                style = typo().bodyMedium,
-                                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
-                                            )
                                         }
                                         val bio =
                                             neteaseMeta.artistBriefDesc

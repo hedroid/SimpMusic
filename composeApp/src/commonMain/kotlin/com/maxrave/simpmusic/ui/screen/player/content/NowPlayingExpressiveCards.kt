@@ -788,13 +788,6 @@ internal fun ExpressiveBelowTheFold(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                         }
-                        if (neteaseMeta.commentCount > 0) {
-                            Text(
-                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
-                                style = typo().bodyMedium,
-                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
-                            )
-                        }
                         val bio = neteaseMeta.artistBriefDesc ?: neteaseMeta.albumDescription
                         if (!bio.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(10.dp))

@@ -160,6 +160,9 @@
     <string name="similar_songs">Similar songs</string>
     <string name="track_count_short">%1$s tracks</string>
     <string name="comments_title">Comments · %1$s</string>
+    <string name="n_replies">%1$s replies</string>
+    <string name="collapse_replies">Collapse replies</string>
+    <string name="no_comments">No comments yet</string>
     <string name="end_of_list">End of the list</string>
     <string name="comments">Comments</string>
     <string name="download_url">Download URL</string>
