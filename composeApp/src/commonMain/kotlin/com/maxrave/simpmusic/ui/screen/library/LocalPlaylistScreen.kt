@@ -449,7 +449,7 @@ fun LocalPlaylistScreen(
     LazyColumn(
         modifier =
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .background(mutedPaletteBg)
                 .hazeSource(hazeState)
                 .pointerInput(changingOrder) {
