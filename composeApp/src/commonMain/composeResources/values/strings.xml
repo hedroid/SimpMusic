@@ -220,6 +220,7 @@
     <string name="update_available">New update available</string>
     <string name="update_message">Version %1$s available\nRelease: %2$s\n</string>
     <string name="check_for_update">Check for update</string>
+    <string name="update_check_failed">Update check failed, please try again later</string>
     <string name="last_checked_at">Last checked at %1$s</string>
     <string name="checking">Checking</string>
     <string name="sponsorblock_skip_segment">SponsorBlock: Skip %1$s segment</string>
