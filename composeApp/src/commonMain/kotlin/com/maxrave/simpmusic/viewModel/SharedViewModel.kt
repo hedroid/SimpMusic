@@ -72,6 +72,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
@@ -79,6 +80,7 @@ import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -129,6 +131,7 @@ import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.reflect.KClass
 
@@ -2280,12 +2283,6 @@ class SharedViewModel(
     val downloadFileProgress: StateFlow<DownloadProgress> get() = _downloadFileProgress
 
     fun downloadFile(bitmap: ImageBitmap) {
-        val fileName =
-            "${nowPlayingScreenData.value.nowPlayingTitle} - ${nowPlayingScreenData.value.artistName}"
-                .replace(Regex("""[|\\?*<":>]"""), "")
-                .replace(" ", "_")
-        val path =
-            "${getDownloadFolderPath()}/$fileName"
         viewModelScope.launch {
             // track 在队列重建窗口(冷启恢复队列/重进后点当前曲)会查空且永不回填,
             // 之前整段 ?.let 静默跳过就是"点了没反应"的病根;songEntity 恒有值,回落它
@@ -2293,17 +2290,21 @@ class SharedViewModel(
                 nowPlayingState.value?.track
                     ?: nowPlayingState.value?.songEntity?.toTrack()
                     ?: return@launch
+            val fileName = sanitizeDownloadFileName(
+                "${nowPlayingScreenData.value.nowPlayingTitle} - ${nowPlayingScreenData.value.artistName}",
+                track.videoId,
+            )
+            val path =
+                "${getDownloadFolderPath()}/$fileName"
             withContext(Dispatchers.IO) {
                 val bytesArray = bitmap.toByteArray()
-                // 公共 Download 走 FUSE:同名目标再建可能 EEXIST(重复下载/外部删过文件
-                // 但 MediaStore 残行的场景)。先删旧目标;仍失败落到错误弹窗,不再裸
-                // throw——那会把整个 app 带崩(实测崩溃栈就在这)
-                val jpgFile = File("$path.jpg")
-                if (jpgFile.exists()) jpgFile.delete()
                 try {
-                    FileOutputStream(jpgFile).use { it.write(bytesArray) }
+                    val jpgPart = File("$path.jpg.part")
+                    FileOutputStream(jpgPart).use { it.write(bytesArray) }
+                    commitDownloadFile(jpgPart, File("$path.jpg"))
                     Logger.d(tag, "Thumbnail saved to $path.jpg")
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Logger.e(tag, "thumbnail write failed: ${e.message}")
                     _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "thumbnail write failed")
                     return@withContext
@@ -2327,7 +2328,38 @@ class SharedViewModel(
         }
     }
 
-    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载 → 覆盖写 + 进度 */
+    /** 下载文件名清理:路径分隔符与非法字符(含 /,否则 AC/DC 这类名字被解释成子目录致写入必失败)、
+     *  控制字符全部滤掉,尾部点号修剪;清理后为空兜底 videoId,截 100 字符防超长文件名 */
+    private fun sanitizeDownloadFileName(
+        raw: String,
+        fallback: String,
+    ): String =
+        raw
+            .replace(Regex("[/|\\\\?*<\":>\\x00-\\x1f]"), "")
+            .replace(" ", "_")
+            .trimEnd('.')
+            .take(100)
+            .ifBlank { "download_$fallback" }
+
+    /** staged write 提交:同目录 .part 已写满并 close,这里 rename 到正式路径——中途断网/
+     *  超时/磁盘满只留下被清理的 .part,旧文件原样保留;同目录 rename 对已存在目标是原子
+     *  覆盖,顺带绕开 FUSE 上"新建同名文件"的 EEXIST(原先删旧文件再直写的病根) */
+    private fun commitDownloadFile(
+        part: File,
+        target: File,
+    ) {
+        try {
+            if (!part.renameTo(target)) {
+                // 个别 FUSE 实现不接受覆盖 rename:此时新文件已完整,删旧目标后重试提交
+                target.delete()
+                check(part.renameTo(target)) { "commit failed: ${target.name}" }
+            }
+        } finally {
+            part.delete()
+        }
+    }
+
+    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载到 .part → 校验后 rename 提交 + 进度 */
     private suspend fun downloadNeteaseFile(
         videoId: String,
         path: String,
@@ -2340,6 +2372,7 @@ class SharedViewModel(
             return
         }
         val ext = if (stream.mimeType?.contains("flac", ignoreCase = true) == true) "flac" else "mp3"
+        val part = File("$path.$ext.part")
         try {
             // prepareGet+execute 才是真流式:ktor3 的 client.get() 会把整个响应体先
             // save 进内存(SavedCall),无损 flac 动辄几十 MB,曾在 ~192MB 堆上直接 OOM
@@ -2353,12 +2386,14 @@ class SharedViewModel(
                 }
             }.use { client ->
                 client.prepareGet(stream.url).execute { response ->
+                    // ktor 默认不按状态码判失败;audioUrl 有 10 分钟有效期,过期/区域拒绝
+                    // 返回的 4xx/5xx 正文是 HTML/JSON,不拦会存成 .mp3 还报下载完成
+                    if (!response.status.isSuccess()) {
+                        throw IOException("HTTP ${response.status.value}")
+                    }
                     val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
                     val channel = response.bodyAsChannel()
-                    // 同 jpg:先删同名旧音频目标,防 FUSE EEXIST(重复下载场景)
-                    val audioFile = File("$path.$ext")
-                    if (audioFile.exists()) audioFile.delete()
-                    FileOutputStream(audioFile).use { output ->
+                    FileOutputStream(part).use { output ->
                         val buffer = ByteArray(64 * 1024)
                         var read = 0L
                         val startedAt = System.currentTimeMillis()
@@ -2376,14 +2411,23 @@ class SharedViewModel(
                                     )
                             }
                         }
+                        // 声明了长度却没读满=半截文件(连接中断但 EOF 提前到达),按失败处理
+                        if (total > 0 && read != total) {
+                            throw IOException("incomplete download: $read/$total")
+                        }
                     }
                 }
             }
+            commitDownloadFile(part, File("$path.$ext"))
             _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
             Logger.d(tag, "Netease file saved to $path.$ext")
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Logger.e(tag, "netease download failed: ${e.message}")
             _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "download failed")
+        } finally {
+            // 成功路径 part 已被 rename 走,这里只兜异常/取消路径的残留清理
+            part.delete()
         }
     }
 
