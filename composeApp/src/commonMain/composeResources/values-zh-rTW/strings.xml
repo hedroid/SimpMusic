@@ -275,6 +275,7 @@
     <string name="update_available">有可用的更新</string>
     <string name="update_message">版本 %1$s 允許\nRelease: %2$s\n</string>
     <string name="check_for_update">檢查更新</string>
+    <string name="update_check_failed">檢查更新失敗，請稍後再試</string>
     <string name="last_checked_at">最後一次檢查於 %1$s</string>
     <string name="checking">檢查中</string>
     <string name="sponsorblock_skip_segment">SponsorBlock：跳過 %1$s 段</string>

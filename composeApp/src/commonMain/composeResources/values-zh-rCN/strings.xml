@@ -209,6 +209,7 @@
     <string name="update_available">有可用的更新</string>
     <string name="update_message">版本 %1$s 可用\n发布版本：%2$s\n</string>
     <string name="check_for_update">检查更新</string>
+    <string name="update_check_failed">检查更新失败，请稍后再试</string>
     <string name="last_checked_at">上次检查于 %1$s</string>
     <string name="checking">检查中</string>
     <string name="sponsorblock_skip_segment">SponsorBlock: 跳过 %1$s 段</string>

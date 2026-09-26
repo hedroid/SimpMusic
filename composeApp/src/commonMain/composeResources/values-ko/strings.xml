@@ -203,6 +203,7 @@
     <string name="update_available">새 업데이트 있음</string>
     <string name="update_message">%1$s 버전 이용 가능\n출시일: %2$s\n</string>
     <string name="check_for_update">업데이트</string>
+    <string name="update_check_failed">업데이트 확인 실패, 나중에 다시 시도해 주세요</string>
     <string name="last_checked_at">최근 확인: %1$s</string>
     <string name="checking">확인 중</string>
     <string name="sponsorblock_skip_segment">SponsorBlock: %1$s 구간 건너뛰기</string>

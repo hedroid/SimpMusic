@@ -110,6 +110,7 @@ import org.simpmusic.lastfm.completeLogin
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.login_netease_first
+import simpmusic.composeapp.generated.resources.update_check_failed
 import simpmusic.composeapp.generated.resources.added_to_youtube_liked
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
@@ -1356,7 +1357,22 @@ class SharedViewModel(
                     }
 
                     else -> {
-                        log("Check for update error: ${response.message}", LogLevel.WARN)
+                        // API 路径失败(最常见=api.github.com 匿名 60 次/小时限流,共享出口 IP
+                        // 极易撞上):改走 HTML 重定向兜底——releases/latest 302 目标含最新 tag,
+                        // 网页路径限额宽松。双路都失败才提示(此前失败静默吞掉,用户读作"没反应")。
+                        log("Check for update via API failed (${response.message}), falling back to redirect probe", LogLevel.WARN)
+                        updateRepository.checkForGithubReleaseUpdateViaRedirect().collectLatest { fb ->
+                            val fbData = fb.data
+                            if (fb is Resource.Success && fbData != null) {
+                                _updateResponse.value = fbData
+                                showedUpdateDialog = true
+                            } else {
+                                log("Check for update via redirect also failed: ${fb.message}", LogLevel.WARN)
+                                makeToast(getString(Res.string.update_check_failed))
+                            }
+                            _isCheckingUpdate.value = false
+                        }
+                        return@collectLatest
                     }
                 }
                 _isCheckingUpdate.value = false
