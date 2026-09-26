@@ -15,7 +15,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,6 +91,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
@@ -245,6 +246,10 @@ import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
 import simpmusic.composeapp.generated.resources.n_replies
 import simpmusic.composeapp.generated.resources.no_comments
+import simpmusic.composeapp.generated.resources.post_comment_hint
+import simpmusic.composeapp.generated.resources.post_comment_success
+import simpmusic.composeapp.generated.resources.publish
+import simpmusic.composeapp.generated.resources.reply_hint
 import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
@@ -4277,6 +4282,50 @@ fun NeteaseCommentsSheet(
         loadFirst(sort)
     }
 
+    // 发表/回复评论:官方交互=点评论弹回复框;对话框形态(居中 AlertDialog)避开
+    // ModalBottomSheet 内 IME inset 不可用的已知问题
+    var showPostDialog by remember { mutableStateOf(false) }
+    var replyTarget by remember { mutableStateOf<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment?>(null) }
+    var postText by remember { mutableStateOf("") }
+    var posting by remember { mutableStateOf(false) }
+    val postSuccessText = stringResource(Res.string.post_comment_success)
+
+    fun submitPost() {
+        val text = postText.trim()
+        if (text.isEmpty() || posting) return
+        val target = replyTarget
+        posting = true
+        coroutineScope.launch {
+            neteaseRepository
+                .postSongComment(songId, text, replyTo = target?.commentId)
+                .onSuccess {
+                    posting = false
+                    showPostDialog = false
+                    postText = ""
+                    replyTarget = null
+                    showToast(message = postSuccessText, duration = ToastDuration.Short, gravity = ToastGravity.Bottom)
+                    // 新评论在"最新"档最前,发布后切到最新并重载首屏让它立即可见
+                    if (sort != NeteaseCommentSort.LATEST) {
+                        sort = NeteaseCommentSort.LATEST
+                    }
+                    collapseFloor()
+                    comments = emptyList()
+                    hasMore = true
+                    failed = false
+                    cursor = null
+                    loadFirst(NeteaseCommentSort.LATEST)
+                }
+                .onFailure { e ->
+                    posting = false
+                    showToast(
+                        message = e.message ?: "failed",
+                        duration = ToastDuration.Short,
+                        gravity = ToastGravity.Bottom,
+                    )
+                }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -4288,17 +4337,12 @@ fun NeteaseCommentsSheet(
         modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
-        // 数据少(首屏都凑不满)保持 0.8f 紧凑;数据够一屏则铺满屏幕(官方评论区形态),
-        // 高度分数动画过渡,首载落地时自然展开
-        val sheetHeightFraction by animateFloatAsState(
-            targetValue = if (comments.size >= 15) 0.95f else 0.8f,
-            label = "neteaseCommentSheetHeight",
-        )
+        // 用户定案:评论区无条件全屏(0.95,顶部留状态栏呼吸位)
         Card(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(sheetHeightFraction),
+                    .fillMaxHeight(0.95f),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
             colors = CardDefaults.cardColors().copy(containerColor = dark.container),
         ) {
@@ -4314,16 +4358,33 @@ fun NeteaseCommentsSheet(
                     colors = CardDefaults.cardColors().copy(containerColor = dark.handle),
                     shape = RoundedCornerShape(50),
                 ) {}
-                Text(
-                    text =
-                        stringResource(
-                            Res.string.comments_title,
-                            formatCompactCount(totalCount),
-                        ),
-                    style = typo().titleMedium,
-                    color = dark.content,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                )
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text =
+                            stringResource(
+                                Res.string.comments_title,
+                                formatCompactCount(totalCount),
+                            ),
+                        style = typo().titleMedium,
+                        color = dark.content,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 发表评论入口(点评论行=回复该条,这里=发新评论)
+                    IconButton(onClick = { replyTarget = null; showPostDialog = true }) {
+                        Icon(
+                            imageVector = SimpIcons.Edit,
+                            contentDescription = "Post comment",
+                            tint = dark.subtitle,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
                 // 热门/最新排序切换:热门=服务端精华热评一次拉全,最新=offset 翻页
                 Row(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -4382,7 +4443,17 @@ fun NeteaseCommentsSheet(
                                             .clip(RoundedCornerShape(50)),
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
+                                // 点评论=回复该条(官方交互);点赞按钮在右侧独立处理点击
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            replyTarget = comment
+                                            postText = ""
+                                            showPostDialog = true
+                                        },
+                                ) {
                                     Text(
                                         text =
                                             listOfNotNull(
@@ -4478,7 +4549,18 @@ fun NeteaseCommentsSheet(
                                                         .clip(RoundedCornerShape(50)),
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Column(Modifier.weight(1f)) {
+                                            Column(
+                                                Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        if (reply.commentId != null) {
+                                                            replyTarget = reply
+                                                            postText = ""
+                                                            showPostDialog = true
+                                                        }
+                                                    },
+                                            ) {
                                                 Text(
                                                     text =
                                                         listOfNotNull(
@@ -4599,6 +4681,60 @@ fun NeteaseCommentsSheet(
                     }
                 }
             }
+        }
+    }
+    // 发布/回复对话框:居中 AlertDialog(库页 CreatePlaylistDialog 同款形态,IME 安全)
+    if (showPostDialog) {
+        val focusRequester = remember { FocusRequester() }
+        AlertDialog(
+            onDismissRequest = {
+                showPostDialog = false
+                replyTarget = null
+            },
+            title = {
+                Text(
+                    text =
+                        replyTarget?.let { target ->
+                            stringResource(Res.string.reply_hint, target.nickname ?: "")
+                        } ?: stringResource(Res.string.comments),
+                    style = typo().titleMedium,
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = postText,
+                    onValueChange = { postText = it },
+                    placeholder = { Text(stringResource(Res.string.post_comment_hint), style = typo().bodyMedium) },
+                    minLines = 3,
+                    maxLines = 5,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = postText.isNotBlank() && !posting,
+                    onClick = { submitPost() },
+                ) {
+                    Text(stringResource(Res.string.publish))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPostDialog = false
+                        replyTarget = null
+                    },
+                ) {
+                    Text(stringResource(Res.string.cancel))
+                }
+            },
+            modifier = Modifier.hapticTapFeedback(),
+        )
+        LaunchedEffect(showPostDialog) {
+            focusRequester.requestFocus()
         }
     }
 }

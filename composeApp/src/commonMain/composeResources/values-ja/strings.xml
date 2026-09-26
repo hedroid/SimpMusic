@@ -150,6 +150,10 @@
     <string name="n_replies">%1$s 件の返信</string>
     <string name="collapse_replies">返信を閉じる</string>
     <string name="no_comments">まだコメントはありません</string>
+    <string name="post_comment_hint">コメントを書きましょう...</string>
+    <string name="reply_hint">@%1$s に返信:</string>
+    <string name="post_comment_success">コメントを投稿しました</string>
+    <string name="publish">投稿</string>
     <string name="end_of_list">最後まで読み込みました</string>
     <string name="comments">コメント</string>
     <string name="download_url">ダウンロードURL</string>

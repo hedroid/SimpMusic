@@ -158,6 +158,10 @@
     <string name="n_replies">%1$s 条回复</string>
     <string name="collapse_replies">收起回复</string>
     <string name="no_comments">还没有评论</string>
+    <string name="post_comment_hint">说点什么吧...</string>
+    <string name="reply_hint">回复 @%1$s：</string>
+    <string name="post_comment_success">评论已发布</string>
+    <string name="publish">发布</string>
     <string name="end_of_list">已经到底了</string>
     <string name="comments">评论</string>
     <string name="download_url">下载链接</string>

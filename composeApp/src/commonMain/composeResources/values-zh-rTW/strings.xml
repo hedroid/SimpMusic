@@ -224,6 +224,10 @@
     <string name="n_replies">%1$s 則回覆</string>
     <string name="collapse_replies">收起回覆</string>
     <string name="no_comments">還沒有留言</string>
+    <string name="post_comment_hint">說點什麼吧...</string>
+    <string name="reply_hint">回覆 @%1$s：</string>
+    <string name="post_comment_success">留言已發布</string>
+    <string name="publish">發布</string>
     <string name="end_of_list">已經到底了</string>
     <string name="comments">留言</string>
     <string name="download_url">下載網址</string>

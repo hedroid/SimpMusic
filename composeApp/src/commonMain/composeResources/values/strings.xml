@@ -164,6 +164,10 @@
     <string name="n_replies">%1$s replies</string>
     <string name="collapse_replies">Collapse replies</string>
     <string name="no_comments">No comments yet</string>
+    <string name="post_comment_hint">Write a comment...</string>
+    <string name="reply_hint">Reply to @%1$s:</string>
+    <string name="post_comment_success">Comment posted</string>
+    <string name="publish">Post</string>
     <string name="end_of_list">End of the list</string>
     <string name="comments">Comments</string>
     <string name="download_url">Download URL</string>
