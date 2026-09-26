@@ -39,7 +39,7 @@
 | M4 | 网易主页 | ✅ 独立屏：账户卡/每日推荐(滤雷达)/私人雷达(曲目三行网格)/雷达歌单(5卡)/精品歌单/推荐新歌(96dp紧凑卡三行)/榜单区块/五组分类(网页catalog目录,3行网格)。2026-09-15 变更：关注的歌手/收藏的专辑两行移出主页（已迁库页"您的网易云"tab，M2 收口）；热门歌手行采 YTM chart 布局并沉底 |
 | M5 | 分类页 + 混合 | ✅ 分类页（NeteaseTagScreen 两列网格 + 热门/精品排序 chip + 会话缓存/下拉刷新，网页歌单广场同源）；✅ 混合页私人FM（2026-09-13，独立屏 + 无限续播，见下文方案）。2026-09-15：tab 可见性从"任一源登录"改为**按当前源的登录态**（YT登录+选YT 或 网易登录+选网易），消除 YT 未登录+选 YT 露出空 mixes 页 |
 | M6 | 专辑/歌手页路由 | ✅ 完成（2026-09-14：两页数字 ID 同页路由 + 关注/取关 + 搜索专辑 tab/艺人卡跳转解锁 + 主页热门歌手/新碟上架两行） |
-| M7 | 歌曲评论区 | ❌ UI 未开始（core 端点+repo 方法已验证；播放页 Spotify 主题详情卡已展示前 2 热评，缺独立评论页） |
+| M7 | 歌曲评论区 | ✅ 完成（2026-09-26：三主题播放页入口+评论弹窗重做，v2 链路。入口=经典底部行三区评论居中/M3E 标题行红心右侧圆钮/AM dock 第四枚，仅网易歌显示，详情卡旧入口已删；弹窗=热门/最新档切换(v2 sortType 2/3)+cursor 自动翻页+服务端 timeStr 时间+楼中楼内联展开(入口计数只有 v2 响应有,v1 showFloorComment 恒 null)+失败重试；楼层端点 floor/get time 游标。详情卡/Info 面板仍走 v1 songComments 热评。核心=core 5631a33/主仓 18e80990，参考 Melodia；修 nowPlayingVideoId track-null 回退 songEntity） |
 | M8 | 云盘页 | ❌ UI 未开始（cloudDisk 端点已封装于 NeteaseEndpoints，repo 映射+UI 未接） |
 | M9 | 关注同步 + 无版权自动切源 | ✅ 完成（2026-09-22：灰歌三件套——①songDetail/v6 detail 合并顶层 privileges(st/fee) 落 isAvailable,歌单页 SongFullWidthItems 置灰(标题/艺人/封面 0.4 alpha);②设置"无版权歌曲"三选一(neteaseUnavailableAction: 自动跳过[默认]/暂停/切换到 YouTube Music);③播放失败探针分流(probeNeteasePlayable,songDetail privilege)后按设置动作执行,回退 YT= title+artist 搜 YT 首页+时长±4s+标题归一择优,replaceMediaItem 原位换曲续播;防循环护栏=连续不可播达队列长度即停。旧 neteaseAutoSwitch 布尔键已删,换新键 netease_unavailable_action |
 | M10 | 网易歌曲下载管线 | ❌ 单独评估（SimpleCache→文件改造） |
@@ -878,8 +878,7 @@ dump bounds 取,目测两次全偏)。
 
 ### 下一步建议顺序
 
-**相似歌曲独立页 / M7 评论页**（M9 灰歌回退已于 2026-09-22 完成）
-（资产全现成，纯 UI 活）→ M8 云盘 → 其余按需。
+**M7 评论页已随 2026-09-26 落地**（相似歌曲独立页亦已完成）；下一个 → M8 云盘 → 其余按需。
 （原序首项"库页分区+迁库页"已随 M2 完成，移出。）
 
 ## 调试备忘（环境）
