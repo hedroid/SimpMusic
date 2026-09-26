@@ -94,12 +94,17 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
@@ -4146,8 +4151,10 @@ fun NeteaseCommentsSheet(
     var loadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
-    // v2 cursor 分页:服务端算好下一页游标,透传即可(null=没有更多)
+    // v2 cursor 分页:服务端算好下一页游标,透传即可(null=没有更多);
+    // pageNo 必须随页递增(恒 1 时服务端无视 cursor 原样返回第一页,探针实证)
     var cursor by remember { mutableStateOf<String?>(null) }
+    var pageNo by remember { mutableStateOf(1) }
     // 楼中楼:同时只展开一条,收起即清
     var expandedCommentId by remember { mutableStateOf<Long?>(null) }
     var floorComments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
@@ -4160,12 +4167,14 @@ fun NeteaseCommentsSheet(
         loading = true
         failed = false
         cursor = null
+        pageNo = 1
         coroutineScope.launch {
             val page =
                 neteaseRepository.getSongCommentsPage(
                     songId,
                     sortType = target.wire,
                     cursor = target.firstCursor,
+                    pageNo = 1,
                 )
             if (page == null) {
                 failed = true
@@ -4179,24 +4188,35 @@ fun NeteaseCommentsSheet(
     }
 
     fun loadMore() {
+        com.maxrave.logger.Logger.w("NeteaseComments", "loadMore called: loading=$loading loadingMore=$loadingMore hasMore=$hasMore cursor=$cursor size=${comments.size}")
         if (loading || loadingMore || !hasMore) return
         val next = cursor ?: return
         loadingMore = true
+        pageNo += 1
         coroutineScope.launch {
             val page =
                 neteaseRepository.getSongCommentsPage(
                     songId,
                     sortType = sort.wire,
                     cursor = next,
+                    pageNo = pageNo,
                 )
             if (page == null) {
                 failed = true
+                pageNo -= 1
             } else {
                 // 同一条评论跨页/跨档可能重复,按评论 id 去重
-                comments = (comments + page.items).distinctBy { it.commentId }
+                val oldSize = comments.size
+                val deduped = (comments + page.items).distinctBy { it.commentId }
+                comments = deduped
                 hasMore = page.hasMore
                 cursor = page.nextCursor
                 failed = false
+                // 停滞防护:服务端返回了一页但没有任何新评论(游标不推进/重叠页),
+                // 继续拉只会原地打转,直接按到底处理
+                if (page.items.isNotEmpty() && deduped.size == oldSize) {
+                    hasMore = false
+                }
             }
             loadingMore = false
         }
@@ -4409,8 +4429,30 @@ fun NeteaseCommentsSheet(
                     }
                 }
                 HorizontalDivider(color = dark.handle, thickness = 0.5.dp)
+                // 手势隔离:吃掉列表滚动/惯性的一切剩余量,使下滑关闭手势不作用于评论
+                // 内容(0.95 全屏下列表顶部下拉极易误触 sheet 拖拽);关闭手势保留在
+                // 标题/拖拽条区域(无列表消费,剩余量仍归 sheet)
+                val listGestureSink =
+                    remember {
+                        object : NestedScrollConnection {
+                            override fun onPostScroll(
+                                consumed: Offset,
+                                available: Offset,
+                                source: NestedScrollSource,
+                            ): Offset =
+                                // 只拦下拉(available.y>0=内容滚到顶后继续下拉);上滑剩余不拦,
+                                // 否则影响 sheet 自身展开语义
+                                if (available.y > 0) Offset(0f, available.y) else Offset.Zero
+
+                            override suspend fun onPostFling(
+                                consumed: Velocity,
+                                available: Velocity,
+                            ): Velocity =
+                                if (available.y > 0) available else Velocity.Zero
+                        }
+                    }
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).nestedScroll(listGestureSink),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
                     items(comments) { comment ->
@@ -4613,7 +4655,7 @@ fun NeteaseCommentsSheet(
                                             modifier = Modifier.fillMaxWidth(),
                                             contentAlignment = Alignment.Center,
                                         ) {
-                                            LaunchedEffect(floorComments.size) {
+                                            LaunchedEffect(floorComments.size, floorCursor) {
                                                 loadFloorPage(expandedId, floorCursor ?: -1L, isFirstPage = false)
                                             }
                                         }
@@ -4652,7 +4694,10 @@ fun NeteaseCommentsSheet(
                                 hasMore -> {
                                     // 尾部占位滚进组合视口(LazyColumn 预组合=近底)即自动翻页;
                                     // key 挂列表长度,每页落地后自然续拉下一页
-                                    LaunchedEffect(comments.size, sort) { loadMore() }
+                                    LaunchedEffect(comments.size, cursor, sort) {
+                                        com.maxrave.logger.Logger.w("NeteaseComments", "tail effect fired: size=${comments.size} sort=$sort")
+                                        loadMore()
+                                    }
                                     if (loadingMore) {
                                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
                                     }
