@@ -63,6 +63,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.data.model.loginsync.LoginSyncException
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.extension.findActivity
 import com.maxrave.simpmusic.ui.component.QrScanner
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
@@ -138,6 +139,8 @@ actual fun LoginSyncDialog(onDismiss: () -> Unit) {
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // sheet 是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+        modifier = Modifier.hapticTapFeedback(),
         sheetState = sheetState,
         containerColor = Color.Transparent,
         contentColor = Color.Transparent,
@@ -282,6 +285,8 @@ actual fun LoginSyncDialog(onDismiss: () -> Unit) {
         is Step.Trust -> {
             AlertDialog(
                 onDismissRequest = ::close,
+                // 弹窗是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+                modifier = Modifier.hapticTapFeedback(),
                 title = { Text(text = stringResource(Res.string.login_sync_trust_title), style = typo().titleSmall) },
                 text = { Text(text = stringResource(Res.string.login_sync_trust_message, step.desktop.name, step.desktop.os)) },
                 confirmButton = {
@@ -296,6 +301,7 @@ actual fun LoginSyncDialog(onDismiss: () -> Unit) {
         is Step.Choose -> {
             AlertDialog(
                 onDismissRequest = ::close,
+                modifier = Modifier.hapticTapFeedback(),
                 title = { Text(text = stringResource(Res.string.login_sync_choose_title), style = typo().titleSmall) },
                 text = {
                     Column {

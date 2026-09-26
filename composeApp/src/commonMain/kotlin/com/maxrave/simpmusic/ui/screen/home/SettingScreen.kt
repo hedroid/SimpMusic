@@ -114,6 +114,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.HapticFeedbackLevel
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.ui.directoryPickerResult
 import com.maxrave.simpmusic.expect.ui.LoginSyncDialog
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
@@ -3101,6 +3102,8 @@ fun SettingScreen(
         val alertBasicState = basisAlertData ?: return
         AlertDialog(
             onDismissRequest = { viewModel.setBasicAlertData(null) },
+            // 弹窗是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             title = {
                 Text(
                     text = alertBasicState.title,
@@ -3151,6 +3154,7 @@ fun SettingScreen(
         val parsedColor = parseThemeColorHex(pendingHex)
         AlertDialog(
             onDismissRequest = { showColorPickerDialog = false },
+            modifier = Modifier.hapticTapFeedback(),
             title = { Text(text = stringResource(Res.string.custom_color), style = typo().titleSmall) },
             text = {
                 Column {
@@ -3210,7 +3214,10 @@ fun SettingScreen(
     if (showNeteaseAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
-            modifier = Modifier.wrapContentSize(),
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .hapticTapFeedback(),
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3366,7 +3373,10 @@ fun SettingScreen(
     if (showYouTubeAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
-            modifier = Modifier.wrapContentSize(),
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .hapticTapFeedback(),
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3535,6 +3545,8 @@ fun SettingScreen(
         // AlertDialog
         AlertDialog(
             onDismissRequest = { viewModel.setAlertData(null) },
+            // 弹窗是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             title = {
                 Text(
                     text = alertState.title,
@@ -3843,7 +3855,8 @@ fun SettingScreen(
         ModalBottomSheet(
             modifier =
                 Modifier
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .hapticTapFeedback(),
             onDismissRequest = {
                 showThirdPartyLibraries = false
             },
@@ -3987,6 +4000,7 @@ private fun ImportProgressDialog(
     val finished = progress is ImportProgress.Success || progress is ImportProgress.Error
     AlertDialog(
         onDismissRequest = { if (finished) onDismiss() },
+        modifier = Modifier.hapticTapFeedback(),
         properties =
             DialogProperties(
                 dismissOnBackPress = finished,
