@@ -15,6 +15,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -159,6 +160,7 @@ import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Edit
+import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
@@ -198,9 +200,10 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import multiplatform.network.cmptoast.ToastDuration
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
@@ -311,6 +314,7 @@ import simpmusic.composeapp.generated.resources.sleep_timer_warning
 import simpmusic.composeapp.generated.resources.sort_by
 import simpmusic.composeapp.generated.resources.sort_by_newest
 import simpmusic.composeapp.generated.resources.sort_hot
+import simpmusic.composeapp.generated.resources.sort_recommend
 import simpmusic.composeapp.generated.resources.start_radio
 import simpmusic.composeapp.generated.resources.similar_songs
 import simpmusic.composeapp.generated.resources.sync
@@ -4105,10 +4109,11 @@ sealed class DevLogInType {
         }
 }
 /**
- * 评论弹窗排序档:wire=v2 sortType(2=最热/3=最新),firstCursor=首页游标(服务端算下一页,
- * 直接透传)。楼层数(replyCount)只有 v2 响应有,列表已切 v2。
+ * 评论弹窗排序档(官方 app 三标签):wire=v2 sortType(99=推荐/2=最热/3=最新),
+ * firstCursor=首页游标(服务端算下一页,直接透传)。楼层数(replyCount)只有 v2 响应有。
  */
 private enum class NeteaseCommentSort(val wire: Int, val firstCursor: String) {
+    RECOMMEND(99, "0"),
     HOT(2, "normalHot#0"),
     LATEST(3, "0"),
 }
@@ -4124,7 +4129,7 @@ fun NeteaseCommentsSheet(
     val coroutineScope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val dark = rememberSurfaceDarkColors()
-    var sort by remember { mutableStateOf(NeteaseCommentSort.HOT) }
+    var sort by remember { mutableStateOf(NeteaseCommentSort.RECOMMEND) }
     var comments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
     // 首载/切档=loading,追加=loadingMore(重入守卫读两者);失败置 failed 出重试行——
     // 旧版失败直接 hasMore=false 假装到底,网络抖一下评论列表就"没了"
@@ -4223,6 +4228,51 @@ fun NeteaseCommentsSheet(
         }
     }
 
+    // 点赞乐观更新+失败回退:服务端按账号/设备可能风控拒绝(250"存在安全风险"等)
+    var likePending by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
+    fun toggleLike(
+        comment: com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment,
+        isFloor: Boolean,
+    ) {
+        val id = comment.commentId ?: return
+        if (id in likePending) return
+        val oldLiked = comment.liked
+        val oldCount = comment.likedCount ?: 0
+        fun patch(list: List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>): List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment> =
+            list.map {
+                if (it.commentId == id) {
+                    it.copy(
+                        liked = !oldLiked,
+                        likedCount = if (oldLiked) maxOf(oldCount - 1, 0) else oldCount + 1,
+                    )
+                } else {
+                    it
+                }
+            }
+        if (isFloor) floorComments = patch(floorComments) else comments = patch(comments)
+        likePending = likePending + id
+        coroutineScope.launch {
+            neteaseRepository.setCommentLiked(songId, id, like = !oldLiked).onFailure { e ->
+                fun revert(list: List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>): List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment> =
+                    list.map {
+                        if (it.commentId == id) {
+                            it.copy(liked = oldLiked, likedCount = oldCount)
+                        } else {
+                            it
+                        }
+                    }
+                if (isFloor) floorComments = revert(floorComments) else comments = revert(comments)
+                showToast(
+                    message = e.message ?: "failed",
+                    duration = ToastDuration.Short,
+                    gravity = ToastGravity.Bottom,
+                )
+            }
+            likePending = likePending - id
+        }
+    }
+
     LaunchedEffect(songId) {
         loadFirst(sort)
     }
@@ -4238,11 +4288,17 @@ fun NeteaseCommentsSheet(
         modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
+        // 数据少(首屏都凑不满)保持 0.8f 紧凑;数据够一屏则铺满屏幕(官方评论区形态),
+        // 高度分数动画过渡,首载落地时自然展开
+        val sheetHeightFraction by animateFloatAsState(
+            targetValue = if (comments.size >= 15) 0.95f else 0.8f,
+            label = "neteaseCommentSheetHeight",
+        )
         Card(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.8f),
+                    .fillMaxHeight(sheetHeightFraction),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
             colors = CardDefaults.cardColors().copy(containerColor = dark.container),
         ) {
@@ -4291,7 +4347,11 @@ fun NeteaseCommentsSheet(
                             Text(
                                 text =
                                     stringResource(
-                                        if (candidate == NeteaseCommentSort.HOT) Res.string.sort_hot else Res.string.sort_by_newest,
+                                        when (candidate) {
+                                            NeteaseCommentSort.RECOMMEND -> Res.string.sort_recommend
+                                            NeteaseCommentSort.HOT -> Res.string.sort_hot
+                                            NeteaseCommentSort.LATEST -> Res.string.sort_by_newest
+                                        },
                                     ),
                                 style = typo().labelMedium,
                                 color = if (sort == candidate) dark.content else dark.subtitle,
@@ -4334,19 +4394,18 @@ fun NeteaseCommentsSheet(
                                         color = dark.subtitle,
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
+                                    NeteaseEmojiText(
                                         text = comment.content,
                                         style = typo().bodyMedium,
                                         color = dark.content,
                                     )
                                     // 本条是回复时引用的父评论摘要(官方 app "回复 @xx: ..." 同款)
                                     comment.beRepliedNickname?.let { repliedTo ->
-                                        Text(
+                                        NeteaseEmojiText(
                                             text = "回复 @${repliedTo}: ${comment.beRepliedContent.orEmpty()}",
                                             style = typo().labelSmall,
                                             color = dark.subtitle,
                                             maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(top = 2.dp),
                                         )
                                     }
@@ -4377,17 +4436,25 @@ fun NeteaseCommentsSheet(
                                         }
                                     }
                                 }
-                                Column(horizontalAlignment = Alignment.End) {
+                                // 点赞/取消点赞:乐观更新,风控/未登录拒绝时回退并 toast 服务端文案
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    modifier =
+                                        Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { toggleLike(comment, isFloor = false) }
+                                            .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+                                ) {
                                     Icon(
-                                        imageVector = SimpIcons.FavoriteBorder,
+                                        imageVector = if (comment.liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
                                         contentDescription = null,
-                                        tint = dark.subtitle,
+                                        tint = if (comment.liked) Color(0xFFEC4141) else dark.subtitle,
                                         modifier = Modifier.size(14.dp),
                                     )
                                     Text(
                                         text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
                                         style = typo().labelSmall,
-                                        color = dark.subtitle,
+                                        color = if (comment.liked) Color(0xFFEC4141) else dark.subtitle,
                                     )
                                 }
                             }
@@ -4422,11 +4489,34 @@ fun NeteaseCommentsSheet(
                                                     style = typo().labelSmall,
                                                     color = dark.subtitle,
                                                 )
-                                                Text(
+                                                NeteaseEmojiText(
                                                     text = reply.content,
                                                     style = typo().bodySmall,
                                                     color = dark.content,
                                                 )
+                                            }
+                                            // 楼层回复同样可点赞(乐观+失败回退)
+                                            Column(
+                                                horizontalAlignment = Alignment.End,
+                                                modifier =
+                                                    Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { toggleLike(reply, isFloor = true) }
+                                                        .padding(start = 8.dp),
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (reply.liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                                                    contentDescription = null,
+                                                    tint = if (reply.liked) Color(0xFFEC4141) else dark.subtitle,
+                                                    modifier = Modifier.size(12.dp),
+                                                )
+                                                reply.likedCount?.let { count ->
+                                                    Text(
+                                                        text = formatCompactCount(count),
+                                                        style = typo().labelSmall,
+                                                        color = if (reply.liked) Color(0xFFEC4141) else dark.subtitle,
+                                                    )
+                                                }
                                             }
                                         }
                                     }

@@ -148,6 +148,7 @@
     <string name="similar_songs">비슷한 곡</string>
     <string name="track_count_short">%1$s곡</string>
     <string name="comments_title">댓글 · %1$s</string>
+    <string name="sort_recommend">추천</string>
     <string name="n_replies">답글 %1$s개</string>
     <string name="collapse_replies">답글 접기</string>
     <string name="no_comments">아직 댓글이 없습니다</string>
