@@ -273,7 +273,8 @@
     <string name="save_last_played">儲存上次播放</string>
     <string name="save_last_played_track_and_queue">儲存上次播放的歌曲和佇列</string>
     <string name="update_available">有可用的更新</string>
-    <string name="update_message">版本 %1$s 允許\nRelease: %2$s\n</string>
+    <string name="update_message">版本 %1$s 可用\n發布時間：%2$s\n</string>
+    <string name="update_message_no_time">版本 %1$s 可用</string>
     <string name="check_for_update">檢查更新</string>
     <string name="update_check_failed">檢查更新失敗，請稍後再試</string>
     <string name="last_checked_at">最後一次檢查於 %1$s</string>

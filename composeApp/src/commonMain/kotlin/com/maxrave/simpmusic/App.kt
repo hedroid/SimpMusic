@@ -129,9 +129,32 @@ import simpmusic.composeapp.generated.resources.this_link_is_not_supported
 import simpmusic.composeapp.generated.resources.unknown
 import simpmusic.composeapp.generated.resources.update_available
 import simpmusic.composeapp.generated.resources.update_message
+import simpmusic.composeapp.generated.resources.update_message_no_time
 import simpmusic.composeapp.generated.resources.version_format
 import simpmusic.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
+
+/**
+ * 远端 tag(v3.0.1 形状)是否比当前版本新:逐段数值比较,当前版本无法解析时保守返回 true
+ * (弹窗错弹比真更新被吞掉无害)。任意一段缺失按 0 补齐。
+ */
+private fun isUpdateAvailable(
+    remoteTag: String,
+    currentVersion: String = VersionManager.getVersionName(),
+): Boolean {
+    fun parse(tag: String): List<Int>? =
+        tag.removePrefix("v").split('.').map { it.toIntOrNull() }.let { parts ->
+            if (parts.any { it == null }) null else parts.map { it ?: 0 }
+        }
+    val remote = parse(remoteTag) ?: return true
+    val current = parse(currentVersion) ?: return true
+    for (i in 0 until maxOf(remote.size, current.size)) {
+        val r = remote.getOrElse(i) { 0 }
+        val c = current.getOrElse(i) { 0 }
+        if (r != c) return r > c
+    }
+    return false
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class)
 @Composable
@@ -394,9 +417,10 @@ fun App(
 
     LaunchedEffect(updateData) {
         val response = updateData ?: return@LaunchedEffect
-        if (viewModel.showedUpdateDialog &&
-            response.tagName != getString(Res.string.version_format, VersionManager.getVersionName())
-        ) {
+        // 语义比较而非字符串不等:老实现 getVersionName() 为空时 "v3.0.1"!="v" 恒真,
+        // 每次手动检查都会弹"有更新"(即使已是最新版)。tag 形如 v<major>.<minor>.<patch>,
+        // 解析失败(形状意外)时维持旧行为视为有更新,别把真更新吞掉
+        if (viewModel.showedUpdateDialog && isUpdateAvailable(response.tagName)) {
             shouldShowUpdateDialog = true
         }
     }
@@ -879,11 +903,20 @@ fun App(
 
                             val updateMessage =
                                 runBlocking {
-                                    getString(
-                                        Res.string.update_message,
-                                        response.tagName,
-                                        formatted,
-                                    )
+                                    // 兜底路径(HTML 重定向)拿不到 releaseTime——此时省掉时间行,
+                                    // 别显示"发布版本:未知"(v3.0.1 可用 vs 可用+未知,前者干净)
+                                    if (response.releaseTime != null) {
+                                        getString(
+                                            Res.string.update_message,
+                                            response.tagName,
+                                            formatted,
+                                        )
+                                    } else {
+                                        getString(
+                                            Res.string.update_message_no_time,
+                                            response.tagName,
+                                        )
+                                    }
                                 }
                             Column(
                                 Modifier
