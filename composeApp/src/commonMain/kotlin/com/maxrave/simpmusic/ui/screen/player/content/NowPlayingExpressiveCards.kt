@@ -178,19 +178,26 @@ internal fun ExpressiveArtworkCardPage(
                 // page) and any other content from bleeding into adjacent pages.
                 .clipToBounds()
                 // Tap toggles controls only when the canvas is covering this page;
-                // otherwise no-op — Classic verbatim.
-                .clickable(
-                    enabled = pageHasCanvas,
-                    onClick = {
-                        if (state.mainScrollState.value == 0) {
-                            actions.onToggleControls()
-                        }
+                // otherwise no-op — Classic verbatim. Mounted CONDITIONALLY for the same
+                // reason as Classic: a disabled clickable still consumes UP, which reads
+                // as "hit a control" to the global haptic observer.
+                .then(
+                    if (pageHasCanvas) {
+                        Modifier.clickable(
+                            onClick = {
+                                if (state.mainScrollState.value == 0) {
+                                    actions.onToggleControls()
+                                }
+                            },
+                            indication = null,
+                            interactionSource =
+                                remember {
+                                    MutableInteractionSource()
+                                },
+                        )
+                    } else {
+                        Modifier
                     },
-                    indication = null,
-                    interactionSource =
-                        remember {
-                            MutableInteractionSource()
-                        },
                 ),
     ) {
         // ── Fullscreen canvas backdrop (current track + canvas data) — Classic verbatim ──

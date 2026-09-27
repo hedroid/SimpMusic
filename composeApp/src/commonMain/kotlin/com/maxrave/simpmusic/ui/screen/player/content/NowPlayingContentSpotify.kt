@@ -375,19 +375,28 @@ fun NowPlayingContentSpotify(
                                 .clipToBounds()
                                 // Tap toggles controls only when the canvas is covering this page;
                                 // otherwise no-op (matches the legacy behaviour where the touch
-                                // overlay only appeared in canvas mode).
-                                .clickable(
-                                    enabled = pageHasCanvas,
-                                    onClick = {
-                                        if (state.mainScrollState.value == 0) {
-                                            actions.onToggleControls()
-                                        }
+                                // overlay only appeared in canvas mode). The modifier is mounted
+                                // CONDITIONALLY, not passed enabled=false: a disabled clickable
+                                // still consumes UP on the Final pass, which the global haptic
+                                // observer reads as "hit a control" — every tap on the artwork
+                                // buzzed even though the tap did nothing.
+                                .then(
+                                    if (pageHasCanvas) {
+                                        Modifier.clickable(
+                                            onClick = {
+                                                if (state.mainScrollState.value == 0) {
+                                                    actions.onToggleControls()
+                                                }
+                                            },
+                                            indication = null,
+                                            interactionSource =
+                                                remember {
+                                                    MutableInteractionSource()
+                                                },
+                                        )
+                                    } else {
+                                        Modifier
                                     },
-                                    indication = null,
-                                    interactionSource =
-                                        remember {
-                                            MutableInteractionSource()
-                                        },
                                 ),
                     ) {
                         // ── Layer 0: per-page backdrop (adjacent pages only) ──
