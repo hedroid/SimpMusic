@@ -17,6 +17,8 @@ fun initCast(context: Context): Boolean {
 
 fun isCastAvailable(): Boolean = false
 
+fun isRemotePlaybackAvailable(): Boolean = false
+
 fun wrapWithCastPlayer(
     context: Context,
     localPlayer: Player,

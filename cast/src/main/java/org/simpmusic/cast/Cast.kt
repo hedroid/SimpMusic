@@ -1,8 +1,11 @@
+@file:Suppress("StaticFieldLeak")
+
 package org.simpmusic.cast
 
 import android.content.Context
 import androidx.media3.cast.CastPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -48,11 +51,15 @@ fun initCast(context: Context): Boolean {
 
 fun isCastAvailable(): Boolean = castAvailable
 
+/** The full build always offers DLNA even when Google Play services are unavailable. */
+fun isRemotePlaybackAvailable(): Boolean = true
+
 /**
  * Wraps [localPlayer] in a [CastPlayer] so playback can switch seamlessly between
  * local and remote (Cast) output. Falls back to returning [localPlayer] unchanged
  * when Cast isn't available or the CastPlayer fails to build.
  */
+@UnstableApi
 fun wrapWithCastPlayer(
     context: Context,
     localPlayer: Player,
@@ -80,3 +87,8 @@ fun currentCastDeviceName(): String? =
         Logger.e(TAG, "Failed to read current cast device name: ${e.message}", e)
         null
     }
+
+fun endCurrentCastSession() {
+    runCatching { castContext?.sessionManager?.endCurrentSession(true) }
+        .onFailure { Logger.e(TAG, "Failed to end Cast session: ${it.message}", it) }
+}
