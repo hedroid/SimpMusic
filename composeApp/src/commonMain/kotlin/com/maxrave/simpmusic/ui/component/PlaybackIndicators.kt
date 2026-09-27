@@ -56,23 +56,35 @@ import kotlin.math.sin
  *
  * The motion lives in animated PATHS (the rectangle is redrawn vertex by vertex each keyframe),
  * not in any transform, which is why every layer and parent in the file reads `p=(0,0)`.
+ *
+ * [paused] freezes the bars at the loop's first keyframe: the row still reads as "this is the
+ * current track", but a stationary equalizer says paused instead of playing (YouTube Music
+ * behaves the same way). No infinite transition is composed in that state, so a paused row
+ * costs zero animation frames — same motive as the old 12fps throttle.
  */
 @Composable
 fun AudioPlayingIndicator(
     modifier: Modifier = Modifier,
     color: Color = AudioIndicatorCyan,
+    paused: Boolean = false,
 ) {
-    val transition = rememberInfiniteTransition(label = "audioPlaying")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = AUDIO_CYCLE_MS, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "phase",
-    )
+    val phase: Float =
+        if (paused) {
+            PAUSED_PHASE
+        } else {
+            val transition = rememberInfiniteTransition(label = "audioPlaying")
+            val animated by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = AUDIO_CYCLE_MS, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "phase",
+            )
+            animated
+        }
 
     Canvas(modifier = modifier) {
         val scale = minOf(size.width / AUDIO_COMP_WIDTH, size.height / AUDIO_COMP_HEIGHT)
@@ -288,6 +300,12 @@ private val AUDIO_BAR_HEIGHTS =
 
 /** 144 frames at 100fps. */
 private const val AUDIO_CYCLE_MS = 1_440
+
+/**
+ * Frozen loop position for the paused state: keyframe 0's bar set (40 / 26.7 / 56.5 / 24.7 / 40 /
+ * 70.3) is uneven enough that the shape still reads as an equalizer at rest.
+ */
+private const val PAUSED_PHASE = 0f
 
 /** 50 frames at 25fps. */
 private const val DOWNLOAD_CYCLE_MS = 2_000

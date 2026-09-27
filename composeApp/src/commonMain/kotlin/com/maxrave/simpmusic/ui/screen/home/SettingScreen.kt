@@ -3839,17 +3839,14 @@ fun SettingScreen(
             Res.readBytes("files/aboutlibraries.json").decodeToString()
         }
         val lazyListState = rememberLazyListState()
-        val canScrollBackward by remember {
-            derivedStateOf {
-                lazyListState.canScrollBackward
-            }
-        }
+        // 上游曾用 confirmValueChange = { !canScrollBackward } 把"列表不在顶部"时的收起
+        // (含 back 触发的 hide settle)全部拒绝:列表滚下去后 back 关不掉 sheet,某些
+        // 返回路径上 back 穿透弹掉设置页而 sheet 窗口残留,屏幕像失灵。两级退出本来
+        // 就由 sheet 的 nestedScroll 保证(非顶部下拉先滚列表,到顶才拖 sheet),这里
+        // 不再加限制。
         val sheetState =
             rememberModalBottomSheetState(
                 skipPartiallyExpanded = true,
-                confirmValueChange = {
-                    !canScrollBackward
-                },
             )
         val coroutineScope = rememberCoroutineScope()
         ModalBottomSheet(

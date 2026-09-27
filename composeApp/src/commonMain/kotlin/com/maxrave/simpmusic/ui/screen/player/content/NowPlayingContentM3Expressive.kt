@@ -363,14 +363,11 @@ private fun NowPlayingM3ExpressiveLayout(
                             color = Color.White,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .wrapContentHeight(align = Alignment.CenterVertically)
-                                    .basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
-                                    ).focusable(),
+                                    .wrapContentHeight(align = Alignment.CenterVertically),
                         )
                     }
                     IconButton(
@@ -473,14 +470,11 @@ private fun NowPlayingM3ExpressiveLayout(
                                     style = typo().labelSmall,
                                     color = Color.White,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 20.dp)
-                                            .basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            .padding(horizontal = 20.dp),
                                 )
                             }
                         }

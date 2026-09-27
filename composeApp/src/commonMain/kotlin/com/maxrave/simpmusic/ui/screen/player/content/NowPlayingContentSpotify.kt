@@ -799,14 +799,11 @@ fun NowPlayingContentSpotify(
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .wrapContentHeight(align = Alignment.CenterVertically)
-                                        .basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                            animationMode = MarqueeAnimationMode.Immediately,
-                                        ).focusable(),
+                                        .wrapContentHeight(align = Alignment.CenterVertically),
                             )
                         }
                     },
@@ -913,21 +910,18 @@ fun NowPlayingContentSpotify(
                                     animationSpec = tween(durationMillis = 300),
                                     label = "inlineLyricLine",
                                 ) { lineText ->
-                                    Text(
-                                        text = lineText,
-                                        style = typo().labelSmall,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 20.dp)
-                                                .basicMarquee(
-                                                    iterations = Int.MAX_VALUE,
-                                                    animationMode = MarqueeAnimationMode.Immediately,
-                                                ).focusable(),
-                                    )
-                                }
+                                Text(
+                                    text = lineText,
+                                    style = typo().labelSmall,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 20.dp),
+                                )
+                            }
                             }
 
                             // Info Layout
@@ -1628,15 +1622,13 @@ fun NowPlayingContentSpotify(
                                     style = typo().bodyMedium,
                                     color = Color.White,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
                                             .wrapContentHeight(
                                                 align = Alignment.CenterVertically,
-                                            ).basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            ),
                                 )
                                 LazyRow(verticalAlignment = Alignment.CenterVertically) {
                                     item {
@@ -1657,15 +1649,13 @@ fun NowPlayingContentSpotify(
                                             text = state.screenData.artistName,
                                             style = typo().bodySmall,
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier =
                                                 Modifier
                                                     .fillMaxWidth()
                                                     .wrapContentHeight(
                                                         align = Alignment.CenterVertically,
-                                                    ).basicMarquee(
-                                                        iterations = Int.MAX_VALUE,
-                                                        animationMode = MarqueeAnimationMode.Immediately,
-                                                    ).focusable(),
+                                                    ),
                                         )
                                     }
                                 }

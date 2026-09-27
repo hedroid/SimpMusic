@@ -88,6 +88,9 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -102,6 +105,26 @@ import simpmusic.composeapp.generated.resources.podcasts
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
 import kotlin.math.roundToInt
+
+/**
+ * The player's actual play/pause state, for the row's playing indicator.
+ *
+ * Callers pass `isPlaying` meaning "this row is the CURRENT track" — that is the condition for
+ * showing the equalizer slot at all — but whether the bars MOVE has to follow the player, or a
+ * paused queue shows a dancing equalizer on the current row forever. Reading it here (the
+ * SharedViewModel is a Koin single, same pattern as the SongRepository below) gives every one of
+ * the 13+ call sites the correct two-state behaviour without each screen wiring its own flow.
+ *
+ * map + distinctUntilChanged collapses ControlState (which also carries volume etc.) to a Boolean,
+ * so rows only recompose when playback actually flips.
+ */
+@Composable
+private fun rememberActualPlaying(): Boolean {
+    val sharedViewModel: SharedViewModel = koinInject()
+    return remember(sharedViewModel) {
+        sharedViewModel.controllerState.map { it.isPlaying }.distinctUntilChanged()
+    }.collectAsState(initial = false).value
+}
 
 /**
  * This is the song item in the playlist or other places.
@@ -271,11 +294,23 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // The slot shows on the current row; whether the bars animate follows the
+                    // player — paused keeps the frozen equalizer, not a dancing one.
+                    val actuallyPlaying = rememberActualPlaying()
                     Crossfade(isPlaying) {
                         if (it) {
-                            AudioPlayingIndicator(
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                            Crossfade(actuallyPlaying, label = "rowPlayingAnim") { playingNow ->
+                                if (playingNow) {
+                                    AudioPlayingIndicator(
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                } else {
+                                    AudioPlayingIndicator(
+                                        modifier = Modifier.fillMaxSize(),
+                                        paused = true,
+                                    )
+                                }
+                            }
                         } else if (index == null) {
                             val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
                             AsyncImage(
@@ -432,11 +467,21 @@ fun SuggestItems(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(modifier = Modifier.size(40.dp)) {
+                val actuallyPlaying = rememberActualPlaying()
                 Crossfade(isPlaying) {
                     if (it) {
-                        AudioPlayingIndicator(
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        Crossfade(actuallyPlaying, label = "suggestPlayingAnim") { playingNow ->
+                            if (playingNow) {
+                                AudioPlayingIndicator(
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                AudioPlayingIndicator(
+                                    modifier = Modifier.fillMaxSize(),
+                                    paused = true,
+                                )
+                            }
+                        }
                     } else {
                         val thumb = track.thumbnails?.lastOrNull()?.url
                         AsyncImage(
