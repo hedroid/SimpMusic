@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -623,22 +624,22 @@ private fun AppleMusicMainView(
                                         text = state.screenData.nowPlayingTitle,
                                         style = typography.compactTitle,
                                         maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                                                .focusable(),
+                                                .wrapContentHeight(align = Alignment.CenterVertically),
                                     )
                                     Spacer(modifier = Modifier.height(3.dp))
                                     Text(
                                         text = state.screenData.artistName,
                                         style = typography.compactArtist,
                                         maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
-                                                .focusable(),
+                                                .wrapContentHeight(align = Alignment.CenterVertically),
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))

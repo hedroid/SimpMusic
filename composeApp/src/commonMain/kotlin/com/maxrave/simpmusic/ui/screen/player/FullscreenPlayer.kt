@@ -1,10 +1,7 @@
 package com.maxrave.simpmusic.ui.screen.player
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -340,14 +338,11 @@ fun FullscreenPlayer(
                                     text = nowPlayingState.nowPlayingTitle,
                                     style = typo().titleMedium,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
-                                            .wrapContentHeight(align = Alignment.CenterVertically)
-                                            .basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            .wrapContentHeight(align = Alignment.CenterVertically),
                                 )
                             },
                             navigationIcon = {
