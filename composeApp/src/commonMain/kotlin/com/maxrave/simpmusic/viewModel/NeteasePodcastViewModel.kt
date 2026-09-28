@@ -9,7 +9,6 @@ import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.netease.model.NeteaseDjProgram
 import com.maxrave.netease.model.NeteaseDjRadio
-import com.maxrave.netease.model.NeteasePodcastCategory
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,8 +34,6 @@ class NeteasePodcastViewModel(
     private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
     data class UiState(
-        val categories: List<NeteasePodcastCategory> = emptyList(),
-        val selectedCategoryId: Long? = null,
         val programs: List<NeteaseDjProgram> = emptyList(),
         val programsLoading: Boolean = true,
         val programsLoadingMore: Boolean = false,
@@ -66,9 +63,6 @@ class NeteasePodcastViewModel(
     /** 静默刷新:不清已显示分区(下拉刷新口径),各区块独立回写 */
     fun refresh() {
         viewModelScope.launch {
-            neteaseRepository.getPodcastCategories().onSuccess { categories ->
-                _uiState.update { it.copy(categories = categories) }
-            }
             neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
                 _uiState.update { it.copy(recommendRadios = radios) }
             }
@@ -92,16 +86,9 @@ class NeteasePodcastViewModel(
         }
     }
 
-    /** 分类切换:重拉最新节目第一页 */
-    fun selectCategory(categoryId: Long?) {
-        if (_uiState.value.selectedCategoryId == categoryId) return
-        _uiState.update { it.copy(selectedCategoryId = categoryId, programs = emptyList(), programsLoading = true) }
-        viewModelScope.launch { reloadPrograms() }
-    }
-
     private suspend fun reloadPrograms() {
-        val cateId = _uiState.value.selectedCategoryId
-        neteaseRepository.getRecommendPodcastProgramsPage(cateId, offset = 0).fold(
+        // cateId 服务端忽略(见 Screen 文档注释),恒传 null
+        neteaseRepository.getRecommendPodcastProgramsPage(null, offset = 0).fold(
             onSuccess = { (programs, more) ->
                 // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
                 val playable = programs.filter { it.mainSongId != null }
@@ -121,7 +108,7 @@ class NeteasePodcastViewModel(
         _uiState.update { it.copy(programsLoadingMore = true) }
         viewModelScope.launch {
             neteaseRepository
-                .getRecommendPodcastProgramsPage(state.selectedCategoryId, offset = state.programs.size)
+                .getRecommendPodcastProgramsPage(null, offset = state.programs.size)
                 .fold(
                     onSuccess = { (programs, more) ->
                         val playable = programs.filter { it.mainSongId != null }
