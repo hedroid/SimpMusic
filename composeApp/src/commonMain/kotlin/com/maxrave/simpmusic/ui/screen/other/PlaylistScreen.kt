@@ -184,6 +184,8 @@ fun PlaylistScreen(
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
+    // 自建歌单/网易红心歌单没有收藏语义,顶栏心隐藏(PlaylistViewModel.favoriteAvailable)
+    val favoriteAvailable by viewModel.favoriteAvailable.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
 
@@ -297,7 +299,7 @@ fun PlaylistScreen(
     LaunchedEffect(key1 = id) {
         if (id != uiState.data?.id) {
             Logger.w(tag, "new id: $id")
-            viewModel.getData(id)
+            viewModel.getData(id, isYourYouTubePlaylist)
         }
     }
     LaunchedEffect(key1 = firstItemVisible) {
@@ -526,7 +528,7 @@ fun PlaylistScreen(
                                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        if (!data.isRadio) {
+                                                        if (!data.isRadio && favoriteAvailable) {
                                                             Box(
                                                                 modifier = Modifier.size(48.dp),
                                                                 contentAlignment = Alignment.Center,
@@ -825,7 +827,7 @@ fun PlaylistScreen(
                                                             .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    if (!data.isRadio) {
+                                                    if (!data.isRadio && favoriteAvailable) {
                                                         Box(
                                                             modifier = Modifier.size(48.dp),
                                                             contentAlignment = Alignment.Center,

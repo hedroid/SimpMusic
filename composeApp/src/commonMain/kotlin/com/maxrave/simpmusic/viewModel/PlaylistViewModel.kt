@@ -116,6 +116,34 @@ class PlaylistViewModel(
     private val _remoteSavePending = MutableStateFlow(false)
     val remoteSavePending: StateFlow<Boolean> = _remoteSavePending
 
+    /**
+     * 详情页顶栏收藏心是否该出现:自建歌单(YT=browse 响应可编辑包装+库页"创建的歌单"
+     * 分区导航参数双信号,网易=creatorId==uid)与红心歌单(YT Liked Music/网易"我喜欢的
+     * 音乐")没有"收藏进资料库"的语义,心隐藏。默认 true(fail-open):判定晚到时心迟一点
+     * 消失,不让收藏歌单的心迟迟不出现。
+     */
+    private val _favoriteAvailable = MutableStateFlow(true)
+    val favoriteAvailable: StateFlow<Boolean> = _favoriteAvailable
+
+    /** 从库页"创建的歌单/系统歌单"分区进入时为 true(nav 参数,不依赖网络) */
+    private var ownYouTubeNavHint = false
+
+    private fun refreshFavoriteAvailability(
+        id: String,
+        ownYouTube: Boolean,
+    ) {
+        if (id.toLongOrNull() != null) {
+            viewModelScope.launch {
+                val hidden =
+                    neteaseRepository.isNeteaseLikedPlaylist(id) ||
+                        neteaseRepository.isOwnNeteasePlaylist(id)
+                _favoriteAvailable.value = !hidden
+            }
+        } else {
+            _favoriteAvailable.value = !(ownYouTube || ownYouTubeNavHint)
+        }
+    }
+
     private var _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks
 
@@ -488,11 +516,16 @@ class PlaylistViewModel(
         _playlistEntity.value = null
         _downloadedList.value = emptyList()
         _listColors.value = emptyList()
+        _favoriteAvailable.value = true
         checkDownloadedPlaylist?.cancel()
         checkDownloadedPlaylist = null
     }
 
-    fun getData(id: String) {
+    fun getData(
+        id: String,
+        ownYouTubeNavHint: Boolean = false,
+    ) {
+        this.ownYouTubeNavHint = ownYouTubeNavHint
         resetData()
         viewModelScope.launch {
             // Check radio
@@ -571,6 +604,7 @@ class PlaylistViewModel(
                                 getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
                                 maybeAdoptRemoteSaved(data.first.id)
                                 refreshRemoteSavedState(data.first.id)
+                                refreshFavoriteAvailability(data.first.id, data.first.isOwnYouTubePlaylist)
                             }
 
                             else -> {
@@ -673,6 +707,8 @@ class PlaylistViewModel(
                         playlistId = id,
                         inLibrary = now(),
                     )
+                    // 网络解析失败走 Room 兜底渲染(深链/弱网常见路径),门的判定同样要跑
+                    refreshFavoriteAvailability(id, false)
                     _uiState.value =
                         Success(
                             data =
