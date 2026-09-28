@@ -39,6 +39,9 @@ class NeteaseRadioDetailViewModel(
         val loadingMore: Boolean = false,
         val hasMore: Boolean = false,
         val subInFlight: Boolean = false,
+        /** 非 null=节目列表拉取失败——byradio 连续调用会被网易限流(HTTP 200+空数据或
+         *  code=405"操作频繁",同一电台先空后有即此),网络抖动同走这里;UI 给重试不冒充空态 */
+        val programsUnavailable: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -49,26 +52,45 @@ class NeteaseRadioDetailViewModel(
     fun load(id: Long) {
         if (radioId == id && !_uiState.value.loading) return
         radioId = id
-        _uiState.update { it.copy(loading = true) }
-        // 电台信息与节目列表并行,独立降级(详情失败不阻塞节目列表)
+        _uiState.update { it.copy(loading = true, programsUnavailable = false) }
         viewModelScope.launch {
+            // 串行:节目"空且电台声明有节目=不可用"的判定依赖详情的 programCount,
+            // 并行会有详情未回(declared=0)的误判窗口
             neteaseRepository.getDjRadioDetail(id).fold(
                 onSuccess = { radio -> _uiState.update { it.copy(radio = radio) } },
                 onFailure = { log("radio detail failed: $it") },
             )
+            loadPrograms()
         }
-        viewModelScope.launch {
-            neteaseRepository.getDjRadioProgramsPage(id, offset = 0).fold(
-                onSuccess = { (programs, more) ->
-                    // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
-                    val playable = programs.filter { it.mainSongId != null }
-                    _uiState.update { it.copy(programs = playable, hasMore = more, loading = false) }
-                },
-                onFailure = {
-                    _uiState.update { it.copy(loading = false) }
-                },
-            )
-        }
+    }
+
+    /** 重试(不可用态/失败的入口);成功但空且电台声明有节目=限流的静默空形态,也归不可用 */
+    fun retry() {
+        _uiState.update { it.copy(loading = true, programsUnavailable = false) }
+        viewModelScope.launch { loadPrograms() }
+    }
+
+    private suspend fun loadPrograms() {
+        neteaseRepository.getDjRadioProgramsPage(radioId, offset = 0).fold(
+            onSuccess = { (programs, more) ->
+                // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
+                val playable = programs.filter { it.mainSongId != null }
+                val declared = _uiState.value.radio?.programCount ?: 0
+                val unavailable = playable.isEmpty() && declared > 0
+                _uiState.update {
+                    it.copy(
+                        programs = playable,
+                        hasMore = more,
+                        loading = false,
+                        programsUnavailable = unavailable,
+                    )
+                }
+            },
+            onFailure = {
+                log("radio programs failed: $it")
+                _uiState.update { it.copy(loading = false, programsUnavailable = true) }
+            },
+        )
     }
 
     fun loadMore() {

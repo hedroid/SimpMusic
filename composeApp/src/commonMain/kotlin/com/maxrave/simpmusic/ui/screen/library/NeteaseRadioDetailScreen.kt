@@ -52,6 +52,8 @@ import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.podcast_no_programs
 import simpmusic.composeapp.generated.resources.podcast_programs
+import simpmusic.composeapp.generated.resources.podcast_programs_unavailable
+import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.podcast_subscribe
 import simpmusic.composeapp.generated.resources.podcast_subscribed
 
@@ -133,12 +135,32 @@ fun NeteaseRadioDetailScreen(
             }
             if (uiState.programs.isEmpty() && !uiState.loading) {
                 item(key = "radio_no_programs") {
-                    Text(
-                        text = stringResource(Res.string.podcast_no_programs),
-                        style = typo().bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    )
+                    Column(
+                        Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text =
+                                stringResource(
+                                    if (uiState.programsUnavailable) {
+                                        Res.string.podcast_programs_unavailable
+                                    } else {
+                                        Res.string.podcast_no_programs
+                                    },
+                                ),
+                            style = typo().bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (uiState.programsUnavailable) {
+                            // 音乐合集型电台 byradio 恒空 / 405 频控——静置或稍后重试
+                            Button(
+                                onClick = { viewModel.retry() },
+                                modifier = Modifier.padding(top = 12.dp),
+                            ) {
+                                Text(stringResource(Res.string.retry), style = typo().labelMedium)
+                            }
+                        }
+                    }
                 }
             }
             itemsIndexed(

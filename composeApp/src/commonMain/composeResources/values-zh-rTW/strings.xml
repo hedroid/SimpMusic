@@ -222,6 +222,7 @@
     <string name="podcast_featured_radios">精選電臺</string>
     <string name="podcast_toplist_radios">熱門電臺榜</string>
     <string name="podcast_programs">節目</string>
+    <string name="podcast_programs_unavailable">節目拉取失敗（操作頻繁被限流或網路波動），稍後重試</string>
     <string name="podcast_no_programs">暫無節目</string>
     <string name="podcast_subscribe">訂閱</string>
     <string name="podcast_subscribed">已訂閱</string>

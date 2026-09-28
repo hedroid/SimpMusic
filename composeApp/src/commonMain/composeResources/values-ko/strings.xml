@@ -494,6 +494,7 @@
     <string name="podcast_featured_radios">추천 라디오</string>
     <string name="podcast_toplist_radios">인기 라디오 차트</string>
     <string name="podcast_programs">에피소드</string>
+    <string name="podcast_programs_unavailable">에피소드를 불러오지 못했습니다(요청 제한 또는 네트워크 불안정). 잠시 후 다시 시도하세요</string>
     <string name="podcast_no_programs">아직 에피소드가 없습니다</string>
     <string name="podcast_subscribe">구독</string>
     <string name="podcast_subscribed">구독 중</string>

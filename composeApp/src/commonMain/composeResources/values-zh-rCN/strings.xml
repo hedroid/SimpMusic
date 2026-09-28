@@ -968,6 +968,7 @@
     <string name="podcast_featured_radios">精选电台</string>
     <string name="podcast_toplist_radios">热门电台榜</string>
     <string name="podcast_programs">节目</string>
+    <string name="podcast_programs_unavailable">节目拉取失败（操作频繁被限流或网络波动），稍后重试</string>
     <string name="podcast_no_programs">暂无节目</string>
     <string name="podcast_subscribe">订阅</string>
     <string name="podcast_subscribed">已订阅</string>
