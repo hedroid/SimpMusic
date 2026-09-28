@@ -818,7 +818,7 @@ dump bounds 取,目测两次全偏)。
 | 无尽队列下拉=橡皮筋触发 | 用户 2026-09-25 定需求：①橡皮筋效果做强（现 overscroll 默认拉伸感弱）；②**追加时机改成"触发橡皮筋才追加"**——现实现是近底边沿自动续批+滚动停 250ms 手势兜底（AGENTS.md 播放队列页增强三轮），满屏小队列下拉本身就是 overscroll 无滚动事件，需改走 nestedScroll 连接器吃 post-scroll 段作唯一触发信号并自绘更强橡皮筋；两套队列 UI（QueueBottomSheet/AppleMusicQueueView）同改 | 中 |
 | 日志排查功能 | 用户 2026-09-25 定需求：真机（三星 release）kermit/logcat 全被 ROM 静默，出问题只能靠模拟器复现。方向=app 内日志环形缓冲（kermit 接自定义 writer）+设置页"导出日志"→写文件/系统分享面板；要覆盖网络层既有 W 级埋点（netease api rejected 等） | 中 |
 | M8 云盘页 | cloudDisk 端点已封装，repo 映射+UI 未接；云盘歌可播不可缓存下载 | 中 |
-| 网易播客 | 搜索 type=1004/1009 通道已知；dj 生态端点与播放链路待调研（节目音频是否同走取流）；UI 候选复用库页播客分区或并入"您的网易云" | 中（含调研） |
+| ~~网易播客~~ ✅ 一期已落地（2026-09-28，core 20b618b+d033346+主仓 2c377db8/f8de68b8）：库页"播客"chip（**仅网易登录显示**，紧跟您的网易云）→ 播客主页（分类 chips/我的订阅/最新节目/猜你喜欢/精选电台/热门电台榜，区块独立降级，形状对齐 Melodia=rinchao0721/Melodia 真机抓包）+ 电台详情页（已订阅态/节目 30 批分页/订阅退订闭环/整队起播）。**铁律：节目可播的是 mainSong.id（节目自身 id 取流无效）；订阅列表=weapi /djradio/get/subed（不带 uid，旧 /user/ 前缀路径业务 404 已死）；订阅/退订未登录也回 200 必须先验登录态**。播放队列 playlistId 用 NETEASE_PODCAST_ 前缀（避开 NETEASE_RADIO_ 无尽哨兵）。DjPodcastProbe=形状探针。余量：节目落库收藏/下载、搜索 type=1009 解锁 PODCASTS tab、收听历史 | 中（余量） |
 | 跨源歌词供应商（YT 歌用网易/QQ 词库） | 接入点全现成（getLyricsFromFormat/LyricsProvider），Lyrico 匹配算法待移植 | 中偏大 |
 | 网易 MV | 搜索 type=1004 现隐藏；需打破 isVideo 恒 false 的管线假设（取流/追踪/watchtime/详情卡），走 /mv/detail + /mv/url | 中偏大 |
 | M10 离线下载管线 | SimpleCache→文件式改造；公共 Download 导出路径已通（AGENTS.md 调研） | 大 |
