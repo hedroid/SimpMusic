@@ -51,6 +51,9 @@ import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.podcast_listens
+import simpmusic.composeapp.generated.resources.podcast_badge_bought
+import simpmusic.composeapp.generated.resources.podcast_badge_paid
+import simpmusic.composeapp.generated.resources.podcast_badge_vip
 import simpmusic.composeapp.generated.resources.podcast_based_on_listening
 import simpmusic.composeapp.generated.resources.podcast_featured_radios
 import simpmusic.composeapp.generated.resources.podcast_guess_you_like
@@ -361,12 +364,36 @@ internal fun NeteaseProgramRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        ProgramStateBadge(program = program)
         Text(
             text = formatProgramDuration(program.durationMs),
             style = typo().bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/** 节目可听性角标(付费未购/VIP 内容/已购买),放在时长左侧。付费=当前只有试听态
+ *  (整行置灰,点播走三档动作);VIP/已购可完整播,角标仅提示。 */
+@Composable
+private fun ProgramStateBadge(program: com.maxrave.netease.model.NeteaseDjProgram) {
+    val (textRes, color) =
+        when {
+            program.paid -> Res.string.podcast_badge_paid to MaterialTheme.colorScheme.error
+            program.bought -> Res.string.podcast_badge_bought to MaterialTheme.colorScheme.secondary
+            program.vip -> Res.string.podcast_badge_vip to MaterialTheme.colorScheme.primary
+            else -> return
+        }
+    Text(
+        text = stringResource(textRes),
+        style = typo().labelSmall,
+        color = color,
+        modifier =
+            Modifier
+                .padding(end = 6.dp)
+                .background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
 }
 
 private fun formatProgramDuration(durationMs: Long): String {

@@ -956,6 +956,9 @@
     <string name="liked_songs">喜欢的歌曲</string>
     <string name="library_podcasts">播客</string>
     <string name="netease_podcast">网易播客</string>
+    <string name="podcast_badge_paid">付费</string>
+    <string name="podcast_badge_bought">已购</string>
+    <string name="podcast_badge_vip">VIP</string>
     <string name="podcast_listens">%1$s次收听</string>
     <string name="podcast_my_subscriptions">我的订阅</string>
     <string name="podcast_latest_programs">最新节目</string>

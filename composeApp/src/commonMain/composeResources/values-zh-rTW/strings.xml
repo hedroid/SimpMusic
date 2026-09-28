@@ -210,6 +210,9 @@
     <string name="liked_songs">喜歡的歌曲</string>
     <string name="library_podcasts">播客</string>
     <string name="netease_podcast">網易播客</string>
+    <string name="podcast_badge_paid">付費</string>
+    <string name="podcast_badge_bought">已購</string>
+    <string name="podcast_badge_vip">VIP</string>
     <string name="podcast_listens">%1$s次收聽</string>
     <string name="podcast_my_subscriptions">我的訂閱</string>
     <string name="podcast_latest_programs">最新節目</string>

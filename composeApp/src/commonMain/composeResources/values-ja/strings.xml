@@ -453,6 +453,9 @@
     <string name="favorite_podcasts">お気に入りのポッドキャスト</string>
     <string name="no_favorite_podcasts">お気に入りのポッドキャストなし</string>
     <string name="netease_podcast">NetEaseポッドキャスト</string>
+    <string name="podcast_badge_paid">有料</string>
+    <string name="podcast_badge_bought">購入済み</string>
+    <string name="podcast_badge_vip">VIP</string>
     <string name="podcast_listens">%1$s回再生</string>
     <string name="podcast_my_subscriptions">登録済みのラジオ</string>
     <string name="podcast_latest_programs">最新のエピソード</string>
