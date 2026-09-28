@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.extension.now
 import com.maxrave.simpmusic.ui.theme.typo
@@ -29,12 +30,15 @@ fun endOfPageCredit(): String =
         ) + "\nhedroid"
 
 @Composable
-fun EndOfPage(withoutCredit: Boolean = false) {
+fun EndOfPage(
+    withoutCredit: Boolean = false,
+    height: Dp = 88.dp,
+) {
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(280.dp),
+                .height(height),
         contentAlignment = Alignment.TopCenter,
     ) {
         if (!withoutCredit) {

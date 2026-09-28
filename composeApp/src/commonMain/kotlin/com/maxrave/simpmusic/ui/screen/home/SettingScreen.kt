@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,7 +47,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
@@ -57,7 +55,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -72,7 +69,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -146,6 +142,7 @@ import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.ThirdPartyLibrariesDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.NeteaseLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LastfmLoginDestination
@@ -161,12 +158,6 @@ import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import com.mikepenz.aboutlibraries.entity.Library
-import com.mikepenz.aboutlibraries.ui.compose.ChipColors
-import com.mikepenz.aboutlibraries.ui.compose.LibraryDefaults
-import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
-import com.mikepenz.aboutlibraries.ui.compose.m3.libraryColors
-import com.mikepenz.aboutlibraries.ui.compose.produceLibraries
 import com.mohamedrejeb.calf.core.ExperimentalCalfApi
 import com.mohamedrejeb.calf.io.getPath
 import com.mohamedrejeb.calf.picker.FilePickerFileType
@@ -177,7 +168,6 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.roundToInt
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -704,10 +694,6 @@ fun SettingScreen(
     var showLoginSyncDialog by rememberSaveable {
         mutableStateOf(false)
     }
-    var showThirdPartyLibraries by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     LaunchedEffect(true) {
         viewModel.getAllGoogleAccount()
     }
@@ -3075,7 +3061,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.third_party_libraries),
                     subtitle = stringResource(Res.string.description_and_licenses),
                     onClick = {
-                        showThirdPartyLibraries = true
+                        navController.navigate(ThirdPartyLibrariesDestination)
                     },
                 )
             }
@@ -3832,97 +3818,6 @@ fun SettingScreen(
                 }
             },
         )
-    }
-
-    if (showThirdPartyLibraries) {
-        val libraries by produceLibraries {
-            Res.readBytes("files/aboutlibraries.json").decodeToString()
-        }
-        val lazyListState = rememberLazyListState()
-        // 上游曾用 confirmValueChange = { !canScrollBackward } 把"列表不在顶部"时的收起
-        // (含 back 触发的 hide settle)全部拒绝:列表滚下去后 back 关不掉 sheet,某些
-        // 返回路径上 back 穿透弹掉设置页而 sheet 窗口残留,屏幕像失灵。两级退出本来
-        // 就由 sheet 的 nestedScroll 保证(非顶部下拉先滚列表,到顶才拖 sheet),这里
-        // 不再加限制。
-        val sheetState =
-            rememberModalBottomSheetState(
-                skipPartiallyExpanded = true,
-            )
-        val coroutineScope = rememberCoroutineScope()
-        ModalBottomSheet(
-            modifier =
-                Modifier
-                    .fillMaxHeight()
-                    .hapticTapFeedback(),
-            onDismissRequest = {
-                showThirdPartyLibraries = false
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = {},
-            scrimColor = Color.Black.copy(alpha = .5f),
-            sheetState = sheetState,
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-            shape = RectangleShape,
-        ) {
-            // Capture theme colors here: the ChipColors getters below run outside composition.
-            val surfaceContainerHighestColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            val onSurfaceColor = MaterialTheme.colorScheme.onSurface
-            LibrariesContainer(
-                libraries?.copy(
-                    libraries =
-                        libraries
-                            ?.libraries
-                            ?.distinctBy {
-                                it.name
-                            }?.toImmutableList() ?: emptyList<Library>().toImmutableList(),
-                ),
-                Modifier.fillMaxSize(),
-                lazyListState = lazyListState,
-                contentPadding = innerPadding,
-                colors =
-                    LibraryDefaults.libraryColors(
-                        licenseChipColors =
-                            object : ChipColors {
-                                override val containerColor: Color
-                                    get() = surfaceContainerHighestColor
-                                override val contentColor: Color
-                                    get() = onSurfaceColor
-                            },
-                    ),
-                header = {
-                    item {
-                        TopAppBar(
-                            windowInsets = WindowInsets(0, 0, 0, 0),
-                            title = {
-                                Text(
-                                    text =
-                                        stringResource(
-                                            Res.string.third_party_libraries,
-                                        ),
-                                    style = typo().titleMedium,
-                                )
-                            },
-                            navigationIcon = {
-                                Box(Modifier.padding(horizontal = 5.dp)) {
-                                    RippleIconButton(
-                                        SimpIcons.ArrowBackIosNew,
-                                        Modifier
-                                            .size(32.dp),
-                                        true,
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    ) {
-                                        coroutineScope.launch {
-                                            sheetState.hide()
-                                            showThirdPartyLibraries = false
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                    }
-                },
-            )
-        }
     }
 
     // Transparent while the list sits at the top — an always-on frost dimmed the glow behind the
