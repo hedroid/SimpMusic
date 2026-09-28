@@ -119,6 +119,7 @@ import com.maxrave.simpmusic.expect.ui.isWallpaperDynamicColorSupported
 import com.maxrave.simpmusic.expect.ui.openEqResult
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.extension.bytesToMB
+import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.extension.displayString
 import com.maxrave.simpmusic.extension.isLanguageCode
 import com.maxrave.simpmusic.extension.isTwoLetterCode
@@ -715,7 +716,7 @@ fun SettingScreen(
     // haze frost below stays: it is what keeps the title readable while rows scroll under it.
     LazyColumn(
         state = settingListState,
-        contentPadding = innerPadding,
+        contentPadding = innerPadding.copy(bottom = 0.dp),
         modifier =
             Modifier
                 .padding(horizontal = 16.dp)
@@ -3067,7 +3068,7 @@ fun SettingScreen(
             }
         }
         item(key = "end") {
-            EndOfPage(includeBottomBarPadding = false)
+            EndOfPage()
         }
     }
     importState?.let { progress ->

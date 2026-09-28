@@ -662,12 +662,17 @@ fun App(
                                     ).hazeSource(hazeState),
                             ) {
                                 val bottomOverlayPadding =
-                                    if (isTablet && isShowMiniPlayer && !isInFullscreen) {
+                                    if (isTablet && !isInFullscreen) {
                                         if (getPlatform() == Platform.Android) {
                                             if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp
                                         } else {
                                             80.dp
                                         }
+                                    } else if (!isTablet && isNavBarVisible && !isShowMiniPlayer) {
+                                        // Keep the footer stable when playback stops. Scaffold removes
+                                        // the mini player from innerPadding, so reserve its expanded
+                                        // height here instead of letting the end of the list jump.
+                                        if (isLiquidGlassEnabled == TRUE) 68.dp else 60.dp
                                     } else {
                                         0.dp
                                     }
