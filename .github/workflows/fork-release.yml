@@ -77,6 +77,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag != '' && inputs.tag || format('v{0}', steps.ver.outputs.version) }}
+          # workflow_dispatch can run from a non-default branch. Without an explicit target,
+          # action-gh-release creates a missing tag on the repository default branch even though
+          # the APK above was built from github.sha, leaving the Release tag and binary mismatched.
+          target_commitish: ${{ github.sha }}
           name: SimpMusic ${{ steps.ver.outputs.version }}
           files: SimpMusic-*.apk
           generate_release_notes: true
