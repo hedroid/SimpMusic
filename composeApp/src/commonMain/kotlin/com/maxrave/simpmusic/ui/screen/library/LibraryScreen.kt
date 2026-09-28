@@ -92,6 +92,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryCollection
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
+import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.blur.hazeBlur
@@ -178,6 +179,8 @@ fun LibraryScreen(
 
     val selectionState = rememberSongSelectionState()
     val selectionViewModel: SongSelectionViewModel = koinViewModel()
+    // 网易云播客 chip 页 VM(Koin single:数据随 single 存活,tab 往返零重拉)
+    val neteasePodcastViewModel: NeteasePodcastViewModel = koinViewModel()
     var showSelectionSheet by rememberSaveable { mutableStateOf(false) }
     var showSelectionAddToPlaylist by rememberSaveable { mutableStateOf(false) }
     val allSelectedDownloaded by selectionViewModel.allSelectedDownloaded.collectAsStateWithLifecycle()
@@ -242,6 +245,11 @@ fun LibraryScreen(
                 if (neteasePlaylist !is LocalResource.Success) {
                     viewModel.getNeteaseLibrary()
                 }
+            }
+
+            // 网易云播客:首拉整页;之后每次选中只静默刷新订阅区(详情页订阅动作要反映回来)
+            LibraryChipType.NETEASE_PODCAST -> {
+                neteasePodcastViewModel.onPageSelected()
             }
 
             // Mix for you has its own nav tab now. The filter is persisted, so a build upgraded
@@ -326,6 +334,14 @@ fun LibraryScreen(
                     onUnsubscribeAlbum = { viewModel.unsubscribeNeteaseAlbum(it) },
                     onCreatePlaylist = { viewModel.createNeteasePlaylistInLibrary(it) },
                     onScrolling = onScrolling,
+                )
+            }
+
+            LibraryChipType.NETEASE_PODCAST -> {
+                NeteasePodcastScreen(
+                    innerPadding = innerPadding.copy(top = topAppBarHeight),
+                    navController = navController,
+                    viewModel = neteasePodcastViewModel,
                 )
             }
 
@@ -642,6 +658,8 @@ fun LibraryScreen(
             val topLevelLibraryChips =
                 listOf(
                     LibraryChipType.NETEASE_PLAYLIST,
+                    // 网易云播客(仅网易登录显示,未登录不出现——与您的网易云同款门控)
+                    LibraryChipType.NETEASE_PODCAST,
                     LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                     LibraryChipType.CHART,
                     LibraryChipType.WRAPPED,
@@ -653,6 +671,9 @@ fun LibraryScreen(
                 }
                 // "您的网易云"分区只在网易登录时出现(与 YT 分区对 YT 登录的门控对称)
                 if (type == LibraryChipType.NETEASE_PLAYLIST && !neteaseLoggedIn) {
+                    return@forEach
+                }
+                if (type == LibraryChipType.NETEASE_PODCAST && !neteaseLoggedIn) {
                     return@forEach
                 }
                 // Nothing to recap without the plays — gated exactly as the YouTube chip above
@@ -668,6 +689,7 @@ fun LibraryScreen(
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
                             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_music)
                             LibraryChipType.NETEASE_PLAYLIST -> stringResource(Res.string.your_netease)
+                            LibraryChipType.NETEASE_PODCAST -> stringResource(Res.string.library_podcasts)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
                             LibraryChipType.FAVORITE_PLAYLIST -> stringResource(Res.string.favorite_playlists)

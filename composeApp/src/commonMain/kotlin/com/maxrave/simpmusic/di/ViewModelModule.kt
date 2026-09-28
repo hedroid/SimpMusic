@@ -19,6 +19,8 @@ import com.maxrave.simpmusic.viewModel.LoginSyncSenderViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
+import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
+import com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseTagViewModel
 import com.maxrave.simpmusic.viewModel.MoodViewModel
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
@@ -184,6 +186,19 @@ val viewModelModule =
         }
         single {
             NeteaseMixViewModel(
+                get(),
+            )
+        }
+        // 网易云播客 chip 页:single——tab 往返零重拉(NeteaseHome/Mix 同款理由)
+        single {
+            NeteasePodcastViewModel(
+                get(),
+                get(),
+            )
+        }
+        viewModel {
+            NeteaseRadioDetailViewModel(
+                get(),
                 get(),
             )
         }
