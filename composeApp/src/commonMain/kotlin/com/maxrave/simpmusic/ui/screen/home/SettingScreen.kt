@@ -3067,7 +3067,7 @@ fun SettingScreen(
             }
         }
         item(key = "end") {
-            EndOfPage()
+            EndOfPage(includeBottomBarPadding = false)
         }
     }
     importState?.let { progress ->

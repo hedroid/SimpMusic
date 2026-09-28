@@ -450,7 +450,7 @@ fun LibraryDynamicPlaylistScreen(
             }
         }
         item {
-            EndOfPage()
+            EndOfPage(includeBottomBarPadding = false)
         }
     }
     if (showSelectionSheet) {

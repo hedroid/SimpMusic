@@ -265,7 +265,7 @@ internal fun LibraryYouTubeTab(
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }, key = "yt_end") {
-                        EndOfPage()
+                        EndOfPage(includeBottomBarPadding = false)
                     }
                 }
             }

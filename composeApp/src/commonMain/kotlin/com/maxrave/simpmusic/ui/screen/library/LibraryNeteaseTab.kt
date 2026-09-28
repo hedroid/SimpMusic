@@ -270,7 +270,7 @@ internal fun LibraryNeteaseTab(
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }, key = "netease_end") {
-                        EndOfPage()
+                        EndOfPage(includeBottomBarPadding = false)
                     }
                 }
             }

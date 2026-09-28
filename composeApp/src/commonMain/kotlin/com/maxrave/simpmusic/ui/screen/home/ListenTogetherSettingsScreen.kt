@@ -279,7 +279,7 @@ fun ListenTogetherSettingsScreen(
                     }
                 }
 
-                EndOfPage()
+                EndOfPage(includeBottomBarPadding = false)
             }
         }
 

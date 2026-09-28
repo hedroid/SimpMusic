@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -73,6 +74,8 @@ import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.ui.component.AppBottomNavigationBar
 import com.maxrave.simpmusic.ui.component.AppNavigationRail
 import com.maxrave.simpmusic.ui.component.LiquidGlassAppBottomNavigationBar
+import com.maxrave.simpmusic.ui.component.LocalAppBottomOverlayPadding
+import com.maxrave.simpmusic.ui.component.LocalAppContentPadding
 import com.maxrave.simpmusic.ui.icon.ArrowForwardIos
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
@@ -658,22 +661,37 @@ fun App(
                                         },
                                     ).hazeSource(hazeState),
                             ) {
-                                AppNavigationGraph(
-                                    innerPadding = innerPadding,
-                                    navController = navController,
-                                    hideNavBar = {
-                                        isNavBarVisible = false
-                                    },
-                                    showNavBar = {
-                                        isNavBarVisible = true
-                                    },
-                                    showNowPlayingSheet = {
-                                        isShowNowPlaylistScreen = true
-                                    },
-                                    onScrolling = {
-                                        isScrolledToTop = it
-                                    },
-                                )
+                                val bottomOverlayPadding =
+                                    if (isTablet && isShowMiniPlayer && !isInFullscreen) {
+                                        if (getPlatform() == Platform.Android) {
+                                            if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp
+                                        } else {
+                                            80.dp
+                                        }
+                                    } else {
+                                        0.dp
+                                    }
+                                CompositionLocalProvider(
+                                    LocalAppContentPadding provides innerPadding,
+                                    LocalAppBottomOverlayPadding provides bottomOverlayPadding,
+                                ) {
+                                    AppNavigationGraph(
+                                        innerPadding = innerPadding,
+                                        navController = navController,
+                                        hideNavBar = {
+                                            isNavBarVisible = false
+                                        },
+                                        showNavBar = {
+                                            isNavBarVisible = true
+                                        },
+                                        showNowPlayingSheet = {
+                                            isShowNowPlaylistScreen = true
+                                        },
+                                        onScrolling = {
+                                            isScrolledToTop = it
+                                        },
+                                    )
+                                }
                             }
                             this@Row.AnimatedVisibility(
                                 modifier =

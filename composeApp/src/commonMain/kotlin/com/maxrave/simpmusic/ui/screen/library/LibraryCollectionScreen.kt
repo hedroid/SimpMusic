@@ -269,7 +269,7 @@ fun DownloadedManagementBody(
                                 },
                             )
                         }
-                        item { EndOfPage() }
+                        item { EndOfPage(includeBottomBarPadding = false) }
                     }
                 }
             } else {
