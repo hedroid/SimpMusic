@@ -1497,7 +1497,9 @@ fun QueueBottomSheet(
                             }
                         }
                         item {
-                            EndOfPage()
+                            // sheet 已自行处理 insets 且下方另有浮动按钮区预留,
+                            // scaffold 底栏高度不该在 sheet 内再垫一次(页尾审计 2026-09-28)
+                            EndOfPage(includeBottomBarPadding = false)
                         }
                     }
                     if (queue.isNotEmpty()) {

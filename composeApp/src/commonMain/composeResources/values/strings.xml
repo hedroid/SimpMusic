@@ -1002,6 +1002,8 @@
     <string name="all_songs_already_liked">All selected songs are already in favorites</string>
     <string name="cloud_action_failed_youtube">Couldn't update your YouTube Music account</string>
     <string name="library_podcasts">Podcasts</string>
+    <string name="netease_podcast">NetEase Podcasts</string>
+    <string name="podcast_listens">%1$s listens</string>
     <string name="podcast_my_subscriptions">My subscriptions</string>
     <string name="podcast_latest_programs">Latest programs</string>
     <string name="podcast_tap_to_listen">Tap to listen</string>

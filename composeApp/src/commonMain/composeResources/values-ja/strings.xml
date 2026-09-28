@@ -452,6 +452,8 @@
     <string name="custom_model_id_messages">AI 提供元によるモデルIDを正確に入力します。</string>
     <string name="favorite_podcasts">お気に入りのポッドキャスト</string>
     <string name="no_favorite_podcasts">お気に入りのポッドキャストなし</string>
+    <string name="netease_podcast">NetEaseポッドキャスト</string>
+    <string name="podcast_listens">%1$s回再生</string>
     <string name="podcast_my_subscriptions">登録済みのラジオ</string>
     <string name="podcast_latest_programs">最新のエピソード</string>
     <string name="podcast_tap_to_listen">タップして再生</string>

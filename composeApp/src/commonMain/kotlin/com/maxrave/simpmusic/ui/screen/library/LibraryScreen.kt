@@ -110,6 +110,8 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.download_management
+import simpmusic.composeapp.generated.resources.netease_podcast
+
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
@@ -689,7 +691,7 @@ fun LibraryScreen(
                             LibraryChipType.YOUR_LIBRARY -> stringResource(Res.string.your_library)
                             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> stringResource(Res.string.your_youtube_music)
                             LibraryChipType.NETEASE_PLAYLIST -> stringResource(Res.string.your_netease)
-                            LibraryChipType.NETEASE_PODCAST -> stringResource(Res.string.library_podcasts)
+                            LibraryChipType.NETEASE_PODCAST -> stringResource(Res.string.netease_podcast)
                             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> stringResource(Res.string.mix_for_you)
                             LibraryChipType.LOCAL_PLAYLIST -> stringResource(Res.string.your_playlists)
                             LibraryChipType.FAVORITE_PLAYLIST -> stringResource(Res.string.favorite_playlists)

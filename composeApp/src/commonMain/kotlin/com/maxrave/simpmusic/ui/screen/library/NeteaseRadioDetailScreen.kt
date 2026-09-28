@@ -157,7 +157,8 @@ fun NeteaseRadioDetailScreen(
                 }
             }
             item(key = "radio_end") {
-                EndOfPage()
+                // contentPadding 已含 scaffold 底栏让位,页尾不双叠(同两云 tab 口径)
+                EndOfPage(includeBottomBarPadding = false)
             }
         }
     }

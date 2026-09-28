@@ -481,6 +481,8 @@
     <string name="custom_model_id_messages">AI 제공자의 정확한 모델 ID를 입력해 주십시오.</string>
     <string name="favorite_podcasts">즐겨 찾는 팟캐스트</string>
     <string name="no_favorite_podcasts">즐겨 찾는 팟캐스트 없음</string>
+    <string name="netease_podcast">NetEase 팟캐스트</string>
+    <string name="podcast_listens">%1$s회 청취</string>
     <string name="podcast_my_subscriptions">내 구독 라디오</string>
     <string name="podcast_latest_programs">최신 에피소드</string>
     <string name="podcast_tap_to_listen">탭하여 재생</string>

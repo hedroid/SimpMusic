@@ -2,8 +2,6 @@ package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,11 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -49,10 +45,11 @@ import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.all
+import simpmusic.composeapp.generated.resources.podcast_listens
 import simpmusic.composeapp.generated.resources.podcast_based_on_listening
 import simpmusic.composeapp.generated.resources.podcast_featured_radios
 import simpmusic.composeapp.generated.resources.podcast_guess_you_like
@@ -63,8 +60,10 @@ import simpmusic.composeapp.generated.resources.podcast_toplist_radios
 
 /**
  * 网易云播客 chip 页(LibraryScreen Crossfade 分支挂载,VM 是 Koin single)。
- * 区块编排对齐 Melodia:分类 chips → 我的订阅 → 最新节目(点击即播) → 猜你喜欢(未登录隐藏)
+ * 区块编排对齐 Melodia:我的订阅 → 最新节目(点击即播,N人收听) → 猜你喜欢(未登录隐藏)
  * → 精选电台 → 热门电台榜(带排名)。横行走统一 MediaRow 口径(15dp 页边/4dp 间距)。
+ * 无分类 chips:/program/recommend/v1 的 cateId 被服务端忽略(number/string/categoryId
+ * 三变体探针实证,Melodia 同款请求同样无效),假过滤已移除(2026-09-28)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +76,7 @@ fun NeteasePodcastScreen(
     val pullToRefreshState = rememberPullToRefreshState()
 
     val hasAnyContent =
-        uiState.categories.isNotEmpty() || uiState.myRadios.isNotEmpty() ||
+        uiState.myRadios.isNotEmpty() ||
             uiState.programs.isNotEmpty() || uiState.personalizedRadios.isNotEmpty() ||
             uiState.recommendRadios.isNotEmpty() || uiState.toplistRadios.isNotEmpty()
 
@@ -127,17 +126,6 @@ fun NeteasePodcastScreen(
                     bottom = innerPadding.calculateBottomPadding() + 8.dp,
                 ),
         ) {
-            // 分类 chips(全部=不过滤)
-            if (uiState.categories.isNotEmpty()) {
-                item(key = "podcast_categories") {
-                    PodcastCategoryChipsRow(
-                        categories = uiState.categories,
-                        selectedId = uiState.selectedCategoryId,
-                        onSelect = { viewModel.selectCategory(it) },
-                    )
-                }
-            }
-
             // 我的订阅(未登录/空即隐藏)
             if (uiState.myRadios.isNotEmpty()) {
                 item(key = "podcast_my_subscriptions") {
@@ -242,38 +230,9 @@ fun NeteasePodcastScreen(
             }
 
             item(key = "podcast_end") {
-                EndOfPage()
+                // contentPadding 已含 scaffold 底栏让位,页尾不双叠(同两云 tab 口径)
+                EndOfPage(includeBottomBarPadding = false)
             }
-        }
-    }
-}
-
-/** 分类 chips 行(含"全部"=不过滤;选中即重拉最新节目) */
-@Composable
-private fun PodcastCategoryChipsRow(
-    categories: List<com.maxrave.netease.model.NeteasePodcastCategory>,
-    selectedId: Long?,
-    onSelect: (Long?) -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 15.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        FilterChip(
-            selected = selectedId == null,
-            onClick = { onSelect(null) },
-            label = { Text(stringResource(Res.string.all), style = typo().labelMedium) },
-        )
-        categories.forEach { category ->
-            FilterChip(
-                selected = selectedId == category.id,
-                onClick = { onSelect(category.id) },
-                label = { Text(category.name, style = typo().labelMedium) },
-            )
         }
     }
 }
@@ -383,7 +342,14 @@ internal fun NeteaseProgramRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = listOfNotNull(program.radioName, program.djNickname).joinToString(" · "),
+                text =
+                    listOfNotNull(
+                        program.radioName,
+                        program.djNickname,
+                        program.listenerCount?.let {
+                            stringResource(Res.string.podcast_listens, formatCompactCount(it))
+                        },
+                    ).joinToString(" · "),
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

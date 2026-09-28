@@ -955,6 +955,8 @@
     <string name="cloud_action_failed_youtube">YouTube Music 账号操作失败</string>
     <string name="liked_songs">喜欢的歌曲</string>
     <string name="library_podcasts">播客</string>
+    <string name="netease_podcast">网易播客</string>
+    <string name="podcast_listens">%1$s次收听</string>
     <string name="podcast_my_subscriptions">我的订阅</string>
     <string name="podcast_latest_programs">最新节目</string>
     <string name="podcast_tap_to_listen">点击即听</string>
