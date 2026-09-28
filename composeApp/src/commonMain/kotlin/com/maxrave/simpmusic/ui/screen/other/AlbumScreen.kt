@@ -902,12 +902,15 @@ fun AlbumScreen(
                                     style = typo().labelMedium,
                                     modifier =
                                         Modifier.padding(
-                                            horizontal = 24.dp,
+                                            // 与下方首张封面左缘对齐(横行 12dp),原 24dp 与封面错位
+                                            horizontal = 12.dp,
                                             vertical = 8.dp,
                                         ),
                                 )
                                 LazyRow(
                                     verticalAlignment = Alignment.CenterVertically,
+                                    // 统一封面间距 4dp(原 0dp 贴合)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     modifier = Modifier.padding(horizontal = 12.dp),
                                 ) {
                                     items(uiState.otherVersion) { album ->

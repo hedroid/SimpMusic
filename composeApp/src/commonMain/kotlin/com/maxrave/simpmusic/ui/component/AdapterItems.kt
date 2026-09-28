@@ -1563,39 +1563,24 @@ fun MoodAndGenresContentItem(
     navController: NavController,
     homeViewModel: HomeViewModel = koinViewModel(),
 ) {
-    Column(
-        modifier = Modifier.wrapContentHeight(align = Alignment.CenterVertically, unbounded = true),
-    ) {
-        Text(
-            text =
-                when (data) {
-                    is ItemsPlaylist -> (data).header
-                    is Item -> (data).header
-                    else -> ""
-                },
-            style = typo().titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier =
-                Modifier
-                    .padding(top = 8.dp)
-                    .padding(
-                        horizontal = 15.dp,
-                    ).fillMaxWidth(),
-        )
-        LazyRow(
-            modifier =
-                Modifier.padding(
-                    10.dp,
-                ),
-        ) {
-            val itemList =
-                when (data) {
-                    is ItemsPlaylist -> (data).contents
-                    is Item -> (data).contents
-                    else -> listOf()
-                }
-            items(itemList) { item ->
-                HomeItemContentPlaylist(onClick = {
+    // 统一横行口径(2026-09-28):MediaRow——页边 15dp、封面间 4dp、snap 滑动、节头与首卡对齐。
+    // 旧实现是手写 LazyRow:封面 0dp 贴合、行边距 10dp 与节头 15dp 错位,不在统一口径内。
+    val header =
+        when (data) {
+            is ItemsPlaylist -> (data).header
+            is Item -> (data).header
+            else -> ""
+        }
+    val itemList =
+        when (data) {
+            is ItemsPlaylist -> (data).contents
+            is Item -> (data).contents
+            else -> listOf()
+        }
+    MediaRow(title = header) {
+        items(itemList) { item ->
+            HomeItemContentPlaylist(
+                onClick = {
                     // The "Songs" shelf mixes tracks into a list that is otherwise all playlists,
                     // so route by videoId: a track starts its radio, everything else opens a page.
                     val moodSong = item as? com.maxrave.domain.data.model.mood.moodmoments.Content
@@ -1641,8 +1626,9 @@ fun MoodAndGenresContentItem(
                             ),
                         )
                     }
-                }, data = item)
-            }
+                },
+                data = item,
+            )
         }
     }
 }
