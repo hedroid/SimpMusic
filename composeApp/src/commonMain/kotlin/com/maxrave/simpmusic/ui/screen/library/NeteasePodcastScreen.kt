@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -299,15 +300,19 @@ internal fun NeteaseDjRadioCard(
     }
 }
 
-/** 节目整行(封面 56dp + 标题 + 电台·主播 + 时长);点击=从该节目整队起播 */
+/** 节目整行(封面 56dp + 标题 + 电台·主播·N次收听 + 时长);点击=从该节目整队起播。
+ *  paid 节目(付费未购)整行 0.4 alpha 置灰——与歌单灰歌同款形态;点击仍可播,
+ *  走 isAvailable=false 的三档动作(默认 SKIP),不再播 26KB 试听片段。 */
 @Composable
 internal fun NeteaseProgramRow(
     program: com.maxrave.netease.model.NeteaseDjProgram,
     onClick: () -> Unit,
 ) {
+    // 置灰修饰(灰歌同款):paid 行整体 0.4 alpha
+    val dimModifier = if (program.paid) Modifier.alpha(0.4f) else Modifier
     Row(
         modifier =
-            Modifier
+            dimModifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .padding(horizontal = 15.dp, vertical = 6.dp),
