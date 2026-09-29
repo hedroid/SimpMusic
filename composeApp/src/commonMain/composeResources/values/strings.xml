@@ -1017,6 +1017,8 @@
     <string name="podcast_toplist_radios">Popular radios</string>
     <string name="podcast_programs">Programs</string>
     <string name="podcast_programs_unavailable">Couldn't load programs (rate-limited by NetEase or network hiccup). Try again in a moment.</string>
+    <string name="podcast_rising_fastest">Fastest rising</string>
+    <string name="podcast_hottest_radios">Hottest radios</string>
     <string name="podcast_category_empty">No radios in this category yet</string>
     <string name="podcast_no_programs">No programs yet</string>
     <string name="podcast_subscribe">Subscribe</string>

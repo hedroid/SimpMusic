@@ -1,18 +1,24 @@
 package com.maxrave.simpmusic.ui.screen.library
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,25 +28,39 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import coil3.compose.LocalPlatformContext
+import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NormalAppBar
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastCategoryViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.podcast_category_empty
+import simpmusic.composeapp.generated.resources.podcast_hottest_radios
+import simpmusic.composeapp.generated.resources.podcast_rising_fastest
 import simpmusic.composeapp.generated.resources.retry
 
-/** 网易云播客分类电台列表页(分类 chips 进入,/djradio/hot offset 分页,近底追加) */
+/**
+ * 网易云播客分类页(官方同构,2026-09-29):双 tab 榜单——上升最快(type=0)/最热电台(type=1),
+ * 两列网格(单元格=排名+方形小封面+名称+订阅数,官方一行两条);近底分页,tab 按需拉取。
+ * 官方顶部"优秀新电台"横滑暂缺端点(三个候选全 404 探针实证),不做假区。
+ */
 @Composable
 fun NeteasePodcastCategoryScreen(
     navController: NavController,
@@ -71,32 +91,63 @@ fun NeteasePodcastCategoryScreen(
                 }
             },
         )
-        if (uiState.loading && uiState.radios.isEmpty()) {
+        if (uiState.loading) {
             CenterLoadingBox(Modifier.fillMaxSize())
             return@Column
         }
-        val listState = rememberLazyListState()
-        val shouldLoadMore by remember {
-            derivedStateOf {
-                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                last >= listState.layoutInfo.totalItemsCount - 8
+
+        // 双 tab(上升最快/最热电台,官方同款)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 15.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            NeteasePodcastCategoryViewModel.ChartTab.entries.forEach { tab ->
+                FilterChip(
+                    selected = uiState.tab == tab,
+                    onClick = { viewModel.switchTab(tab) },
+                    label = {
+                        Text(
+                            stringResource(if (tab == NeteasePodcastCategoryViewModel.ChartTab.RISING) Res.string.podcast_rising_fastest else Res.string.podcast_hottest_radios),
+                            style = typo().labelMedium,
+                        )
+                    },
+                )
             }
         }
-        LaunchedEffect(shouldLoadMore, uiState.hasMore) {
-            if (shouldLoadMore && uiState.hasMore && !uiState.loadingMore && !uiState.loading) {
+
+        val chart = uiState.current
+        val gridState = rememberLazyGridState()
+        val shouldLoadMore by remember {
+            derivedStateOf {
+                val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                last >= gridState.layoutInfo.totalItemsCount - 6
+            }
+        }
+        LaunchedEffect(shouldLoadMore, chart.hasMore) {
+            if (shouldLoadMore && chart.hasMore && !chart.loadingMore) {
                 viewModel.loadMore()
             }
         }
-        LazyColumn(
-            state = listState,
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding =
                 PaddingValues(
+                    start = 15.dp,
+                    end = 15.dp,
+                    top = 4.dp,
                     bottom = innerPadding.calculateBottomPadding() + 8.dp,
                 ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (uiState.radios.isEmpty() && !uiState.loading) {
-                item(key = "category_error") {
+            if (chart.radios.isEmpty()) {
+                item(key = "category_state", span = { GridItemSpan(2) }) {
                     Column(
                         Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -104,13 +155,13 @@ fun NeteasePodcastCategoryScreen(
                         Text(
                             text =
                                 stringResource(
-                                    // 僵尸分类(娱乐/其他等服务端本来就 0 条)≠加载失败
-                                    if (uiState.unavailable) Res.string.error else Res.string.podcast_category_empty,
+                                    // 僵尸分类(娱乐/其他服务端 0 条)≠加载失败
+                                    if (chart.failed) Res.string.error else Res.string.podcast_category_empty,
                                 ),
                             style = typo().bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (uiState.unavailable) {
+                        if (chart.failed) {
                             Button(
                                 onClick = { viewModel.retry() },
                                 modifier = Modifier.padding(top = 12.dp),
@@ -121,9 +172,11 @@ fun NeteasePodcastCategoryScreen(
                     }
                 }
             }
-            itemsIndexed(uiState.radios, key = { _, r -> "category_radio_" + r.id }) { index, radio ->
-                Box(Modifier.padding(horizontal = 15.dp, vertical = 6.dp)) {
-                NeteaseDjRadioCard(radio = radio, rank = index + 1) {
+            itemsIndexed(chart.radios, key = { _, r -> "category_radio_${r.id}" }) { index, radio ->
+                CategoryRadioCell(
+                    rank = index + 1,
+                    radio = radio,
+                ) {
                     navController.navigate(
                         com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination(
                             radioId = radio.id,
@@ -131,21 +184,79 @@ fun NeteasePodcastCategoryScreen(
                         ),
                     )
                 }
-                }
             }
-            if (uiState.loadingMore) {
-                item(key = "category_loading_more") {
+            if (chart.loadingMore) {
+                item(key = "category_loading_more", span = { GridItemSpan(2) }) {
                     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp))
                     }
                 }
             }
-            item(key = "category_end") {
-                // 列表自身无 bottom contentPadding(电台卡自带 15dp 视觉边距),
-                // 页尾走默认动态避让
-                EndOfPage()
+            item(key = "category_end", span = { GridItemSpan(2) }) {
+                // 网格 contentPadding 已含 scaffold 底栏让位,页尾不双叠
+                EndOfPage(includeBottomBarPadding = false)
             }
         }
     }
 }
 
+/** 榜单单元格(官方一行两条同构):排名数字 + 方形小封面 + 名称两行 + 订阅数 */
+@Composable
+private fun CategoryRadioCell(
+    rank: Int,
+    radio: com.maxrave.netease.model.NeteaseDjRadio,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onClick)
+                .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = rank.toString(),
+            style = typo().titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = 10.dp),
+        )
+        AsyncImage(
+            model =
+                ImageRequest
+                    .Builder(LocalPlatformContext.current)
+                    .data(radio.coverUrl)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .crossfade(550)
+                    .build(),
+            contentDescription = radio.name,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+        )
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 10.dp),
+        ) {
+            Text(
+                text = radio.name,
+                style = typo().titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            radio.subCount?.let {
+                Text(
+                    text = formatCompactCount(it),
+                    style = typo().bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}

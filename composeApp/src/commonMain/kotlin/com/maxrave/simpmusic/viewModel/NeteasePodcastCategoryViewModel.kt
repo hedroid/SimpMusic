@@ -1,10 +1,7 @@
 package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
-import com.maxrave.common.Config
 import com.maxrave.data.repository.NeteaseRepositoryImpl
-import com.maxrave.domain.mediaservice.handler.PlaylistType
-import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.netease.model.NeteaseDjRadio
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,17 +10,37 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** 网易云播客分类电台列表页(分类 chips 进入,/djradio/hot offset 分页,近底追加)。entry-scope */
+/**
+ * 网易云播客分类电台列表页(分类 chips 进入)。对齐官方分类页双 tab(2026-09-29):
+ * **上升最快(type=0)/最热电台(type=1)**,/djradio/hot 分档名单完全不同(探针实证);
+ * 两列网格近底分页。tab 按需拉取(切 tab 才请求该档),各自独立降级。
+ * 官方顶部"优秀新电台"横滑暂缺端点(三个候选全 404),不做假区。
+ */
 class NeteasePodcastCategoryViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
 ) : BaseViewModel() {
-    data class UiState(
+    /** 榜单分档(与 /djradio/hot 的 type 对齐) */
+    enum class ChartTab(val endpointType: Int) {
+        RISING(0),
+        HOT(1),
+    }
+
+    data class ChartState(
         val radios: List<NeteaseDjRadio> = emptyList(),
-        val loading: Boolean = true,
-        val loadingMore: Boolean = false,
+        val loaded: Boolean = false,
         val hasMore: Boolean = false,
-        val unavailable: Boolean = false,
+        val loadingMore: Boolean = false,
+        val failed: Boolean = false,
     )
+
+    data class UiState(
+        val tab: ChartTab = ChartTab.RISING,
+        val charts: Map<ChartTab, ChartState> =
+            ChartTab.entries.associateWith { ChartState() },
+        val loading: Boolean = true,
+    ) {
+        val current: ChartState get() = charts[tab] ?: ChartState()
+    }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> get() = _uiState.asStateFlow()
@@ -31,51 +48,80 @@ class NeteasePodcastCategoryViewModel(
     private var categoryId = 0L
 
     fun load(id: Long) {
-        if (categoryId == id && !_uiState.value.loading) return
+        if (categoryId == id && _uiState.value.charts.any { it.value.loaded }) return
         categoryId = id
-        _uiState.update { it.copy(loading = true, unavailable = false) }
-        viewModelScope.launch { loadPage() }
+        _uiState.update { it.copy(loading = true, charts = ChartTab.entries.associateWith { ChartState() }) }
+        loadTab(ChartTab.RISING)
+    }
+
+    fun switchTab(tab: ChartTab) {
+        if (_uiState.value.tab == tab) return
+        _uiState.update { it.copy(tab = tab) }
+        if (!_uiState.value.charts[tab]!!.loaded) {
+            loadTab(tab)
+        }
     }
 
     fun retry() {
-        _uiState.update { it.copy(loading = true, unavailable = false) }
-        viewModelScope.launch { loadPage() }
+        _uiState.update { state ->
+            state.copy(charts = state.charts + (state.tab to (state.charts[state.tab] ?: ChartState()).copy(failed = false)))
+        }
+        loadTab(_uiState.value.tab)
     }
 
     fun loadMore() {
         val state = _uiState.value
-        if (!state.hasMore || state.loadingMore || state.loading) return
-        _uiState.update { it.copy(loadingMore = true) }
+        val chart = state.current
+        if (!chart.loaded || !chart.hasMore || chart.loadingMore) return
+        _uiState.update { s ->
+            s.copy(charts = s.charts + (s.tab to chart.copy(loadingMore = true)))
+        }
         viewModelScope.launch {
             neteaseRepository
-                .getDjRadiosByCategory(categoryId, offset = state.radios.size)
+                .getDjRadiosByCategory(categoryId, offset = chart.radios.size, type = state.tab.endpointType)
                 .fold(
                     onSuccess = { (radios, more) ->
-                        _uiState.update { current ->
-                            val fresh = radios.filterNot { r -> current.radios.any { it.id == r.id } }
-                            current.copy(
-                                radios = current.radios + fresh,
-                                hasMore = more && fresh.isNotEmpty(),
-                                loadingMore = false,
+                        _uiState.update { s ->
+                            val c = s.charts[s.tab] ?: return@update s
+                            val fresh = radios.filterNot { r -> c.radios.any { it.id == r.id } }
+                            s.copy(
+                                charts = s.charts + (s.tab to c.copy(radios = c.radios + fresh, hasMore = more && fresh.isNotEmpty(), loadingMore = false)),
                             )
                         }
                     },
                     onFailure = {
-                        _uiState.update { it.copy(loadingMore = false) }
+                        _uiState.update { s ->
+                            val c = s.charts[s.tab] ?: return@update s
+                            s.copy(charts = s.charts + (s.tab to c.copy(loadingMore = false)))
+                        }
                     },
                 )
         }
     }
 
-    private suspend fun loadPage() {
-        neteaseRepository.getDjRadiosByCategory(categoryId, offset = 0).fold(
-            onSuccess = { (radios, more) ->
-                _uiState.update { it.copy(radios = radios, hasMore = more, loading = false) }
-            },
-            onFailure = {
-                log("category radios failed: $it")
-                _uiState.update { it.copy(loading = false, unavailable = true) }
-            },
-        )
+    private fun loadTab(tab: ChartTab) {
+        viewModelScope.launch {
+            neteaseRepository
+                .getDjRadiosByCategory(categoryId, offset = 0, type = tab.endpointType)
+                .fold(
+                    onSuccess = { (radios, more) ->
+                        _uiState.update { s ->
+                            s.copy(
+                                loading = false,
+                                charts = s.charts + (tab to ChartState(radios = radios, loaded = true, hasMore = more)),
+                            )
+                        }
+                    },
+                    onFailure = {
+                        log("category radios failed: $it")
+                        _uiState.update { s ->
+                            s.copy(
+                                loading = false,
+                                charts = s.charts + (tab to (s.charts[tab] ?: ChartState()).copy(loaded = true, failed = true)),
+                            )
+                        }
+                    },
+                )
+        }
     }
 }
