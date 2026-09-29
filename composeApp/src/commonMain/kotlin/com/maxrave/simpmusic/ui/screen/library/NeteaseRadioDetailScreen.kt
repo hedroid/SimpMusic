@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +44,8 @@ import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NormalAppBar
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
+import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
@@ -51,6 +54,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.podcast_no_programs
+import simpmusic.composeapp.generated.resources.podcast_order_earliest
+import simpmusic.composeapp.generated.resources.podcast_order_latest
 import simpmusic.composeapp.generated.resources.podcast_programs
 import simpmusic.composeapp.generated.resources.podcast_programs_unavailable
 import simpmusic.composeapp.generated.resources.retry
@@ -126,12 +131,35 @@ fun NeteaseRadioDetailScreen(
                 )
             }
             item(key = "radio_programs_header") {
-                Text(
-                    text = stringResource(Res.string.podcast_programs),
-                    style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
-                )
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 15.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.podcast_programs),
+                        style = typo().headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 图标切换:下箭头=最新在前(默认),双上箭头=最早在前;选中 primary 着色
+                    IconButton(onClick = { viewModel.setAscending(false) }) {
+                        Icon(
+                            SimpIcons.KeyboardArrowDown,
+                            contentDescription = stringResource(Res.string.podcast_order_latest),
+                            tint = if (!uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { viewModel.setAscending(true) }) {
+                        Icon(
+                            SimpIcons.KeyboardDoubleArrowUp,
+                            contentDescription = stringResource(Res.string.podcast_order_earliest),
+                            tint = if (uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             if (uiState.programs.isEmpty() && !uiState.loading) {
                 item(key = "radio_no_programs") {
@@ -167,7 +195,9 @@ fun NeteaseRadioDetailScreen(
                 uiState.programs,
                 key = { _, program -> "radio_program_${program.id}" },
             ) { index, program ->
-                NeteaseProgramRow(program = program) {
+                // 期号=第几期(serialNum):最新排序首条即当前最大期号,最早排序从第 1 期起;
+                // 缺期号的数据回退位置序号
+                NeteaseProgramRow(program = program, rank = program.serialNum ?: index + 1) {
                     viewModel.playFrom(index)
                 }
             }

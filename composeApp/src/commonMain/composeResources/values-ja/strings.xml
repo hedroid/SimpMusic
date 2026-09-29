@@ -466,6 +466,8 @@
     <string name="podcast_program_toplist">人気エピソードランキング</string>
     <string name="podcast_toplist_radios">人気ラジオランキング</string>
     <string name="podcast_programs">エピソード</string>
+    <string name="podcast_order_latest">新しい順</string>
+    <string name="podcast_order_earliest">古い順</string>
     <string name="podcast_programs_unavailable">エピソードの取得に失敗しました（操作が頻繁または通信不安定）。しばらくしてからお試しください</string>
     <string name="podcast_rising_fastest">急上昇</string>
     <string name="podcast_hottest_radios">最も人気のラジオ</string>

@@ -223,6 +223,8 @@
     <string name="podcast_program_toplist">熱門節目榜</string>
     <string name="podcast_toplist_radios">熱門電臺榜</string>
     <string name="podcast_programs">節目</string>
+    <string name="podcast_order_latest">最新</string>
+    <string name="podcast_order_earliest">最早</string>
     <string name="podcast_programs_unavailable">節目拉取失敗（操作頻繁被限流或網路波動），稍後重試</string>
     <string name="podcast_rising_fastest">上升最快</string>
     <string name="podcast_hottest_radios">最熱電臺</string>

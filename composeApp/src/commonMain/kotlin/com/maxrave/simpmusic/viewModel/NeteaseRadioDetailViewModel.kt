@@ -44,6 +44,8 @@ class NeteaseRadioDetailViewModel(
         /** 非 null=节目列表拉取失败——byradio 连续调用会被网易限流(HTTP 200+空数据或
          *  code=405"操作频繁",同一电台先空后有即此),网络抖动同走这里;UI 给重试不冒充空态 */
         val programsUnavailable: Boolean = false,
+        /** 节目排序:false=最新在前(默认,byradio asc=false)/true=最早在前(asc=true) */
+        val ascending: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -72,8 +74,15 @@ class NeteaseRadioDetailViewModel(
         viewModelScope.launch { loadPrograms() }
     }
 
+    /** 切换 最新在前/最早在前(byradio asc 参数),清空重拉第一页 */
+    fun setAscending(ascending: Boolean) {
+        if (_uiState.value.ascending == ascending) return
+        _uiState.update { it.copy(ascending = ascending, programs = emptyList(), hasMore = false, loading = true, programsUnavailable = false) }
+        viewModelScope.launch { loadPrograms() }
+    }
+
     private suspend fun loadPrograms() {
-        neteaseRepository.getDjRadioProgramsPage(radioId, offset = 0).fold(
+        neteaseRepository.getDjRadioProgramsPage(radioId, offset = 0, asc = _uiState.value.ascending).fold(
             onSuccess = { (programs, more) ->
                 // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
                 val playable = programs.filter { it.mainSongId != null }
@@ -101,7 +110,7 @@ class NeteaseRadioDetailViewModel(
         _uiState.update { it.copy(loadingMore = true) }
         viewModelScope.launch {
             neteaseRepository
-                .getDjRadioProgramsPage(radioId, offset = state.programs.size)
+                .getDjRadioProgramsPage(radioId, offset = state.programs.size, asc = _uiState.value.ascending)
                 .fold(
                     onSuccess = { (programs, more) ->
                         val playable = programs.filter { it.mainSongId != null }

@@ -969,6 +969,8 @@
     <string name="podcast_program_toplist">热门节目榜</string>
     <string name="podcast_toplist_radios">热门电台榜</string>
     <string name="podcast_programs">节目</string>
+    <string name="podcast_order_latest">最新</string>
+    <string name="podcast_order_earliest">最早</string>
     <string name="podcast_programs_unavailable">节目拉取失败（操作频繁被限流或网络波动），稍后重试</string>
     <string name="podcast_rising_fastest">上升最快</string>
     <string name="podcast_hottest_radios">最热电台</string>
