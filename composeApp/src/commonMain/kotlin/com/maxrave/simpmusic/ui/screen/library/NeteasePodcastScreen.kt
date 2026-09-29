@@ -71,10 +71,10 @@ import simpmusic.composeapp.generated.resources.podcast_toplist_radios
 
 /**
  * 网易云播客 chip 页(LibraryScreen Crossfade 分支挂载,VM 是 Koin single)。
- * 区块编排对齐业内播客发现页(Spotify/YTM/网易官方,2026-09-29 重设计):全部区块统一
- * 横滑 shelf(MediaRow 口径,15dp 页边/4dp 间距)——分类 chips → 我的订阅 → 猜你喜欢
- * → 最新节目(竖版节目卡,点击即播) → 精选电台 → 热门电台榜 → 新晋电台榜(双独立 shelf,
- * 带排名) → 热门节目榜(节目卡+排名)。列表行形态只留给电台详情页的时间序列内容。
+ * 区块形态按内容类型二分(2026-09-29 二稿,对齐 Apple Podcasts/Spotify/网易官方):
+ * **电台(频道)=横滑卡货架**(订阅对象,封面即主体,统一 160dp)——我的订阅/猜你喜欢/
+ * 精选/热门榜/新晋榜;**节目(剧集)=列表行**(可播放内容单元,信息密度高)——最新节目/
+ * 热门节目榜(行首排名,各取前 10)。上一稿全货架化是过度统一,剧集内容业内均为列表。
  * 分类 chips 拉 /djradio/hot 电台列表(program 端点 cateId 被服务端忽略是另一回事)。
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,27 +170,39 @@ fun NeteasePodcastScreen(
                 }
             }
 
-            // 最新节目(竖版节目卡横滑,点击即播;shelf 固定一页)
+            // 最新节目(剧集=列表行,Apple New Episodes/Spotify 剧集同款;取前10,
+            // 点击即播整队——整队仍是全部节目,列表只是展示窗口)
             if (uiState.programsLoading && uiState.programs.isEmpty()) {
                 item(key = "podcast_programs_loading") {
                     Box(
-                        Modifier.fillMaxWidth().height(200.dp),
+                        Modifier.fillMaxWidth().height(160.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(22.dp))
                     }
                 }
-            } else if (uiState.programs.isNotEmpty()) {
-                item(key = "podcast_programs") {
-                    MediaRow(
-                        title = stringResource(Res.string.podcast_latest_programs),
-                        subtitle = stringResource(Res.string.podcast_tap_to_listen),
-                    ) {
-                        items(uiState.programs, key = { "program_${it.id}" }) { program ->
-                            NeteaseProgramCard(program = program) {
-                                viewModel.playProgram(uiState.programs.indexOf(program))
-                            }
-                        }
+            } else {
+                item(key = "podcast_programs_header") {
+                    Column(Modifier.padding(horizontal = 15.dp)) {
+                        Text(
+                            text = stringResource(Res.string.podcast_latest_programs),
+                            style = typo().headlineMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                        Text(
+                            text = stringResource(Res.string.podcast_tap_to_listen),
+                            style = typo().bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                items(
+                    uiState.programs.take(LATEST_PROGRAMS_SHOWN),
+                    key = { "program_${it.id}" },
+                ) { program ->
+                    NeteaseProgramRow(program = program) {
+                        viewModel.playProgram(uiState.programs.indexOf(program))
                     }
                 }
             }
@@ -240,15 +252,25 @@ fun NeteasePodcastScreen(
                 }
             }
 
-            // 热门节目榜(竖版节目卡+排名,点击即播;付费判定同最新节目)
+            // 热门节目榜(剧集榜单=列表行+行首排名,Apple Top Charts 同款;取前10)
             if (uiState.programToplist.isNotEmpty()) {
-                item(key = "podcast_program_toplist") {
-                    MediaRow(title = stringResource(Res.string.podcast_program_toplist)) {
-                        itemsIndexed(uiState.programToplist, key = { _, p -> "program_toplist_${p.id}" }) { index, program ->
-                            NeteaseProgramCard(program = program, rank = index + 1) {
-                                viewModel.playProgramToplist(uiState.programToplist.indexOf(program))
-                            }
-                        }
+                item(key = "podcast_program_toplist_header") {
+                    Text(
+                        text = stringResource(Res.string.podcast_program_toplist),
+                        style = typo().headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 10.dp),
+                    )
+                }
+                itemsIndexed(
+                    uiState.programToplist.take(TOPLIST_PROGRAMS_SHOWN),
+                    key = { _, p -> "program_toplist_${p.id}" },
+                ) { index, program ->
+                    NeteaseProgramRow(
+                        program = program,
+                        rank = index + 1,
+                    ) {
+                        viewModel.playProgramToplist(uiState.programToplist.indexOf(program))
                     }
                 }
             }
@@ -260,6 +282,10 @@ fun NeteasePodcastScreen(
         }
     }
 }
+
+/** 发现页列表区块的展示窗口:剧集类内容取前 N 条(全量横滑无"页底",列表太长喧宾夺主) */
+private const val LATEST_PROGRAMS_SHOWN = 10
+private const val TOPLIST_PROGRAMS_SHOWN = 10
 
 /** 分类浏览 chips(点击=进分类电台列表页;与已移除的"cateId 过滤节目"假过滤不同,这里拉电台列表) */
 @Composable
@@ -352,88 +378,13 @@ internal fun NeteaseDjRadioCard(
     }
 }
 
-/** 竖版节目卡(发现页 shelf 通用形态,对齐 Spotify 新剧集/YTM 货架卡):方形封面+右下时长
- *  角标(榜单带左上排名)+标题两行+电台名。paid 置灰 0.4(灰歌同款);点击=整队起播。 */
-@Composable
-internal fun NeteaseProgramCard(
-    program: com.maxrave.netease.model.NeteaseDjProgram,
-    rank: Int? = null,
-    onClick: () -> Unit,
-) {
-    val dimModifier = if (program.paid) Modifier.alpha(0.4f) else Modifier
-    Column(
-        modifier =
-            dimModifier
-                .width(140.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick),
-    ) {
-        Box {
-            AsyncImage(
-                model =
-                    ImageRequest
-                        .Builder(LocalPlatformContext.current)
-                        .data(program.coverUrl)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .crossfade(550)
-                        .build(),
-                contentDescription = program.name,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .size(140.dp)
-                        .clip(RoundedCornerShape(10.dp)),
-            )
-            // 时长角标(右下,黑底白字——业内剧集卡通用)
-            Text(
-                text = formatProgramDuration(program.durationMs),
-                style = typo().labelSmall,
-                color = Color.White,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 1.dp),
-            )
-            if (rank != null) {
-                Text(
-                    text = rank.toString(),
-                    style = typo().titleMedium,
-                    color = Color.White,
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                )
-            }
-        }
-        Text(
-            text = program.name,
-            style = typo().titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Text(
-            text = program.radioName.orEmpty(),
-            style = typo().bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
 /** 节目整行(封面 56dp + 标题 + 电台·主播·N次收听 + 时长);点击=从该节目整队起播。
  *  paid 节目(付费未购)整行 0.4 alpha 置灰——与歌单灰歌同款形态;点击仍可播,
  *  走 isAvailable=false 的三档动作(默认 SKIP),不再播 26KB 试听片段。 */
 @Composable
 internal fun NeteaseProgramRow(
     program: com.maxrave.netease.model.NeteaseDjProgram,
+    rank: Int? = null,
     onClick: () -> Unit,
 ) {
     // 置灰修饰(灰歌同款):paid 行整体 0.4 alpha
@@ -446,6 +397,15 @@ internal fun NeteaseProgramRow(
                 .padding(horizontal = 15.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 榜单行首排名(Apple Top Charts 同款;普通列表不传)
+        if (rank != null) {
+            Text(
+                text = rank.toString(),
+                style = typo().titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 12.dp).width(24.dp),
+            )
+        }
         AsyncImage(
             model =
                 ImageRequest
