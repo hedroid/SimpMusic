@@ -37,6 +37,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.error
+import simpmusic.composeapp.generated.resources.podcast_category_empty
 import simpmusic.composeapp.generated.resources.retry
 
 /** 网易云播客分类电台列表页(分类 chips 进入,/djradio/hot offset 分页,近底追加) */
@@ -101,7 +102,11 @@ fun NeteasePodcastCategoryScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = stringResource(Res.string.error),
+                            text =
+                                stringResource(
+                                    // 僵尸分类(娱乐/其他等服务端本来就 0 条)≠加载失败
+                                    if (uiState.unavailable) Res.string.error else Res.string.podcast_category_empty,
+                                ),
                             style = typo().bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

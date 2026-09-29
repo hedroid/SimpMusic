@@ -467,6 +467,7 @@
     <string name="podcast_toplist_radios">人気ラジオランキング</string>
     <string name="podcast_programs">エピソード</string>
     <string name="podcast_programs_unavailable">エピソードの取得に失敗しました（操作が頻繁または通信不安定）。しばらくしてからお試しください</string>
+    <string name="podcast_category_empty">このカテゴリにラジオはまだありません</string>
     <string name="podcast_no_programs">エピソードはまだありません</string>
     <string name="podcast_subscribe">登録</string>
     <string name="podcast_subscribed">登録済み</string>
