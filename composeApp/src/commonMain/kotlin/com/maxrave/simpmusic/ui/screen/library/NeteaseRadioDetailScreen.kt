@@ -340,8 +340,8 @@ private fun RadioHeader(
                 when (playback) {
                     null ->
                         if (hasResume) {
-                            Button(onClick = onResumePlayback, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) {
-                                PlayBadgeIcon(if (false) SimpIcons.Pause else SimpIcons.PlayArrow)
+                            OutlinedButton(onClick = onResumePlayback, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) {
+                                PlayBadgeIcon(SimpIcons.PlayArrow)
                                 Text(
                                     stringResource(Res.string.podcast_resume),
                                     style = typo().labelMedium,
