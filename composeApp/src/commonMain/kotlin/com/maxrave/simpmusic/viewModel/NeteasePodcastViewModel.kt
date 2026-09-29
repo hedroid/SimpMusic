@@ -37,13 +37,11 @@ class NeteasePodcastViewModel(
 ) : BaseViewModel() {
     data class UiState(
         val categories: List<NeteasePodcastCategory> = emptyList(),
-        val toplistType: Int = 1,
-        val toplistRadios: List<NeteaseDjRadio> = emptyList(),
+        val hotRadios: List<NeteaseDjRadio> = emptyList(),
+        val newRadios: List<NeteaseDjRadio> = emptyList(),
         val programToplist: List<NeteaseDjProgram> = emptyList(),
         val programs: List<NeteaseDjProgram> = emptyList(),
         val programsLoading: Boolean = true,
-        val programsLoadingMore: Boolean = false,
-        val programsHasMore: Boolean = false,
         val personalizedRadios: List<NeteaseDjRadio> = emptyList(),
         val recommendRadios: List<NeteaseDjRadio> = emptyList(),
         val myRadios: List<NeteaseDjRadio> = emptyList(),
@@ -74,7 +72,12 @@ class NeteasePodcastViewModel(
             neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
                 _uiState.update { it.copy(recommendRadios = radios) }
             }
-            loadToplist(_uiState.value.toplistType)
+            neteaseRepository.getDjRadioToplist(type = 1).onSuccess { radios ->
+                _uiState.update { it.copy(hotRadios = radios) }
+            }
+            neteaseRepository.getDjRadioToplist(type = 0).onSuccess { radios ->
+                _uiState.update { it.copy(newRadios = radios) }
+            }
             // 热门节目榜:元素是节目形状,过滤不可播(同最新节目口径)
             neteaseRepository.getDjProgramToplist().onSuccess { programs ->
                 _uiState.update { it.copy(programToplist = programs.filter { p -> p.mainSongId != null }) }
@@ -88,20 +91,6 @@ class NeteasePodcastViewModel(
         }
     }
 
-    /** 榜单区 热门(1)/新晋(0) 切换 */
-    fun setToplistType(type: Int) {
-        if (_uiState.value.toplistType == type) return
-        _uiState.update { it.copy(toplistType = type, toplistRadios = emptyList()) }
-        loadToplist(type)
-    }
-
-    private fun loadToplist(type: Int) {
-        viewModelScope.launch {
-            neteaseRepository.getDjRadioToplist(type = type).onSuccess { radios ->
-                _uiState.update { it.copy(toplistRadios = radios) }
-            }
-        }
-    }
 
     private fun refreshMyRadios() {
         viewModelScope.launch {
@@ -118,40 +107,13 @@ class NeteasePodcastViewModel(
                 // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
                 val playable = programs.filter { it.mainSongId != null }
                 _uiState.update {
-                    it.copy(programs = playable, programsHasMore = more, programsLoading = false, programsLoadingMore = false)
+                    it.copy(programs = playable, programsLoading = false)
                 }
             },
             onFailure = {
-                _uiState.update { it.copy(programsLoading = false, programsHasMore = false) }
+                _uiState.update { it.copy(programsLoading = false) }
             },
         )
-    }
-
-    fun loadMorePrograms() {
-        val state = _uiState.value
-        if (!state.programsHasMore || state.programsLoadingMore || state.programsLoading) return
-        _uiState.update { it.copy(programsLoadingMore = true) }
-        viewModelScope.launch {
-            neteaseRepository
-                .getRecommendPodcastProgramsPage(null, offset = state.programs.size)
-                .fold(
-                    onSuccess = { (programs, more) ->
-                        val playable = programs.filter { it.mainSongId != null }
-                        _uiState.update { current ->
-                            // 整页撞重=服务端重复发批,收尾防 offset 死循环(SimilarSongs 同款)
-                            val fresh = playable.filterNot { p -> current.programs.any { it.id == p.id } }
-                            current.copy(
-                                programs = current.programs + fresh,
-                                programsHasMore = more && fresh.isNotEmpty(),
-                                programsLoadingMore = false,
-                            )
-                        }
-                    },
-                    onFailure = {
-                        _uiState.update { it.copy(programsLoadingMore = false) }
-                    },
-                )
-        }
     }
 
     /** 点节目=从点击处整队起播(最新节目列表,播完即止) */
