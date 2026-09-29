@@ -55,6 +55,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.MediaRow
+import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCategoryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
@@ -151,7 +152,7 @@ fun NeteasePodcastScreen(
                 item(key = "podcast_my_subscriptions") {
                     MediaRow(title = stringResource(Res.string.podcast_my_subscriptions), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.myRadios, key = { "my_radio_${it.id}" }) { radio ->
-                            NeteaseDjRadioCard(radio = radio) {
+                            NeteaseDjRadioCard(radio = radio, navController = navController) {
                                 navController.navigate(
                                     NeteaseRadioDetailDestination(radioId = radio.id, radioName = radio.name),
                                 )
@@ -166,7 +167,7 @@ fun NeteasePodcastScreen(
                 item(key = "podcast_personalized") {
                     MediaRow(title = stringResource(Res.string.podcast_guess_you_like), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.personalizedRadios, key = { "personalized_${it.id}" }) { radio ->
-                            NeteaseDjRadioCard(radio = radio) {
+                            NeteaseDjRadioCard(radio = radio, navController = navController) {
                                 navController.navigate(
                                     NeteaseRadioDetailDestination(radioId = radio.id, radioName = radio.name),
                                 )
@@ -211,7 +212,7 @@ fun NeteasePodcastScreen(
                 item(key = "podcast_recommend") {
                     MediaRow(title = stringResource(Res.string.podcast_featured_radios), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.recommendRadios, key = { "recommend_${it.id}" }) { radio ->
-                            NeteaseDjRadioCard(radio = radio) {
+                            NeteaseDjRadioCard(radio = radio, navController = navController) {
                                 navController.navigate(
                                     NeteaseRadioDetailDestination(radioId = radio.id, radioName = radio.name),
                                 )
@@ -226,7 +227,7 @@ fun NeteasePodcastScreen(
                 item(key = "podcast_toplist_hot") {
                     MediaRow(title = stringResource(Res.string.podcast_toplist_radios), modifier = Modifier.padding(top = 16.dp)) {
                         itemsIndexed(uiState.hotRadios, key = { _, r -> "toplist_${r.id}" }) { index, radio ->
-                            NeteaseDjRadioCard(radio = radio, rank = index + 1) {
+                            NeteaseDjRadioCard(radio = radio, rank = index + 1, navController = navController) {
                                 navController.navigate(
                                     NeteaseRadioDetailDestination(radioId = radio.id, radioName = radio.name),
                                 )
@@ -241,7 +242,7 @@ fun NeteasePodcastScreen(
                 item(key = "podcast_toplist_new") {
                     MediaRow(title = stringResource(Res.string.podcast_new_radios), modifier = Modifier.padding(top = 16.dp)) {
                         itemsIndexed(uiState.newRadios, key = { _, r -> "new_toplist_${r.id}" }) { index, radio ->
-                            NeteaseDjRadioCard(radio = radio, rank = index + 1) {
+                            NeteaseDjRadioCard(radio = radio, rank = index + 1, navController = navController) {
                                 navController.navigate(
                                     NeteaseRadioDetailDestination(radioId = radio.id, radioName = radio.name),
                                 )
@@ -320,6 +321,7 @@ private fun PodcastCategoryChipsRow(
 internal fun NeteaseDjRadioCard(
     radio: com.maxrave.netease.model.NeteaseDjRadio,
     rank: Int? = null,
+    navController: NavController? = null,
     onClick: () -> Unit,
 ) {
     Column(

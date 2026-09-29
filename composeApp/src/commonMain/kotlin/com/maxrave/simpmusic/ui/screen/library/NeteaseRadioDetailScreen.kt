@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -141,6 +142,7 @@ fun NeteaseRadioDetailScreen(
                 RadioHeader(
                     radio = uiState.radio,
                     subInFlight = uiState.subInFlight,
+                    navController = navController,
                     playback = playback,
                     hasResume = uiState.resumeProgramId != null,
                     onToggleSubscribe = { viewModel.toggleSubscribe() },
@@ -267,6 +269,7 @@ private fun SortIconButton(
 private fun RadioHeader(
     radio: com.maxrave.netease.model.NeteaseDjRadio?,
     subInFlight: Boolean,
+    navController: NavController,
     playback: com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel.RadioPlayback?,
     hasResume: Boolean,
     onToggleSubscribe: () -> Unit,

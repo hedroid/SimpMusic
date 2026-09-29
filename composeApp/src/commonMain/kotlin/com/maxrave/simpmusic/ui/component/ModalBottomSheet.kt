@@ -4140,6 +4140,8 @@ fun NeteaseCommentsSheet(
     onDismiss: () -> Unit,
     songId: String,
     totalCount: Int,
+    /** 评论线程 id;null=歌曲默认(R_SO_4)。播客节目传 A_DJ_1_<programId> */
+    threadId: String? = null,
     neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -4177,6 +4179,7 @@ fun NeteaseCommentsSheet(
                     sortType = target.wire,
                     cursor = target.firstCursor,
                     pageNo = 1,
+                    threadId = threadId,
                 )
             if (page == null) {
                 failed = true
@@ -4202,6 +4205,7 @@ fun NeteaseCommentsSheet(
                     sortType = sort.wire,
                     cursor = next,
                     pageNo = pageNo,
+                    threadId = threadId,
                 )
             if (page == null) {
                 failed = true

@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -169,6 +170,7 @@ fun NowPlayingScreen(
 @Composable
 fun NowPlayingScreenContent(
     sharedViewModel: SharedViewModel = koinInject(),
+    neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
     mediaPlayerHandler: MediaPlayerHandler = koinInject(),
     navController: NavController,
     isExpanded: Boolean,
@@ -872,6 +874,38 @@ fun NowPlayingScreenContent(
     // 网易歌评论列表(详情卡评论数入口);songId 取自当前曲目,面板自身负责分页。
     // 用 songEntity.videoId 而非 track.videoId:后者在部分转场时机为 null,
     // 空串进去分页直接"已经到底了"
+    // 播客节目评论线程与歌曲不同(A_DJ_1_<programId> vs R_SO_4_<songId>):队列 playlistId
+    // 带 NETEASE_PODCAST_ 前缀时,用当前 mainSong id 在电台节目列表里反查 programId。
+    // 查不到(网络失败/列表翻页不够深)回退歌曲线程——空数据总比错线程好。
+    val podcastProgramThreadId =
+        produceState<String?>(null, nowPlayingVideoId) {
+            // 队列恢复态(SAVED_QUEUE)会丢失播客前缀,不能拿前缀判"不是播客"——
+            // 用当前曲 album.id(radioId,播客构造 toResultSong 时写入)存在即按播客解析
+            val vid = nowPlayingVideoId ?: return@produceState
+            val radioId =
+                mediaPlayerHandler.queueData.value?.data?.listTracks
+                    ?.firstOrNull { it.videoId == vid }?.album?.id?.toLongOrNull()
+                    ?: return@produceState
+            com.maxrave.logger.Logger.w("PodcastComments", "resolving programId for $vid in radio $radioId")
+            var found: Long? = null
+            var offset = 0
+            // 最多翻 5 页×30=150 期,覆盖绝大多数电台
+            for (i in 0 until 5) {
+                val page =
+                    runCatching {
+                        neteaseRepository.getDjRadioProgramsPage(radioId, offset = offset).getOrNull()
+                    }.getOrNull() ?: break
+                val hit = page.first.firstOrNull { it.mainSongId?.toString() == vid }
+                if (hit != null) {
+                    found = hit.id
+                    break
+                }
+                if (!page.second) break
+                offset += page.first.size
+            }
+            com.maxrave.logger.Logger.w("PodcastComments", "resolved programId=$found")
+            value = found?.let { "A_DJ_1_$it" }
+        }
     if (showNeteaseComments) {
         NeteaseCommentsSheet(
             onDismiss = { showNeteaseComments = false },
@@ -880,6 +914,7 @@ fun NowPlayingScreenContent(
                     ?: nowPlayingVideoId
                     ?: "",
             totalCount = screenDataState.neteaseSongData?.commentCount ?: 0,
+            threadId = podcastProgramThreadId.value,
         )
     }
 
