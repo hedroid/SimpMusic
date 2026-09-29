@@ -220,6 +220,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.podcast_comment_like_unsupported
+import simpmusic.composeapp.generated.resources.comment_label
 import simpmusic.composeapp.generated.resources.create
 import simpmusic.composeapp.generated.resources.added_to_netease_playlist
 import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
@@ -4164,6 +4166,8 @@ fun NeteaseCommentsSheet(
     totalCount: Int,
     /** 评论线程 id;null=歌曲默认(R_SO_4)。播客节目传 A_DJ_1_<programId> */
     threadId: String? = null,
+    /** 播客节目(不依赖 threadId 反查时序):标题不带数字+点赞禁用 */
+    isPodcast: Boolean = false,
     neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -4294,6 +4298,16 @@ fun NeteaseCommentsSheet(
     ) {
         val id = comment.commentId ?: return
         if (id in likePending) return
+        // 节目线程(A_DJ_1)的 like 写通道未验证支持——禁用防"显示成功实则失败"。
+        // (runBlocking 取串:本函数非 Composable,stringResource 不可用)
+        if (isPodcast || threadId != null) {
+            showToast(
+                message = runBlocking { getString(Res.string.podcast_comment_like_unsupported) },
+                duration = ToastDuration.Short,
+                gravity = ToastGravity.Bottom,
+            )
+            return
+        }
         val oldLiked = comment.liked
         val oldCount = comment.likedCount ?: 0
         fun patch(list: List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>): List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment> =
@@ -4740,8 +4754,8 @@ fun NeteaseCommentsSheet(
                         }
                     }
                 }
-                // 节目线程(A_DJ_1)的评论发布写通道未验证——输入栏整行隐藏(2026-09-29)
-                if (threadId == null) Row(
+                // 节目评论发布写通道未验证——输入栏整行隐藏(2026-09-29)
+                if (threadId == null && !isPodcast) Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()

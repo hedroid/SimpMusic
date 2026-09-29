@@ -919,6 +919,10 @@ fun NowPlayingScreenContent(
                     ?: "",
             totalCount = screenDataState.neteaseSongData?.commentCount ?: 0,
             threadId = podcastProgramThreadId.value,
+            isPodcast = mediaPlayerHandler.queueData.value?.data?.let { d ->
+                d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null })
+            } == true,
         )
     }
 
