@@ -46,6 +46,8 @@ import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NormalAppBar
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.Pause
+import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.SortAscending
@@ -144,13 +146,13 @@ fun NeteaseRadioDetailScreen(
                     onResumePlayback = { viewModel.resumePlayback() },
                 )
             }
-            item(key = "radio_programs_header") {
+            stickyHeader {
                 Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            // end=7dp 补偿 40dp 按钮的 8dp 内边距:升序图标右缘与行内
-                            // 时长文本右缘(15dp 页边)严格对齐
+                            // 吸顶行必须有实底:滚动时节目从下面穿过,透底会叠影
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(start = 15.dp, end = 7.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -337,15 +339,30 @@ private fun RadioHeader(
                     null ->
                         if (hasResume) {
                             Button(onClick = onResumePlayback) {
+                                Icon(
+                                    SimpIcons.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
                                 Text(stringResource(Res.string.podcast_resume), style = typo().labelMedium)
                             }
                         } else {
                             OutlinedButton(onClick = onPlayAllOrResume) {
+                                Icon(
+                                    SimpIcons.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
                                 Text(stringResource(Res.string.podcast_play_all), style = typo().labelMedium)
                             }
                         }
                     else ->
                         OutlinedButton(onClick = onPlayAllOrResume) {
+                            Icon(
+                                if (playback.isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
                             Text(
                                 stringResource(
                                     if (playback.isPlaying) Res.string.podcast_pause else Res.string.podcast_resume,
