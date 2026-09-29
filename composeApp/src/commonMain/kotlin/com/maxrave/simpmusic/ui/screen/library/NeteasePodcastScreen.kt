@@ -59,7 +59,6 @@ import simpmusic.composeapp.generated.resources.podcast_listens
 import simpmusic.composeapp.generated.resources.podcast_badge_bought
 import simpmusic.composeapp.generated.resources.podcast_badge_paid
 import simpmusic.composeapp.generated.resources.podcast_badge_vip
-import simpmusic.composeapp.generated.resources.podcast_based_on_listening
 import simpmusic.composeapp.generated.resources.podcast_featured_radios
 import simpmusic.composeapp.generated.resources.podcast_guess_you_like
 import simpmusic.composeapp.generated.resources.podcast_latest_programs
@@ -155,10 +154,7 @@ fun NeteasePodcastScreen(
             // 猜你喜欢(需登录;未登录服务端回空,区块隐藏)
             if (uiState.personalizedRadios.isNotEmpty()) {
                 item(key = "podcast_personalized") {
-                    MediaRow(
-                        title = stringResource(Res.string.podcast_guess_you_like),
-                        subtitle = stringResource(Res.string.podcast_based_on_listening),
-                    ) {
+                    MediaRow(title = stringResource(Res.string.podcast_guess_you_like)) {
                         items(uiState.personalizedRadios, key = { "personalized_${it.id}" }) { radio ->
                             NeteaseDjRadioCard(radio = radio) {
                                 navController.navigate(

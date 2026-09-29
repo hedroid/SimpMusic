@@ -63,32 +63,44 @@ class NeteasePodcastViewModel(
         }
     }
 
-    /** 静默刷新:不清已显示分区(下拉刷新口径),各区块独立回写 */
+    /** 静默刷新:不清已显示分区(下拉刷新口径),各区块独立回写。
+     *  并行发起(每个请求各自 launch,网易主页三分区同口径)——串行 7 个请求要
+     *  1.5~2.5s 才全部落地,并行后总耗时=最慢单请求;回写都是 update{},并发安全。 */
     fun refresh() {
         viewModelScope.launch {
             neteaseRepository.getPodcastCategories().onSuccess { categories ->
                 _uiState.update { it.copy(categories = categories) }
             }
+        }
+        viewModelScope.launch {
             neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
                 _uiState.update { it.copy(recommendRadios = radios) }
             }
+        }
+        viewModelScope.launch {
             neteaseRepository.getDjRadioToplist(type = 1).onSuccess { radios ->
                 _uiState.update { it.copy(hotRadios = radios) }
             }
+        }
+        viewModelScope.launch {
             neteaseRepository.getDjRadioToplist(type = 0).onSuccess { radios ->
                 _uiState.update { it.copy(newRadios = radios) }
             }
+        }
+        viewModelScope.launch {
             // 热门节目榜:元素是节目形状,过滤不可播(同最新节目口径)
             neteaseRepository.getDjProgramToplist().onSuccess { programs ->
                 _uiState.update { it.copy(programToplist = programs.filter { p -> p.mainSongId != null }) }
             }
+        }
+        viewModelScope.launch {
             // 猜你喜欢:未登录时服务端返回空列表(成功),区块随之隐藏
             neteaseRepository.getPersonalizedDjRadios().onSuccess { radios ->
                 _uiState.update { it.copy(personalizedRadios = radios) }
             }
-            refreshMyRadios()
-            reloadPrograms()
         }
+        refreshMyRadios()
+        viewModelScope.launch { reloadPrograms() }
     }
 
 

@@ -490,7 +490,6 @@
     <string name="podcast_latest_programs">최신 에피소드</string>
     <string name="podcast_tap_to_listen">탭하여 재생</string>
     <string name="podcast_guess_you_like">맞춤 추천</string>
-    <string name="podcast_based_on_listening">청취 기반 추천</string>
     <string name="podcast_featured_radios">추천 라디오</string>
     <string name="podcast_new_radios">신규 라디오 차트</string>
     <string name="podcast_program_toplist">인기 에피소드 차트</string>
