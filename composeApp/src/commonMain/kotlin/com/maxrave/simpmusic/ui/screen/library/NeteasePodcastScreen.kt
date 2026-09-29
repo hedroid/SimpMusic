@@ -359,9 +359,8 @@ internal fun NeteaseDjRadioCard(
             text = radio.name,
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            // 固定占两行:货架高度恒定,1/2行标题卡混排不再引起整行重排跳动;播主仍紧随其后
-            minLines = 2,
-            maxLines = 2,
+            // 单行省略(2026-09-29 用户终案:固定两行太丑);跳动问题已由区块间距+播主紧随缓解
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )

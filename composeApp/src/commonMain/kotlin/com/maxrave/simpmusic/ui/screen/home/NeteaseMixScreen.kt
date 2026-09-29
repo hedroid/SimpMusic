@@ -485,10 +485,8 @@ private fun HeartRadioCard(
             )
         } else {
             IconButton(onClick = if (isHeartActive) onToggle else onClick) {
-                Icon(
-                    imageVector = if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = null,
-                    tint = if (isHeartActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                com.maxrave.simpmusic.ui.component.PlayBadgeIcon(
+                    if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                 )
             }
         }
