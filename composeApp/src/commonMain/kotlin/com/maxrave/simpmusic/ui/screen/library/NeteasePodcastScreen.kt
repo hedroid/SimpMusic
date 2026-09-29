@@ -434,7 +434,8 @@ internal fun NeteaseProgramRow(
                 text = program.name,
                 style = typo().titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                // 最多两行:长标题完整显示到两行,短标题单行自然高度(2026-09-29 用户终案)
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(

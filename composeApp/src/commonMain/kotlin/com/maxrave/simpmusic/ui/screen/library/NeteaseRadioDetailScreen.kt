@@ -159,8 +159,7 @@ fun NeteaseRadioDetailScreen(
                         modifier = Modifier.weight(1f),
                     )
                     // 升/降序各一颗图标(官方同款箭头+横线):降序=最新在前,升序=最早在前;
-                    // 40dp 缩小间距,选中态 primaryContainer 圆底+onPrimaryContainer(Material
-                    // toggle 标准形态,比纯 tint 明显)
+                    // 无底色纯图标(2026-09-29 用户终案:圆底太丑),选中仅 primary 着色
                     SortIconButton(
                         icon = SimpIcons.SortDescending,
                         contentDescription = stringResource(Res.string.podcast_order_latest),
@@ -249,18 +248,11 @@ private fun SortIconButton(
             contentDescription = contentDescription,
             tint =
                 if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
-            modifier =
-                if (selected) {
-                    Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape)
-                        .padding(6.dp)
-                } else {
-                    Modifier.padding(6.dp)
-                },
+            modifier = Modifier.padding(6.dp),
         )
     }
 }
