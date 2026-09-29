@@ -124,8 +124,6 @@ fun NeteasePodcastScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            // 区块间距 16dp(网易主页 shelf 节奏同源;此前条目贴条目太挤,2026-09-29 用户反馈)
-            verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding =
                 PaddingValues(
                     top = innerPadding.calculateTopPadding(),
@@ -145,7 +143,7 @@ fun NeteasePodcastScreen(
             // 我的订阅(未登录/空即隐藏)
             if (uiState.myRadios.isNotEmpty()) {
                 item(key = "podcast_my_subscriptions") {
-                    MediaRow(title = stringResource(Res.string.podcast_my_subscriptions)) {
+                    MediaRow(title = stringResource(Res.string.podcast_my_subscriptions), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.myRadios, key = { "my_radio_${it.id}" }) { radio ->
                             NeteaseDjRadioCard(radio = radio) {
                                 navController.navigate(
@@ -160,7 +158,7 @@ fun NeteasePodcastScreen(
             // 猜你喜欢(需登录;未登录服务端回空,区块隐藏)
             if (uiState.personalizedRadios.isNotEmpty()) {
                 item(key = "podcast_personalized") {
-                    MediaRow(title = stringResource(Res.string.podcast_guess_you_like)) {
+                    MediaRow(title = stringResource(Res.string.podcast_guess_you_like), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.personalizedRadios, key = { "personalized_${it.id}" }) { radio ->
                             NeteaseDjRadioCard(radio = radio) {
                                 navController.navigate(
@@ -189,7 +187,7 @@ fun NeteasePodcastScreen(
                         text = stringResource(Res.string.podcast_latest_programs),
                         style = typo().headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 10.dp),
+                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 26.dp),
                     )
                 }
                 items(
@@ -205,7 +203,7 @@ fun NeteasePodcastScreen(
             // 精选电台
             if (uiState.recommendRadios.isNotEmpty()) {
                 item(key = "podcast_recommend") {
-                    MediaRow(title = stringResource(Res.string.podcast_featured_radios)) {
+                    MediaRow(title = stringResource(Res.string.podcast_featured_radios), modifier = Modifier.padding(top = 16.dp)) {
                         items(uiState.recommendRadios, key = { "recommend_${it.id}" }) { radio ->
                             NeteaseDjRadioCard(radio = radio) {
                                 navController.navigate(
@@ -220,7 +218,7 @@ fun NeteasePodcastScreen(
             // 热门电台榜(独立 shelf,带排名)
             if (uiState.hotRadios.isNotEmpty()) {
                 item(key = "podcast_toplist_hot") {
-                    MediaRow(title = stringResource(Res.string.podcast_toplist_radios)) {
+                    MediaRow(title = stringResource(Res.string.podcast_toplist_radios), modifier = Modifier.padding(top = 16.dp)) {
                         itemsIndexed(uiState.hotRadios, key = { _, r -> "toplist_${r.id}" }) { index, radio ->
                             NeteaseDjRadioCard(radio = radio, rank = index + 1) {
                                 navController.navigate(
@@ -235,7 +233,7 @@ fun NeteasePodcastScreen(
             // 新晋电台榜(独立 shelf,带排名)
             if (uiState.newRadios.isNotEmpty()) {
                 item(key = "podcast_toplist_new") {
-                    MediaRow(title = stringResource(Res.string.podcast_new_radios)) {
+                    MediaRow(title = stringResource(Res.string.podcast_new_radios), modifier = Modifier.padding(top = 16.dp)) {
                         itemsIndexed(uiState.newRadios, key = { _, r -> "new_toplist_${r.id}" }) { index, radio ->
                             NeteaseDjRadioCard(radio = radio, rank = index + 1) {
                                 navController.navigate(
@@ -254,7 +252,7 @@ fun NeteasePodcastScreen(
                         text = stringResource(Res.string.podcast_program_toplist),
                         style = typo().headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 10.dp),
+                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 26.dp),
                     )
                 }
                 itemsIndexed(
@@ -361,6 +359,8 @@ internal fun NeteaseDjRadioCard(
             text = radio.name,
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
+            // 固定占两行:货架高度恒定,1/2行标题卡混排不再引起整行重排跳动;播主仍紧随其后
+            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),

@@ -46,6 +46,7 @@ import coil3.request.crossfade
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.NormalAppBar
+import com.maxrave.simpmusic.ui.component.PlayBadgeIcon
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
@@ -234,30 +235,6 @@ fun NeteaseRadioDetailScreen(
                 EndOfPage(includeBottomBarPadding = false)
             }
         }
-    }
-}
-
-/** 按钮内播放徽标:细描边圆圈包播放/暂停图标(单图标太轻不清,官方按钮同款) */
-@Composable
-private fun PlayBadgeIcon(icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    androidx.compose.foundation.layout.Box(
-        modifier =
-            Modifier
-                .size(22.dp)
-                ,
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.foundation.layout.Box(
-            modifier =
-                Modifier
-                    .size(20.dp)
-                    .border(1.dp, androidx.compose.material3.LocalContentColor.current, androidx.compose.foundation.shape.CircleShape),
-        )
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(12.dp),
-        )
     }
 }
 

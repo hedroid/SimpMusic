@@ -550,11 +550,10 @@ private fun FmHeroCard(
             )
             Spacer(Modifier.height(16.dp))
             Button(onClick = cardAction) {
-                Icon(
-                    imageVector = if (isFmActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = null,
+                com.maxrave.simpmusic.ui.component.PlayBadgeIcon(
+                    if (isFmActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     when {
                         isFmActive && isPlaying -> stringResource(Res.string.personal_fm_pause)
