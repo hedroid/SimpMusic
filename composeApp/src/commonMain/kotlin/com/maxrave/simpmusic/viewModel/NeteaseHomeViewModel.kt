@@ -13,6 +13,9 @@ import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +95,21 @@ class NeteaseHomeViewModel(
     /** 下拉刷新进行中(顶部指示器):已就绪行的后台重拉尚未全部落地 */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /** 上次页面可见的本地日(epochDay)。VM 是进程级 Koin single,行数据驻留整个进程
+     *  生命周期——没有跨日失效的话,常驻后台几天后主页永远是几天前拉的内容。 */
+    private var lastSeenEpochDay: Long? = null
+
+    /** 页面每次变为可见时调用(Screen 重组的 LaunchedEffect(Unit)):检测到跨天就静默
+     *  触发一次 [refresh](已就绪行保持内容、后台 force 重拉、落地原位替换);同一天内
+     *  tab 往返零重拉。VM 刚创建(first= null)不触发——首拉由 ensureRowLoaded 正常走。 */
+    fun onScreenShown() {
+        val today =
+            Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toEpochDays()
+        val seen = lastSeenEpochDay
+        lastSeenEpochDay = today
+        if (seen != null && seen != today) refresh()
+    }
 
     /** 进行中的行,防占位重组重复发请求 */
     private val inFlightRows = mutableSetOf<Row>()

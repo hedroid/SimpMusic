@@ -114,6 +114,10 @@ fun NeteaseHomeScreen(
     val chipRowState = rememberScrollState()
     var topAppBarHeightPx by remember { mutableIntStateOf(0) }
 
+    // VM 是进程级 single,数据驻留整进程;每次本页重组(含 tab 切回)交给 VM 检测跨天,
+    // 跨天则静默刷新一轮(行保持内容原位替换),同一天内零重拉
+    LaunchedEffect(Unit) { viewModel.onScreenShown() }
+
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex }
             .collect {
