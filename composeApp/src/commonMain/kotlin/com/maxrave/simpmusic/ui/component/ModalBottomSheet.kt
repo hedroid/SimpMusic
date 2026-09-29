@@ -4427,10 +4427,16 @@ fun NeteaseCommentsSheet(
                 ) {}
                 Text(
                     text =
-                        stringResource(
-                            Res.string.comments_title,
-                            formatCompactCount(totalCount),
-                        ),
+                        // 节目评论计数与歌曲不同源,入参(歌曲详情卡)对节目恒不可信(实测 0)——
+                        // 节目态不带数字
+                        if (isPodcast) {
+                            stringResource(Res.string.comment_label)
+                        } else {
+                            stringResource(
+                                Res.string.comments_title,
+                                formatCompactCount(totalCount),
+                            )
+                        },
                     style = typo().titleMedium,
                     color = dark.content,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
