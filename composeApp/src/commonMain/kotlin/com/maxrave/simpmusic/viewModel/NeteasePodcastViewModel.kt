@@ -69,7 +69,9 @@ class NeteasePodcastViewModel(
     fun refresh() {
         viewModelScope.launch {
             neteaseRepository.getPodcastCategories().onSuccess { categories ->
-                _uiState.update { it.copy(categories = categories) }
+                // 服务端官方分类表 19 个,尾部 7 个是僵尸分类(探针实证恒 0~3 条);
+                // 截前 11 个(用户定案 2026-09-29,前 11 个主分类全部 6 条以上可翻页)
+                _uiState.update { it.copy(categories = categories.take(11)) }
             }
         }
         viewModelScope.launch {

@@ -53,8 +53,10 @@ import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.podcast_category_empty
 import simpmusic.composeapp.generated.resources.podcast_hottest_radios
+import simpmusic.composeapp.generated.resources.podcast_programs
 import simpmusic.composeapp.generated.resources.podcast_rising_fastest
 import simpmusic.composeapp.generated.resources.retry
+import simpmusic.composeapp.generated.resources.subscribers
 
 /**
  * 网易云播客分类页(官方同构,2026-09-29):双 tab 榜单——上升最快(type=0)/最热电台(type=1),
@@ -133,7 +135,8 @@ fun NeteasePodcastCategoryScreen(
         }
 
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            // 单列信息行:右侧要放 播主·节目数·订阅数+描述,半宽格放不下(用户定案 2026-09-29)
+            columns = GridCells.Fixed(1),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding =
@@ -143,8 +146,6 @@ fun NeteasePodcastCategoryScreen(
                     top = 4.dp,
                     bottom = innerPadding.calculateBottomPadding() + 8.dp,
                 ),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (chart.radios.isEmpty()) {
                 item(key = "category_state", span = { GridItemSpan(2) }) {
@@ -200,7 +201,8 @@ fun NeteasePodcastCategoryScreen(
     }
 }
 
-/** 榜单单元格(官方一行两条同构):排名数字 + 方形小封面 + 名称两行 + 订阅数 */
+/** 榜单行(单列):排名 + 小封面 + 电台名 + 数据行(播主·N节目·N订阅) + 描述/rcmdtext 两行。
+ *  列表端点字段残缺时逐行跳过(播主/描述缺失不占位),半宽格时代只剩一个订阅数太空。 */
 @Composable
 private fun CategoryRadioCell(
     rank: Int,
@@ -213,7 +215,7 @@ private fun CategoryRadioCell(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick)
-                .padding(vertical = 4.dp),
+                .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -234,7 +236,7 @@ private fun CategoryRadioCell(
             contentScale = ContentScale.Crop,
             modifier =
                 Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(8.dp)),
         )
         Column(
@@ -246,15 +248,36 @@ private fun CategoryRadioCell(
                 text = radio.name,
                 style = typo().titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            radio.subCount?.let {
+            val meta =
+                listOfNotNull(
+                    radio.djNickname?.takeIf { it.isNotBlank() },
+                    radio.programCount.takeIf { it > 0 }?.let { count ->
+                        "${formatCompactCount(count.toLong())} ${stringResource(Res.string.podcast_programs)}"
+                    },
+                    radio.subCount?.let { stringResource(Res.string.subscribers, formatCompactCount(it)) },
+                ).joinToString(" · ")
+            if (meta.isNotEmpty()) {
                 Text(
-                    text = formatCompactCount(it),
+                    text = meta,
                     style = typo().bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val desc =
+                radio.description?.takeIf { it.isNotBlank() }
+                    ?: radio.rcmdtext?.takeIf { it.isNotBlank() }
+            if (desc != null) {
+                Text(
+                    text = desc,
+                    style = typo().bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
