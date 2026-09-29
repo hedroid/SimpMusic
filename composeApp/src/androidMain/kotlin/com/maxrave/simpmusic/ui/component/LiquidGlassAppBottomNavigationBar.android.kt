@@ -146,12 +146,14 @@ actual fun LiquidGlassAppBottomNavigationBar(
     }
 
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    // 库在听歌分析前(用户 2026-09-30 定序,与 AppBottomNavigationBar/rail 同步);ordinal 是
+    // tab 身份不是位置,交换列表项即可。
     val bottomNavScreens =
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Search,
         )
     // Tabs shown in the sliding bar (Apple Music style); Search lives in its own FAB.
@@ -159,8 +161,8 @@ actual fun LiquidGlassAppBottomNavigationBar(
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
         )
     var selectedIndex by rememberSaveable {
         mutableIntStateOf(

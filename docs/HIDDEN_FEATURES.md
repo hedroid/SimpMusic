@@ -28,7 +28,8 @@
 ## 二、库页 chip 下线（路由保留）
 
 **背景**：收藏体系云端化终稿（2026-09-20）把库页 chips 重组为
-`[YT 歌单 / 您的网易云 / 排行榜 / Wrapped / 下载管理]`（`LibraryScreen.kt` 的 `topLevelLibraryChips`），
+`[YT 歌单 / 您的网易云 / 排行榜 / Wrapped / 下载管理]`（`LibraryScreen.kt` 的 `topLevelLibraryChips`；
+2026-09-30 起 Wrapped 亦下线，现役 = 网易云 / 网易播客 / YT / 排行榜 / 下载管理），
 以下 enum 从 chip 行移除，**独立路由仍在**（`LibraryScreen.kt:205-214` 可直达）：
 
 | chip | 现状 |
@@ -37,6 +38,7 @@
 | LOCAL_PLAYLIST（本地歌单） | **暂无 UI 入口**（用户点名下线，且明确后续可能整体移除——**不要**给本地歌单/收藏找新入口；数据仍在库中，备份是唯一带出通道） |
 | FAVORITE_PLAYLIST（收藏歌曲/红心聚合） | **暂无 UI 入口**；红心本身仍可在播放页/迷你条操作，云端同步不受影响 |
 | FAVORITE_PODCAST | 随"您的库"一并下线 |
+| WRAPPED（年度回顾 chip 页） | 2026-09-30 用户定案隐藏：从 `topLevelLibraryChips` 移除，filter 落在该值弹回 CHART（与 YOUTUBE_MIX_FOR_YOU 同款兜底）。**管线全保留**（enum/`LibraryWrappedTab`/`getMonthlyRecaps`），恢复 = chips 列表加回 `LibraryChipType.WRAPPED` + Crossfade 换回内容分支 + 两个收集器加回（LibraryScreen 顶部有注释指引）。注意听歌分析 tab 的 Wrapped 全屏入口（AnalyticsScreen 横幅 → WrappedScreen）**不受影响** |
 
 **衍生影响（2026-09-20 定稿）**：本地歌单/收藏歌曲无入口后，**备份是这批本地数据的唯一带出通道**，
 但文案**不罗列**这些无入口的条目（用户读不到对应物反而困惑）——"备份"按钮副标题最终归纳为

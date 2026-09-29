@@ -59,15 +59,15 @@ fun AppBottomNavigationBar(
     // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
     var showSourceMenu by remember { mutableStateOf(false) }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
-    // Library here while keeping the ordinal they were declared with, so that the numbering stays
-    // stable whether or not those tabs are present.
+    // `ordinal` identifies a tab, it is NOT the position — Library sits before Analytics and Mix
+    // for you here (用户 2026-09-30 定序) while keeping the ordinal each was declared with, so
+    // that the numbering stays stable whether or not those tabs are present.
     val bottomNavScreens =
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Search,
         )
     var selectedIndex by rememberSaveable {
@@ -272,8 +272,8 @@ fun AppNavigationRail(
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Search,
         )
     var selectedIndex by rememberSaveable {

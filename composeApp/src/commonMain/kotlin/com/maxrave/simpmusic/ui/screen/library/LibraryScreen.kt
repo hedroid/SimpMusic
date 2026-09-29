@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.ui.screen.library
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
@@ -19,7 +20,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -153,10 +156,8 @@ fun LibraryScreen(
     val density = LocalDensity.current
 
     val loggedIn by viewModel.youtubeLoggedIn.collectAsStateWithLifecycle(initialValue = false)
-    // Wrapped and its recaps are built entirely from playback_event, so the chip follows the same
-    // setting the Analytics tab does.
-    val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val monthlyRecaps by viewModel.monthlyRecaps.collectAsStateWithLifecycle()
+    // Wrapped(年度回顾)chip 已隐藏(2026-09-30):recaps/localTrackingEnabled 两个收集器随之
+    // 下岗,恢复 chip 时一并加回(monthlyRecaps/localTrackingEnabled + getMonthlyRecaps)。
     val nowPlaying by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
     val youTubePlaylist by viewModel.youTubePlaylist.collectAsStateWithLifecycle()
     val youTubeLikedPlaylists by viewModel.youTubeLikedPlaylists.collectAsStateWithLifecycle()
@@ -209,6 +210,11 @@ fun LibraryScreen(
 
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
+    // 顶栏第一排(标题行)随内容滚动收起——与首页顶栏同款效果(用户 2026-09-30)。
+    // 信号沿用各 chip 页已有的 onScrolling(true=在顶/上滑回顶,false=深入内容下滑):
+    // 在 Crossfade 内容里按来源页过滤后驱动标题行显隐,原样转发给 App 驱动底栏;
+    // 不上报滚动的 chip 页(播客/下载管理)由下面 LaunchedEffect 的复位兜底。
+    var showTitleBar by rememberSaveable { mutableStateOf(true) }
     val openLibraryPlaylists = {
         navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
     }
@@ -223,6 +229,14 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(currentFilter) {
+        // 切 chip 的标题行复位只给"不上报滚动"的页(播客/下载管理):上报型 tab 的
+        // Crossfade 会恢复上次滚动位置(SaveableStateProvider),首帧上报的就是真实
+        // 状态(深处=false),blanket 复位会跟它打架把刚展开的标题又压回去。
+        if (currentFilter == LibraryChipType.NETEASE_PODCAST ||
+            currentFilter == LibraryChipType.DOWNLOADED_PLAYLIST
+        ) {
+            showTitleBar = true
+        }
         Logger.w(
             "LIBPROBE",
             "currentFilter=$currentFilter netease=${neteasePlaylist::class.simpleName}/${subscribedArtists::class.simpleName}/${starredAlbums::class.simpleName}",
@@ -277,8 +291,10 @@ fun LibraryScreen(
                 }
             }
 
+            // Wrapped(年度回顾)chip 已隐藏(2026-09-30):enum 与 LibraryWrappedTab 管线保留,
+            // 但入口没了,落在该值上弹回排行榜(与 YOUTUBE_MIX_FOR_YOU 同款兜底)。
             LibraryChipType.WRAPPED -> {
-                viewModel.getMonthlyRecaps()
+                viewModel.setCurrentScreen(LibraryChipType.CHART)
             }
         }
     }
@@ -287,6 +303,15 @@ fun LibraryScreen(
         modifier = Modifier.hazeSource(hazeState),
         targetState = currentFilter,
     ) { filter ->
+        // 只认"当前 chip 页"的滚动上报:Crossfade 过渡期旧页仍在组合、fling 可能还没停,
+        // 旧页迟到的 false 会把切页时刚复位的标题行又压回去(实测竞态);对新页无影响。
+        // 转发给 App 的底栏信号维持原行为(新旧页都转发,与改造前一致)。
+        val tabScrolling: (onTop: Boolean) -> Unit = { onTop ->
+            if (filter == viewModel.currentScreen.value) {
+                showTitleBar = onTop
+            }
+            onScrolling(onTop)
+        }
         when (filter) {
             // 下载管理 chip 页:复用独立页的内容体,chip 页无 TopAppBar(库页自带标题区)
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
@@ -316,7 +341,7 @@ fun LibraryScreen(
                     onDeletePlaylist = { viewModel.deleteYouTubePlaylist(it) },
                     onUnsubscribePlaylist = { viewModel.unsubscribeYouTubePlaylist(it) },
                     onCreatePlaylist = { viewModel.createYouTubePlaylistInLibrary(it) },
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                 )
             }
 
@@ -335,7 +360,7 @@ fun LibraryScreen(
                     onDeletePlaylist = { viewModel.deleteNeteasePlaylist(it) },
                     onUnsubscribeAlbum = { viewModel.unsubscribeNeteaseAlbum(it) },
                     onCreatePlaylist = { viewModel.createNeteasePlaylistInLibrary(it) },
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                 )
             }
 
@@ -356,7 +381,7 @@ fun LibraryScreen(
                     navController,
                     innerPadding.copy(top = topAppBarHeight),
                     yourLocalPlaylist,
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                     emptyText = Res.string.no_playlists_added,
                     header = {
                         LibrarySectionHeader(
@@ -383,7 +408,7 @@ fun LibraryScreen(
                     favoritePlaylist,
                     emptyText = Res.string.no_favorite_playlists,
                     // 混源网格:网易来源的收藏条目带品牌角标
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                     header = {
                         LibrarySectionHeader(
                             navController = navController,
@@ -405,7 +430,7 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                     header = {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -453,7 +478,7 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     favoritePodcasts,
                     emptyText = Res.string.no_favorite_podcasts,
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                     header = {
                         LibrarySectionHeader(
                             navController = navController,
@@ -475,7 +500,7 @@ fun LibraryScreen(
                     innerPadding.copy(top = topAppBarHeight),
                     chartPlaylists,
                     emptyText = Res.string.no_charts_found,
-                    onScrolling = onScrolling,
+                    onScrolling = tabScrolling,
                     // 排行榜 tile 封面右上角标 YTM 品牌角标(替代原 SimpMusic 图标)
                     showSourceBadge = true,
                 ) {
@@ -483,16 +508,9 @@ fun LibraryScreen(
                 }
             }
 
-            LibraryChipType.WRAPPED -> {
-                LibraryWrappedTab(
-                    navController = navController,
-                    contentPadding = innerPadding.copy(top = topAppBarHeight),
-                    recaps = monthlyRecaps,
-                    onScrolling = onScrolling,
-                ) {
-                    viewModel.getMonthlyRecaps()
-                }
-            }
+            // Nothing to draw: chip 已隐藏(2026-09-30),上面的 effect 会立刻弹回 CHART,
+            // 与 YOUTUBE_MIX_FOR_YOU 同款;恢复 chip 时换回 LibraryWrappedTab(...) 分支。
+            LibraryChipType.WRAPPED -> Unit
             else -> Unit
         }
     }
@@ -581,48 +599,70 @@ fun LibraryScreen(
                 topAppBarHeight = with(density) { coordinates.size.height.toDp() }
             },
     ) {
-        TopAppBar(
-            title = {
-                Text(
-                    text = stringResource(Res.string.library),
-                    style = typo().titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            },
-            colors =
-                TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                ),
-            navigationIcon = {
-                AnimatedVisibility(
-                    !accountThumbnail.isNullOrEmpty(),
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                    enter = fadeIn() + expandHorizontally(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    AsyncImage(
-                        model =
-                            ImageRequest
-                                .Builder(LocalPlatformContext.current)
-                                .data(accountThumbnail)
-                                .crossfade(550)
-                                .build(),
-                        placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
-                        error = rememberVectorPainter(SimpIcons.PeopleAlt),
-                        contentDescription = null,
-                        modifier =
-                            Modifier
-                                .size(26.dp)
-                                .clip(CircleShape),
+        // 标题行随内容滚动收起(与首页顶栏同款):下滑深入内容时只剩 chip 行贴顶,
+        // 回滑到顶时标题行展开;收起态由同尺寸的状态栏 Spacer 占位,chip 行不钻到
+        // 状态栏下面。整列高度变化经 onGloballyPositioned 回写 topAppBarHeight,
+        // 各 chip 页的 contentPadding 跟随,内容从收起的标题行下方滑过(糊面盖着)。
+        AnimatedVisibility(
+            visible = showTitleBar,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(Res.string.library),
+                        style = typo().titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
-                }
-            },
-            // The Library bar had no actions slot at all — added for the Listen Together entry,
-            // which the design canvas puts on Home AND Library.
-            actions = {
-                ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
-            },
-        )
+                },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                    ),
+                navigationIcon = {
+                    AnimatedVisibility(
+                        !accountThumbnail.isNullOrEmpty(),
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        enter = fadeIn() + expandHorizontally(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(accountThumbnail)
+                                    .crossfade(550)
+                                    .build(),
+                            placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape),
+                        )
+                    }
+                },
+                // The Library bar had no actions slot at all — added for the Listen Together entry,
+                // which the design canvas puts on Home AND Library.
+                actions = {
+                    ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
+                },
+            )
+        }
+        AnimatedVisibility(
+            visible = !showTitleBar,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Spacer(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars),
+            )
+        }
         AnimatedVisibility(visible = selectionState.isActive) {
             SongSelectionTopAppBar(
                 state = selectionState,
@@ -653,10 +693,11 @@ fun LibraryScreen(
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // "您的库"chip 页已下线;下载管理升为顶层 chip(在 Wrapped 后),本地歌单等
-            // 独立路由保留但不再从 chip 行进入。顺序(用户 2026-09-20 定序):网易云 →
-            // YouTube Music → 排行榜 → Wrapped → 下载管理;"进库默认选第一个可见 chip"
-            // 的取值顺序与此保持一致。
+            // "您的库"chip 页已下线;下载管理升为顶层 chip,本地歌单等独立路由保留但不再从
+            // chip 行进入。顺序(用户 2026-09-20 定序):网易云 → YouTube Music → 排行榜 →
+            // 下载管理(Wrapped 年度回顾 chip 已于 2026-09-30 隐藏,恢复时加回
+            // LibraryChipType.WRAPPED 并放开其内容分支);"进库默认选第一个可见 chip"的
+            // 取值顺序与此保持一致。
             val topLevelLibraryChips =
                 listOf(
                     LibraryChipType.NETEASE_PLAYLIST,
@@ -664,7 +705,6 @@ fun LibraryScreen(
                     LibraryChipType.NETEASE_PODCAST,
                     LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
                     LibraryChipType.CHART,
-                    LibraryChipType.WRAPPED,
                     LibraryChipType.DOWNLOADED_PLAYLIST,
                 )
             topLevelLibraryChips.forEach { type ->
@@ -676,11 +716,6 @@ fun LibraryScreen(
                     return@forEach
                 }
                 if (type == LibraryChipType.NETEASE_PODCAST && !neteaseLoggedIn) {
-                    return@forEach
-                }
-                // Nothing to recap without the plays — gated exactly as the YouTube chip above
-                // is gated on being logged in.
-                if (type == LibraryChipType.WRAPPED && !localTrackingEnabled) {
                     return@forEach
                 }
                 Chip(
