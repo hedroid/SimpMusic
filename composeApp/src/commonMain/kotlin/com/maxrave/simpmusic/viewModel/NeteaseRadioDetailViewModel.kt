@@ -9,6 +9,7 @@ import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.netease.model.NeteaseDjProgram
 import com.maxrave.netease.model.NeteaseDjRadio
+import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_netease_first
+import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.podcast_subscribe_toast
 import simpmusic.composeapp.generated.resources.podcast_unsubscribe_toast
 
@@ -158,9 +160,29 @@ class NeteaseRadioDetailViewModel(
                         )
                     }
                 },
-                onFailure = {
-                    makeToast(getString(Res.string.login_netease_first))
-                    _uiState.update { it.copy(subInFlight = false) }
+                onFailure = { e ->
+                    // 失败≠没生效:sub/unsub 请求可能已被服务端处理、只是响应被频控/网络层
+                    // 拦掉(实测"订阅成功却报错"即此)——先拉订阅列表对账,状态已到位按成功处理
+                    val actualSubed = neteaseRepository.getMyDjRadios().getOrNull()?.any { it.id == radioId }
+                    if (actualSubed == target) {
+                        makeToast(getString(if (target) Res.string.podcast_subscribe_toast else Res.string.podcast_unsubscribe_toast))
+                        _uiState.update {
+                            it.copy(
+                                subInFlight = false,
+                                radio = it.radio?.copy(subed = target),
+                            )
+                        }
+                    } else {
+                        // 文案分流:未登录→登录提示;405 频控→操作频繁;其余→操作失败。
+                        // 一律报"请登录"是错误引导(2026-09-29 用户实测踩中)
+                        val msgRes =
+                            when {
+                                e.message?.contains("未登录") == true -> Res.string.login_netease_first
+                                else -> neteaseWriteErrorString(e, Res.string.netease_action_failed)
+                            }
+                        makeToast(getString(msgRes))
+                        _uiState.update { it.copy(subInFlight = false) }
+                    }
                 },
             )
         }
