@@ -1730,9 +1730,11 @@ fun NowPlayingBottomSheet(
     // 会丢播客前缀,但播客构造 Track 时 album.id=radioId 的指纹仍在;普通歌单/专辑各曲不同)
     val isPodcastQueue = koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
         val d = h.queueData.value?.data
-        d?.playlistId?.startsWith("NETEASE_PODCAST_") == true || d?.listTracks.orEmpty().let { t ->
-            t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } && t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null
-        }
+        val t = d?.listTracks.orEmpty()
+        d?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+            // 恢复队列指纹:全部数字 videoId 的多曲队列(歌曲队列几乎都带 LM/VL/RADAR/
+            // 歌单 id 等非纯数字或混合形状;播客节目=纯数字+episode 连续)。
+            (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null })
     }
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
@@ -2150,7 +2152,9 @@ fun NowPlayingBottomSheet(
                             }
                         }
                     }
-                    CheckBoxActionButton(
+                    // 播客节目红心走 /song/like 报 524"歌单不支持添加播客声音"(歌曲/声音链路
+                    // 分离,声音喜欢端点多形状穷举全 400)——隐藏防假失败(2026-09-29)
+                    if (!isPodcastQueue) CheckBoxActionButton(
                         // 云端态优先(登录时拉取,~几百 ms 到):本地 Room 的 liked 可能过期
                         // (YT 红心歌单里本地未赞、云端已赞,读作"状态不对");云端未到/未登录
                         // 退回本地值。checkbox 以 defaultChecked 为 key,云端晚到会重置显示
@@ -2197,7 +2201,8 @@ fun NowPlayingBottomSheet(
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                         }
                     }
-                    ActionButton(
+                    // 播客节目不进歌单(剧集不是歌)——隐藏(2026-09-29 用户定)
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.PlaylistAdd,
                         text = Res.string.add_to_a_playlist,
                         enable = cloudLikedForGate != null,
