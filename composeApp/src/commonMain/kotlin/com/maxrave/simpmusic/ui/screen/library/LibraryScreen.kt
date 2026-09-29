@@ -198,12 +198,20 @@ fun LibraryScreen(
     val hazeState =
         rememberHazeState()
 
-    // 顶栏内容留白:锁定"展开态"高度(maxOf),不跟随收起动画——contentPadding 若逐帧
+    // 网格页内容留白:锁定"展开态"高度(maxOf),不跟随收起动画——contentPadding 若逐帧
     // 跟随动画,LazyGrid 每帧重锚定首可见项→触发新一轮滚动上报→翻转标题显隐→又改
     // padding,自持振荡(用户实测"滑到底顶部来回跳");锁定后标题行收/展是纯覆盖层,
     // 内容零位移。首页不受此害是因为它的留白是第 0 项内部的 Spacer,滚远后改高度
     // 不碰当前锚点。只增不减,进程重启从展开态起步(下面 showTitleBar 非 saveable)。
     var topAppBarHeight by remember {
+        mutableStateOf(0.dp)
+    }
+    // 下载管理页专用:实时(随动画)高度。该页的"歌曲/歌单"切换行是列表外层的固定头,
+    // 锁定展开高度会让它在收起态钉在 y≈480,chips 行下方留一条永不消失的空白带
+    // (用户实测"滑到底部后顶部显示一半下不去")。它消费的是 Column 外层 padding,
+    // 列表内部坐标不参与——变高变矮只改视口大小,不触发列表重锚定,无振荡风险,
+    // 与网格页的列表 contentPadding 性质不同。
+    var topBarLiveHeight by remember {
         mutableStateOf(0.dp)
     }
     var showAddSheet by remember { mutableStateOf(false) }
@@ -319,7 +327,7 @@ fun LibraryScreen(
                 val dynamicViewModel: LibraryDynamicPlaylistViewModel = koinViewModel()
                 val sharedVm: SharedViewModel = koinInject()
                 DownloadedManagementBody(
-                    topPadding = topAppBarHeight,
+                    topPadding = topBarLiveHeight,
                     bottomPadding = innerPadding.calculateBottomPadding(),
                     navController = navController,
                     viewModel = viewModel,
@@ -599,12 +607,11 @@ fun LibraryScreen(
         Modifier
             .background(Color.Transparent)
             .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
-                // maxOf 锁定展开态高度:见上面 topAppBarHeight 声明处的振荡说明。
-                topAppBarHeight =
-                    maxOf(
-                        topAppBarHeight,
-                        with(density) { coordinates.size.height.toDp() },
-                    )
+                // 双轨:maxOf 锁定值给网格页 contentPadding(防振荡,见声明处说明);
+                // 实时值给下载管理页的固定头(它需要跟着顶栏走,且无振荡风险)。
+                val measured = with(density) { coordinates.size.height.toDp() }
+                topAppBarHeight = maxOf(topAppBarHeight, measured)
+                topBarLiveHeight = measured
             },
     ) {
         // 标题行随内容滚动收起(与首页顶栏同款):下滑深入内容时只剩 chip 行贴顶,
