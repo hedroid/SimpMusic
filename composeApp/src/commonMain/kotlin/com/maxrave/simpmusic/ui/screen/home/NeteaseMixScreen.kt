@@ -44,13 +44,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -374,26 +373,24 @@ private fun FmSongRow(
     onPlay: (index: Int) -> Unit,
 ) {
     val rowState = rememberLazyListState()
-    // 只在滚动(手势+fling 惯性)完全停止时判定一次是否在尾部:滚动过程中追加会连环
-    // 触发多次请求(fling 追不上 append);且手势→fling 交接处 isScrollInProgress 有
-    // 瞬间 false,静止需延时复核——一次手势最多拉一批。初始无滚动事件,天然不触发。
+    // 无感预取:尾部前 3 张(~1.5 屏)进入视野即开拉,fling 中途网络已在飞,到手时
+    // 批已续上,不再有"撞到行尾停住等网络"的边界卡顿(用户 2026-09-30 反馈)。布尔
+    // 边沿一次进区只打一发(离开再进才重武装),VM 在飞守卫(fmLoadingMore)双保险
+    // 防风暴;垃圾桶删歌后仍处近尾区会自然补拉。旧"滚停+250ms 复核+最后一张"触发废弃。
     if (onLoadMore != null) {
-        LaunchedEffect(rowState) {
-            snapshotFlow { rowState.isScrollInProgress }
-                .distinctUntilChanged()
-            .collectLatest { scrolling ->
-                if (!scrolling) {
-                    delay(250)
-                    if (rowState.isScrollInProgress) return@collectLatest
-                    val info = rowState.layoutInfo
-                    val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    val hasScrolled =
-                        rowState.firstVisibleItemIndex > 0 || rowState.firstVisibleItemScrollOffset > 0
-                    if (hasScrolled && info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 1) {
-                        onLoadMore?.invoke()
-                    }
-                }
+        val shouldLoadMore by remember {
+            derivedStateOf {
+                val info = rowState.layoutInfo
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 3
             }
+        }
+        LaunchedEffect(rowState) {
+            snapshotFlow { shouldLoadMore }
+                .distinctUntilChanged()
+                .collect { near ->
+                    if (near) onLoadMore?.invoke()
+                }
         }
     }
     LazyRow(
