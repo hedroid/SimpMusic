@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -137,7 +138,9 @@ fun NeteaseRadioDetailScreen(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 15.dp, vertical = 10.dp),
+                            // end=7dp 补偿 40dp 按钮的 8dp 内边距:升序图标右缘与行内
+                            // 时长文本右缘(15dp 页边)严格对齐
+                            .padding(start = 15.dp, end = 7.dp, top = 10.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -146,21 +149,21 @@ fun NeteaseRadioDetailScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f),
                     )
-                    // 升/降序各一颗图标(官方同款箭头+横线):降序=最新在前,升序=最早在前;选中 primary
-                    IconButton(onClick = { viewModel.setAscending(false) }) {
-                        Icon(
-                            SimpIcons.SortDescending,
-                            contentDescription = stringResource(Res.string.podcast_order_latest),
-                            tint = if (!uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { viewModel.setAscending(true) }) {
-                        Icon(
-                            SimpIcons.SortAscending,
-                            contentDescription = stringResource(Res.string.podcast_order_earliest),
-                            tint = if (uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    // 升/降序各一颗图标(官方同款箭头+横线):降序=最新在前,升序=最早在前;
+                    // 40dp 缩小间距,选中态 primaryContainer 圆底+onPrimaryContainer(Material
+                    // toggle 标准形态,比纯 tint 明显)
+                    SortIconButton(
+                        icon = SimpIcons.SortDescending,
+                        contentDescription = stringResource(Res.string.podcast_order_latest),
+                        selected = !uiState.ascending,
+                        onClick = { viewModel.setAscending(false) },
+                    )
+                    SortIconButton(
+                        icon = SimpIcons.SortAscending,
+                        contentDescription = stringResource(Res.string.podcast_order_earliest),
+                        selected = uiState.ascending,
+                        onClick = { viewModel.setAscending(true) },
+                    )
                 }
             }
             if (uiState.programs.isEmpty() && !uiState.loading) {
@@ -219,6 +222,38 @@ fun NeteaseRadioDetailScreen(
                 EndOfPage(includeBottomBarPadding = false)
             }
         }
+    }
+}
+
+@Composable
+private fun SortIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint =
+                if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            modifier =
+                if (selected) {
+                    Modifier
+                        .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.CircleShape)
+                        .padding(6.dp)
+                } else {
+                    Modifier.padding(6.dp)
+                },
+        )
     }
 }
 
