@@ -1725,6 +1725,10 @@ fun NowPlayingBottomSheet(
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 播客队列(节目是"剧集"):艺人/专辑/电台/相似/加歌单等歌曲向条目整组隐藏(2026-09-29)
+    val isPodcastQueue =
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
+            .queueData.value?.data?.playlistId?.startsWith("NETEASE_PODCAST_") == true
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
@@ -2208,7 +2212,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
                     }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.PeopleAlt,
                         text = Res.string.artists,
                     ) {
@@ -2223,7 +2227,7 @@ fun NowPlayingBottomSheet(
                             artist = true
                         }
                     }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.Album,
                         // Three states, not two. A track can carry an album ID with no title: the
                         // row it was parsed from links an album but never spells its name out.
@@ -2251,7 +2255,7 @@ fun NowPlayingBottomSheet(
                             navController.navigate(AlbumDestination(browseId = id))
                         }
                     }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.Sensors,
                         text = Res.string.start_radio,
                     ) {
@@ -2265,7 +2269,7 @@ fun NowPlayingBottomSheet(
                     }
                     // 网易歌独有:simiSong 相似歌曲列表页(2026-09-25 落地,2026-09-15 曾从
                     // 详情卡摘除的入口以独立页形态回归);YT 歌的相似=电台,无列表形态
-                    if (uiState.songUIState.videoId.toLongOrNull() != null) {
+                    if (uiState.songUIState.videoId.toLongOrNull() != null && !isPodcastQueue) {
                         ActionButton(
                             icon = SimpIcons.LibraryMusic,
                             text = Res.string.similar_songs,

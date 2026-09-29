@@ -500,6 +500,7 @@
     <string name="podcast_pause">일시정지</string>
     <string name="podcast_expand">더 보기</string>
     <string name="podcast_collapse">접기</string>
+    <string name="podcast_comment_like_unsupported">에피소드 댓글에는 좋아요를 할 수 없습니다</string>
     <string name="podcast_trial_toast">이 에피소드는 별도 구매가 필요합니다. 미리듣기 재생 중</string>
     <string name="podcast_order_latest">최신순</string>
     <string name="podcast_order_earliest">오래된순</string>

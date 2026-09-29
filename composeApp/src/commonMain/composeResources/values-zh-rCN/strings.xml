@@ -974,6 +974,7 @@
     <string name="podcast_pause">暂停</string>
     <string name="podcast_expand">展开</string>
     <string name="podcast_collapse">收起</string>
+    <string name="podcast_comment_like_unsupported">节目评论暂不支持点赞</string>
     <string name="podcast_trial_toast">该节目需单独购买，正在播放试听</string>
     <string name="podcast_order_latest">最新</string>
     <string name="podcast_order_earliest">最早</string>
