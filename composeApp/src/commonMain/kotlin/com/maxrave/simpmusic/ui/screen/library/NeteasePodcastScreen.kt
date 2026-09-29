@@ -2,6 +2,8 @@ package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,8 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +48,7 @@ import coil3.request.crossfade
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.MediaRow
+import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCategoryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
@@ -59,6 +64,9 @@ import simpmusic.composeapp.generated.resources.podcast_featured_radios
 import simpmusic.composeapp.generated.resources.podcast_guess_you_like
 import simpmusic.composeapp.generated.resources.podcast_latest_programs
 import simpmusic.composeapp.generated.resources.podcast_my_subscriptions
+import simpmusic.composeapp.generated.resources.podcast_new_radios
+import simpmusic.composeapp.generated.resources.podcast_program_toplist
+import simpmusic.composeapp.generated.resources.podcast_switch_toplist
 import simpmusic.composeapp.generated.resources.podcast_tap_to_listen
 import simpmusic.composeapp.generated.resources.podcast_toplist_radios
 
@@ -130,6 +138,16 @@ fun NeteasePodcastScreen(
                     bottom = innerPadding.calculateBottomPadding() + 8.dp,
                 ),
         ) {
+            // 分类浏览 chips(点击=进分类电台列表页;cateId 过滤节目无效,这里拉的是电台)
+            if (uiState.categories.isNotEmpty()) {
+                item(key = "podcast_categories") {
+                    PodcastCategoryChipsRow(
+                        categories = uiState.categories,
+                        navController = navController,
+                    )
+                }
+            }
+
             // 我的订阅(未登录/空即隐藏)
             if (uiState.myRadios.isNotEmpty()) {
                 item(key = "podcast_my_subscriptions") {
@@ -218,10 +236,24 @@ fun NeteasePodcastScreen(
                 }
             }
 
-            // 热门电台榜(带排名)
+            // 电台榜(热门/新晋切换,带排名)
             if (uiState.toplistRadios.isNotEmpty()) {
                 item(key = "podcast_toplist") {
-                    MediaRow(title = stringResource(Res.string.podcast_toplist_radios)) {
+                    MediaRow(
+                        title =
+                            stringResource(
+                                if (uiState.toplistType == 1) {
+                                    Res.string.podcast_toplist_radios
+                                } else {
+                                    Res.string.podcast_new_radios
+                                },
+                            ),
+                        subtitle = stringResource(Res.string.podcast_switch_toplist),
+                        onMoreClick = {
+                            viewModel.setToplistType(if (uiState.toplistType == 1) 0 else 1)
+                        },
+                        moreColor = MaterialTheme.colorScheme.primary,
+                    ) {
                         itemsIndexed(uiState.toplistRadios, key = { _, r -> "toplist_${r.id}" }) { index, radio ->
                             NeteaseDjRadioCard(radio = radio, rank = index + 1) {
                                 navController.navigate(
@@ -233,10 +265,57 @@ fun NeteasePodcastScreen(
                 }
             }
 
+            // 热门节目榜(元素是节目,点击即播;付费判定同最新节目)
+            if (uiState.programToplist.isNotEmpty()) {
+                item(key = "podcast_program_toplist_header") {
+                    Column(Modifier.padding(horizontal = 15.dp)) {
+                        Text(
+                            text = stringResource(Res.string.podcast_program_toplist),
+                            style = typo().headlineMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
+                }
+                items(uiState.programToplist, key = { "program_toplist_${it.id}" }) { program ->
+                    NeteaseProgramRow(program = program) {
+                        viewModel.playProgramToplist(uiState.programToplist.indexOf(program))
+                    }
+                }
+            }
+
             item(key = "podcast_end") {
                 // contentPadding 已含 scaffold 底栏让位,页尾不双叠(同两云 tab 口径)
                 EndOfPage(includeBottomBarPadding = false)
             }
+        }
+    }
+}
+
+/** 分类浏览 chips(点击=进分类电台列表页;与已移除的"cateId 过滤节目"假过滤不同,这里拉电台列表) */
+@Composable
+private fun PodcastCategoryChipsRow(
+    categories: List<com.maxrave.netease.model.NeteasePodcastCategory>,
+    navController: NavController,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 15.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        categories.forEach { category ->
+            FilterChip(
+                selected = false,
+                onClick = {
+                    navController.navigate(
+                        NeteasePodcastCategoryDestination(categoryId = category.id, categoryName = category.name),
+                    )
+                },
+                label = { Text(category.name, style = typo().labelMedium) },
+            )
         }
     }
 }

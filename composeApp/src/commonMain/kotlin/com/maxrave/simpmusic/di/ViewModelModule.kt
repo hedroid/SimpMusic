@@ -19,6 +19,7 @@ import com.maxrave.simpmusic.viewModel.LoginSyncSenderViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseHomeViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseLoginViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
+import com.maxrave.simpmusic.viewModel.NeteasePodcastCategoryViewModel
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel
 import com.maxrave.simpmusic.viewModel.NeteaseTagViewModel
@@ -199,6 +200,11 @@ val viewModelModule =
         viewModel {
             NeteaseRadioDetailViewModel(
                 get(),
+                get(),
+            )
+        }
+        viewModel {
+            NeteasePodcastCategoryViewModel(
                 get(),
             )
         }

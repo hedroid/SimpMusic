@@ -15,8 +15,10 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestinatio
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreSongsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCategoryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.screen.library.LocalPlaylistScreen
+import com.maxrave.simpmusic.ui.screen.library.NeteasePodcastCategoryScreen
 import com.maxrave.simpmusic.ui.screen.library.NeteaseRadioDetailScreen
 import com.maxrave.simpmusic.ui.screen.other.AlbumScreen
 import com.maxrave.simpmusic.ui.screen.other.ArtistScreen
@@ -96,6 +98,15 @@ fun NavGraphBuilder.listScreenGraph(
             navController = navController,
             radioId = data.radioId,
             radioName = data.radioName,
+        )
+    }
+    composable<NeteasePodcastCategoryDestination> { entry ->
+        val data = entry.toRoute<NeteasePodcastCategoryDestination>()
+        NeteasePodcastCategoryScreen(
+            innerPadding = innerPadding,
+            navController = navController,
+            categoryId = data.categoryId,
+            categoryName = data.categoryName,
         )
     }
     composable<BrowseDestination> { entry ->

@@ -966,6 +966,9 @@
     <string name="podcast_guess_you_like">猜你喜欢</string>
     <string name="podcast_based_on_listening">根据你的收听</string>
     <string name="podcast_featured_radios">精选电台</string>
+    <string name="podcast_new_radios">新晋电台榜</string>
+    <string name="podcast_switch_toplist">点按切换热门/新晋</string>
+    <string name="podcast_program_toplist">热门节目榜</string>
     <string name="podcast_toplist_radios">热门电台榜</string>
     <string name="podcast_programs">节目</string>
     <string name="podcast_programs_unavailable">节目拉取失败（操作频繁被限流或网络波动），稍后重试</string>

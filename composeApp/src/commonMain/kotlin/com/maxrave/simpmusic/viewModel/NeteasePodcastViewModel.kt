@@ -9,6 +9,7 @@ import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.netease.model.NeteaseDjProgram
 import com.maxrave.netease.model.NeteaseDjRadio
+import com.maxrave.netease.model.NeteasePodcastCategory
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_netease_first
 import simpmusic.composeapp.generated.resources.podcast_latest_programs
+import simpmusic.composeapp.generated.resources.podcast_program_toplist
 import simpmusic.composeapp.generated.resources.podcast_subscribe_toast
 import simpmusic.composeapp.generated.resources.podcast_unsubscribe_toast
 
@@ -34,13 +36,16 @@ class NeteasePodcastViewModel(
     private val sharedViewModel: SharedViewModel,
 ) : BaseViewModel() {
     data class UiState(
+        val categories: List<NeteasePodcastCategory> = emptyList(),
+        val toplistType: Int = 1,
+        val toplistRadios: List<NeteaseDjRadio> = emptyList(),
+        val programToplist: List<NeteaseDjProgram> = emptyList(),
         val programs: List<NeteaseDjProgram> = emptyList(),
         val programsLoading: Boolean = true,
         val programsLoadingMore: Boolean = false,
         val programsHasMore: Boolean = false,
         val personalizedRadios: List<NeteaseDjRadio> = emptyList(),
         val recommendRadios: List<NeteaseDjRadio> = emptyList(),
-        val toplistRadios: List<NeteaseDjRadio> = emptyList(),
         val myRadios: List<NeteaseDjRadio> = emptyList(),
     )
 
@@ -63,11 +68,16 @@ class NeteasePodcastViewModel(
     /** 静默刷新:不清已显示分区(下拉刷新口径),各区块独立回写 */
     fun refresh() {
         viewModelScope.launch {
+            neteaseRepository.getPodcastCategories().onSuccess { categories ->
+                _uiState.update { it.copy(categories = categories) }
+            }
             neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
                 _uiState.update { it.copy(recommendRadios = radios) }
             }
-            neteaseRepository.getDjRadioToplist().onSuccess { radios ->
-                _uiState.update { it.copy(toplistRadios = radios) }
+            loadToplist(_uiState.value.toplistType)
+            // 热门节目榜:元素是节目形状,过滤不可播(同最新节目口径)
+            neteaseRepository.getDjProgramToplist().onSuccess { programs ->
+                _uiState.update { it.copy(programToplist = programs.filter { p -> p.mainSongId != null }) }
             }
             // 猜你喜欢:未登录时服务端返回空列表(成功),区块随之隐藏
             neteaseRepository.getPersonalizedDjRadios().onSuccess { radios ->
@@ -75,6 +85,21 @@ class NeteasePodcastViewModel(
             }
             refreshMyRadios()
             reloadPrograms()
+        }
+    }
+
+    /** 榜单区 热门(1)/新晋(0) 切换 */
+    fun setToplistType(type: Int) {
+        if (_uiState.value.toplistType == type) return
+        _uiState.update { it.copy(toplistType = type, toplistRadios = emptyList()) }
+        loadToplist(type)
+    }
+
+    private fun loadToplist(type: Int) {
+        viewModelScope.launch {
+            neteaseRepository.getDjRadioToplist(type = type).onSuccess { radios ->
+                _uiState.update { it.copy(toplistRadios = radios) }
+            }
         }
     }
 
@@ -142,6 +167,26 @@ class NeteasePodcastViewModel(
                 firstPlayedTrack = first,
                 playlistId = "NETEASE_PODCAST_LATEST",
                 playlistName = getString(Res.string.podcast_latest_programs),
+                playlistType = PlaylistType.PLAYLIST,
+                continuation = null,
+            ),
+        )
+        sharedViewModel.loadMediaItemFromTrack(first, Config.PLAYLIST_CLICK, index)
+    }
+
+    /** 点热门节目榜=从点击处整队起播(榜单列表,播完即止) */
+    fun playProgramToplist(index: Int) {
+        val tracks =
+            _uiState.value.programToplist
+                .mapNotNull { it.toResultSong() }
+                .map { it.toTrack() }
+        val first = tracks.getOrNull(index) ?: return
+        setQueueData(
+            QueueData.Data(
+                listTracks = ArrayList(tracks),
+                firstPlayedTrack = first,
+                playlistId = "NETEASE_PODCAST_TOPLIST",
+                playlistName = getString(Res.string.podcast_program_toplist),
                 playlistType = PlaylistType.PLAYLIST,
                 continuation = null,
             ),

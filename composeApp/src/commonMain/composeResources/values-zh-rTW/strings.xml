@@ -220,6 +220,9 @@
     <string name="podcast_guess_you_like">猜你喜歡</string>
     <string name="podcast_based_on_listening">根據你的收聽</string>
     <string name="podcast_featured_radios">精選電臺</string>
+    <string name="podcast_new_radios">新晉電臺榜</string>
+    <string name="podcast_switch_toplist">點按切換熱門/新晉</string>
+    <string name="podcast_program_toplist">熱門節目榜</string>
     <string name="podcast_toplist_radios">熱門電臺榜</string>
     <string name="podcast_programs">節目</string>
     <string name="podcast_programs_unavailable">節目拉取失敗（操作頻繁被限流或網路波動），稍後重試</string>
