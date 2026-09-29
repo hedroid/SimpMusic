@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -236,6 +237,30 @@ fun NeteaseRadioDetailScreen(
     }
 }
 
+/** 按钮内播放徽标:细描边圆圈包播放/暂停图标(单图标太轻不清,官方按钮同款) */
+@Composable
+private fun PlayBadgeIcon(icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    androidx.compose.foundation.layout.Box(
+        modifier =
+            Modifier
+                .size(22.dp)
+                ,
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier =
+                Modifier
+                    .size(20.dp)
+                    .border(1.dp, androidx.compose.material3.LocalContentColor.current, androidx.compose.foundation.shape.CircleShape),
+        )
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+        )
+    }
+}
+
 @Composable
 private fun SortIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -338,36 +363,33 @@ private fun RadioHeader(
                 when (playback) {
                     null ->
                         if (hasResume) {
-                            Button(onClick = onResumePlayback) {
-                                Icon(
-                                    SimpIcons.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
+                            Button(onClick = onResumePlayback, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) {
+                                PlayBadgeIcon(if (false) SimpIcons.Pause else SimpIcons.PlayArrow)
+                                Text(
+                                    stringResource(Res.string.podcast_resume),
+                                    style = typo().labelMedium,
+                                    modifier = Modifier.padding(start = 8.dp),
                                 )
-                                Text(stringResource(Res.string.podcast_resume), style = typo().labelMedium)
                             }
                         } else {
-                            OutlinedButton(onClick = onPlayAllOrResume) {
-                                Icon(
-                                    SimpIcons.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
+                            OutlinedButton(onClick = onPlayAllOrResume, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) {
+                                PlayBadgeIcon(SimpIcons.PlayArrow)
+                                Text(
+                                    stringResource(Res.string.podcast_play_all),
+                                    style = typo().labelMedium,
+                                    modifier = Modifier.padding(start = 8.dp),
                                 )
-                                Text(stringResource(Res.string.podcast_play_all), style = typo().labelMedium)
                             }
                         }
                     else ->
-                        OutlinedButton(onClick = onPlayAllOrResume) {
-                            Icon(
-                                if (playback.isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
+                        OutlinedButton(onClick = onPlayAllOrResume, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp)) {
+                            PlayBadgeIcon(if (playback.isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow)
                             Text(
                                 stringResource(
                                     if (playback.isPlaying) Res.string.podcast_pause else Res.string.podcast_resume,
                                 ),
                                 style = typo().labelMedium,
+                                modifier = Modifier.padding(start = 8.dp),
                             )
                         }
                 }

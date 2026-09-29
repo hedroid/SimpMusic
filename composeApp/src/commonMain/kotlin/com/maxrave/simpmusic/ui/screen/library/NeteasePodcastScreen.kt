@@ -122,6 +122,8 @@ fun NeteasePodcastScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
+            // 区块间距 16dp(网易主页 shelf 节奏同源;此前条目贴条目太挤,2026-09-29 用户反馈)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding =
                 PaddingValues(
                     top = innerPadding.calculateTopPadding(),
@@ -362,8 +364,9 @@ internal fun NeteaseDjRadioCard(
             text = radio.name,
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            // 横滑卡标题单行省略:双行卡会让货架高度随滚动条目忽变(1行/2行跳动)
-            maxLines = 1,
+            // 两行截断(通用口径)。区块间距固定后,单卡高度差不再传导成整页跳动
+            maxLines = 2,
+            minLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
