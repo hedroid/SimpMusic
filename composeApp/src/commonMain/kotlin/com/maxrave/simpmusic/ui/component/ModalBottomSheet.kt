@@ -1725,10 +1725,15 @@ fun NowPlayingBottomSheet(
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // 播客队列(节目是"剧集"):艺人/专辑/电台/相似/加歌单等歌曲向条目整组隐藏(2026-09-29)
-    val isPodcastQueue =
-        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
-            .queueData.value?.data?.playlistId?.startsWith("NETEASE_PODCAST_") == true
+    // 播客队列(节目是"剧集"):艺人/专辑/电台/相似等歌曲向条目整组隐藏。
+    // 判定双路:playlistId 前缀,或队列"全部曲 album.id 同一纯数字值"(恢复队列 SAVED_QUEUE
+    // 会丢播客前缀,但播客构造 Track 时 album.id=radioId 的指纹仍在;普通歌单/专辑各曲不同)
+    val isPodcastQueue = koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
+        val d = h.queueData.value?.data
+        d?.playlistId?.startsWith("NETEASE_PODCAST_") == true || d?.listTracks.orEmpty().let { t ->
+            t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } && t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null
+        }
+    }
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
