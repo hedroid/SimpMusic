@@ -403,6 +403,8 @@ private fun AppleMusicQueuePillsRow(
             active = false,
             activeContainer = activePillContainer,
             activeContent = activePillContent,
+            // 播客节目进不了歌曲歌单——置灰禁用(药丸保留,行布局不破)
+            enabled = !state.isPodcastSong,
             onClick = { actions.onShowAddToPlaylist() },
             modifier = Modifier.weight(1f),
         )
@@ -433,6 +435,7 @@ private fun AppleMusicQueuePill(
     activeContent: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier =
@@ -443,13 +446,13 @@ private fun AppleMusicQueuePill(
                 .height(40.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(if (active) activeContainer else AppleMusicPillInactive)
-                .clickable(onClick = onClick),
+                .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = "",
-            tint = if (active) activeContent else Color.White,
+            tint = if (active) activeContent else Color.White.copy(alpha = if (enabled) 1f else 0.38f),
             modifier = Modifier.size(20.dp),
         )
     }

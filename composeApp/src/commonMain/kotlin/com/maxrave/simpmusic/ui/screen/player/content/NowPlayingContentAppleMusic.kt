@@ -154,8 +154,9 @@ fun NowPlayingContentAppleMusic(
     // when the incoming track had lyrics arriving a moment later. Lyrics landing restarts this
     // effect and cancels the wait, so the fallback only ever fires for a track that really has
     // none.
-    LaunchedEffect(state.screenData.lyricsData, viewState) {
-        if (viewState != AppleMusicView.LYRICS || state.screenData.lyricsData != null) return@LaunchedEffect
+    LaunchedEffect(state.screenData.lyricsData, viewState, state.isPodcastSong) {
+        // 播客节目视为"无歌词"(stale 词有残留窗口,不能等数据自然清):同样走宽限后回 MAIN
+        if (viewState != AppleMusicView.LYRICS || (state.screenData.lyricsData != null && !state.isPodcastSong)) return@LaunchedEffect
         delay(LYRICS_ABSENCE_GRACE_MS)
         viewState = AppleMusicView.MAIN
     }

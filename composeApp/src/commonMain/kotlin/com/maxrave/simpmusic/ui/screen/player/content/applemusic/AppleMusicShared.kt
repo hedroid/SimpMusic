@@ -955,7 +955,8 @@ internal fun AppleMusicBottomCluster(
             viewState = viewState,
             onSelectView = onSelectView,
             castState = state.castState,
-            lyricsAvailable = state.screenData.lyricsData != null,
+            // 播客节目拿不到歌词(stale 词也会残留窗口)——dock 歌词钮恒不可用
+            lyricsAvailable = state.screenData.lyricsData != null && !state.isPodcastSong,
             activeColor = activePillContainer,
             activeContentColor = activePillContent,
             showComments = state.isNeteaseSong,

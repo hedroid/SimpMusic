@@ -1053,14 +1053,15 @@ fun NowPlayingContentSpotify(
                                                             .size(24.dp)
                                                             .aspectRatio(1f)
                                                             .clip(CircleShape),
-                                                    enabled = state.likeEnabled,
+                                                    // 播客节目进不了歌曲歌单(/song/like 同源链路分离)——置灰禁用(槽位保留,UI 协调)
+                                                    enabled = state.likeEnabled && !state.isPodcastSong,
                                                     onClick = {
                                                         actions.onShowAddToPlaylist()
                                                     },
                                                 ) {
                                                     Icon(
                                                         imageVector = SimpIcons.PlaylistAdd,
-                                                        tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
+                                                        tint = if (state.likeEnabled && !state.isPodcastSong) Color.White else Color.White.copy(alpha = 0.38f),
                                                         contentDescription = "Add to Playlist",
                                                     )
                                                 }
@@ -1209,7 +1210,8 @@ fun NowPlayingContentSpotify(
                     Column(Modifier.padding(horizontal = 20.dp)) {
                         // Lyrics Layout
                         AnimatedVisibility(
-                            visible = state.screenData.lyricsData != null,
+                            // 播客节目拿不到歌词(stale 词也会残留窗口)——整卡不展示
+                            visible = state.screenData.lyricsData != null && !state.isPodcastSong,
                             modifier = Modifier.padding(top = 10.dp),
                         ) {
                             ElevatedCard(
@@ -1360,7 +1362,8 @@ fun NowPlayingContentSpotify(
                         Spacer(modifier = Modifier.height(10.dp))
                         // 艺人卡按源取数:网易歌来自 neteaseSongData(头像/粉丝数),YT 歌来自 songInfoData
                         val neteaseMeta = state.screenData.neteaseSongData
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+                        // 播客节目无艺人数据(详情卡端点对 mainSong 只回部分字段,卡会空壳)——不展示
+                        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
                             ElevatedCard(
                                 onClick = {
                                     actions.onNavigateToArtist()
@@ -1452,7 +1455,8 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+                        // 说明卡同艺人卡:播客节目端点字段全空/零值,展示只会剩空壳——不展示
+                        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
                             ElevatedCard(
                                 onClick = {},
                                 shape = RoundedCornerShape(8.dp),

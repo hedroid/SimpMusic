@@ -378,6 +378,15 @@ fun InfoPlayerBottomSheet(
     val format by sharedViewModel.format.collectAsState(null)
     val extractSource by sharedViewModel.extractSource.collectAsState()
     val downloadProgress by sharedViewModel.downloadFileProgress.collectAsStateWithLifecycle()
+    // 播客队列指纹(与三点菜单同款):mainSong 的点赞数端点恒 0,点赞行不展示
+    val isPodcastQueue =
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
+            val d = h.queueData.value?.data
+            val t = d?.listTracks.orEmpty()
+            d?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+                (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
+                    t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null)
+        }
 
     ModalBottomSheet(
         onDismissRequest = {
@@ -880,7 +889,8 @@ fun InfoPlayerBottomSheet(
 
                 val neteaseMeta = screenDataState.neteaseSongData
                 if (isNeteaseSong && neteaseMeta != null) {
-                    neteaseMeta.likeCount?.let { likeCount ->
+                    // 播客节目点赞数拿不到(端点对 mainSong 恒 0)——不展示,别挂一个"点赞 0"
+                    if (!isPodcastQueue) neteaseMeta.likeCount?.let { likeCount ->
                         Text(
                             text = stringResource(Res.string.like),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),

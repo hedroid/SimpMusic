@@ -1023,13 +1023,14 @@ private fun ExpressiveConnectedGroup(
         }
         ExpressiveConnectedSlot(
             shape = middle,
-            enabled = state.likeEnabled,
+            // 播客节目进不了歌曲歌单(/song/like 同源链路分离)——置灰禁用(槽位保留,连体胶囊形状不破)
+            enabled = state.likeEnabled && !state.isPodcastSong,
             onClick = { actions.onShowAddToPlaylist() },
         ) {
             Icon(
                 imageVector = SimpIcons.PlaylistAdd,
                 contentDescription = "Add to Playlist",
-                tint = if (state.likeEnabled) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                tint = if (state.likeEnabled && !state.isPodcastSong) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                 modifier = Modifier.size(22.dp),
             )
         }
