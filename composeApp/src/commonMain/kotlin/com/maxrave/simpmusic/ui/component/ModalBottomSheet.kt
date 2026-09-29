@@ -1143,7 +1143,8 @@ fun QueueBottomSheet(
     val isPodcastQueue =
         queueData?.data?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
             (queueData?.data?.listTracks.orEmpty().let { t ->
-                t.size >= 3 && t.all { it.videoId.toLongOrNull() != null }
+                t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
+                    t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null
             })
 
     // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
@@ -1741,10 +1742,10 @@ fun NowPlayingBottomSheet(
     val isPodcastQueue = koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
         val d = h.queueData.value?.data
         val t = d?.listTracks.orEmpty()
+        // 指纹三条件:前缀/全数字+单一 album.id(歌单队列也全数字,单一 album 才是播客电台特征)
         d?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-            // 恢复队列指纹:全部数字 videoId 的多曲队列(歌曲队列几乎都带 LM/VL/RADAR/
-            // 歌单 id 等非纯数字或混合形状;播客节目=纯数字+episode 连续)。
-            (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null })
+            (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
+                t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null)
     }
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()

@@ -658,7 +658,8 @@ fun NowPlayingScreenContent(
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
             isPodcastSong = mediaPlayerHandler.queueData.value?.data?.let { d ->
                 d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null })
+                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null } &&
+                        d.listTracks.map { it.album?.id }.distinct().size == 1 && d.listTracks.first().album?.id?.toLongOrNull() != null)
             } == true,
             remoteLikeState = remoteLikeState,
             // 红心=云端态;未登录源置灰(点击提示登录)
@@ -921,7 +922,8 @@ fun NowPlayingScreenContent(
             threadId = podcastProgramThreadId.value,
             isPodcast = mediaPlayerHandler.queueData.value?.data?.let { d ->
                 d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null })
+                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null } &&
+                        d.listTracks.map { it.album?.id }.distinct().size == 1 && d.listTracks.first().album?.id?.toLongOrNull() != null)
             } == true,
         )
     }
