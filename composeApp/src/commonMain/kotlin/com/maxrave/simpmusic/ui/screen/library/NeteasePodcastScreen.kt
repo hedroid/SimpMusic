@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -47,6 +48,11 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.maxrave.simpmusic.ui.icon.LockSmall
+import com.maxrave.simpmusic.ui.icon.Pause
+import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.Star
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.MediaRow
@@ -57,6 +63,7 @@ import com.maxrave.simpmusic.extension.formatTimeAgo
 import kotlinx.datetime.toLocalDateTime
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.podcast_listens
@@ -469,27 +476,44 @@ internal fun NeteaseProgramRow(
     }
 }
 
-/** 节目可听性角标(付费未购/VIP 内容/已购买),放在时长左侧。付费=当前只有试听态
- *  (整行置灰,点播走三档动作);VIP/已购可完整播,角标仅提示。 */
+/** 节目可听性角标(图标+文字,放在时长左侧):
+ *  paid(锁)=付费未购——当前只有试听态,整行置灰+点播走三档动作;
+ *  vip(星)=VIP 专属内容(fee=1),会员可完整播,仅提示;
+ *  bought 字段语义存疑(VIP 账号未购买也被标 buyed=true,探针实证)已废弃不展示。 */
 @Composable
 private fun ProgramStateBadge(program: com.maxrave.netease.model.NeteaseDjProgram) {
-    val (textRes, color) =
+    val (badge, color) =
         when {
-            program.paid -> Res.string.podcast_badge_paid to MaterialTheme.colorScheme.error
-            program.bought -> Res.string.podcast_badge_bought to MaterialTheme.colorScheme.secondary
-            program.vip -> Res.string.podcast_badge_vip to MaterialTheme.colorScheme.primary
+            program.paid -> ProgramBadge.Lock to MaterialTheme.colorScheme.error
+            program.vip -> ProgramBadge.Vip to MaterialTheme.colorScheme.primary
             else -> return
         }
-    Text(
-        text = stringResource(textRes),
-        style = typo().labelSmall,
-        color = color,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier
                 .padding(end = 6.dp)
                 .background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-    )
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+    ) {
+        Icon(
+            imageVector = if (badge == ProgramBadge.Lock) SimpIcons.LockSmall else SimpIcons.Star,
+            contentDescription = stringResource(badge.text),
+            tint = color,
+            modifier = Modifier.size(11.dp),
+        )
+        Text(
+            text = stringResource(badge.text),
+            style = typo().labelSmall,
+            color = color,
+            modifier = Modifier.padding(start = 3.dp),
+        )
+    }
+}
+
+private enum class ProgramBadge(val text: StringResource) {
+    Lock(Res.string.podcast_badge_paid),
+    Vip(Res.string.podcast_badge_vip),
 }
 
 private fun formatProgramDuration(durationMs: Long): String {
