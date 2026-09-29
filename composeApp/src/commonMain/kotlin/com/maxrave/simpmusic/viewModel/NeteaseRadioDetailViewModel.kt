@@ -219,13 +219,16 @@ class NeteaseRadioDetailViewModel(
         }
     }
 
-    /** 点节目=从点击处整队起播(播完即止);startMs 供续播跳到上次位置 */
+    /** 点节目=从点击处整队起播;startMs 供续播跳到上次位置。
+     *  队列只带组队时已载的节目(通常第一页 30 条),还有未载页时发续页令牌
+     *  (POD{A|D}_<offset>,A=最早在前)——队列页近底/下拉由 core 续本台下一页,播完即止 */
     fun playFrom(
         index: Int,
         startMs: Long = 0L,
     ) {
+        val state = _uiState.value
         val tracks =
-            _uiState.value.programs
+            state.programs
                 .mapNotNull { it.toResultSong() }
                 .map { it.toTrack() }
         val first = tracks.getOrNull(index) ?: return
@@ -234,9 +237,14 @@ class NeteaseRadioDetailViewModel(
                 listTracks = ArrayList(tracks),
                 firstPlayedTrack = first,
                 playlistId = "NETEASE_PODCAST_RADIO_$radioId",
-                playlistName = _uiState.value.radio?.name ?: "",
+                playlistName = state.radio?.name ?: "",
                 playlistType = PlaylistType.PLAYLIST,
-                continuation = null,
+                continuation =
+                    if (state.hasMore) {
+                        "POD${if (state.ascending) 'A' else 'D'}_${state.programs.size}"
+                    } else {
+                        null
+                    },
             ),
         )
         sharedViewModel.loadMediaItemFromTrack(first, Config.PLAYLIST_CLICK, index)
