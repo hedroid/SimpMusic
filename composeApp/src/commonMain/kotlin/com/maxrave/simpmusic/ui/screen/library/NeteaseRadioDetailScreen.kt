@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,11 @@ import com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.podcast_play_all
+import simpmusic.composeapp.generated.resources.podcast_resume
+import simpmusic.composeapp.generated.resources.podcast_pause
+import simpmusic.composeapp.generated.resources.podcast_collapse
+import simpmusic.composeapp.generated.resources.podcast_expand
 import simpmusic.composeapp.generated.resources.podcast_no_programs
 import simpmusic.composeapp.generated.resources.podcast_order_earliest
 import simpmusic.composeapp.generated.resources.podcast_order_latest
@@ -127,10 +133,13 @@ fun NeteaseRadioDetailScreen(
         ) {
             // 电台头图区
             item(key = "radio_header") {
+                val playback by viewModel.radioPlayback.collectAsStateWithLifecycle()
                 RadioHeader(
                     radio = uiState.radio,
                     subInFlight = uiState.subInFlight,
+                    playback = playback,
                     onToggleSubscribe = { viewModel.toggleSubscribe() },
+                    onPlayAllOrResume = { viewModel.playAllOrResume() },
                 )
             }
             item(key = "radio_programs_header") {
@@ -204,7 +213,6 @@ fun NeteaseRadioDetailScreen(
                 // 缺期号的数据回退位置序号
                 NeteaseProgramRow(
                     program = program,
-                    rank = program.serialNum ?: index + 1,
                     subtitleMode = ProgramSubtitleMode.TIME,
                 ) {
                     viewModel.playFrom(index)
@@ -261,7 +269,9 @@ private fun SortIconButton(
 private fun RadioHeader(
     radio: com.maxrave.netease.model.NeteaseDjRadio?,
     subInFlight: Boolean,
+    playback: com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel.RadioPlayback?,
     onToggleSubscribe: () -> Unit,
+    onPlayAllOrResume: () -> Unit,
 ) {
     if (radio == null) return
     Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp)) {
@@ -314,24 +324,53 @@ private fun RadioHeader(
             )
             Spacer(Modifier.height(8.dp))
             val subed = radio.subed == true
-            if (subed) {
-                OutlinedButton(onClick = onToggleSubscribe, enabled = !subInFlight) {
-                    Text(stringResource(Res.string.podcast_subscribed), style = typo().labelMedium)
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                if (subed) {
+                    OutlinedButton(onClick = onToggleSubscribe, enabled = !subInFlight) {
+                        Text(stringResource(Res.string.podcast_subscribed), style = typo().labelMedium)
+                    }
+                } else {
+                    Button(onClick = onToggleSubscribe, enabled = !subInFlight) {
+                        Text(stringResource(Res.string.podcast_subscribe), style = typo().labelMedium)
+                    }
                 }
-            } else {
-                Button(onClick = onToggleSubscribe, enabled = !subInFlight) {
-                    Text(stringResource(Res.string.podcast_subscribe), style = typo().labelMedium)
+                // 播放全部/继续播放/暂停(随本电台队列状态三态,官方故事FM同款第二按钮)
+                when (playback) {
+                    null -> OutlinedButton(onClick = onPlayAllOrResume) {
+                        Text(stringResource(Res.string.podcast_play_all), style = typo().labelMedium)
+                    }
+                    else ->
+                        OutlinedButton(onClick = onPlayAllOrResume) {
+                            Text(
+                                stringResource(
+                                    if (playback.isPlaying) Res.string.podcast_pause else Res.string.podcast_resume,
+                                ),
+                                style = typo().labelMedium,
+                            )
+                        }
                 }
             }
             radio.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                // 超过 3 行显示"展开",点击切换全量/收起(官方同款)
+                var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                var overflowing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
                 Text(
                     text = desc,
                     style = typo().bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    maxLines = if (expanded) Int.MAX_VALUE else 3,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { overflowing = it.hasVisualOverflow || expanded },
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                if (overflowing) {
+                    androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
+                        Text(
+                            stringResource(if (expanded) Res.string.podcast_collapse else Res.string.podcast_expand),
+                            style = typo().labelMedium,
+                        )
+                    }
+                }
             }
         }
     }

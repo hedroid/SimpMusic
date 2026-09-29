@@ -495,6 +495,11 @@
     <string name="podcast_program_toplist">인기 에피소드 차트</string>
     <string name="podcast_toplist_radios">인기 라디오 차트</string>
     <string name="podcast_programs">에피소드</string>
+    <string name="podcast_play_all">전체 재생</string>
+    <string name="podcast_resume">이어서 재생</string>
+    <string name="podcast_pause">일시정지</string>
+    <string name="podcast_expand">더 보기</string>
+    <string name="podcast_collapse">접기</string>
     <string name="podcast_order_latest">최신순</string>
     <string name="podcast_order_earliest">오래된순</string>
     <string name="podcast_programs_unavailable">에피소드를 불러오지 못했습니다(요청 제한 또는 네트워크 불안정). 잠시 후 다시 시도하세요</string>

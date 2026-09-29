@@ -14,6 +14,8 @@ import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
@@ -51,7 +53,38 @@ class NeteaseRadioDetailViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> get() = _uiState.asStateFlow()
 
-    private var radioId = 0L
+    /** 当前电台 id(StateFlow 化:radioPlayback 的 combine 源,避免可变 var 闭包取旧值) */
+    private val radioIdFlow = MutableStateFlow(0L)
+    private var radioId: Long
+        get() = radioIdFlow.value
+        set(value) {
+            radioIdFlow.value = value
+        }
+
+    /** 本电台当前播放态(null=播放队列不是本电台):驱动 播放全部/继续播放/暂停 按钮三态 */
+    data class RadioPlayback(val isPlaying: Boolean)
+
+    val radioPlayback: kotlinx.coroutines.flow.StateFlow<RadioPlayback?> =
+        kotlinx.coroutines.flow.combine(
+            radioIdFlow,
+            mediaPlayerHandler.queueData,
+            mediaPlayerHandler.controlState,
+        ) { id, q, c ->
+            if (id != 0L && q?.data?.playlistId == "NETEASE_PODCAST_RADIO_$id") {
+                RadioPlayback(c.isPlaying)
+            } else {
+                null
+            }
+        }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), null)
+
+    /** 头部按钮:非本队=播放全部(当前列表顺序整队起播);本队=继续/暂停(PlayPause 翻转) */
+    fun playAllOrResume() {
+        val playback = radioPlayback.value
+        when {
+            playback == null -> playFrom(0)
+            else -> viewModelScope.launch { mediaPlayerHandler.onPlayerEvent(com.maxrave.domain.mediaservice.handler.PlayerEvent.PlayPause) }
+        }
+    }
 
     fun load(id: Long) {
         if (radioId == id && !_uiState.value.loading) return

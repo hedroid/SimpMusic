@@ -223,6 +223,11 @@
     <string name="podcast_program_toplist">熱門節目榜</string>
     <string name="podcast_toplist_radios">熱門電臺榜</string>
     <string name="podcast_programs">節目</string>
+    <string name="podcast_play_all">播放全部</string>
+    <string name="podcast_resume">繼續播放</string>
+    <string name="podcast_pause">暫停</string>
+    <string name="podcast_expand">展開</string>
+    <string name="podcast_collapse">收起</string>
     <string name="podcast_order_latest">最新</string>
     <string name="podcast_order_earliest">最早</string>
     <string name="podcast_programs_unavailable">節目拉取失敗（操作頻繁被限流或網路波動），稍後重試</string>
