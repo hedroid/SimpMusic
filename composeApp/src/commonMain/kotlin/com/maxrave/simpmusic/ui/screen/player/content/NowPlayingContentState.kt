@@ -107,6 +107,8 @@ class NowPlayingContentState(
     val shouldShowVideo: Boolean,
     /** 当前歌曲是否来自网易；用于元数据加载前也能立即应用源特有 UI 规则。 */
     val isNeteaseSong: Boolean,
+    /** 播客节目(队列指纹判定):歌曲红心对节目无效(524),三主题红心隐藏 */
+    val isPodcastSong: Boolean = false,
     /** 红心=云端账号状态;该源未登录时置灰(onLoginRequired 提示) */
     val likeEnabled: Boolean = true,
     val remoteLikeState: RemoteSongLikeState,

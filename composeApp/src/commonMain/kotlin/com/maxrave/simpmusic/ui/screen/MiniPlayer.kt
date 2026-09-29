@@ -173,6 +173,12 @@ fun MiniPlayer(
     val nowPlayingVideoIdMini = sharedViewModel.nowPlayingState.collectAsStateWithLifecycle(initialValue = null).value?.track?.videoId
     val likeEnabledMini =
         if (nowPlayingVideoIdMini?.toLongOrNull() != null) miniNeteaseLoggedIn else miniYtLoggedIn
+    // 播客节目(剧集):歌曲红心链路对节目无效(/song/like 报 524)——迷你条红心隐藏
+    val isPodcastMini =
+        sharedViewModel.getQueueDataState().collectAsStateWithLifecycle(initialValue = null).value?.data?.let { d ->
+            d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+                (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null })
+        } == true
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
 
     val layer = rememberGraphicsLayer()
@@ -573,7 +579,7 @@ fun MiniPlayer(
                         contentAlignment = Alignment.Center,
                     ) {
                         // 未登录对应源置灰(点击提示登录),与播放页红心同一套 gate
-                        HeartCheckBox(
+                        if (!isPodcastMini) HeartCheckBox(
                             checked = liked,
                             size = 30,
                             tint = textColor,
@@ -989,7 +995,7 @@ fun MiniPlayer(
                     // glyph the neighbouring icons draw at — 26 left an 18dp heart that read
                     // as extra padding around a smaller icon.
                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                        HeartCheckBox(
+                        if (!isPodcastMini) HeartCheckBox(
                             checked = controllerState.isLiked,
                             size = 32,
                             enabled = likeEnabledMini,

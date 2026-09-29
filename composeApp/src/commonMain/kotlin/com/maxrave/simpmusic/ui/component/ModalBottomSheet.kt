@@ -1136,6 +1136,14 @@ fun QueueBottomSheet(
     // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
     val isFmQueue = queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID
 
+    // 播客队列(剧集播完即止):无尽开关整行隐藏。判定双路=前缀或全数字队列指纹
+    // (恢复队列 SAVED_QUEUE 丢前缀;播客节目=纯数字 id,歌曲队列几乎都有 LM/VL/RADAR 等)
+    val isPodcastQueue =
+        queueData?.data?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+            (queueData?.data?.listTracks.orEmpty().let { t ->
+                t.size >= 3 && t.all { it.videoId.toLongOrNull() != null }
+            })
+
     // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
     // uses (deriveOrderIndex): trust the player's own index when it points at the track
     // nowPlayingState says is playing, else fall back to that track's last position in the
@@ -1369,7 +1377,7 @@ fun QueueBottomSheet(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isPodcastQueue) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(Res.string.endless_queue),
                             style = typo().bodySmall,
@@ -4732,8 +4740,8 @@ fun NeteaseCommentsSheet(
                         }
                     }
                 }
-                // 底部输入栏(Melodia/官方同款):常驻,右侧发送;点评论行进入"回复 @xxx"模式
-                Row(
+                // 节目线程(A_DJ_1)的评论发布写通道未验证——输入栏整行隐藏(2026-09-29)
+                if (threadId == null) Row(
                     modifier =
                         Modifier
                             .fillMaxWidth()

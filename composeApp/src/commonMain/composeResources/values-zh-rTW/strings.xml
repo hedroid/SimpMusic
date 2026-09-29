@@ -228,6 +228,7 @@
     <string name="podcast_pause">暫停</string>
     <string name="podcast_expand">展開</string>
     <string name="podcast_collapse">收起</string>
+    <string name="comment_label">評論</string>
     <string name="podcast_comment_like_unsupported">節目評論暫不支持點讚</string>
     <string name="podcast_trial_toast">該節目需單獨購買，正在播放試聽</string>
     <string name="podcast_order_latest">最新</string>

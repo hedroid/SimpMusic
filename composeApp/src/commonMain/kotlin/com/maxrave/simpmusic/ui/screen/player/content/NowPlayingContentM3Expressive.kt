@@ -746,8 +746,8 @@ internal fun ExpressiveTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
-        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
-        run {
+        // 红心=云端账号喜欢态;未登录源置灰;播客节目隐藏(歌曲红心对节目 524)
+        if (!state.isPodcastSong) run {
         val likeBurst = rememberHeartBurstState()
         Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst).alpha(if (state.likeEnabled) 1f else 0.38f)) {
             FilledIconToggleButton(

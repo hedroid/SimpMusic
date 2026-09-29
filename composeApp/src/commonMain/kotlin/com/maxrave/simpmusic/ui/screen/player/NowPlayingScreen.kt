@@ -656,6 +656,10 @@ fun NowPlayingScreenContent(
             castState = castState,
             shouldShowVideo = shouldShowVideo,
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
+            isPodcastSong = mediaPlayerHandler.queueData.value?.data?.let { d ->
+                d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
+                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null })
+            } == true,
             remoteLikeState = remoteLikeState,
             // 红心=云端态;未登录源置灰(点击提示登录)
             likeEnabled =

@@ -1671,7 +1671,7 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        HeartCheckBox(
+                        if (!state.isPodcastSong) HeartCheckBox(
                             checked = state.controllerState.isLiked,
                             size = 30,
                             enabled = state.likeEnabled,
@@ -1851,7 +1851,7 @@ internal fun NowPlayingTrackInfoRow(
         }
         Spacer(modifier = Modifier.size(12.dp))
         // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
-        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+        if (!state.isPodcastSong) Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
             HeartCheckBox(
                 checked = state.controllerState.isLiked,
                 size = 32,
