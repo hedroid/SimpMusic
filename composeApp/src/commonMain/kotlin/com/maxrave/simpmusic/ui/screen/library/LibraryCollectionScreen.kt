@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -35,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +48,7 @@ import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.extension.copy
+import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.GridLibraryPlaylist
 import com.maxrave.simpmusic.ui.component.LibraryTilingItem
@@ -208,6 +211,8 @@ fun DownloadedManagementBody(
     viewModel: LibraryViewModel,
     dynamicPlaylistViewModel: LibraryDynamicPlaylistViewModel,
     sharedViewModel: SharedViewModel,
+    // 库页 chip 内嵌时接顶栏收起信号(与其它 chip 页同款);独立路由不传,不参与
+    onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
     val downloads by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val downloadedSongs by dynamicPlaylistViewModel.listDownloadedSong.collectAsStateWithLifecycle()
@@ -248,7 +253,21 @@ fun DownloadedManagementBody(
                         )
                     }
                 } else {
+                    // 顶栏收起信号:Songs 列表自报(与其它 chip 页同一套口径)
+                    val songsListState = rememberLazyListState()
+                    val songsScrollingUp by songsListState.isScrollingUp()
+                    LaunchedEffect(songsListState) {
+                        snapshotFlow { songsListState.firstVisibleItemIndex }
+                            .collect {
+                                if (it <= 1) {
+                                    onScrolling.invoke(true)
+                                } else {
+                                    onScrolling.invoke(songsScrollingUp)
+                                }
+                            }
+                    }
                     LazyColumn(
+                        state = songsListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = bottomPadding),
                     ) {
@@ -278,6 +297,7 @@ fun DownloadedManagementBody(
                     contentPadding = PaddingValues(bottom = bottomPadding),
                     data = downloads,
                     emptyText = Res.string.no_playlists_downloaded,
+                    onScrolling = onScrolling,
                     onRemoveDownload = { removeDownloadTarget = it },
                     onReload = viewModel::getDownloadedPlaylist,
                 )

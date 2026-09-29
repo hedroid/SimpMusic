@@ -198,6 +198,11 @@ fun LibraryScreen(
     val hazeState =
         rememberHazeState()
 
+    // 顶栏内容留白:锁定"展开态"高度(maxOf),不跟随收起动画——contentPadding 若逐帧
+    // 跟随动画,LazyGrid 每帧重锚定首可见项→触发新一轮滚动上报→翻转标题显隐→又改
+    // padding,自持振荡(用户实测"滑到底顶部来回跳");锁定后标题行收/展是纯覆盖层,
+    // 内容零位移。首页不受此害是因为它的留白是第 0 项内部的 Spacer,滚远后改高度
+    // 不碰当前锚点。只增不减,进程重启从展开态起步(下面 showTitleBar 非 saveable)。
     var topAppBarHeight by remember {
         mutableStateOf(0.dp)
     }
@@ -211,10 +216,11 @@ fun LibraryScreen(
     val chipRowState = rememberScrollState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
     // 顶栏第一排(标题行)随内容滚动收起——与首页顶栏同款效果(用户 2026-09-30)。
-    // 信号沿用各 chip 页已有的 onScrolling(true=在顶/上滑回顶,false=深入内容下滑):
-    // 在 Crossfade 内容里按来源页过滤后驱动标题行显隐,原样转发给 App 驱动底栏;
-    // 不上报滚动的 chip 页(播客/下载管理)由下面 LaunchedEffect 的复位兜底。
-    var showTitleBar by rememberSaveable { mutableStateOf(true) }
+    // 信号沿用各 chip 页的 onScrolling(true=在顶/上滑回顶,false=深入内容下滑):
+    // 在 Crossfade 内容里按来源页过滤后驱动标题行显隐,原样转发给 App 驱动底栏。
+    // 非 saveable:进程重启恒从展开态起步,与上面 padding 锁定值天然一致,避免
+    // "保存了收起态+padding 重新锁定小值"的错位入场。
+    var showTitleBar by remember { mutableStateOf(true) }
     val openLibraryPlaylists = {
         navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
     }
@@ -229,14 +235,9 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(currentFilter) {
-        // 切 chip 的标题行复位只给"不上报滚动"的页(播客/下载管理):上报型 tab 的
-        // Crossfade 会恢复上次滚动位置(SaveableStateProvider),首帧上报的就是真实
-        // 状态(深处=false),blanket 复位会跟它打架把刚展开的标题又压回去。
-        if (currentFilter == LibraryChipType.NETEASE_PODCAST ||
-            currentFilter == LibraryChipType.DOWNLOADED_PLAYLIST
-        ) {
-            showTitleBar = true
-        }
+        // 标题行显隐不做切页复位:每个 chip 页自己上报滚动状态(含播客/下载管理),
+        // Crossfade 按页恢复滚动位置(SaveableStateProvider),首帧上报的就是真实
+        // 状态(深处=false)——复位会跟它打架,把刚展开的标题又压回去。
         Logger.w(
             "LIBPROBE",
             "currentFilter=$currentFilter netease=${neteasePlaylist::class.simpleName}/${subscribedArtists::class.simpleName}/${starredAlbums::class.simpleName}",
@@ -324,6 +325,7 @@ fun LibraryScreen(
                     viewModel = viewModel,
                     dynamicPlaylistViewModel = dynamicViewModel,
                     sharedViewModel = sharedVm,
+                    onScrolling = tabScrolling,
                 )
             }
 
@@ -369,6 +371,7 @@ fun LibraryScreen(
                     innerPadding = innerPadding.copy(top = topAppBarHeight),
                     navController = navController,
                     viewModel = neteasePodcastViewModel,
+                    onScrolling = tabScrolling,
                 )
             }
 
@@ -596,13 +599,18 @@ fun LibraryScreen(
         Modifier
             .background(Color.Transparent)
             .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }).onGloballyPositioned { coordinates ->
-                topAppBarHeight = with(density) { coordinates.size.height.toDp() }
+                // maxOf 锁定展开态高度:见上面 topAppBarHeight 声明处的振荡说明。
+                topAppBarHeight =
+                    maxOf(
+                        topAppBarHeight,
+                        with(density) { coordinates.size.height.toDp() },
+                    )
             },
     ) {
         // 标题行随内容滚动收起(与首页顶栏同款):下滑深入内容时只剩 chip 行贴顶,
         // 回滑到顶时标题行展开;收起态由同尺寸的状态栏 Spacer 占位,chip 行不钻到
-        // 状态栏下面。整列高度变化经 onGloballyPositioned 回写 topAppBarHeight,
-        // 各 chip 页的 contentPadding 跟随,内容从收起的标题行下方滑过(糊面盖着)。
+        // 状态栏下面。padding 锁定展开高度,标题收/展是纯覆盖层——内容零位移、
+        // 也不会反过来触发滚动上报(振荡根源已断)。
         AnimatedVisibility(
             visible = showTitleBar,
             enter = fadeIn() + expandVertically(),

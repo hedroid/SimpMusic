@@ -30,7 +30,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.buildAnnotatedString
@@ -60,6 +62,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCatego
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.extension.formatTimeAgo
+import com.maxrave.simpmusic.extension.isScrollingUp
 import kotlinx.datetime.toLocalDateTime
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
@@ -93,6 +96,8 @@ fun NeteasePodcastScreen(
     innerPadding: PaddingValues,
     navController: NavController,
     viewModel: NeteasePodcastViewModel,
+    // 库页 chip 内嵌时接顶栏收起信号(与其它 chip 页同款);独立路由/默认不参与
+    onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -128,6 +133,18 @@ fun NeteasePodcastScreen(
             return@PullToRefreshBox
         }
         val listState = rememberLazyListState()
+        // 顶栏收起信号:与 GridLibraryPlaylist/各 chip 页同一套口径(index<=1 视作在顶)
+        val scrollingUp by listState.isScrollingUp()
+        LaunchedEffect(listState) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .collect {
+                    if (it <= 1) {
+                        onScrolling.invoke(true)
+                    } else {
+                        onScrolling.invoke(scrollingUp)
+                    }
+                }
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
