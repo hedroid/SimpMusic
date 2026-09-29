@@ -51,6 +51,8 @@ import com.maxrave.simpmusic.ui.component.MediaRow
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCategoryDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.extension.formatTimeAgo
+import kotlinx.datetime.toLocalDateTime
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import org.jetbrains.compose.resources.stringResource
@@ -377,10 +379,15 @@ internal fun NeteaseDjRadioCard(
 /** 节目整行(封面 56dp + 标题 + 电台·主播·N次收听 + 时长);点击=从该节目整队起播。
  *  paid 节目(付费未购)整行 0.4 alpha 置灰——与歌单灰歌同款形态;点击仍可播,
  *  走 isAvailable=false 的三档动作(默认 SKIP),不再播 26KB 试听片段。 */
+/** 副标题模式:RADIO=电台·主播·收听量(跨电台列表:主页最新节目/节目榜);TIME=发布时间·收听量
+ *  (电台详情页——头部已有电台/主播信息,行内重复冗余,2026-09-29 用户反馈) */
+enum class ProgramSubtitleMode { RADIO, TIME }
+
 @Composable
 internal fun NeteaseProgramRow(
     program: com.maxrave.netease.model.NeteaseDjProgram,
     rank: Int? = null,
+    subtitleMode: ProgramSubtitleMode = ProgramSubtitleMode.RADIO,
     onClick: () -> Unit,
 ) {
     // 置灰修饰(灰歌同款):paid 行整体 0.4 alpha
@@ -432,13 +439,22 @@ internal fun NeteaseProgramRow(
             )
             Text(
                 text =
-                    listOfNotNull(
-                        program.radioName,
-                        program.djNickname,
-                        program.listenerCount?.let {
-                            stringResource(Res.string.podcast_listens, formatCompactCount(it))
-                        },
-                    ).joinToString(" · "),
+                    when (subtitleMode) {
+                        ProgramSubtitleMode.RADIO ->
+                            listOfNotNull(
+                                program.radioName,
+                                program.djNickname,
+                            ).joinToString(" · ")
+                        ProgramSubtitleMode.TIME ->
+                            program.createTimeMs?.let { ms ->
+                                // 绝对发布日期(官方同款),不用相对时间(2026-09-29 用户定案)
+                                kotlinx.datetime.Instant.fromEpochMilliseconds(ms)
+                                    .toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                                    .date.toString()
+                            } ?: ""
+                    } + program.listenerCount?.let {
+                        " · " + stringResource(Res.string.podcast_listens, formatCompactCount(it))
+                    }.orEmpty(),
                 style = typo().bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

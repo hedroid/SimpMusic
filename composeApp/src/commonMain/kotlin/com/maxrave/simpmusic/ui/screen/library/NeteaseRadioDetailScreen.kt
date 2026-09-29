@@ -46,6 +46,8 @@ import com.maxrave.simpmusic.ui.component.NormalAppBar
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowUp
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
+import com.maxrave.simpmusic.ui.icon.SortAscending
+import com.maxrave.simpmusic.ui.icon.SortDescending
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
@@ -144,17 +146,17 @@ fun NeteaseRadioDetailScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f),
                     )
-                    // 图标切换:下箭头=最新在前(默认),双上箭头=最早在前;选中 primary 着色
+                    // 升/降序各一颗图标(官方同款箭头+横线):降序=最新在前,升序=最早在前;选中 primary
                     IconButton(onClick = { viewModel.setAscending(false) }) {
                         Icon(
-                            SimpIcons.KeyboardArrowDown,
+                            SimpIcons.SortDescending,
                             contentDescription = stringResource(Res.string.podcast_order_latest),
                             tint = if (!uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     IconButton(onClick = { viewModel.setAscending(true) }) {
                         Icon(
-                            SimpIcons.KeyboardDoubleArrowUp,
+                            SimpIcons.SortAscending,
                             contentDescription = stringResource(Res.string.podcast_order_earliest),
                             tint = if (uiState.ascending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -197,7 +199,11 @@ fun NeteaseRadioDetailScreen(
             ) { index, program ->
                 // 期号=第几期(serialNum):最新排序首条即当前最大期号,最早排序从第 1 期起;
                 // 缺期号的数据回退位置序号
-                NeteaseProgramRow(program = program, rank = program.serialNum ?: index + 1) {
+                NeteaseProgramRow(
+                    program = program,
+                    rank = program.serialNum ?: index + 1,
+                    subtitleMode = ProgramSubtitleMode.TIME,
+                ) {
                     viewModel.playFrom(index)
                 }
             }
