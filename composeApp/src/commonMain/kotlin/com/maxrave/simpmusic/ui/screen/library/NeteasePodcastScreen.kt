@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -183,19 +185,12 @@ fun NeteasePodcastScreen(
                 }
             } else {
                 item(key = "podcast_programs_header") {
-                    Column(Modifier.padding(horizontal = 15.dp)) {
-                        Text(
-                            text = stringResource(Res.string.podcast_latest_programs),
-                            style = typo().headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(top = 10.dp),
-                        )
-                        Text(
-                            text = stringResource(Res.string.podcast_tap_to_listen),
-                            style = typo().bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        text = stringResource(Res.string.podcast_latest_programs),
+                        style = typo().headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(horizontal = 15.dp).padding(top = 10.dp),
+                    )
                 }
                 items(
                     uiState.programs.take(LATEST_PROGRAMS_SHOWN),
@@ -360,13 +355,13 @@ internal fun NeteaseDjRadioCard(
                 )
             }
         }
+        // 标题独立(1 行就 1 行、2 行截断),播主永远紧随其后的下一行——单行标题→播主在第 2 行,
+        // 两行标题→播主在第 3 行,行与行之间无空隙(2026-09-29 用户定案语义)
         Text(
             text = radio.name,
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            // 两行截断(通用口径)。区块间距固定后,单卡高度差不再传导成整页跳动
             maxLines = 2,
-            minLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
