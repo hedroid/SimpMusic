@@ -567,28 +567,31 @@ fun MiniPlayer(
                     // Flat: 40dp in the 56dp pill leaves an even 8dp ring.
                     val controlSize = if (isFlat) 40.dp else 48.dp
                     val playColor = if (isFlat) MaterialTheme.colorScheme.onPrimary else textColor
-                    Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
-                    // background(shape), not clip: the heart's like-burst draws outside its bounds.
-                    Box(
-                        modifier =
-                            if (isFlat) {
-                                Modifier
-                                    .size(controlSize)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
-                            } else {
-                                Modifier
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // 未登录对应源置灰(点击提示登录),与播放页红心同一套 gate
-                        if (!isPodcastMini) HeartCheckBox(
-                            checked = liked,
-                            size = 30,
-                            tint = textColor,
-                            enabled = likeEnabledMini,
-                            modifier = Modifier.alpha(if (likeEnabledMini) 1f else 0.38f),
+                    // 播客态整格隐藏:flat 变体的圆形底色属于容器而非红心,单藏红心会剩一个空圈
+                    if (!isPodcastMini) {
+                        Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
+                        // background(shape), not clip: the heart's like-burst draws outside its bounds.
+                        Box(
+                            modifier =
+                                if (isFlat) {
+                                    Modifier
+                                        .size(controlSize)
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+                                } else {
+                                    Modifier
+                                },
+                            contentAlignment = Alignment.Center,
                         ) {
-                            sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                            // 未登录对应源置灰(点击提示登录),与播放页红心同一套 gate
+                            HeartCheckBox(
+                                checked = liked,
+                                size = 30,
+                                tint = textColor,
+                                enabled = likeEnabledMini,
+                                modifier = Modifier.alpha(if (likeEnabledMini) 1f else 0.38f),
+                            ) {
+                                sharedViewModel.onUIEvent(UIEvent.ToggleLike)
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.width(if (isFlat) 8.dp else 15.dp))
