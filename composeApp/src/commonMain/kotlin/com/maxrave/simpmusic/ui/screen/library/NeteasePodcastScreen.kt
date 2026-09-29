@@ -362,7 +362,8 @@ internal fun NeteaseDjRadioCard(
             text = radio.name,
             style = typo().titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            // 横滑卡标题单行省略:双行卡会让货架高度随滚动条目忽变(1行/2行跳动)
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )

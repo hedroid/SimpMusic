@@ -138,8 +138,10 @@ fun NeteaseRadioDetailScreen(
                     radio = uiState.radio,
                     subInFlight = uiState.subInFlight,
                     playback = playback,
+                    hasResume = uiState.resumeProgramId != null,
                     onToggleSubscribe = { viewModel.toggleSubscribe() },
                     onPlayAllOrResume = { viewModel.playAllOrResume() },
+                    onResumePlayback = { viewModel.resumePlayback() },
                 )
             }
             item(key = "radio_programs_header") {
@@ -262,8 +264,10 @@ private fun RadioHeader(
     radio: com.maxrave.netease.model.NeteaseDjRadio?,
     subInFlight: Boolean,
     playback: com.maxrave.simpmusic.viewModel.NeteaseRadioDetailViewModel.RadioPlayback?,
+    hasResume: Boolean,
     onToggleSubscribe: () -> Unit,
     onPlayAllOrResume: () -> Unit,
+    onResumePlayback: () -> Unit,
 ) {
     if (radio == null) return
     Row(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp)) {
@@ -327,10 +331,19 @@ private fun RadioHeader(
                     }
                 }
                 // 播放全部/继续播放/暂停(随本电台队列状态三态,官方故事FM同款第二按钮)
+                // 单按钮三态:队列非本台=有记忆"继续播放"(跳上次节目+位置)/无记忆"播放全部";
+                // 队列是本台=暂停/继续播放(PlayPause)
                 when (playback) {
-                    null -> OutlinedButton(onClick = onPlayAllOrResume) {
-                        Text(stringResource(Res.string.podcast_play_all), style = typo().labelMedium)
-                    }
+                    null ->
+                        if (hasResume) {
+                            Button(onClick = onResumePlayback) {
+                                Text(stringResource(Res.string.podcast_resume), style = typo().labelMedium)
+                            }
+                        } else {
+                            OutlinedButton(onClick = onPlayAllOrResume) {
+                                Text(stringResource(Res.string.podcast_play_all), style = typo().labelMedium)
+                            }
+                        }
                     else ->
                         OutlinedButton(onClick = onPlayAllOrResume) {
                             Text(

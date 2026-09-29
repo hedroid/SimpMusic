@@ -201,6 +201,7 @@ val viewModelModule =
             NeteaseRadioDetailViewModel(
                 get(),
                 get(),
+                get(),
             )
         }
         viewModel {

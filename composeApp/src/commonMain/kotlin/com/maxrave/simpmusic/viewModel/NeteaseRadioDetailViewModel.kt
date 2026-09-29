@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ import simpmusic.composeapp.generated.resources.podcast_unsubscribe_toast
 class NeteaseRadioDetailViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val sharedViewModel: SharedViewModel,
+    private val dataStoreManager: com.maxrave.domain.manager.DataStoreManager,
 ) : BaseViewModel() {
     data class UiState(
         val radio: NeteaseDjRadio? = null,
@@ -48,6 +50,9 @@ class NeteaseRadioDetailViewModel(
         val programsUnavailable: Boolean = false,
         /** 节目排序:false=最新在前(默认,byradio asc=false)/true=最早在前(asc=true) */
         val ascending: Boolean = false,
+        /** 上次收听记忆(programId+已播毫秒,持久化;队列清空后回页仍可续播,官方回听同款) */
+        val resumeProgramId: Long? = null,
+        val resumePositionMs: Long = 0L,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -77,6 +82,36 @@ class NeteaseRadioDetailViewModel(
             }
         }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), null)
 
+    init {
+        // 本电台播放中周期落盘收听记忆(10s 粒度;页面关闭/进程死都最多丢 10s)。
+        // 判定直接读 handler 三个 StateFlow.value,不走 radioPlayback(它是 WhileSubscribed,
+        // 页面退到后台停收集变 null,记忆就断——实测踩过)
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                val id = radioId
+                if (id == 0L) continue
+                val q = mediaPlayerHandler.queueData.value
+                if (q?.data?.playlistId != "NETEASE_PODCAST_RADIO_$id") continue
+                val c = mediaPlayerHandler.controlState.value
+                if (!c.isPlaying) continue
+                // track 在部分转场时机为 null(播放页同款回退 songEntity);Ready 只是装载完成
+                // 一瞬,稳态是 Progress/Buffering——判"在播"族即可
+                val nowTrack = mediaPlayerHandler.nowPlayingState.value
+                val vid = nowTrack.track?.videoId ?: nowTrack.songEntity?.videoId
+                val pid = _uiState.value.programs.firstOrNull { it.mainSongId?.toString() == vid }?.id
+                val state = mediaPlayerHandler.simpleMediaState.value
+                val active = state is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Progress ||
+                    state is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Ready ||
+                    state is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Buffering
+                if (pid != null && active) {
+                    val pos = mediaPlayerHandler.player.currentPosition
+                    dataStoreManager.putString("podcast_resume_$id", "$pid|$pos")
+                }
+            }
+        }
+    }
+
     /** 头部按钮:非本队=播放全部(当前列表顺序整队起播);本队=继续/暂停(PlayPause 翻转) */
     fun playAllOrResume() {
         val playback = radioPlayback.value
@@ -90,6 +125,15 @@ class NeteaseRadioDetailViewModel(
         if (radioId == id && !_uiState.value.loading) return
         radioId = id
         _uiState.update { it.copy(loading = true, programsUnavailable = false) }
+        // 读该电台的上次收听记忆("programId|positionMs"单键)
+        viewModelScope.launch {
+            val saved = dataStoreManager.getString("podcast_resume_$id").first()
+            saved?.split("|")?.let { parts ->
+                val pid = parts.getOrNull(0)?.toLongOrNull()
+                val pos = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                if (pid != null) _uiState.update { it.copy(resumeProgramId = pid, resumePositionMs = pos) }
+            }
+        }
         viewModelScope.launch {
             // 串行:节目"空且电台声明有节目=不可用"的判定依赖详情的 programCount,
             // 并行会有详情未回(declared=0)的误判窗口
@@ -164,8 +208,22 @@ class NeteaseRadioDetailViewModel(
         }
     }
 
-    /** 点节目=从点击处整队起播(播完即止) */
-    fun playFrom(index: Int) {
+    /** 头部"继续播放":跳到记忆节目+seek 到记忆位置(队列不在本台时) */
+    fun resumePlayback() {
+        val pid = _uiState.value.resumeProgramId ?: return
+        val idx = _uiState.value.programs.indexOfFirst { it.id == pid }
+        if (idx >= 0) {
+            playFrom(idx, _uiState.value.resumePositionMs)
+        } else {
+            playFrom(0)
+        }
+    }
+
+    /** 点节目=从点击处整队起播(播完即止);startMs 供续播跳到上次位置 */
+    fun playFrom(
+        index: Int,
+        startMs: Long = 0L,
+    ) {
         val tracks =
             _uiState.value.programs
                 .mapNotNull { it.toResultSong() }
@@ -182,6 +240,15 @@ class NeteaseRadioDetailViewModel(
             ),
         )
         sharedViewModel.loadMediaItemFromTrack(first, Config.PLAYLIST_CLICK, index)
+        if (startMs > 0) {
+            // 等 READY 再 seek(装载中 seek 无效);首曲即目标节目(index 定位保证)
+            viewModelScope.launch {
+                kotlinx.coroutines.withTimeoutOrNull(8000) {
+                    mediaPlayerHandler.simpleMediaState.first { it is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Ready }
+                }
+                mediaPlayerHandler.player.seekTo(startMs)
+            }
+        }
     }
 
     /** 订阅/退订(登录态 repo 层先验;按钮态在_flight 中防连点) */
