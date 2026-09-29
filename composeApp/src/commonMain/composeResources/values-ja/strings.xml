@@ -471,6 +471,7 @@
     <string name="podcast_pause">一時停止</string>
     <string name="podcast_expand">もっと見る</string>
     <string name="podcast_collapse">閉じる</string>
+    <string name="podcast_trial_toast">このエピソードは個別購入が必要です。試聴を再生します</string>
     <string name="podcast_order_latest">新しい順</string>
     <string name="podcast_order_earliest">古い順</string>
     <string name="podcast_programs_unavailable">エピソードの取得に失敗しました（操作が頻繁または通信不安定）。しばらくしてからお試しください</string>

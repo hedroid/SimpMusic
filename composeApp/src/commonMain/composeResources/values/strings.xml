@@ -1021,6 +1021,7 @@
     <string name="podcast_pause">Pause</string>
     <string name="podcast_expand">Show more</string>
     <string name="podcast_collapse">Show less</string>
+    <string name="podcast_trial_toast">This program requires a separate purchase — playing trial preview</string>
     <string name="podcast_order_latest">Latest</string>
     <string name="podcast_order_earliest">Earliest</string>
     <string name="podcast_programs_unavailable">Couldn't load programs (rate-limited by NetEase or network hiccup). Try again in a moment.</string>

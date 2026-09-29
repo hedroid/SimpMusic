@@ -20,6 +20,7 @@ import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_netease_first
 import simpmusic.composeapp.generated.resources.podcast_latest_programs
+import simpmusic.composeapp.generated.resources.podcast_trial_toast
 import simpmusic.composeapp.generated.resources.podcast_program_toplist
 import simpmusic.composeapp.generated.resources.podcast_subscribe_toast
 import simpmusic.composeapp.generated.resources.podcast_unsubscribe_toast
@@ -52,6 +53,22 @@ class NeteasePodcastViewModel(
 
     /** 首拉过一次即不再整页 Loading(静默刷新口径) */
     private var loadedOnce = false
+
+    init {
+        // 付费节目试听 toast:repo 取流层检测到 26KB 占位时发事件;3s 去重防整台连播刷屏
+        viewModelScope.launch {
+            var lastSongId = ""
+            var lastAt = 0L
+            neteaseRepository.trialToastFlow.collect { songId ->
+                val now = kotlin.time.TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds
+                if (songId != lastSongId || now - lastAt > 3000) {
+                    makeToast(getString(Res.string.podcast_trial_toast))
+                    lastSongId = songId
+                    lastAt = now
+                }
+            }
+        }
+    }
 
     /** chip 页被选中时调用:首拉整页,之后只静默刷新订阅区(详情页订阅/退订要反映回来) */
     fun onPageSelected() {

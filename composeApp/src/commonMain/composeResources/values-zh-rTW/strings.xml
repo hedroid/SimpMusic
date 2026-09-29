@@ -228,6 +228,7 @@
     <string name="podcast_pause">暫停</string>
     <string name="podcast_expand">展開</string>
     <string name="podcast_collapse">收起</string>
+    <string name="podcast_trial_toast">該節目需單獨購買，正在播放試聽</string>
     <string name="podcast_order_latest">最新</string>
     <string name="podcast_order_earliest">最早</string>
     <string name="podcast_programs_unavailable">節目拉取失敗（操作頻繁被限流或網路波動），稍後重試</string>

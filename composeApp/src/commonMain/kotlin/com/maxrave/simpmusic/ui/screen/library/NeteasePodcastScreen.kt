@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.LocalPlatformContext
@@ -48,11 +49,9 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.maxrave.simpmusic.ui.icon.LockSmall
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.icon.SimpIcons
-import com.maxrave.simpmusic.ui.icon.Star
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.MediaRow
@@ -488,27 +487,16 @@ private fun ProgramStateBadge(program: com.maxrave.netease.model.NeteaseDjProgra
             program.vip -> ProgramBadge.Vip to MaterialTheme.colorScheme.primary
             else -> return
         }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Text(
+        text = stringResource(badge.text),
+        style = typo().labelSmall.copy(fontSize = 9.sp),
+        color = color,
         modifier =
             Modifier
                 .padding(end = 6.dp)
                 .background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp, vertical = 2.dp),
-    ) {
-        Icon(
-            imageVector = if (badge == ProgramBadge.Lock) SimpIcons.LockSmall else SimpIcons.Star,
-            contentDescription = stringResource(badge.text),
-            tint = color,
-            modifier = Modifier.size(11.dp),
-        )
-        Text(
-            text = stringResource(badge.text),
-            style = typo().labelSmall,
-            color = color,
-            modifier = Modifier.padding(start = 3.dp),
-        )
-    }
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+    )
 }
 
 private enum class ProgramBadge(val text: StringResource) {
