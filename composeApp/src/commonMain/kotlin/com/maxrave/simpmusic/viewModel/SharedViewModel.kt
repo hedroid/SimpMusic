@@ -109,6 +109,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
 import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
+import simpmusic.composeapp.generated.resources.podcast_trial_toast
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.login_netease_first
@@ -148,6 +149,24 @@ class SharedViewModel(
     private val cacheRepository: CacheRepository,
     private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl,
 ) : BaseViewModel() {
+
+    init {
+        // 付费播客节目试听 toast:repo 取流层检测到 26KB 占位时发事件。
+        // 放这里(进程级 single 常驻)而非播客页 VM——播客页没进过时该 VM 不存在,
+        // SharedFlow 无订阅者 tryEmit 直接丢弃,toast 永远不弹(2026-09-29 实测踩过)
+        viewModelScope.launch {
+            var lastSongId = ""
+            var lastAtMs = 0L
+            neteaseRepository.trialToastFlow.collect { songId ->
+                val now = System.currentTimeMillis()
+                if (songId != lastSongId || now - lastAtMs > 3000) {
+                    makeToast(getString(Res.string.podcast_trial_toast))
+                    lastSongId = songId
+                    lastAtMs = now
+                }
+            }
+        }
+    }
 
     // ---------------------------------------------------------------- 音源切换(feat/netease-source)
 
