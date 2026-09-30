@@ -98,9 +98,6 @@ class NowPlayingBottomSheetViewModel(
     private var ytPlaylistsJob: Job? = null
     private var neteasePlaylistsJob: Job? = null
 
-    /** 网易列表归属账号的 cookie 指纹:换号/重登后旧列表必须失效(点它会加错账号的歌单) */
-    private var neteaseOwnerCookie: String? = null
-
     init {
         viewModelScope.launch {
             val sleepTimerJob =
@@ -141,22 +138,31 @@ class NowPlayingBottomSheetViewModel(
                         }
                     }
                 }
-            // 账号看门狗:cookie 变化/登出沿上立即清缓存列表。跳过首帧(DataStore 冷流
-            // 首读可能是默认值,把"未初始化"当"登出"会误清);只在"见过真值之后的变化沿"清
+            // 账号看门狗:MUSIC_U 身份变化/登出沿上立即取消在途链并清缓存列表。
+            // 身份取 MUSIC_U 而非整串 cookie——__csrf/NMTID 等随 Set-Cookie 合而变,
+            // 整串比对会把同账号误判成换号(2026-09-30 三轮 CR)。取消在途 job 很关键:
+            // 只清列表的话,旧账号请求晚到成功仍会把旧列表写回来。跳过首帧(DataStore
+            // 冷流首读可能是默认值,把"未初始化"当"登出"会误清),只在"见过真值后的
+            // 变化沿"动作。
             val accountWatchdogJob =
                 launch {
-                    var seenNeteaseCookie: String? = null
+                    var seenNeteaseIdentity: String? = null
+                    var seenHasNeteaseIdentity = false
                     var seenLoggedIn: Boolean? = null
                     combine(dataStoreManager.neteaseCookie, dataStoreManager.loggedIn) { c, l -> c to l }
                         .collect { (cookie, loggedIn) ->
-                            if (seenNeteaseCookie != null && cookie != seenNeteaseCookie) {
-                                neteaseOwnerCookie = null
+                            val identity = com.maxrave.simpmusic.extension.neteaseAccountIdentity(cookie)
+                            currentNeteaseIdentity = identity
+                            if (seenHasNeteaseIdentity && identity != seenNeteaseIdentity) {
+                                neteasePlaylistsJob?.cancel()
                                 _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
                             }
                             if (seenLoggedIn == true && loggedIn != DataStoreManager.TRUE) {
+                                ytPlaylistsJob?.cancel()
                                 _uiState.update { it.copy(listYouTubePlaylist = null, youTubePlaylistsFailed = false) }
                             }
-                            seenNeteaseCookie = cookie
+                            seenNeteaseIdentity = identity
+                            seenHasNeteaseIdentity = identity != null
                             seenLoggedIn = loggedIn == DataStoreManager.TRUE
                         }
                 }
@@ -202,28 +208,32 @@ class NowPlayingBottomSheetViewModel(
     /** "VLLM"(自动混合歌单)不可加歌,弹窗列表恒过滤 */
     private fun List<PlaylistsResult>.filterEditable() = filter { it.browseId != "VLLM" }
 
+    /** 当前网易账号身份(MUSIC_U),看门狗每次 cookie 发射时刷新;回包落库前校验用 */
+    private var currentNeteaseIdentity: String? = null
+
     /**
      * 网易自建歌单加载(单飞,重入取消旧链):
      * - 非网易歌/未登录/账号失效([NeteaseNotLoggedInException])=清空——留着旧账号
      *   的歌单只会加错地方;
      * - 网络/风控/业务失败=退避重试(不可重试异常不耗退避),期间与终态都保留旧列表,
      *   终败置 failed(列表空时弹窗出"重试"行)。
+     * 回包写入前校验账号身份仍与请求启动时一致——取消是主防线,这里是同线程兜底
+     * (看门狗清列表后,在途旧回包成功仍会把旧列表写回,三轮 CR 实锤)。
      */
     private fun loadNeteasePlaylists(isNeteaseSong: Boolean) {
         neteasePlaylistsJob?.cancel()
         neteasePlaylistsJob =
             viewModelScope.launch {
                 if (!isNeteaseSong) {
-                    neteaseOwnerCookie = null
                     _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
                     return@launch
                 }
                 val cookie = dataStoreManager.neteaseCookie.first()
                 if (cookie.isBlank()) {
-                    neteaseOwnerCookie = null
                     _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
                     return@launch
                 }
+                val startIdentity = com.maxrave.simpmusic.extension.neteaseAccountIdentity(cookie)
                 _uiState.update { it.copy(neteasePlaylistsFailed = false) }
                 val result =
                     com.maxrave.simpmusic.extension.retryIf(
@@ -232,15 +242,24 @@ class NowPlayingBottomSheetViewModel(
                     ) { _ ->
                         neteaseRepository.getOwnNeteasePlaylistsResult()
                     }
+                // 看门狗未首帧时 currentNeteaseIdentity 尚未知(null),放行写入——
+                // 后续身份变化沿的看门狗会再清;已知且不一致=换号后旧回包,丢弃
+                val identityStillCurrent =
+                    currentNeteaseIdentity == null || currentNeteaseIdentity == startIdentity
                 result
                     .onSuccess { list ->
-                        neteaseOwnerCookie = cookie
-                        _uiState.update { it.copy(listNeteasePlaylist = list) }
+                        if (identityStillCurrent) {
+                            _uiState.update { it.copy(listNeteasePlaylist = list) }
+                        } else {
+                            com.maxrave.logger.Logger.w(
+                                "AddToPlaylist",
+                                "discard stale netease playlists: identity changed during flight",
+                            )
+                        }
                     }.onFailure { e ->
                         if (e is NeteaseNotLoggedInException) {
-                            neteaseOwnerCookie = null
                             _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
-                        } else {
+                        } else if (identityStillCurrent) {
                             _uiState.update { it.copy(neteasePlaylistsFailed = true) }
                         }
                     }

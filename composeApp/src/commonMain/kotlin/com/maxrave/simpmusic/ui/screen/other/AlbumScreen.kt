@@ -1007,7 +1007,10 @@ fun AlbumScreen(
                         },
                         // Deliberately does not exit yet: the playlist picker opens next and
                         // still needs the selection alive.
-                        onAddToPlaylist = { showSelectionAddToPlaylist = true },
+                        onAddToPlaylist = {
+                            selectionViewModel.loadCloudPlaylists()
+                            showSelectionAddToPlaylist = true
+                        },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
                             selectionState.exit()
@@ -1021,16 +1024,32 @@ fun AlbumScreen(
                 if (showSelectionAddToPlaylist) {
                     val selectedIds = selectionState.selected.toList()
                     val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+                    val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+                    val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+                    val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+                    val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
                     AddToPlaylistModalBottomSheet(
                         isBottomSheetVisible = true,
                         listLocalPlaylist = localPlaylists,
-                        listYouTubePlaylist = emptyList(),
+                        listYouTubePlaylist = youTubePlaylists,
+                        listNeteasePlaylist = neteasePlaylists,
+                        youTubeLoadFailed = youTubeLoadFailedState,
+                        neteaseLoadFailed = neteaseLoadFailedState,
+                        onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
+                        videoIds = selectedIds,
                         onDismiss = { showSelectionAddToPlaylist = false },
                         onClick = { playlist ->
-                            selectionViewModel.addToPlaylist(playlist.id, selectedIds)
-                            selectionState.exit()
+                        selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+                        selectionState.exit()
                         },
-                        onYTPlaylistClick = {},
+                        onYTPlaylistClick = { playlist ->
+                        selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
+                        onNeteasePlaylistClick = { playlist ->
+                        selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
                     )
                 }
                 if (showBottomSheet) {

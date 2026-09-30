@@ -86,14 +86,12 @@ class SongSelectionViewModel(
     private var ytPlaylistsJob: kotlinx.coroutines.Job? = null
     private var neteasePlaylistsJob: kotlinx.coroutines.Job? = null
 
-    /** 网易列表归属账号的 cookie 指纹:换号后旧列表失效(点它会加错账号的歌单) */
-    private var neteaseOwnerCookie: String? = null
-
     /**
      * 弹窗打开时拉云端歌单列表(两路独立单飞;退避重试消化冷网络首拉失败——用户
      *  2026-09-30 反馈"第一次拉取不到")。终态失败保留旧值并置 failed(旧实现
      * `?: emptyList()`/getOrDefault 会把失败折叠成空列表,既丢旧值又无重试入口);
-     * 网易不可重试异常(已登出/账号失效)=清空,不耗退避。
+     * 网易不可重试异常(已登出/账号失效)=清空,不耗退避。网易回包写入前按 MUSIC_U
+     * 身份复核(entry 内换号窗口极小,但复核零成本,三轮 CR 补)。
      */
     fun loadCloudPlaylists() {
         ytPlaylistsJob?.cancel()
@@ -116,27 +114,38 @@ class SongSelectionViewModel(
             viewModelScope.launch {
                 val cookie = dataStoreManager.neteaseCookie.first()
                 if (cookie.isBlank()) {
-                    neteaseOwnerCookie = null
                     _neteasePlaylists.value = null
                     _neteasePlaylistsFailed.value = false
                     return@launch
                 }
+                val startIdentity = com.maxrave.simpmusic.extension.neteaseAccountIdentity(cookie)
                 _neteasePlaylistsFailed.value = false
                 val result =
                     com.maxrave.simpmusic.extension.retryIf(
                         tag = "AddToPlaylist",
                         retryOn = { it.isFailure && it.exceptionOrNull() !is com.maxrave.netease.NeteaseNotLoggedInException },
                     ) { neteaseRepository.getOwnNeteasePlaylistsResult() }
+                // 身份复核:拉取期间换号(MUSIC_U 变)则丢弃——整串 cookie 因 Set-Cookie
+                // 合并不稳定,不用于身份
+                val identityStillCurrent =
+                    com.maxrave.simpmusic.extension.neteaseAccountIdentity(
+                        dataStoreManager.neteaseCookie.first(),
+                    ) == startIdentity
                 result
                     .onSuccess { list ->
-                        neteaseOwnerCookie = cookie
-                        _neteasePlaylists.value = list
+                        if (identityStillCurrent) {
+                            _neteasePlaylists.value = list
+                        } else {
+                            com.maxrave.logger.Logger.w(
+                                "AddToPlaylist",
+                                "discard stale netease playlists: identity changed during flight",
+                            )
+                        }
                     }.onFailure { e ->
                         if (e is com.maxrave.netease.NeteaseNotLoggedInException) {
-                            neteaseOwnerCookie = null
                             _neteasePlaylists.value = null
                             _neteasePlaylistsFailed.value = false
-                        } else {
+                        } else if (identityStillCurrent) {
                             _neteasePlaylistsFailed.value = true
                         }
                     }
