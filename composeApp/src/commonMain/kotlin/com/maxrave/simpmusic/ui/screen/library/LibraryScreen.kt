@@ -65,6 +65,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.maxrave.common.LibraryChipType
+import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.LocalResource
@@ -194,7 +195,8 @@ fun LibraryScreen(
     // Plain remember: the payload is not saveable and the dialog is short-lived enough that a
     // process death mid-confirm can just start over.
     var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
-    val accountThumbnail by viewModel.accountThumbnail.collectAsStateWithLifecycle()
+    // 顶栏头像=当前音源登录账号的头像(用户 2026-09-30):网易源=云村账号,其它=Google 账号
+    val accountThumbnail by viewModel.sourceAccountThumbnail.collectAsStateWithLifecycle()
     val hazeState =
         rememberHazeState()
 
@@ -244,6 +246,36 @@ fun LibraryScreen(
         navController.navigate(LibraryCollectionDestination(LibraryChipType.DOWNLOADED_PLAYLIST.name))
     }
 
+    // chip 按音源显隐(用户 2026-09-30 定稿):网易云/网易播客=网易源+网易登录;
+    // 您的 YouTube Music/排行榜=YT 源+YT 登录;下载管理恒可见。源未加载完成前按
+    // YT 侧处理(App 默认源同款 getOrDefault 口径),与 VM 的 defaultLibraryChip 一致。
+    val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle(
+        initialValue = MusicSource.YOUTUBE_MUSIC.name,
+    )
+    val sourceIsNetease = selectedSource == MusicSource.NETEASE.name
+    val neteaseChipsVisible = neteaseLoggedIn && sourceIsNetease
+    val ytChipsVisible = loggedIn && !sourceIsNetease
+    // 回落目标=第一个可见 chip;chip 被音源/登录态变化藏掉时把 currentFilter 弹到这里
+    val fallbackChip =
+        when {
+            neteaseChipsVisible -> LibraryChipType.NETEASE_PLAYLIST
+            ytChipsVisible -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
+            else -> LibraryChipType.DOWNLOADED_PLAYLIST
+        }
+
+    LaunchedEffect(neteaseChipsVisible, ytChipsVisible, currentFilter) {
+        val visible =
+            when (currentFilter) {
+                LibraryChipType.NETEASE_PLAYLIST, LibraryChipType.NETEASE_PODCAST -> neteaseChipsVisible
+                LibraryChipType.YOUTUBE_MUSIC_PLAYLIST, LibraryChipType.CHART -> ytChipsVisible
+                LibraryChipType.DOWNLOADED_PLAYLIST -> true
+                else -> false // YOUR_LIBRARY/LOCAL_PLAYLIST 等本就走重定向
+            }
+        if (!visible) {
+            viewModel.setCurrentScreen(fallbackChip)
+        }
+    }
+
     LaunchedEffect(currentFilter) {
         // 标题行显隐不做切页复位:每个 chip 页自己上报滚动状态(含播客/下载管理),
         // Crossfade 按页恢复滚动位置(SaveableStateProvider),首帧上报的就是真实
@@ -283,7 +315,7 @@ fun LibraryScreen(
             // while it was selected would land here with no chip to match — send it back to the
             // default. The enum value itself stays so older persisted values still parse.
             LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
-                viewModel.setCurrentScreen(LibraryChipType.CHART)
+                viewModel.setCurrentScreen(fallbackChip)
             }
 
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
@@ -294,7 +326,7 @@ fun LibraryScreen(
             LibraryChipType.LOCAL_PLAYLIST,
             LibraryChipType.FAVORITE_PLAYLIST,
             LibraryChipType.FAVORITE_PODCAST,
-            -> viewModel.setCurrentScreen(LibraryChipType.CHART)
+            -> viewModel.setCurrentScreen(fallbackChip)
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -303,9 +335,9 @@ fun LibraryScreen(
             }
 
             // Wrapped(年度回顾)chip 已隐藏(2026-09-30):enum 与 LibraryWrappedTab 管线保留,
-            // 但入口没了,落在该值上弹回排行榜(与 YOUTUBE_MIX_FOR_YOU 同款兜底)。
+            // 但入口没了,落在该值上弹回回落目标(与 YOUTUBE_MIX_FOR_YOU 同款兜底)。
             LibraryChipType.WRAPPED -> {
-                viewModel.setCurrentScreen(LibraryChipType.CHART)
+                viewModel.setCurrentScreen(fallbackChip)
             }
         }
     }
@@ -733,14 +765,12 @@ fun LibraryScreen(
                     LibraryChipType.DOWNLOADED_PLAYLIST,
                 )
             topLevelLibraryChips.forEach { type ->
-                if (type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST && !loggedIn) {
+                // chip 按音源显隐(用户 2026-09-30 定稿):网易两 chip 只在网易源+登录时
+                // 出现,YT 与排行榜只在 YT 源+登录时出现,不登录不显示;下载管理恒可见
+                if ((type == LibraryChipType.NETEASE_PLAYLIST || type == LibraryChipType.NETEASE_PODCAST) && !neteaseChipsVisible) {
                     return@forEach
                 }
-                // "您的网易云"分区只在网易登录时出现(与 YT 分区对 YT 登录的门控对称)
-                if (type == LibraryChipType.NETEASE_PLAYLIST && !neteaseLoggedIn) {
-                    return@forEach
-                }
-                if (type == LibraryChipType.NETEASE_PODCAST && !neteaseLoggedIn) {
+                if ((type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || type == LibraryChipType.CHART) && !ytChipsVisible) {
                     return@forEach
                 }
                 Chip(
