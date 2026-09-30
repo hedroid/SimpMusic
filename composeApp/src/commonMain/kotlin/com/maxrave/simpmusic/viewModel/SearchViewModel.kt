@@ -21,6 +21,7 @@ import com.maxrave.logger.LogLevel
 import com.maxrave.logger.Logger
 import com.maxrave.netease.model.NeteaseHotWord
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -225,10 +226,24 @@ class SearchViewModel(
     /** 最近一次提交的搜索词(SONGS tab 加载更多要带着它续页) */
     private var lastQuery: String = ""
 
+    // 在途搜索协程:新搜索(提交/点建议/点历史/切源重查)必须取消旧的——
+    // searchAll 与 searchSongs 都写 searchSongsResult,任一路径晚到的旧结果会覆盖新查询(串台);
+    // 旧 loadMore 不取消则会把旧查询的下一页追加进新结果。
+    private var searchJob: Job? = null
+    private var loadMoreJob: Job? = null
+
+    private fun cancelInFlightSearch() {
+        searchJob?.cancel()
+        loadMoreJob?.cancel()
+        // 被取消的 loadMore 走不到任何复位分支,这里统一复位,否则 songsLoadingMore 卡 true 永久堵住翻页
+        _searchScreenState.update { it.copy(songsLoadingMore = false) }
+    }
+
     fun searchSongs(query: String) {
         lastQuery = query
+        cancelInFlightSearch()
         _searchScreenUIState.value = SearchScreenUIState.Loading
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
             searchRepository.getSearchDataSongPage(query, null).collect { values ->
                 when (values) {
                     is Resource.Success -> {
@@ -258,7 +273,7 @@ class SearchViewModel(
         val token = state.songsNextPageToken ?: return
         if (state.songsLoadingMore || state.searchType != SearchType.SONGS) return
         _searchScreenState.update { it.copy(songsLoadingMore = true) }
-        viewModelScope.launch {
+        loadMoreJob = viewModelScope.launch {
             searchRepository.getSearchDataSongPage(lastQuery, token).collect { values ->
                 when (values) {
                     is Resource.Success -> {
@@ -283,8 +298,9 @@ class SearchViewModel(
 
     fun searchAll(query: String) {
         Logger.w("SEARCHPROBE", "searchAll: '$query'")
+        cancelInFlightSearch()
         _searchScreenUIState.value = SearchScreenUIState.Loading
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
             var song = ArrayList<SongsResult>()
             val video = ArrayList<VideosResult>()
             var album = ArrayList<AlbumsResult>()

@@ -1786,13 +1786,20 @@ class SharedViewModel(
                         )
                         insertLyrics(lyrics.toLyricsEntity(videoId))
                         if (officialRomanization != null) {
-                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂
+                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂。
+                            // 竞态守卫:请求在途时切歌,这里照写会把旧歌罗马音挂到新歌整首——
+                            // 本写不经过 updateLyrics、不触碰 lyricsVideoId,吃不到
+                            // "lyricsVideoId != song.videoId 触发重拉"的自愈,必须显式校验归属。
                             _nowPlayingScreenData.update {
-                                it.copy(
-                                    lyricsData = it.lyricsData?.copy(
-                                        romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
-                                    ),
-                                )
+                                if (it.lyricsVideoId == videoId) {
+                                    it.copy(
+                                        lyricsData = it.lyricsData?.copy(
+                                            romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
+                                        ),
+                                    )
+                                } else {
+                                    it
+                                }
                             }
                         }
                         if (officialTranslation != null) {
