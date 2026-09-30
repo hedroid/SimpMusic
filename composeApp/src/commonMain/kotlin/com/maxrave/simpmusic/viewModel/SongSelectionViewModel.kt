@@ -67,32 +67,80 @@ class SongSelectionViewModel(
     // 云端歌单分区("添加到歌单"弹窗,2026-09-24 多选路径接云端——此前 7 个多选调用点只传
     // 本地歌单,而本地分区被政策开关(SHOW_LOCAL_PLAYLIST_SECTION)隐藏,弹窗实际是空的):
     // YT=库歌单(滤 VLLM),网易=自建。
-    // null=尚未拉取(弹窗加载中,别闪"未找到"空态);拉完(含空列表)=已加载
+    // null=尚未成功拉到过(弹窗加载中,别闪"未找到"空态);非 null=已有结果,刷新保留旧值
     private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
     val youTubePlaylists: StateFlow<List<PlaylistsResult>?> = _youTubePlaylists.asStateFlow()
 
     private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
     val neteasePlaylists: StateFlow<List<PlaylistsResult>?> = _neteasePlaylists.asStateFlow()
 
-    /** 弹窗打开时拉云端歌单列表(两路独立;退避重试消化冷网络首拉失败——用户
-     *  2026-09-30 反馈"第一次拉取不到",重试期间保持旧值/null=加载中,不闪空态) */
+    /** 终态失败(重试耗尽):列表为 null/空时弹窗出"重试"行;有旧列表则静默保留 */
+    private val _youTubePlaylistsFailed = MutableStateFlow(false)
+    val youTubePlaylistsFailed: StateFlow<Boolean> = _youTubePlaylistsFailed.asStateFlow()
+
+    private val _neteasePlaylistsFailed = MutableStateFlow(false)
+    val neteasePlaylistsFailed: StateFlow<Boolean> = _neteasePlaylistsFailed.asStateFlow()
+
+    // 单飞 job:弹窗反复打开/双入口并发时取消旧链再起新链,同一时刻每源至多一条
+    // 重试链(旧实现每次调用各起一套,并发时回包乱序互相覆盖)
+    private var ytPlaylistsJob: kotlinx.coroutines.Job? = null
+    private var neteasePlaylistsJob: kotlinx.coroutines.Job? = null
+
+    /** 网易列表归属账号的 cookie 指纹:换号后旧列表失效(点它会加错账号的歌单) */
+    private var neteaseOwnerCookie: String? = null
+
+    /**
+     * 弹窗打开时拉云端歌单列表(两路独立单飞;退避重试消化冷网络首拉失败——用户
+     *  2026-09-30 反馈"第一次拉取不到")。终态失败保留旧值并置 failed(旧实现
+     * `?: emptyList()`/getOrDefault 会把失败折叠成空列表,既丢旧值又无重试入口);
+     * 网易不可重试异常(已登出/账号失效)=清空,不耗退避。
+     */
     fun loadCloudPlaylists() {
-        viewModelScope.launch {
-            val data =
-                com.maxrave.simpmusic.extension.retryIf(
-                    tag = "AddToPlaylist",
-                    retryOn = { it == null },
-                ) { playlistRepository.getLibraryPlaylist().firstOrNull() }
-            _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
-        }
-        viewModelScope.launch {
-            val result =
-                com.maxrave.simpmusic.extension.retryIf(
-                    tag = "AddToPlaylist",
-                    retryOn = { it.isFailure },
-                ) { neteaseRepository.getOwnNeteasePlaylistsResult() }
-            _neteasePlaylists.value = result.getOrDefault(emptyList())
-        }
+        ytPlaylistsJob?.cancel()
+        ytPlaylistsJob =
+            viewModelScope.launch {
+                _youTubePlaylistsFailed.value = false
+                val data =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it == null },
+                    ) { playlistRepository.getLibraryPlaylist().firstOrNull() }
+                if (data != null) {
+                    _youTubePlaylists.value = data.filter { it.browseId != "VLLM" }
+                } else {
+                    _youTubePlaylistsFailed.value = true
+                }
+            }
+        neteasePlaylistsJob?.cancel()
+        neteasePlaylistsJob =
+            viewModelScope.launch {
+                val cookie = dataStoreManager.neteaseCookie.first()
+                if (cookie.isBlank()) {
+                    neteaseOwnerCookie = null
+                    _neteasePlaylists.value = null
+                    _neteasePlaylistsFailed.value = false
+                    return@launch
+                }
+                _neteasePlaylistsFailed.value = false
+                val result =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it.isFailure && it.exceptionOrNull() !is com.maxrave.netease.NeteaseNotLoggedInException },
+                    ) { neteaseRepository.getOwnNeteasePlaylistsResult() }
+                result
+                    .onSuccess { list ->
+                        neteaseOwnerCookie = cookie
+                        _neteasePlaylists.value = list
+                    }.onFailure { e ->
+                        if (e is com.maxrave.netease.NeteaseNotLoggedInException) {
+                            neteaseOwnerCookie = null
+                            _neteasePlaylists.value = null
+                            _neteasePlaylistsFailed.value = false
+                        } else {
+                            _neteasePlaylistsFailed.value = true
+                        }
+                    }
+            }
     }
 
     /** 批量加到 YT 歌单(源互斥:只吃 YT 曲目,网易数字 id 会被服务端拒) */

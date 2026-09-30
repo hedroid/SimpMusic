@@ -28,6 +28,7 @@ import com.maxrave.domain.utils.collectLatestResource
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.logger.LogLevel
+import com.maxrave.netease.NeteaseNotLoggedInException
 import com.maxrave.simpmusic.expect.shareUrl
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
@@ -76,8 +78,8 @@ class NowPlayingBottomSheetViewModel(
         MutableStateFlow(
             NowPlayingBottomSheetUIState(
                 listLocalPlaylist = emptyList(),
-                listYouTubePlaylist = emptyList(),
-                listNeteasePlaylist = emptyList(),
+                listYouTubePlaylist = null,
+                listNeteasePlaylist = null,
                 mainLyricsProvider = SIMPMUSIC,
                 sleepTimer =
                     SleepTimerState(
@@ -89,6 +91,15 @@ class NowPlayingBottomSheetViewModel(
     val uiState: StateFlow<NowPlayingBottomSheetUIState> get() = _uiState.asStateFlow()
 
     private var getSongAsFlow: Job? = null
+
+    // 云端歌单加载链(单飞):VM init 与弹窗打开的 resetPlaylists 曾各自起一套重试链
+    // (各 3 次退避),首次打开弹窗最多 6 次全量 YT 拉取且旧回包可能覆盖新回包
+    // (2026-09-30 二轮 CR)——同名 job 新起前先取消旧的,保证任一时刻每源至多一条链。
+    private var ytPlaylistsJob: Job? = null
+    private var neteasePlaylistsJob: Job? = null
+
+    /** 网易列表归属账号的 cookie 指纹:换号/重登后旧列表必须失效(点它会加错账号的歌单) */
+    private var neteaseOwnerCookie: String? = null
 
     init {
         viewModelScope.launch {
@@ -103,10 +114,6 @@ class NowPlayingBottomSheetViewModel(
                     localPlaylistRepository.getAllLocalPlaylists().collectLatest { list ->
                         _uiState.update { it.copy(listLocalPlaylist = list) }
                     }
-                }
-            val listYouTubePlaylistJob =
-                launch {
-                    loadYouTubePlaylistsWithRetry()
                 }
             val mainLyricsProviderJob =
                 launch {
@@ -134,37 +141,110 @@ class NowPlayingBottomSheetViewModel(
                         }
                     }
                 }
+            // 账号看门狗:cookie 变化/登出沿上立即清缓存列表。跳过首帧(DataStore 冷流
+            // 首读可能是默认值,把"未初始化"当"登出"会误清);只在"见过真值之后的变化沿"清
+            val accountWatchdogJob =
+                launch {
+                    var seenNeteaseCookie: String? = null
+                    var seenLoggedIn: Boolean? = null
+                    combine(dataStoreManager.neteaseCookie, dataStoreManager.loggedIn) { c, l -> c to l }
+                        .collect { (cookie, loggedIn) ->
+                            if (seenNeteaseCookie != null && cookie != seenNeteaseCookie) {
+                                neteaseOwnerCookie = null
+                                _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
+                            }
+                            if (seenLoggedIn == true && loggedIn != DataStoreManager.TRUE) {
+                                _uiState.update { it.copy(listYouTubePlaylist = null, youTubePlaylistsFailed = false) }
+                            }
+                            seenNeteaseCookie = cookie
+                            seenLoggedIn = loggedIn == DataStoreManager.TRUE
+                        }
+                }
+            loadYouTubePlaylists()
             sleepTimerJob.join()
             listLocalPlaylistJob.join()
-            listYouTubePlaylistJob.join()
             mainLyricsProviderJob.join()
+            accountWatchdogJob.join()
         }
     }
 
     /**
-     * YT 歌单单次拉取+退避重试(getLibraryPlaylist 是冷流,emit 一次即完;null=失败或
-     * 服务端空)。只在有结果时落 state——重试期间保留旧列表,弹窗不闪空(用户
-     * 2026-09-30 反馈"第一次拉取不到云端歌单")。final 失败也保留旧值而非清空。
+     * YT 歌单加载(单飞):[force]=false 且已有在途链路时直接返回(init 预热路径);
+     * force=true(弹窗打开要新鲜数据)取消旧链重起。getLibraryPlaylist 是冷流 emit
+     * 一次即完,null=失败或服务端空。只在有结果时落 state——重试期间保留旧列表,
+     * 弹窗不闪空;终态失败保留旧值并置 failed(列表空时弹窗出"重试"行)。
      */
-    private suspend fun loadYouTubePlaylistsWithRetry() {
-        val data =
-            com.maxrave.simpmusic.extension.retryIf(
-                tag = "AddToPlaylist",
-                retryOn = { it == null },
-            ) { _ ->
-                playlistRepository.getLibraryPlaylist().firstOrNull()
+    private fun loadYouTubePlaylists(force: Boolean = false) {
+        if (!force && ytPlaylistsJob?.isActive == true) return
+        ytPlaylistsJob?.cancel()
+        ytPlaylistsJob =
+            viewModelScope.launch {
+                _uiState.update { it.copy(youTubePlaylistsFailed = false) }
+                val data =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it == null },
+                    ) { _ ->
+                        playlistRepository.getLibraryPlaylist().firstOrNull()
+                    }
+                if (data != null) {
+                    _uiState.update { state ->
+                        state.copy(
+                            listYouTubePlaylist = data.filterEditable(),
+                        )
+                    }
+                } else {
+                    _uiState.update { it.copy(youTubePlaylistsFailed = true) }
+                }
             }
-        // 重试后仍 null(彻底失败)=保留旧值不清空;成功才落列表
-        data?.let { fetched ->
-            _uiState.update { state ->
-                state.copy(
-                    listYouTubePlaylist =
-                        fetched.filter {
-                            it.browseId != "VLLM"
-                        },
-                )
+    }
+
+    /** "VLLM"(自动混合歌单)不可加歌,弹窗列表恒过滤 */
+    private fun List<PlaylistsResult>.filterEditable() = filter { it.browseId != "VLLM" }
+
+    /**
+     * 网易自建歌单加载(单飞,重入取消旧链):
+     * - 非网易歌/未登录/账号失效([NeteaseNotLoggedInException])=清空——留着旧账号
+     *   的歌单只会加错地方;
+     * - 网络/风控/业务失败=退避重试(不可重试异常不耗退避),期间与终态都保留旧列表,
+     *   终败置 failed(列表空时弹窗出"重试"行)。
+     */
+    private fun loadNeteasePlaylists(isNeteaseSong: Boolean) {
+        neteasePlaylistsJob?.cancel()
+        neteasePlaylistsJob =
+            viewModelScope.launch {
+                if (!isNeteaseSong) {
+                    neteaseOwnerCookie = null
+                    _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
+                    return@launch
+                }
+                val cookie = dataStoreManager.neteaseCookie.first()
+                if (cookie.isBlank()) {
+                    neteaseOwnerCookie = null
+                    _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
+                    return@launch
+                }
+                _uiState.update { it.copy(neteasePlaylistsFailed = false) }
+                val result =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it.isFailure && it.exceptionOrNull() !is NeteaseNotLoggedInException },
+                    ) { _ ->
+                        neteaseRepository.getOwnNeteasePlaylistsResult()
+                    }
+                result
+                    .onSuccess { list ->
+                        neteaseOwnerCookie = cookie
+                        _uiState.update { it.copy(listNeteasePlaylist = list) }
+                    }.onFailure { e ->
+                        if (e is NeteaseNotLoggedInException) {
+                            neteaseOwnerCookie = null
+                            _uiState.update { it.copy(listNeteasePlaylist = null, neteasePlaylistsFailed = false) }
+                        } else {
+                            _uiState.update { it.copy(neteasePlaylistsFailed = true) }
+                        }
+                    }
             }
-        }
     }
 
     fun resetPlaylists() {
@@ -173,46 +253,27 @@ class NowPlayingBottomSheetViewModel(
                 _uiState.update { it.copy(listLocalPlaylist = list) }
             }
         }
-        viewModelScope.launch {
-            loadYouTubePlaylistsWithRetry()
-        }
+        loadYouTubePlaylists(force = true)
     }
 
     fun setSongEntity(songEntity: SongEntity?) {
         val songOrNowPlaying = songEntity ?: (mediaPlayerHandler.nowPlayingState.value.songEntity ?: return)
+        loadNeteasePlaylists(songOrNowPlaying.videoId.toLongOrNull() != null)
         viewModelScope.launch {
-            // 网易歌单:先清后拉改成"拉到才落"——旧实现上来就清空,首拉一失败弹窗就
-            // 空列表;现在重试期间保留上次结果,仅非网易歌(本就不该有网易分区)才清。
-            if (songOrNowPlaying.videoId.toLongOrNull() == null) {
-                _uiState.update { it.copy(listNeteasePlaylist = emptyList()) }
-            } else {
-                val result =
-                    com.maxrave.simpmusic.extension.retryIf(
-                        tag = "AddToPlaylist",
-                        retryOn = { it.isFailure },
-                    ) { _ ->
-                        neteaseRepository.getOwnNeteasePlaylistsResult()
-                    }
-                result.onSuccess { list ->
-                    _uiState.update { it.copy(listNeteasePlaylist = list) }
-                }
+            _uiState.update { state ->
+                state.copy(
+                    songUIState =
+                        state.songUIState.copy(
+                            isAddedToYouTubeLiked = false,
+                        ),
+                )
             }
-            songOrNowPlaying.videoId.let {
-                _uiState.update { state ->
-                    state.copy(
-                        songUIState =
-                            state.songUIState.copy(
-                                isAddedToYouTubeLiked = false,
-                            ),
-                    )
-                }
-                songRepository.getSongById(it).lastOrNull().let { song ->
-                    if (song != null) {
-                        getSongEntityFlow(videoId = song.videoId)
-                    } else {
-                        songRepository.insertSong(songOrNowPlaying).singleOrNull()?.let {
-                            getSongEntityFlow(videoId = songOrNowPlaying.videoId)
-                        }
+            songRepository.getSongById(songOrNowPlaying.videoId).lastOrNull().let { song ->
+                if (song != null) {
+                    getSongEntityFlow(videoId = song.videoId)
+                } else {
+                    songRepository.insertSong(songOrNowPlaying).singleOrNull()?.let {
+                        getSongEntityFlow(videoId = songOrNowPlaying.videoId)
                     }
                 }
             }
@@ -512,8 +573,12 @@ class NowPlayingBottomSheetViewModel(
 data class NowPlayingBottomSheetUIState(
     val songUIState: SongUIState = SongUIState(),
     val listLocalPlaylist: List<LocalPlaylistEntity>,
-    val listYouTubePlaylist: List<PlaylistsResult>,
-    val listNeteasePlaylist: List<PlaylistsResult>,
+    /** null=本会话还没成功拉到过(弹窗出加载态);非 null=已有结果,刷新期间保留旧值不闪空 */
+    val listYouTubePlaylist: List<PlaylistsResult>?,
+    val listNeteasePlaylist: List<PlaylistsResult>?,
+    /** 终态失败(重试耗尽):列表为 null/空时弹窗出"重试"行;有旧列表则静默保留 */
+    val youTubePlaylistsFailed: Boolean = false,
+    val neteasePlaylistsFailed: Boolean = false,
     val mainLyricsProvider: String,
     val sleepTimer: SleepTimerState,
 ) {

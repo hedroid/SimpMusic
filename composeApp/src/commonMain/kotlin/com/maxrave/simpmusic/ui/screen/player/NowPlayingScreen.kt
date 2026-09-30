@@ -945,6 +945,12 @@ fun NowPlayingScreenContent(
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
             listNeteasePlaylist = uiState.listNeteasePlaylist,
+            youTubeLoadFailed = uiState.youTubePlaylistsFailed,
+            neteaseLoadFailed = uiState.neteasePlaylistsFailed,
+            onRetryCloudPlaylists = {
+                viewModel.resetPlaylists()
+                viewModel.setSongEntity(null)
+            },
             onDismiss = { showAddToPlaylistDirectly = false },
             onClick = { playlist ->
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(playlist.id))

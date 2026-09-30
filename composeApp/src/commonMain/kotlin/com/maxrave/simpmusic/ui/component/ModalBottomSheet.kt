@@ -1803,6 +1803,12 @@ fun NowPlayingBottomSheet(
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
             listNeteasePlaylist = uiState.listNeteasePlaylist,
+            youTubeLoadFailed = uiState.youTubePlaylistsFailed,
+            neteaseLoadFailed = uiState.neteasePlaylistsFailed,
+            onRetryCloudPlaylists = {
+                viewModel.resetPlaylists()
+                viewModel.setSongEntity(song)
+            },
             onDismiss = { addToAPlaylist = false },
             onClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(it.id))
@@ -3042,6 +3048,11 @@ fun AddToPlaylistModalBottomSheet(
     // null=尚未拉取(多选弹窗加载中):不闪"未找到"空态;拉完空列表=真没有,才显示空态
     listYouTubePlaylist: List<PlaylistsResult>?,
     listNeteasePlaylist: List<PlaylistsResult>? = null,
+    /** 终态失败(重试耗尽,VM 侧标志):所选分区无列表时出"重试"行,有旧列表静默保留 */
+    youTubeLoadFailed: Boolean = false,
+    neteaseLoadFailed: Boolean = false,
+    /** "重试"行回调=整链重拉(两源都重拉,与弹窗打开同款入口) */
+    onRetryCloudPlaylists: () -> Unit = {},
     videoId: String? = null,
     // 多选批量建单:非空优先于 videoId(单曲路径不传,行为不变)
     videoIds: List<String> = emptyList(),
@@ -3295,6 +3306,38 @@ fun AddToPlaylistModalBottomSheet(
                                 )
                             }
                         }
+                    }
+
+                    // 所选云端分区的加载/失败态(2026-09-30 二轮 CR:此前加载慢、重试中、
+                    // 终态失败与真空列表全长得一样,用户只看到"新建歌单+空列表"):
+                    // - 本会话还没成功拉到过(list==null)且已登录 → spinner 行;
+                    // - 终态失败且无列表可展示 → "出错了+重试"行;有旧列表则静默用旧值。
+                    val selectedCloudLoading =
+                        (selectedLibrary == 1 && listYouTubePlaylist == null && youtubeLoggedIn == DataStoreManager.TRUE) ||
+                            (selectedLibrary == 2 && listNeteasePlaylist == null && neteaseCookie.isNotBlank())
+                    val selectedCloudFailed =
+                        (selectedLibrary == 1 && youTubeLoadFailed && visibleYouTubePlaylists.isEmpty()) ||
+                            (selectedLibrary == 2 && neteaseLoadFailed && visibleNeteasePlaylists.isEmpty())
+                    if (selectedCloudFailed) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.error_occurred),
+                                style = typo().labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = onRetryCloudPlaylists) {
+                                Text(text = stringResource(Res.string.retry))
+                            }
+                        }
+                    } else if (selectedCloudLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(vertical = 18.dp).size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
                     }
 
                     // 所选分区的云端账号已登录时,即使歌单列表为空也进入列表分支——
