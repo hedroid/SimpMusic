@@ -516,7 +516,6 @@
     <string name="backup_downloaded">ダウンロードしたデータをバックアップする</string>
     <string name="backup_downloaded_description">ダウンロードしたすべての曲のデータをバックアップします</string>
     <string name="auto_backup">自動バックアップ</string>
-    <string name="auto_backup_description">データを %1$s に自動的にバックアップします</string>
     <string name="no_playlist_found">プレイリストが見つかりません。最初に作成してください</string>
     <string name="login_required_short">%1$s にログインしてください</string>
     <string name="login_netease_first">先に网易云音乐にログインしてください</string>

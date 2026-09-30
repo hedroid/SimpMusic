@@ -198,7 +198,6 @@ import simpmusic.composeapp.generated.resources.audio_reverb
 import simpmusic.composeapp.generated.resources.audio_reverb_description
 import simpmusic.composeapp.generated.resources.author
 import simpmusic.composeapp.generated.resources.auto_backup
-import simpmusic.composeapp.generated.resources.auto_backup_description
 import simpmusic.composeapp.generated.resources.auto_check_for_update
 import simpmusic.composeapp.generated.resources.auto_check_for_update_description
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs
@@ -2843,11 +2842,6 @@ fun SettingScreen(
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.auto_backup),
-                        subtitle =
-                            stringResource(
-                                Res.string.auto_backup_description,
-                                backupFolderName ?: stringResource(Res.string.backup_default_folder_name),
-                            ),
                         switch = (autoBackupEnabled to { viewModel.setAutoBackupEnabled(it) }),
                     )
                     AnimatedVisibility(visible = autoBackupEnabled) {
