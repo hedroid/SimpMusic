@@ -229,6 +229,8 @@ fun LibraryScreen(
     // 非 saveable:进程重启恒从展开态起步,与上面 padding 锁定值天然一致,避免
     // "保存了收起态+padding 重新锁定小值"的错位入场。
     var showTitleBar by remember { mutableStateOf(true) }
+    // 标题行翻转的静默窗截止时刻(见 Crossfade 里 tabScrolling 的说明)
+    var suppressTitleFlipUntilNs by remember { mutableStateOf(0L) }
     val openLibraryPlaylists = {
         navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
     }
@@ -316,7 +318,15 @@ fun LibraryScreen(
         // 旧页迟到的 false 会把切页时刚复位的标题行又压回去(实测竞态);对新页无影响。
         // 转发给 App 的底栏信号维持原行为(新旧页都转发,与改造前一致)。
         val tabScrolling: (onTop: Boolean) -> Unit = { onTop ->
-            if (filter == viewModel.currentScreen.value) {
+            if (filter == viewModel.currentScreen.value && onTop != showTitleBar &&
+                System.nanoTime() >= suppressTitleFlipUntilNs
+            ) {
+                // 翻转后开 500ms 静默窗,窗内吞掉后续翻转:标题收/展动画会改变列表几何
+                // (下载管理页=视口高度,吃实时高度),在列表底部触发钳制回拉→index 逐帧
+                // 变化→又触发上报→反向翻转→动画重启,自持振荡(用户 2026-09-30 四轮
+                // 实测"下载页滑到底部开始跳")。动画的全部几何反馈都落在窗内;真手势的
+                // 方向反转在窗外,不受影响。
+                suppressTitleFlipUntilNs = System.nanoTime() + 500_000_000L
                 showTitleBar = onTop
             }
             onScrolling(onTop)
