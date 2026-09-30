@@ -181,6 +181,17 @@ class SharedViewModel(
             .map { it.isNotEmpty() }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /** 顶栏头像=当前音源登录账号(用户 2026-09-30):网易源=云村账号,其它(含 YT)=Google
+     *  账号;未登录空串=隐藏。库页(LibraryViewModel 同款实现)与两个混合页共用这套口径。 */
+    val sourceAccountThumbnail: StateFlow<String> =
+        combine(
+            dataStoreManager.selectedSource,
+            dataStoreManager.neteaseAccountThumbUrl,
+            dataStoreManager.getString("AccountThumbUrl"),
+        ) { source, neteaseThumb, ytThumb ->
+            if (source == com.maxrave.domain.source.MusicSource.NETEASE.name) neteaseThumb.trim() else (ytThumb ?: "").trim()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
     fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
         viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
     }

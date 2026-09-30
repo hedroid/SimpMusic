@@ -1,10 +1,13 @@
 package com.maxrave.simpmusic.ui.screen.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +34,7 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,18 +66,24 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.maxrave.domain.data.model.home.Content
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeShimmer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
+import com.maxrave.simpmusic.viewModel.SharedViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
@@ -100,6 +110,9 @@ fun NeteaseMixScreen(
     onScrolling: (onTop: Boolean) -> Unit = {},
     viewModel: NeteaseMixViewModel = koinInject(),
 ) {
+    // 头像=当前音源登录账号(SharedViewModel 共享流,与库页同一套口径)
+    val sharedViewModel: SharedViewModel = koinInject()
+    val accountThumbnail by sharedViewModel.sourceAccountThumbnail.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val heartLoading by viewModel.heartLoading.collectAsStateWithLifecycle()
@@ -327,12 +340,40 @@ fun NeteaseMixScreen(
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.statusBars),
                 )
-                Text(
-                    text = stringResource(Res.string.personal_fm),
-                    style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                // 标题左侧头像=当前音源登录账号(用户 2026-09-30,与库页同款设计:
+                // 26dp 圆形+crossfade,空串隐藏;本页无 TopAppBar,手排 Row)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
-                )
+                ) {
+                    AnimatedVisibility(
+                        !accountThumbnail.isNullOrEmpty(),
+                        modifier = Modifier.padding(end = 12.dp),
+                        enter = fadeIn() + expandHorizontally(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(accountThumbnail)
+                                    .crossfade(550)
+                                    .build(),
+                            placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape),
+                        )
+                    }
+                    Text(
+                        text = stringResource(Res.string.personal_fm),
+                        style = typo().headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
             }
         }
     }
