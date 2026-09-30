@@ -996,6 +996,7 @@ fun AlbumScreen(
                     val selectedIds = selectionState.selected.toList()
                     SelectedSongsBottomSheet(
                         count = selectedIds.size,
+                        selectionIds = selectedIds,
                         onDismiss = { showSelectionSheet = false },
                         onPlayNext = {
                             selectionViewModel.playNext(selectedIds)
