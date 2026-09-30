@@ -6,6 +6,8 @@
 
 补充审查：2026-09-26，网易“下载到设备”修复提交 `f96c7278`
 
+增量审查：2026-09-30，最近四个自然日（2026-09-27 00:00 至 2026-09-30 当前 HEAD）
+
 审查范围：当前分支相对上游的功能改造，重点检查逻辑正确性、并发、数据一致性、资源释放、UI 卡顿、后台耗电和发热风险。
 
 ## 总结
@@ -39,16 +41,182 @@
 | CR-15 网易仓库懒加载 | **不修** | 代价仅启动多建一个 Ktor client（毫秒级），上游本就存在大量 `createdAtStart`；有启动耗时实测数据再动 |
 | CR-16 分类封面锁 | **不修** | 锁内 400ms delay 是刻意的 405 频控设计（见 PITFALLS），被阻塞的仅是空态分类卡的装饰性封面回填，不阻塞页面主体 |
 | CR-17 1080 封面内存 | **部分修+实测定案（B2=11984ce1；profiler 验证 2026-09-25 完成）** | ①"ViewModel 长持 Bitmap"证实并已修：播放页销毁清 `screenData.bitmap`。②AM 磨砂降采样（B1）不做：共享缓存条目+RenderEffect GPU blur，降采样反而新增条目。③**模拟器实测（网易红心歌单连续切歌 150 次，`am dumpheap`+自写 HPROF 解析器数实例）**：播放页开着，100 切后 Bitmap 实例 74 个、累计 150 切后 71 个——**计数持平=无逐曲泄漏，由 coil 内存缓存 LRU 上限管理**；Java 堆全程平台期（157→114→113→122→139MB 无线性增长），Native 堆 87→183→145MB（LRU 填充后正常驱逐回落）；**关播放页 74→46（-28）实证 B2 释放生效**，剩余为 LRU 常驻缓存（快速重开用）。CR-17"十几 MiB"量级属实但性质=有界缓存非泄漏 |
-| CR-06 搜索串台 | **顺延下一轮** | 竞态属实但本单夸大：searchSongs 仅显式提交触发（输入过程只走 suggest），需快速连续两次提交才可能复现。修法=存 job 取消+generation 校验 |
-| CR-07 歌词竞态 | **顺延下一轮** | 主歌词/空结果分支有 `lyricsVideoId != song.videoId` 自愈（错写会触发重拉）；真问题仅罗马音分支无校验写入且不触发重拉。局部加 videoId 校验即可，不必做统一 lyricsJob 大改 |
-| CR-10 QR client 泄漏 | **顺延下一轮** | 属实（每 HttpClient 独立 OkHttp 引擎，onCleared 只取消轮询），但仅反复进出登录页才积累，Closeable+close 很便宜 |
-| CR-14 通知差集 | **顺延下一轮** | O(n²) 绝对量小（每艺人几十项）；真实问题是"空快照=从未有发行的艺人第一张专辑漏通知"，随循环外预计算一并重构 |
+| CR-06 搜索串台 | **已修（2026-09-30 主仓 749e8600）** | searchSongs/searchAll/loadMoreSongs 全部存 job,任何新搜索先 cancelInFlightSearch 取消旧搜索+旧翻页(searchAll 与 searchSongs 都写 searchSongsResult,任一路径晚到的旧结果会覆盖新查询);取消时统一复位 songsLoadingMore(被取消的 loadMore 走不到任何复位分支,会永久卡 true 堵死翻页)。取消已足够,无需 generation |
+| CR-07 歌词竞态 | **已修（2026-09-30 主仓 749e8600）** | 仅罗马音分支加显式校验(it.lyricsVideoId==videoId 才写):它是全链唯一不经 updateLyrics 的歌词写入,不触碰 lyricsVideoId 吃不到重拉自愈,请求在途切歌会把旧歌罗马音挂到新歌整首;翻译/AI 分支均走 updateLyrics 自愈,维持不动 |
+| CR-10 QR client 泄漏 | **已修（2026-09-30 core 38ee9aa+主仓 749e8600）** | 会话新增 close() 显式关独立引擎,onCleared 先取消 pollJob 再 close |
+| CR-14 通知差集 | **已修（2026-09-30 主仓 749e8600）** | O(n²) 重构为预计算集合(current-saved 语义等价);空快照基线判据从'列表非空'改'快照行存在'(从未有发行的艺人第一张专辑不再漏通知),配套写快照门从'一侧成功就写'改'双侧都成功才写',保证行存在⟺双侧基线有效;任一侧失败跳过写入旧行原样保留,原防重语义不变 |
 | CR-18 网易发行扫描重复分页 | **已修（core 4862d64）** | NotifyWork 的 ALBUM/SINGLE 两条 flow 各自调用同一全量分页端点，每位艺人最多并发两套×10 页请求。修法=`getArtistMoreAlbums` 同艺人**单飞+30s 短窗复用**（先到者锁内翻页，后来者直接拿同一份再按 type 拆分；失败不缓存；跨 12h 扫描轮次必然重拉）——不动 NotifyWork 的双源通用结构，全量分页每艺人只跑一遍，风控暴露减半。 |
 | CR-19 网易下载未校验 HTTP 状态 | **已修（主仓 5004b42a）** | execute 回调入口 `response.status.isSuccess()` 检查（audioUrl 有 10 分钟有效期，过期/区域拒绝的 4xx/5xx 错误正文此前会被存成 mp3/flac 还报完成）；读完核对 Content-Length，没读满抛 `incomplete download: read/total`。模拟器飞行模式实测两分支均见错误弹窗 |
 | CR-20 网易重复下载会先破坏旧文件 | **已修（主仓 5004b42a）** | 封面/音频改 staged write：先写同目录 `.part`，写满 close 后 rename 提交——同目录 rename 对已存在目标是原子覆盖，替代"先删旧文件再直写"，顺带绕开 FUSE 新建同名 EEXIST；失败/取消 finally 清 `.part`，catch 重抛 CancellationException。实测：下载 54% 断网，旧 flac md5 全程不变、无 `.part` 残留 |
 | CR-21 下载文件名漏过滤 `/` | **已修（主仓 5004b42a）** | 清理正则补 `/` 与 `\x00-\x1f` 控制字符、尾部点号修剪、清空兜底 `download_<videoId>`、截 100 字符防超长。`AC/DC`→`ACDC` 已验证（正则断言） |
 
 另：`PlaylistViewModel.kt` 4 处尾随空格与 3 处文件尾空行已清理（`8232f405`）。
+
+## 2026-09-30 增量：最近四日代码审查
+
+### 审查范围与结论
+
+- 时间范围：2026-09-27 00:00（Asia/Shanghai）至 2026-09-30 当前 HEAD。
+- 主仓：`42d16c177edffbb0bb629998b2a80cf6c9daf388..5afef21fc8ee`，75 个提交。
+- core：`d6528d5ba3c172be792004c9d28a22d604488a08..9a62ae8cb71a`，28 个提交。
+- 方法：逐项检查主仓与 core 增量、调用链和 Android/JVM 对称实现；本轮只做静态审查与文档更新，没有构建、模拟器或真机回归。
+
+结论不是“播客完全隔离、没有影响歌曲”。播客的队列续页主路径已经正确按前缀隔离，但 UI 为兼容旧恢复队列加入的启发式判断会把普通网易专辑队列误判为播客；播放页还会为普通网易歌曲主动发起播客节目反查。这两项会直接影响原有歌曲功能与播放流畅性，应先修。
+
+| 检查主题 | 已落实 | 尚未闭环 |
+|---|---|---|
+| 播客对歌曲的隔离 | core `loadMore` 对 `NETEASE_PODCAST_` 早退；电台队列只续本台节目 | 普通网易专辑队列会被 UI 指纹误判为播客；普通歌曲会触发播客评论反查 |
+| 分页 | 分类页、详情页均有近底预取；播放器队列以服务端原始页大小推进 offset；Android/JVM 同构 | 分类双 tab 有回包串台；详情页以过滤后的可播数作 offset，会重页、提前到底 |
+| 缓存/恢复 | 播客 tab 有 Koin 单例会话缓存；电台进度落 DataStore；队列身份三键单次 `edit` | 续页进队但未进详情 VM 的节目不落续播记忆；跨 DataStore/Room 的队列快照仍非原子 |
+| 并行/流畅性 | 播客首页 8 路请求真实并行；Mix 首页 4 路 `async`；FM 倒数第 3 张预取 | 播客刷新可叠加 8×N 请求；byradio 只串行“发车间隔”而非请求；FM 在飞闸门设置晚一拍 |
+
+### 本轮问题总表
+
+| 编号 | 等级 | 状态 | 问题 |
+|---|---|---|---|
+| CR-22 | P1 | **已修（2026-09-30 core aa6c622+主仓 8f114971）** | 播客启发式会把普通网易专辑队列判成播客，隐藏/禁用歌曲功能。修=QueueData.Data.isNeteasePodcastQueue 只认前缀,六处 UI 门控统一替换 |
+| CR-23 | P1 | **已修（2026-09-30 主仓 8f114971）** | 普通网易歌曲切歌也会后台反查最多 5 页播客节目。修=反查收紧为'播客队列+评论面板已开'才解析,面板等 threadId 落地再首载 |
+| CR-24 | P1 | **已修（2026-09-30 主仓 8f114971）** | 分类页双 tab 分页回包写入“当前 tab”，快速切换会串数据并卡 loading。修=捕获 requestedTab+generation 换分类丢包(loadTab 同病一并堵) |
+| CR-25 | P1 | **已修（2026-09-30 主仓 8f114971）** | 电台详情分页用过滤后数量作 offset，会重复页并提前结束。修=UiState 新增 rawProgramCount 服务端游标,首页/续页/POD 起播令牌三处换用 |
+| CR-26 | P2 | **已修主缺口（2026-09-30 core aa6c622+主仓 8f114971）** | 续播缓存只覆盖详情 VM 已加载节目。修=Track/ResultSong 携带 neteaseProgramId(core 续页同链携带),记忆从队列 Track O(1) 直读。遗留:resumePlayback 目标节目不在详情页已载列表时仍 playFrom(0)(定位需按 offset 分页查,收益低未做) |
+| CR-27 | P2 | **已修（2026-09-30 主仓 8f114971）** | 播客首页并行刷新没有 in-flight/job 管理。修=八路收进单个可取消 refreshJob+refreshing 流(首批落地/600ms 先到先收),UI isRefreshing 接真值 |
+| CR-28 | P2 | **已修（2026-09-30 core aa6c622）** | byradio 的互斥锁未覆盖 HTTP。修=请求纳入锁内真串行(取消随协程释放不占锁) |
+| CR-29 | P2 | **不修（2026-09-30 定案）** | 队列身份三键虽原子,但跨 DataStore/Room 无同一快照事务。跨存储原子性需 snapshotVersion 单调解锁或合并可事务存储=架构级改造,与 mayBeSavePlaybackState ANR 同待专项;现有'当前曲必须属于 listTracks'守卫保留 |
+| CR-30 | P2 | **已修（2026-09-30 主仓 f5a67846,随并行会话入库）** | 库页标题 500ms 静默窗只丢弃状态。修=窗内意愿记账 pendingTitleFlip,窗到期 LaunchedEffect 回放;仅锁定高度页(网格 chip)回放——下载管理页(唯一实时高度页)窗内上报可能是收展动画几何反馈,回放会把四轮修掉的贴底振荡以 500ms 节奏请回来,只吞不回放 |
+| CR-31 | P2 | **已修（2026-09-30 主仓 8f114971）** | 下载歌曲空态不再上报“在顶”。修=空态 LaunchedEffect(Unit) 上报在顶;Playlists 空态走网格第 0 项初始发射本就上报,核实无需动 |
+| CR-32 | P2 | **已修（2026-09-30 主仓 8f114971）** | FM 分页在飞闸门进入协程后才置位。修=同步置位再 launch+try/finally 清位 |
+
+### CR-22 播客启发式会把普通网易专辑队列判成播客【P1·已修:core aa6c622+主仓 8f114971】
+
+- 播放页：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/player/NowPlayingScreen.kt:659`
+- 迷你播放条：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/MiniPlayer.kt:176`
+- 信息、队列和歌曲菜单：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/component/ModalBottomSheet.kt:381`、`:1151`、`:1749`
+
+重复出现的兜底条件为：队列至少 3 首、所有 `videoId` 都是数字、所有曲目的 `album.id` 相同且为数字。这不只是播客特征，也正好是普通网易专辑整队播放的正常形状。因此播放任意至少 3 首的网易专辑时，都可能进入播客 UI 分支。
+
+影响：
+
+- 迷你条红心被隐藏。
+- 播放页红心、歌词、艺人/专辑信息或歌曲向卡片被隐藏或置换。
+- 三点菜单中的添加到歌单等歌曲操作被隐藏。
+- 队列页无尽播放开关被隐藏。
+- 同一错误判断复制在至少 6 处，后续很容易继续漂移。
+
+core `fd62b5a` 已经持久化并恢复真实 `playlistId/playlistType/continuation`，不应再用“专辑形状”猜队列类型。建议抽出唯一的 `QueueData.isNeteasePodcastQueue`，只认明确前缀；如必须兼容旧快照，应给快照增加显式 queue kind/版本，而不是从 Track 的专辑字段推断。
+
+### CR-23 普通网易歌曲切歌也会后台反查最多 5 页播客节目【P1·已修:主仓 8f114971】
+
+- 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/player/NowPlayingScreen.kt:879`
+
+`podcastProgramThreadId` 的 `produceState` 只以 `nowPlayingVideoId` 为 key，不要求当前队列是播客，也不要求用户已经打开评论面板。普通网易歌曲同样有数字 `album.id`，所以每次切歌都可能把专辑 ID 当成 radioId，调用 `getDjRadioProgramsPage`，最多连续翻 5 页。
+
+影响：
+
+- 用户不打开评论也会发生无价值网络请求，单次切歌最多 5 次。
+- 与真正的电台详情/队列续页共用 byradio 端点和 800ms 限流器，会让有效请求排队，并增加 405/空数据概率。
+- 产生额外协程、日志、网络唤醒和状态更新，直接影响切歌后的稳定与流畅性。
+
+建议只在“明确播客队列且评论面板已打开”时解析；更稳妥的做法是在节目转 Track 时直接保存 `programId/commentThreadId`，评论入口 O(1) 读取，彻底取消最多 150 期的反向搜索。
+
+### CR-24 分类页双 tab 分页回包会串到当前 tab【P1·已修:主仓 8f114971】
+
+- 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteasePodcastCategoryViewModel.kt:72`
+- 触发器：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/library/NeteasePodcastCategoryScreen.kt:123`
+
+`loadMore()` 发请求时用的是调用瞬间的 `state.tab.endpointType`，但成功和失败回包却读取 `s.tab` 并更新当前 tab。若 RISING 续页在飞时切到 HOT，RISING 返回的数据会追加到 HOT；原 RISING 的 `loadingMore` 还可能永久留在 true。
+
+建议请求前捕获 `requestedTab`、`requestedCategoryId` 和 generation，回包只更新 `charts[requestedTab]`；分类 ID 或 generation 已变化则直接丢弃。补快速切 tab + 慢回包测试。
+
+### CR-25 电台详情分页 offset 使用过滤后数量【P1·已修:主仓 8f114971】
+
+- 首页过滤：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteaseRadioDetailViewModel.kt:161`
+- 续页 offset：同文件 `:184`
+- 起播续页令牌：同文件 `:242`
+- UI 近底触发：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/library/NeteaseRadioDetailScreen.kt:117`
+
+服务端页先过滤掉 `mainSongId == null` 的不可播节目，状态只保存可播列表；后续却以 `state.programs.size` 作为服务端 offset，组队时的 `POD*_<offset>` 也用同一数值。只要前页存在不可播节目，下一页 offset 就会回退并重取旧项；去重后的 `fresh` 可能为空，随后把 `hasMore` 错置为 false，后续节目永久不可达。
+
+core 播放器续页已正确按服务端原始 `programs.size` 推进（Android `MediaServiceHandlerImpl.kt:2159`，JVM 有同构实现），详情 VM 应复用同一口径：在 UiState 单独保存 `nextOffset/rawConsumedCount`，显示列表过滤与服务端游标完全解耦。
+
+### CR-26 续播缓存不覆盖播放器续页追加的节目【P2·已修主缺口:core aa6c622+主仓 8f114971;resume 定位未载节目仍回 playFrom(0)】
+
+- 周期保存：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteaseRadioDetailViewModel.kt:85`
+- 恢复定位：同文件 `:211`
+- core 队列独立续页：`core/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt:2110`
+
+缓存确实存在：每 10 秒把 `podcast_resume_<radioId>=programId|positionMs` 写入 DataStore。但 `programId` 只通过详情 VM 当前的 `_uiState.programs` 反查。播放器在 core 内续到第 2 页以后，新增节目只进入队列，不会同步回详情 VM，因此播放这些节目时 `pid == null`，不会更新缓存。
+
+另一个缺口是恢复只在当前已载列表查 `resumeProgramId`；目标节目不在第一页时直接 `playFrom(0)`，已保存的位置也失效。
+
+建议在节目转 Track 时携带 programId，缓存从当前 Track 元数据直接读取；恢复时按 raw offset 分页查到目标节目，或保存足够的 offset/index 使其可直接定位。
+
+### CR-27 播客首页并行刷新可无限叠加【P2·已修:主仓 8f114971】
+
+- 并行发起：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteasePodcastViewModel.kt:66`
+- 下拉入口：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/library/NeteasePodcastScreen.kt:111`
+
+并行本身已经落实：分类、推荐、热门、新晋、节目榜、个性化、订阅、最新节目共 8 路独立 `launch`，不是串行。但 VM 没有 refresh job、generation 或 in-flight 守卫，UI 又把 `isRefreshing` 固定为 false。连续下拉会形成 8×N 个并发请求，旧批次可在新批次之后回写，且用户看不到真实刷新生命周期。
+
+建议保留独立请求并行，但把它们收进单个结构化 `refreshJob`：新刷新取消旧刷新或通过 generation 丢弃旧回包；暴露真实 refreshing，至少在飞期间拒绝重复手势。不要把 8 路重新改成串行。
+
+### CR-28 byradio 互斥锁没有串行 HTTP 请求【P2·已修:core aa6c622】
+
+- 位置：`core/data/src/commonMain/kotlin/com/maxrave/data/repository/NeteaseRepositoryImpl.kt:1875`
+
+注释承诺“串行+最小间隔”，但 `byradioMutex.withLock` 只包住等待和更新时间戳，`client.djRadioPrograms(...)` 在锁外执行。两个慢请求只会错开开始时间，仍可重叠在网络中；CR-23 的误触发还会扩大这一问题。
+
+若端点必须严格串行，应把请求纳入锁或使用单消费者 Channel/actor；如果只要求限速，则应把注释改为“限制发车间隔”，并明确允许在途重叠。无论采用哪种口径，都应保证取消不会永久占锁或破坏下一次间隔。
+
+### CR-29 队列持久化不是跨存储的同一快照【P2·不修:snapshotVersion 架构级,与 ANR 专项同候】
+
+- 保存入口：`core/data/src/androidMain/kotlin/com/maxrave/data/mediaservice/MediaServiceHandlerImpl.kt:2796`
+- 身份三键：`core/data/src/commonMain/kotlin/com/maxrave/data/dataStore/DataStoreManagerImpl.kt:388`
+
+`playlistId/playlistType/continuation` 三键在一个 DataStore `edit` 中，三键自身是原子的；但 recent song、playlist name、三键身份、Room 队列仍通过多个 suspend 调用依次写入。进程在中间退出或两个异步 `mayBeSaveRecentSong(false)` 交错时，恢复侧仍可能组合出不同代的 recent/身份/队列。
+
+建议给 DataStore 元数据和 Room 队列都写同一个单调 snapshotVersion，恢复时只接受版本一致的组合；或把恢复必需的队列身份与队列实体并入一个可事务提交的存储。现有“当前曲必须属于 listTracks”的守卫应保留，但它不能提供跨存储原子性。
+
+### CR-30 库页标题静默窗丢弃最终滚动状态【P2·已修:主仓 f5a67846,锁定高度页回放/实时高度页只吞】
+
+- 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/library/LibraryScreen.kt:345`
+
+标题翻转后 500ms 内所有相反状态都被直接吞掉，窗口结束时没有读取或回放最新 `onTop`。如果用户在窗口内快速反向滑动或切到一个已保存为相反滚动态的 chip，最终标题可能停在错误状态，直到下一次列表 index 变化才自愈。
+
+建议保留“动画期间不翻转”的抗振荡策略，但记录 `pendingOnTop`，窗口结束后只应用最后一个值；或用可取消 debounce/sample 状态机，避免把用户最终状态永久丢掉。
+
+### CR-31 下载歌曲空态不会恢复标题展开【P2·已修:主仓 8f114971】
+
+- 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/library/LibraryCollectionScreen.kt:245`
+
+下载 Songs 非空时会通过 LazyList 上报 `onScrolling(true)`；空态只显示居中文案，不上报。切页时标题又不再统一复位，因此从一个收起标题的深滚动页面切到“无下载歌曲”时，空页面会继承收起态且没有任何滚动事件可纠正。
+
+建议空态进入时用 `LaunchedEffect(Unit) { onScrolling(true) }` 明确声明在顶；Playlists 空态也应核对同一约定。
+
+### CR-32 FM 分页在飞闸门置位晚一拍【P2·已修:主仓 8f114971】
+
+- VM：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteaseMixViewModel.kt:194`
+- 近尾预取：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/ui/screen/home/NeteaseMixScreen.kt:416`
+
+倒数第 3 张预取方向正确，能把网络等待移出行尾；但 `loadMoreFm()` 在调用点检查 `_fmLoadingMore` 后，进入 `viewModelScope.launch` 才把它置 true。近尾预取和下拉刷新在协程真正调度前各调用一次时，两次都会通过守卫并发拉批；同时置位/清位还没有 `try/finally`，取消或异常可能留下错误状态。
+
+建议在 `launch` 之前原子置位（`compareAndSet(false, true)`），协程内 `try/finally` 清理。去重合并只能避免重复显示，不能抵消重复网络、405 与回包乱序成本。
+
+### 本轮正向确认与验证限制
+
+- 播客队列不会再落入歌曲无尽电台：Android `MediaServiceHandlerImpl.kt:1577` 与 JVM 对应实现都按 `NETEASE_PODCAST_` 早退，RADIO 子类型只续本台节目，LATEST/TOPLIST 播完即止。
+- 播放器队列分页推进正确：core 以服务端原始页大小推进 offset，失败保留令牌重试；问题只在详情 VM 的 UI 分页口径没有同步。
+- 分类页与详情页都存在真实的近底分页触发，不是“只写了 API 没接 UI”；但 CR-24/25 会破坏分页完整性。
+- 播客首页“最新节目”是固定 shelf：只请求 `offset=0` 的 30 条、界面展示前 10 条，`more` 被忽略，点击后以这 30 条组队且播完即止。按当前产品形态这是有意的首屏内容，不算漏接分页；若未来增加“查看全部”，必须另接完整分页，不能直接复用当前 shelf 状态。
+- 缓存不是完全没做：播客 tab 由 Koin `single` + `loadedOnce` 提供进程内缓存，电台续播写 DataStore，队列身份也落 DataStore；问题是覆盖范围和跨存储一致性不足，而不是零缓存。
+- 并行不是完全没做：播客首页多路请求和 Mix 首页 4 路请求都真实并行，电台详情“先详情、后节目”是为了依赖 `programCount` 的有意串行；需要修的是无界重复并发和限流语义，不应笼统把所有请求都改成并行。
+- 按项目约定，本轮未执行 Gradle 构建；上述问题来自控制流与状态机静态核实。修复后至少应补：普通网易专辑播放回归、快速切分类 tab、含不可播节目的多页电台、播放到 core 续页后强杀恢复、连续下拉刷新、弱网多电台切换、下载空态标题、FM 近尾+下拉并发。
+
+### 2026-09-30 处置定案（本轮已实施）
+
+- **已修 10 项**：CR-22/23/24/25（P1 全清）+ CR-26 主缺口/27/28/30/31/32。提交：core `aa6c622`（22/26/28）、主仓 `8f114971`（22~28/31/32 的 UI/VM 侧）、主仓 `f5a67846`（30,与并行会话的库页源门控修复同文件入库）。
+- **不修 1 项**：CR-29（跨存储快照原子性=snapshotVersion 架构级改造，与 mayBeSavePlaybackState ANR 同待专项）。
+- **遗留小缺口**：CR-26 的 resumePlayback 目标节目不在详情页已载列表时仍 `playFrom(0)`（按 offset 分页定位收益低，未做）；CR-22 弃用形状指纹后，fd62b5a 之前保存的旧队列快照恢复时会被判非播客（一次性升级过渡窗口，首次保存自愈）。
+- **验证口径**：本轮仅静态核实+编译验证（` :composeApp:compileAndroidMain`/`:domain`/`:data`/`:netease` 的 android+jvm 变体全过），**未跑模拟器/真机回归**。建议回归清单沿用上节：普通网易专辑（≥3 首整队）播放回归是 CR-22 的最高优先验证项（红心/歌词/歌曲菜单/无尽开关应全部恢复）、播客队列反向回归（上述条目应仍隐藏）、快速切分类 tab、含不可播节目的多页电台翻页、播到 core 续页后收听记忆落盘、连续下拉播客首页、下载空态标题、FM 近尾+下拉并发。
 
 ## P1：建议封版前修复
 
@@ -123,7 +291,7 @@
 
 建议：改为单写者 actor/reducer，所有事件先可靠入队，带上来源和单调序号；对应状态成功应用后再确认消费。不要通过瞬时 `subscriptionCount` 决定是否持久化。
 
-### CR-06 搜索分页会串入旧查询结果【顺延下一轮】
+### CR-06 搜索分页会串入旧查询结果【已修：主仓 749e8600】
 
 - 位置：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SearchViewModel.kt:225`
 
@@ -135,7 +303,7 @@
 
 建议：保存 `searchJob` 和 `loadMoreJob`；查询词、来源或搜索类型改变时全部取消。每次搜索生成 generation/token，所有响应写状态前校验仍属于当前查询。
 
-### CR-07 网易歌词存在跨歌曲写入竞争【顺延下一轮：仅罗马音分支需修】
+### CR-07 网易歌词存在跨歌曲写入竞争【已修：仅罗马音分支,主仓 749e8600】
 
 - 空结果写入：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SharedViewModel.kt:1396`
 - 网易歌词与罗马音写入：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/SharedViewModel.kt:1716`
@@ -181,7 +349,7 @@
 
 建议取出 `next` 后，在 `next == null || next == cursor` 时立即停止，再更新 cursor。
 
-### CR-10 扫码登录专用 HttpClient 未关闭【顺延下一轮】
+### CR-10 扫码登录专用 HttpClient 未关闭【已修：core 38ee9aa+主仓 749e8600】
 
 - client 创建：`core/service/netease/src/commonMain/kotlin/com/maxrave/netease/NeteaseQrLoginSession.kt:38`
 - ViewModel 清理：`composeApp/src/commonMain/kotlin/com/maxrave/simpmusic/viewModel/NeteaseLoginViewModel.kt:219`
@@ -218,7 +386,7 @@
 - 任一批次失败时返回明确的 partial failure，不更新“已完成同步”状态。
 - 记录成功/失败批次，允许安全重试。
 
-### CR-14 通知差集计算存在 O(n²) 分配【顺延下一轮】
+### CR-14 通知差集计算存在 O(n²) 分配【已修：主仓 749e8600,含空快照基线判据】
 
 - 位置：`androidApp/src/main/java/com/maxrave/simpmusic/service/test/notification/NotifyWork.kt:76`
 
@@ -394,15 +562,15 @@ NotifyWork 使用 `combine` 同时请求 ALBUM 和 SINGLE。两条路径进入�
 
 第三批，处理异步竞态：
 
-- [ ] CR-06 搜索 generation。（顺延下一轮；复核：仅显式提交触发，非逐键）
-- [ ] CR-07 歌词 generation。（顺延下一轮；复核：主分支有 lyricsVideoId 自愈，仅罗马音分支需校验）
+- [x] CR-06 搜索串台。（749e8600:searchSongs/searchAll/loadMore 存 job 相互取消+复位 songsLoadingMore;取消足够无需 generation）
+- [x] CR-07 歌词竞态。（749e8600:仅罗马音分支加 lyricsVideoId 校验,其余分支自愈不动）
 - [x] CR-11 Cookie 全写路径串行化。（`dc7330f`+`e0a7b36`：mergeSetCookies 与 replaceCookies 的 saver 均在锁内）
 
 第四批，做资源和性能收口：
 
-- [ ] CR-10 关闭扫码 client。（顺延下一轮）
+- [x] CR-10 关闭扫码 client。（core 38ee9aa+主仓 749e8600）
 - [~] CR-12 移除播放热路径 `runBlocking`。（不修：被 list.size>3 短路，仅小队列触发）
-- [ ] CR-14 优化通知差集。（顺延下一轮）
+- [x] CR-14 优化通知差集。（749e8600:预计算集合+空快照按'行存在'判基线+写快照双侧成功门）
 - [x] CR-18 网易发行只分页一次并拆分两组。（core `4862d64`：getArtistMoreAlbums 同艺人单飞+30s 短窗复用，按 type 拆分不变）
 - [~] CR-15 真正懒加载网易仓库。（不修：毫秒级，有实测数据再动）
 - [~] CR-16 拆分分类封面锁。（不修：刻意的 405 频控设计）
