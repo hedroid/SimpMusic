@@ -37,6 +37,7 @@ import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.flow.update
@@ -105,16 +106,7 @@ class NowPlayingBottomSheetViewModel(
                 }
             val listYouTubePlaylistJob =
                 launch {
-                    playlistRepository.getLibraryPlaylist().collect { data ->
-                        _uiState.update { state ->
-                            state.copy(
-                                listYouTubePlaylist =
-                                    data?.filter {
-                                        it.browseId != "VLLM"
-                                    } ?: emptyList(),
-                            )
-                        }
-                    }
+                    loadYouTubePlaylistsWithRetry()
                 }
             val mainLyricsProviderJob =
                 launch {
@@ -149,6 +141,32 @@ class NowPlayingBottomSheetViewModel(
         }
     }
 
+    /**
+     * YT 歌单单次拉取+退避重试(getLibraryPlaylist 是冷流,emit 一次即完;null=失败或
+     * 服务端空)。只在有结果时落 state——重试期间保留旧列表,弹窗不闪空(用户
+     * 2026-09-30 反馈"第一次拉取不到云端歌单")。final 失败也保留旧值而非清空。
+     */
+    private suspend fun loadYouTubePlaylistsWithRetry() {
+        val data =
+            com.maxrave.simpmusic.extension.retryIf(
+                tag = "AddToPlaylist",
+                retryOn = { it == null },
+            ) { _ ->
+                playlistRepository.getLibraryPlaylist().firstOrNull()
+            }
+        // 重试后仍 null(彻底失败)=保留旧值不清空;成功才落列表
+        data?.let { fetched ->
+            _uiState.update { state ->
+                state.copy(
+                    listYouTubePlaylist =
+                        fetched.filter {
+                            it.browseId != "VLLM"
+                        },
+                )
+            }
+        }
+    }
+
     fun resetPlaylists() {
         viewModelScope.launch {
             localPlaylistRepository.getAllLocalPlaylists().collectLatest { list ->
@@ -156,26 +174,27 @@ class NowPlayingBottomSheetViewModel(
             }
         }
         viewModelScope.launch {
-            playlistRepository.getLibraryPlaylist().collect { data ->
-                _uiState.update { state ->
-                    state.copy(
-                        listYouTubePlaylist =
-                            data?.filter {
-                                it.browseId != "VLLM"
-                            } ?: emptyList(),
-                    )
-                }
-            }
+            loadYouTubePlaylistsWithRetry()
         }
     }
 
     fun setSongEntity(songEntity: SongEntity?) {
         val songOrNowPlaying = songEntity ?: (mediaPlayerHandler.nowPlayingState.value.songEntity ?: return)
         viewModelScope.launch {
-            _uiState.update { it.copy(listNeteasePlaylist = emptyList()) }
-            if (songOrNowPlaying.videoId.toLongOrNull() != null) {
-                _uiState.update {
-                    it.copy(listNeteasePlaylist = neteaseRepository.getOwnNeteasePlaylists())
+            // 网易歌单:先清后拉改成"拉到才落"——旧实现上来就清空,首拉一失败弹窗就
+            // 空列表;现在重试期间保留上次结果,仅非网易歌(本就不该有网易分区)才清。
+            if (songOrNowPlaying.videoId.toLongOrNull() == null) {
+                _uiState.update { it.copy(listNeteasePlaylist = emptyList()) }
+            } else {
+                val result =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it.isFailure },
+                    ) { _ ->
+                        neteaseRepository.getOwnNeteasePlaylistsResult()
+                    }
+                result.onSuccess { list ->
+                    _uiState.update { it.copy(listNeteasePlaylist = list) }
                 }
             }
             songOrNowPlaying.videoId.let {

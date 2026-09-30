@@ -74,23 +74,24 @@ class SongSelectionViewModel(
     private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
     val neteasePlaylists: StateFlow<List<PlaylistsResult>?> = _neteasePlaylists.asStateFlow()
 
-    /** 弹窗打开时拉云端歌单列表(两路独立,失败留空) */
+    /** 弹窗打开时拉云端歌单列表(两路独立;退避重试消化冷网络首拉失败——用户
+     *  2026-09-30 反馈"第一次拉取不到",重试期间保持旧值/null=加载中,不闪空态) */
     fun loadCloudPlaylists() {
         viewModelScope.launch {
-            runCatching {
-                playlistRepository.getLibraryPlaylist().collect { data ->
-                    _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
-                }
-            }.onFailure {
-                _youTubePlaylists.value = emptyList()
-            }
+            val data =
+                com.maxrave.simpmusic.extension.retryIf(
+                    tag = "AddToPlaylist",
+                    retryOn = { it == null },
+                ) { playlistRepository.getLibraryPlaylist().firstOrNull() }
+            _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
         }
         viewModelScope.launch {
-            runCatching {
-                _neteasePlaylists.value = neteaseRepository.getOwnNeteasePlaylists()
-            }.onFailure {
-                _neteasePlaylists.value = emptyList()
-            }
+            val result =
+                com.maxrave.simpmusic.extension.retryIf(
+                    tag = "AddToPlaylist",
+                    retryOn = { it.isFailure },
+                ) { neteaseRepository.getOwnNeteasePlaylistsResult() }
+            _neteasePlaylists.value = result.getOrDefault(emptyList())
         }
     }
 
