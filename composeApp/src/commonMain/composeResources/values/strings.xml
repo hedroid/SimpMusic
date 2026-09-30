@@ -1137,4 +1137,9 @@
     <string name="download_ai_tags_description">Fill missing genre/language tags with AI (uses the lyrics-translation API key)</string>
     <string name="download_wifi_only">Download over Wi-Fi only</string>
 
+
+    <string name="overwrite_download_title">Download again?</string>
+    <string name="overwrite_download_message">This song was already downloaded as a file. Redownloading replaces the existing file.</string>
+    <string name="download_video">Download video</string>
+
 </resources>

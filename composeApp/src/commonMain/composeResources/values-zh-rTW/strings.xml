@@ -789,4 +789,9 @@
     <string name="download_ai_tags_description">用 AI 補全流派/語言等缺失標籤(使用歌詞翻譯的 API key)</string>
     <string name="download_wifi_only">僅 Wi-Fi 下載</string>
 
+
+    <string name="overwrite_download_title">重新下載？</string>
+    <string name="overwrite_download_message">這首歌已下載為檔案，重新下載將覆蓋現有檔案。</string>
+    <string name="download_video">下載影片</string>
+
 </resources>

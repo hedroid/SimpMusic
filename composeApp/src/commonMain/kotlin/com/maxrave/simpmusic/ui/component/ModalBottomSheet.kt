@@ -168,6 +168,7 @@ import com.maxrave.simpmusic.ui.icon.Done
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
 import com.maxrave.simpmusic.ui.icon.Downloading
+import com.maxrave.simpmusic.ui.icon.Movie
 import com.maxrave.simpmusic.ui.icon.Edit
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
@@ -271,6 +272,9 @@ import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
 import simpmusic.composeapp.generated.resources.download_this_song_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.download_video
+import simpmusic.composeapp.generated.resources.overwrite_download_message
+import simpmusic.composeapp.generated.resources.overwrite_download_title
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
 import simpmusic.composeapp.generated.resources.downloading_video
@@ -1067,32 +1071,10 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
-                // 底部"下载到设备"按钮:与 YT 同款位置同款样式;YT 歌下视频,网易歌下
-                // 音频文件(downloadFile 内部按源分流),封面 jpg 两侧共用
-                OutlinedButton(
-                    enabled = screenDataState.bitmap != null,
-                    onClick = {
-                        sharedViewModel.downloadFile(
-                            bitmap = screenDataState.bitmap ?: return@OutlinedButton,
-                        )
-                    },
-                    modifier =
-                        Modifier
-                            .wrapContentSize()
-                            .align(Alignment.CenterHorizontally)
-                            .padding(vertical = 10.dp),
-                ) {
-                    Text(
-                        text =
-                            stringResource(
-                                if (isNeteaseSong) {
-                                    Res.string.download_this_song_file_to_your_device
-                                } else {
-                                    Res.string.download_this_song_video_file_to_your_device
-                                },
-                            ),
-                    )
-                }
+                // "下载到设备"按钮已移除(2026-10 定稿):音频侧由三点菜单"下载"(文件式,落
+                // Music/SimpMusic 带 tag)承接,视频侧由三点菜单"下载视频"(merge mp4 落
+                // Movies/SimpMusic)承接;旧 downloadFile 导出管线保留在 VM 不删,回滚只需
+                // 恢复此按钮。
                 Spacer(modifier = Modifier.height(10.dp))
 
                 EndOfModalBottomSheet()
@@ -1876,6 +1858,8 @@ fun NowPlayingBottomSheet(
     }
 
     if (showRemoveDownloadDialog) {
+        // 2026-10 文件式下载:确认后的语义从"删除"改为"覆盖重新下载"(删旧文件+重新入队;
+        // 旧缓存下载的歌无文件,确认后自然落"直接文件下载"路径)
         AlertDialog(
             containerColor = rememberSurfaceDarkColors().container,
             onDismissRequest = { showRemoveDownloadDialog = false },
@@ -1884,7 +1868,7 @@ fun NowPlayingBottomSheet(
                     showRemoveDownloadDialog = false
                     viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                 }) {
-                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
                 }
             },
             dismissButton = {
@@ -1893,10 +1877,10 @@ fun NowPlayingBottomSheet(
                 }
             },
             title = {
-                Text(text = stringResource(Res.string.remove_download_title), style = typo().labelSmall)
+                Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
             },
             text = {
-                Text(text = stringResource(Res.string.remove_download_message), style = typo().bodyMedium)
+                Text(text = stringResource(Res.string.overwrite_download_message), style = typo().bodyMedium)
             },
         )
     }
@@ -2213,6 +2197,15 @@ fun NowPlayingBottomSheet(
                             DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> showCancelDownloadDialog = true
                             DownloadState.STATE_DOWNLOADED -> showRemoveDownloadDialog = true
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                        }
+                    }
+                    // 视频文件下载(2026-10 文件式,仅 YT 歌):merge mp4 落 Movies/SimpMusic
+                    if (uiState.songUIState.videoId.toLongOrNull() == null) {
+                        ActionButton(
+                            icon = SimpIcons.Movie,
+                            text = Res.string.download_video,
+                        ) {
+                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
                         }
                     }
                     // 播客节目不进歌单(剧集不是歌)——隐藏(2026-09-29 用户定)

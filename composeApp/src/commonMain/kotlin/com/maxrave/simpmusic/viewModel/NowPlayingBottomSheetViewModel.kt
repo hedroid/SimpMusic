@@ -437,21 +437,15 @@ class NowPlayingBottomSheetViewModel(
 
 
                 is NowPlayingBottomSheetUIEvent.Download -> {
-                    when (songUIState.downloadState) {
-                        DownloadState.STATE_NOT_DOWNLOADED -> {
-                            songRepository.updateDownloadState(
-                                videoId = songUIState.videoId,
-                                downloadState = DownloadState.STATE_PREPARING,
-                            )
-                            downloadUtils.downloadTrack(
-                                videoId = songUIState.videoId,
-                                title = songUIState.title,
-                                thumbnail = songUIState.thumbnails ?: "",
-                            )
-                            makeToast(getString(Res.string.downloading))
-                        }
-
-                        DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> {
+                    // 文件式下载(2026-10)三态:以"文件在不在"为准,不再信 downloadState 快照
+                    // ——旧 SimpleCache 下载的歌 state=3 却无文件,按定稿走"未下载"直接文件
+                    // 下载(旧缓存保留两份并存);"真已下载"=覆盖(删旧文件重新入队)。
+                    val queuedOrDownloading =
+                        songUIState.downloadState == DownloadState.STATE_PREPARING ||
+                            songUIState.downloadState == DownloadState.STATE_DOWNLOADING ||
+                            downloadUtils.isAudioQueuedOrDownloading(songUIState.videoId)
+                    when {
+                        queuedOrDownloading -> {
                             // Demote FIRST: while a referencing container still claims to be
                             // downloaded, its re-download watcher can observe the song vanishing
                             // and queue it right back — undoing the removal the user just asked
@@ -465,15 +459,46 @@ class NowPlayingBottomSheetViewModel(
                             makeToast(getString(Res.string.removed_download))
                         }
 
-                        DownloadState.STATE_DOWNLOADED -> {
+                        downloadUtils.isAudioFileDownloaded(songUIState.videoId) -> {
+                            // 覆盖:删旧文件(文件+MediaStore 行+Room 列)后重新入队
                             demoteDownloadedContainersOf(songUIState.videoId)
-                            downloadUtils.removeDownload(songUIState.videoId)
+                            downloadUtils.removeAudioDownload(songUIState.videoId)
                             songRepository.updateDownloadState(
-                                songUIState.videoId,
-                                DownloadState.STATE_NOT_DOWNLOADED,
+                                videoId = songUIState.videoId,
+                                downloadState = DownloadState.STATE_PREPARING,
                             )
-                            makeToast(getString(Res.string.removed_download))
+                            downloadUtils.downloadTrack(
+                                videoId = songUIState.videoId,
+                                title = songUIState.title,
+                                thumbnail = songUIState.thumbnails ?: "",
+                            )
+                            makeToast(getString(Res.string.downloading))
                         }
+
+                        else -> {
+                            songRepository.updateDownloadState(
+                                videoId = songUIState.videoId,
+                                downloadState = DownloadState.STATE_PREPARING,
+                            )
+                            downloadUtils.downloadTrack(
+                                videoId = songUIState.videoId,
+                                title = songUIState.title,
+                                thumbnail = songUIState.thumbnails ?: "",
+                            )
+                            makeToast(getString(Res.string.downloading))
+                        }
+                    }
+                }
+
+                is NowPlayingBottomSheetUIEvent.DownloadVideo -> {
+                    // 仅 YT 歌(网易无视频流);重复提交在 DownloadManager 侧天然幂等
+                    if (songUIState.videoId.toLongOrNull() == null) {
+                        downloadUtils.downloadVideo(
+                            videoId = songUIState.videoId,
+                            title = songUIState.title,
+                            thumbnail = songUIState.thumbnails ?: "",
+                        )
+                        makeToast(getString(Res.string.downloading))
                     }
                 }
 
@@ -623,6 +648,9 @@ sealed class NowPlayingBottomSheetUIEvent {
 
 
     data object Download : NowPlayingBottomSheetUIEvent()
+
+    /** 视频文件下载(文件式,仅 YT 歌):音视频双流 merge mp4 落 Movies/SimpMusic */
+    data object DownloadVideo : NowPlayingBottomSheetUIEvent()
 
     data class AddToPlaylist(
         val playlistId: Long,
