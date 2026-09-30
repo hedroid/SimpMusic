@@ -107,9 +107,10 @@ fun NeteasePodcastCategoryScreen(
 
     Box(Modifier.fillMaxSize()) {
         val chart = uiState.current
-        // 未加载 tab(按需拉取的首页在途)也渲染加载态:页面曾只看全局 loading,把
-        // "切到最热加载中"显示成"该分类暂无电台"空态(五轮 CR);failed 由网格内错误分支渲染
-        if (uiState.loading || !chart.loaded) {
+        // 未加载 tab(按需拉取的首页在途)与"失败后重试在途"(chart.loading)都渲染加载态:
+        // 页面曾只看全局 loading——切未加载 tab 显示成"该分类暂无电台",失败态重试(loaded
+        // 已 true)同样落进网格分支把空列表当空态;failed 由网格内错误分支渲染(五轮 CR 补)
+        if (uiState.loading || chart.loading || !chart.loaded) {
             CenterLoadingBox(Modifier.fillMaxSize())
         } else {
             val shouldLoadMore by remember {

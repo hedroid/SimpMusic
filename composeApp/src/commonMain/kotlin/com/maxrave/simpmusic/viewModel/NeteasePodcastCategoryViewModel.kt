@@ -75,10 +75,14 @@ class NeteasePodcastCategoryViewModel(
     }
 
     fun retry() {
+        val tab = _uiState.value.tab
+        val chart = _uiState.value.charts[tab] ?: return
+        // 在途重试直接返回,防外部重复调用叠加首页请求
+        if (chart.loading) return
         _uiState.update { state ->
-            state.copy(charts = state.charts + (state.tab to (state.charts[state.tab] ?: ChartState()).copy(failed = false, loading = true)))
+            state.copy(charts = state.charts + (tab to chart.copy(failed = false, loading = true)))
         }
-        loadTab(_uiState.value.tab)
+        loadTab(tab)
     }
 
     fun loadMore() {
