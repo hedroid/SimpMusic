@@ -103,6 +103,7 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
@@ -233,6 +234,10 @@ fun LibraryScreen(
     var showTitleBar by remember { mutableStateOf(true) }
     // 标题行翻转的静默窗截止时刻(见 Crossfade 里 tabScrolling 的说明)
     var suppressTitleFlipUntilNs by remember { mutableStateOf(0L) }
+    // 静默窗内被吞掉的最后一个"翻转意愿"(null=无):窗到期回放,防用户快速反向滑/
+    // 切到保存了相反滚动态的页时终态被永久丢弃(CR-30)。仅锁定高度页(网格各 chip)
+    // 记录——下载管理页(实时高度)的窗内上报可能是收展动画的几何反馈,回放=振荡回归
+    var pendingTitleFlip by remember { mutableStateOf<Boolean?>(null) }
     val openLibraryPlaylists = {
         navController.navigate(LibraryCollectionDestination(LibraryChipType.LOCAL_PLAYLIST.name))
     }
@@ -247,33 +252,52 @@ fun LibraryScreen(
     }
 
     // chip 按音源显隐(用户 2026-09-30 定稿):网易云/网易播客=网易源+网易登录;
-    // 您的 YouTube Music/排行榜=YT 源+YT 登录;下载管理恒可见。源未加载完成前按
-    // YT 侧处理(App 默认源同款 getOrDefault 口径),与 VM 的 defaultLibraryChip 一致。
-    val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle(
-        initialValue = MusicSource.YOUTUBE_MUSIC.name,
-    )
+    // 您的 YouTube Music/排行榜=YT 源+YT 登录;下载管理恒可见。selectedSource 是
+    // StateFlow,无 initialValue 收集即首帧取 .value(VM 新建、源键首读落地前是
+    // 空串,按 YT 侧处理,与 App 默认源同款口径);两个登录态是 DataStore 冷流,
+    // 重组首帧恒为 initialValue,回落判定因此不吃这里的值(见下)。
+    val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle()
     val sourceIsNetease = selectedSource == MusicSource.NETEASE.name
     val neteaseChipsVisible = neteaseLoggedIn && sourceIsNetease
     val ytChipsVisible = loggedIn && !sourceIsNetease
-    // 回落目标=第一个可见 chip;chip 被音源/登录态变化藏掉时把 currentFilter 弹到这里
-    val fallbackChip =
-        when {
-            neteaseChipsVisible -> LibraryChipType.NETEASE_PLAYLIST
-            ytChipsVisible -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
-            else -> LibraryChipType.DOWNLOADED_PLAYLIST
-        }
 
-    LaunchedEffect(neteaseChipsVisible, ytChipsVisible, currentFilter) {
-        val visible =
-            when (currentFilter) {
-                LibraryChipType.NETEASE_PLAYLIST, LibraryChipType.NETEASE_PODCAST -> neteaseChipsVisible
-                LibraryChipType.YOUTUBE_MUSIC_PLAYLIST, LibraryChipType.CHART -> ytChipsVisible
-                LibraryChipType.DOWNLOADED_PLAYLIST -> true
-                else -> false // YOUR_LIBRARY/LOCAL_PLAYLIST 等本就走重定向
+    // 回落判定:选中 chip 被音源/登录态变化藏掉时弹回第一个可见 chip。门控三流
+    // (网易登录/YT 登录/音源)在 effect 内 combine 后消费——组合级 state 在进歌单
+    // 详情返回等重组首帧是 initialValue(false),会把"未初始化"当"未登录",曾把
+    // "您的网易云"选中误弹回下载管理(2026-09-30 回归);combine 的首个 emission
+    // 保证判定时三条门控全是真值。已下线 enum(YOUR_LIBRARY/WRAPPED/混源旧值等)
+    // 走 else 分支同样在此回落,下方 load effect 的重定向分支已并入本处。
+    LaunchedEffect(currentFilter) {
+        val filter = currentFilter
+        combine(
+            viewModel.neteaseLoggedIn,
+            viewModel.youtubeLoggedIn,
+            viewModel.selectedSource,
+        ) { netease, yt, source -> Triple(netease, yt, source) }
+            .collect { (netease, yt, source) ->
+                // 空串只出现在 VM 新建、selectedSource 镜像首值落地前(DataStore 键
+                // 恒有非空默认),此时不做判定,等真值落地 combine 重发——否则网易
+                // 用户首进库页会被空串当 YT 侧误判。
+                if (source.isEmpty()) return@collect
+                val neteaseVisible = netease && source == MusicSource.NETEASE.name
+                val ytVisible = yt && source != MusicSource.NETEASE.name
+                val visible =
+                    when (filter) {
+                        LibraryChipType.NETEASE_PLAYLIST, LibraryChipType.NETEASE_PODCAST -> neteaseVisible
+                        LibraryChipType.YOUTUBE_MUSIC_PLAYLIST, LibraryChipType.CHART -> ytVisible
+                        LibraryChipType.DOWNLOADED_PLAYLIST -> true
+                        else -> false
+                    }
+                if (!visible) {
+                    viewModel.setCurrentScreen(
+                        when {
+                            neteaseVisible -> LibraryChipType.NETEASE_PLAYLIST
+                            ytVisible -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
+                            else -> LibraryChipType.DOWNLOADED_PLAYLIST
+                        },
+                    )
+                }
             }
-        if (!visible) {
-            viewModel.setCurrentScreen(fallbackChip)
-        }
     }
 
     LaunchedEffect(currentFilter) {
@@ -311,22 +335,9 @@ fun LibraryScreen(
                 neteasePodcastViewModel.onPageSelected()
             }
 
-            // Mix for you has its own nav tab now. The filter is persisted, so a build upgraded
-            // while it was selected would land here with no chip to match — send it back to the
-            // default. The enum value itself stays so older persisted values still parse.
-            LibraryChipType.YOUTUBE_MIX_FOR_YOU -> {
-                viewModel.setCurrentScreen(fallbackChip)
-            }
-
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
                 viewModel.getDownloadedPlaylist()
             }
-
-            LibraryChipType.YOUR_LIBRARY,
-            LibraryChipType.LOCAL_PLAYLIST,
-            LibraryChipType.FAVORITE_PLAYLIST,
-            LibraryChipType.FAVORITE_PODCAST,
-            -> viewModel.setCurrentScreen(fallbackChip)
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -334,11 +345,10 @@ fun LibraryScreen(
                 }
             }
 
-            // Wrapped(年度回顾)chip 已隐藏(2026-09-30):enum 与 LibraryWrappedTab 管线保留,
-            // 但入口没了,落在该值上弹回回落目标(与 YOUTUBE_MIX_FOR_YOU 同款兜底)。
-            LibraryChipType.WRAPPED -> {
-                viewModel.setCurrentScreen(fallbackChip)
-            }
+            // 已下线 enum(YOUTUBE_MIX_FOR_YOU/WRAPPED/YOUR_LIBRARY/LOCAL_PLAYLIST/
+            // FAVORITE_*)的重定向已并入上方的回落 effect(统一吃 combine 真值),
+            // 这里只管各 chip 页的数据装载;K2 要求枚举 when 穷尽,else 吸掉旧值。
+            else -> {}
         }
     }
 
@@ -350,18 +360,44 @@ fun LibraryScreen(
         // 旧页迟到的 false 会把切页时刚复位的标题行又压回去(实测竞态);对新页无影响。
         // 转发给 App 的底栏信号维持原行为(新旧页都转发,与改造前一致)。
         val tabScrolling: (onTop: Boolean) -> Unit = { onTop ->
-            if (filter == viewModel.currentScreen.value && onTop != showTitleBar &&
-                System.nanoTime() >= suppressTitleFlipUntilNs
-            ) {
-                // 翻转后开 500ms 静默窗,窗内吞掉后续翻转:标题收/展动画会改变列表几何
-                // (下载管理页=视口高度,吃实时高度),在列表底部触发钳制回拉→index 逐帧
-                // 变化→又触发上报→反向翻转→动画重启,自持振荡(用户 2026-09-30 四轮
-                // 实测"下载页滑到底部开始跳")。动画的全部几何反馈都落在窗内;真手势的
-                // 方向反转在窗外,不受影响。
-                suppressTitleFlipUntilNs = System.nanoTime() + 500_000_000L
-                showTitleBar = onTop
+            if (filter == viewModel.currentScreen.value) {
+                if (onTop == showTitleBar) {
+                    // 与当前态一致=终态已对齐,清掉待回放
+                    pendingTitleFlip = null
+                } else if (System.nanoTime() >= suppressTitleFlipUntilNs) {
+                    // 翻转后开 500ms 静默窗,窗内吞掉后续翻转:标题收/展动画会改变列表几何
+                    // (下载管理页=视口高度,吃实时高度),在列表底部触发钳制回拉→index 逐帧
+                    // 变化→又触发上报→反向翻转→动画重启,自持振荡(用户 2026-09-30 四轮
+                    // 实测"下载页滑到底部开始跳")。动画的全部几何反馈都落在窗内;真手势的
+                    // 方向反转在窗外,不受影响。
+                    suppressTitleFlipUntilNs = System.nanoTime() + 500_000_000L
+                    pendingTitleFlip = null
+                    showTitleBar = onTop
+                } else if (filter != LibraryChipType.DOWNLOADED_PLAYLIST) {
+                    // 窗内被吞的翻转意愿记账,窗到期回放(CR-30)。锁定高度页(网格各 chip)
+                    // 标题收/展是纯覆盖层、内容零位移,回放不会产生新反馈,安全;下载管理页
+                    // 是唯一实时高度页,窗内上报本身就可能是收展动画的几何反馈,回放它会把
+                    // 四轮修掉的贴底振荡以 500ms 节奏请回来——只吞不回放
+                    pendingTitleFlip = onTop
+                }
             }
             onScrolling(onTop)
+        }
+        // 静默窗到期回放:把窗内最后被吞的用户终态落地(锁定高度页专属,见上)
+        LaunchedEffect(pendingTitleFlip, suppressTitleFlipUntilNs) {
+            if (pendingTitleFlip == null) return@LaunchedEffect
+            val until = suppressTitleFlipUntilNs
+            val remainingMs = (until - System.nanoTime()) / 1_000_000L
+            if (remainingMs > 0) kotlinx.coroutines.delay(remainingMs + 8)
+            // 等待期间出现新翻转(窗被重开/意愿被消费)则放弃本次回放
+            if (suppressTitleFlipUntilNs != until) return@LaunchedEffect
+            val v = pendingTitleFlip ?: return@LaunchedEffect
+            if (v != showTitleBar) {
+                showTitleBar = v
+                // 回放的翻转同样开静默窗(窗内新意愿照常记账,不丢单向终态)
+                suppressTitleFlipUntilNs = System.nanoTime() + 500_000_000L
+            }
+            pendingTitleFlip = null
         }
         when (filter) {
             // 下载管理 chip 页:复用独立页的内容体,chip 页无 TopAppBar(库页自带标题区)
