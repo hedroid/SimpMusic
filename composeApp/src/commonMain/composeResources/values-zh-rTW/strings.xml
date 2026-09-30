@@ -620,6 +620,7 @@
     <string name="backup_downloaded">備份已下載的資料</string>
     <string name="backup_downloaded_description">備份所有已下載歌曲的資料</string>
     <string name="auto_backup">自動備份</string>
+    <string name="auto_backup_description">自動備份您的應用資料</string>
     <string name="backup_frequency">備用頻率</string>
     <string name="daily">每天</string>
     <string name="weekly">每週</string>

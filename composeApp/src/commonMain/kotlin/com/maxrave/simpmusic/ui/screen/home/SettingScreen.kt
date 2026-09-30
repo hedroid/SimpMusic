@@ -198,6 +198,7 @@ import simpmusic.composeapp.generated.resources.audio_reverb
 import simpmusic.composeapp.generated.resources.audio_reverb_description
 import simpmusic.composeapp.generated.resources.author
 import simpmusic.composeapp.generated.resources.auto_backup
+import simpmusic.composeapp.generated.resources.auto_backup_description
 import simpmusic.composeapp.generated.resources.auto_check_for_update
 import simpmusic.composeapp.generated.resources.auto_check_for_update_description
 import simpmusic.composeapp.generated.resources.auto_download_liked_songs
@@ -2842,6 +2843,10 @@ fun SettingScreen(
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.auto_backup),
+                        // 简版描述:不含备份位置(下一行"备份位置"已展示,重复信息)。
+                        // 不能整个删掉——无副标题时行高被 Switch(~30dp)撑起、标题垂直居中,
+                        // 与邻行文字间距 73px(带副标题行 42px),视觉上空出一行(用户 2026-10-01 反馈)。
+                        subtitle = stringResource(Res.string.auto_backup_description),
                         switch = (autoBackupEnabled to { viewModel.setAutoBackupEnabled(it) }),
                     )
                     AnimatedVisibility(visible = autoBackupEnabled) {
