@@ -357,6 +357,7 @@ class SettingsViewModel(
         getKeepYouTubePlaylistOffline()
         getDownloadQuality()
         getVideoDownloadQuality()
+        getFileDownloadSettings()
         getLocalTrackingEnabled()
         getBlogNotificationEnabled()
         getAutoBackupEnabled()
@@ -436,6 +437,104 @@ class SettingsViewModel(
                 dataStoreManager.setVideoDownloadQuality(quality)
             }
             getVideoDownloadQuality()
+        }
+    }
+
+    // ===== 文件式下载(第二代)分区 =====
+
+    private val _audioDownloadQuality = MutableStateFlow<String?>(null)
+    val audioDownloadQuality: StateFlow<String?> = _audioDownloadQuality
+
+    private val _downloadFileNameFormat = MutableStateFlow<String?>(null)
+    val downloadFileNameFormat: StateFlow<String?> = _downloadFileNameFormat
+
+    private val _simultaneousDownloads = MutableStateFlow(3)
+    val simultaneousDownloads: StateFlow<Int> = _simultaneousDownloads
+
+    private val _downloadArtistAlbumFolder = MutableStateFlow(false)
+    val downloadArtistAlbumFolder: StateFlow<Boolean> = _downloadArtistAlbumFolder
+
+    private val _downloadSaveLrc = MutableStateFlow(true)
+    val downloadSaveLrc: StateFlow<Boolean> = _downloadSaveLrc
+
+    private val _downloadAiTags = MutableStateFlow(false)
+    val downloadAiTags: StateFlow<Boolean> = _downloadAiTags
+
+    private val _downloadWifiOnly = MutableStateFlow(true)
+    val downloadWifiOnly: StateFlow<Boolean> = _downloadWifiOnly
+
+    private fun getFileDownloadSettings() {
+        viewModelScope.launch {
+            dataStoreManager.audioDownloadQuality.collect { _audioDownloadQuality.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadFileNameFormat.collect { _downloadFileNameFormat.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.simultaneousDownloads.collect { _simultaneousDownloads.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadArtistAlbumFolder.collect {
+                _downloadArtistAlbumFolder.emit(it == DataStoreManager.TRUE)
+            }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadSaveLrc.collect { _downloadSaveLrc.emit(it == DataStoreManager.TRUE) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadAiTags.collect { _downloadAiTags.emit(it == DataStoreManager.TRUE) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadWifiOnly.collect { _downloadWifiOnly.emit(it == DataStoreManager.TRUE) }
+        }
+    }
+
+    fun setAudioDownloadQuality(quality: String) {
+        viewModelScope.launch {
+            dataStoreManager.setAudioDownloadQuality(quality)
+            _audioDownloadQuality.emit(quality)
+        }
+    }
+
+    fun setDownloadFileNameFormat(format: String) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadFileNameFormat(format)
+            _downloadFileNameFormat.emit(format)
+        }
+    }
+
+    fun setSimultaneousDownloads(count: Int) {
+        viewModelScope.launch {
+            dataStoreManager.setSimultaneousDownloads(count)
+            _simultaneousDownloads.emit(count.coerceIn(1, 10))
+        }
+    }
+
+    fun setDownloadArtistAlbumFolder(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadArtistAlbumFolder(enabled)
+            _downloadArtistAlbumFolder.emit(enabled)
+        }
+    }
+
+    fun setDownloadSaveLrc(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadSaveLrc(enabled)
+            _downloadSaveLrc.emit(enabled)
+        }
+    }
+
+    fun setDownloadAiTags(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadAiTags(enabled)
+            _downloadAiTags.emit(enabled)
+        }
+    }
+
+    fun setDownloadWifiOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadWifiOnly(enabled)
+            _downloadWifiOnly.emit(enabled)
         }
     }
 
