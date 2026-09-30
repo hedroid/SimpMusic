@@ -1372,42 +1372,53 @@ class SharedViewModel(
     fun checkForUpdate() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
-            // Keep this read ahead of the first DataStore write: on a fresh install
-            // MainActivity performs runBlocking DataStore writes on the main thread,
-            // and enqueuing our write before theirs can wedge the DataStore actor
-            // behind the blocked main looper, leaving the app stuck on the splash.
-            dataStoreManager.updateChannel.first()
-            dataStoreManager.putString(
-                "CheckForUpdateAt",
-                System.currentTimeMillis().toString(),
-            )
-            updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
-                val data = response.data
-                when (response) {
-                    is Resource.Success if (data != null) -> {
-                        _updateResponse.value = data
-                        showedUpdateDialog = true
-                    }
-
-                    else -> {
-                        // API 路径失败(最常见=api.github.com 匿名 60 次/小时限流,共享出口 IP
-                        // 极易撞上):改走 HTML 重定向兜底——releases/latest 302 目标含最新 tag,
-                        // 网页路径限额宽松。双路都失败才提示(此前失败静默吞掉,用户读作"没反应")。
-                        log("Check for update via API failed (${response.message}), falling back to redirect probe", LogLevel.WARN)
-                        updateRepository.checkForGithubReleaseUpdateViaRedirect().collectLatest { fb ->
-                            val fbData = fb.data
-                            if (fb is Resource.Success && fbData != null) {
-                                _updateResponse.value = fbData
-                                showedUpdateDialog = true
-                            } else {
-                                log("Check for update via redirect also failed: ${fb.message}", LogLevel.WARN)
-                                makeToast(getString(Res.string.update_check_failed))
-                            }
-                            _isCheckingUpdate.value = false
+            // 更新检查是纯增益功能,任何残余异常都不许把 app 带崩(2026-09-30 真机崩溃:
+            // 无代理环境两段 GitHub 请求先后超时,兜底路径曾把 SocketTimeoutException 裸抛
+            // 出 collectLatest)。scraper/repo 层已捕获,这里是第二道防线;finally 同时
+            // 保证失败路径不会把 _isCheckingUpdate 永远留在 true。
+            try {
+                // Keep this read ahead of the first DataStore write: on a fresh install
+                // MainActivity performs runBlocking DataStore writes on the main thread,
+                // and enqueuing our write before theirs can wedge the DataStore actor
+                // behind the blocked main looper, leaving the app stuck on the splash.
+                dataStoreManager.updateChannel.first()
+                dataStoreManager.putString(
+                    "CheckForUpdateAt",
+                    System.currentTimeMillis().toString(),
+                )
+                updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
+                    val data = response.data
+                    when (response) {
+                        is Resource.Success if (data != null) -> {
+                            _updateResponse.value = data
+                            showedUpdateDialog = true
                         }
-                        return@collectLatest
+
+                        else -> {
+                            // API 路径失败(最常见=api.github.com 匿名 60 次/小时限流,共享出口 IP
+                            // 极易撞上):改走 HTML 重定向兜底——releases/latest 302 目标含最新 tag,
+                            // 网页路径限额宽松。双路都失败才提示(此前失败静默吞掉,用户读作"没反应")。
+                            log("Check for update via API failed (${response.message}), falling back to redirect probe", LogLevel.WARN)
+                            updateRepository.checkForGithubReleaseUpdateViaRedirect().collectLatest { fb ->
+                                val fbData = fb.data
+                                if (fb is Resource.Success && fbData != null) {
+                                    _updateResponse.value = fbData
+                                    showedUpdateDialog = true
+                                } else {
+                                    log("Check for update via redirect also failed: ${fb.message}", LogLevel.WARN)
+                                    makeToast(getString(Res.string.update_check_failed))
+                                }
+                            }
+                            return@collectLatest
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("Check for update threw outside repo layer: ${e.message}", LogLevel.WARN)
+                makeToast(getString(Res.string.update_check_failed))
+            } finally {
                 _isCheckingUpdate.value = false
             }
         }
