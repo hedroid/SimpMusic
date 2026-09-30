@@ -162,7 +162,8 @@ fun NeteaseRadioDetailScreen(
                 ) {
                     Text(
                         text = stringResource(Res.string.podcast_programs),
-                        style = typo().headlineMedium,
+                        // titleMedium 与页头电台名同档(headlineMedium 用户嫌太大,2026-09-30)
+                        style = typo().titleMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f),
                     )
@@ -391,7 +392,8 @@ private fun RadioHeader(
                     androidx.compose.material3.TextButton(onClick = { expanded = !expanded }) {
                         Text(
                             stringResource(if (expanded) Res.string.podcast_collapse else Res.string.podcast_expand),
-                            style = typo().labelMedium,
+                            // labelSmall:正文是 bodySmall(11sp),16sp Bold 的展开键比正文还抢眼(2026-09-30)
+                            style = typo().labelSmall,
                         )
                     }
                 }

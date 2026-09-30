@@ -341,7 +341,8 @@ fun NeteaseMixScreen(
                             .windowInsetsPadding(WindowInsets.statusBars),
                 )
                 // 标题左侧头像=当前音源登录账号(用户 2026-09-30,与库页同款设计:
-                // 26dp 圆形+crossfade,空串隐藏;本页无 TopAppBar,手排 Row)
+                // 26dp 圆形+crossfade,空串隐藏;标题 titleMedium 与库页顶栏同字号;
+                // 本页无 TopAppBar,手排 Row)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
@@ -370,7 +371,7 @@ fun NeteaseMixScreen(
                     }
                     Text(
                         text = stringResource(Res.string.personal_fm),
-                        style = typo().headlineMedium,
+                        style = typo().titleMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                     )
                 }
