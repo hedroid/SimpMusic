@@ -130,8 +130,16 @@ class NeteaseRadioDetailViewModel(
         }
     }
 
+    /** 节目列表加载链(首页/续页共用单飞)+代数:换电台/切排序递增 generation,在途回包
+     *  按代丢弃——切排序时旧升/降序的首页或续页晚到,会把另一序的节目追加进新列表
+     *  (乱序+重复+rawProgramCount/hasMore 错位,五轮 CR) */
+    private var programsJob: kotlinx.coroutines.Job? = null
+    private var programsGeneration = 0L
+
     fun load(id: Long) {
         if (radioId == id && !_uiState.value.loading) return
+        programsGeneration++
+        programsJob?.cancel()
         radioId = id
         _uiState.update { it.copy(loading = true, programsUnavailable = false) }
         // 读该电台的上次收听记忆("programId|positionMs"单键)
@@ -157,67 +165,83 @@ class NeteaseRadioDetailViewModel(
     /** 重试(不可用态/失败的入口);成功但空且电台声明有节目=限流的静默空形态,也归不可用 */
     fun retry() {
         _uiState.update { it.copy(loading = true, programsUnavailable = false) }
-        viewModelScope.launch { loadPrograms() }
+        loadPrograms()
     }
 
     /** 切换 最新在前/最早在前(byradio asc 参数),清空重拉第一页 */
     fun setAscending(ascending: Boolean) {
         if (_uiState.value.ascending == ascending) return
         _uiState.update { it.copy(ascending = ascending, programs = emptyList(), rawProgramCount = 0, hasMore = false, loading = true, programsUnavailable = false) }
-        viewModelScope.launch { loadPrograms() }
+        loadPrograms()
     }
 
-    private suspend fun loadPrograms() {
-        neteaseRepository.getDjRadioProgramsPage(radioId, offset = 0, asc = _uiState.value.ascending).fold(
-            onSuccess = { (programs, more) ->
-                // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐;
-                // 原始页大小进 rawProgramCount 当服务端游标
-                val playable = programs.filter { it.mainSongId != null }
-                val declared = _uiState.value.radio?.programCount ?: 0
-                val unavailable = playable.isEmpty() && declared > 0
-                _uiState.update {
-                    it.copy(
-                        programs = playable,
-                        rawProgramCount = programs.size,
-                        hasMore = more,
-                        loading = false,
-                        programsUnavailable = unavailable,
-                    )
-                }
-            },
-            onFailure = {
-                log("radio programs failed: $it")
-                _uiState.update { it.copy(loading = false, programsUnavailable = true) }
-            },
-        )
+    private fun loadPrograms() {
+        programsJob?.cancel()
+        val gen = ++programsGeneration
+        val radioIdAtStart = radioId
+        val ascendingAtStart = _uiState.value.ascending
+        programsJob =
+            viewModelScope.launch {
+                neteaseRepository.getDjRadioProgramsPage(radioIdAtStart, offset = 0, asc = ascendingAtStart).fold(
+                    onSuccess = { (programs, more) ->
+                        // 换电台/切排序后到达的旧回包整包丢弃
+                        if (gen != programsGeneration || radioId != radioIdAtStart) return@fold
+                        // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐;
+                        // 原始页大小进 rawProgramCount 当服务端游标
+                        val playable = programs.filter { it.mainSongId != null }
+                        val declared = _uiState.value.radio?.programCount ?: 0
+                        val unavailable = playable.isEmpty() && declared > 0
+                        _uiState.update {
+                            it.copy(
+                                programs = playable,
+                                rawProgramCount = programs.size,
+                                hasMore = more,
+                                loading = false,
+                                programsUnavailable = unavailable,
+                            )
+                        }
+                    },
+                    onFailure = {
+                        if (gen != programsGeneration || radioId != radioIdAtStart) return@fold
+                        log("radio programs failed: $it")
+                        _uiState.update { it.copy(loading = false, programsUnavailable = true) }
+                    },
+                )
+            }
     }
 
     fun loadMore() {
         val state = _uiState.value
         if (!state.hasMore || state.loadingMore || state.loading) return
         _uiState.update { it.copy(loadingMore = true) }
-        viewModelScope.launch {
-            neteaseRepository
-                .getDjRadioProgramsPage(radioId, offset = state.rawProgramCount, asc = _uiState.value.ascending)
-                .fold(
-                    onSuccess = { (programs, more) ->
-                        val playable = programs.filter { it.mainSongId != null }
-                        _uiState.update { current ->
-                            // 整页撞重=服务端重复发批,收尾防 offset 死循环(SimilarSongs 同款)
-                            val fresh = playable.filterNot { p -> current.programs.any { it.id == p.id } }
-                            current.copy(
-                                programs = current.programs + fresh,
-                                // 游标按原始页大小推进,不可播节目也占服务端 offset
-                                rawProgramCount = current.rawProgramCount + programs.size,
-                                hasMore = more && fresh.isNotEmpty(),
-                                loadingMore = false,
-                            )
-                        }
-                    },
-                    onFailure = {
-                        _uiState.update { it.copy(loadingMore = false) }
-                    },
-                )
+        val gen = programsGeneration
+        val radioIdAtStart = radioId
+        programsJob?.cancel()
+        programsJob =
+            viewModelScope.launch {
+                neteaseRepository
+                    .getDjRadioProgramsPage(radioIdAtStart, offset = state.rawProgramCount, asc = state.ascending)
+                    .fold(
+                        onSuccess = { (programs, more) ->
+                            if (gen != programsGeneration || radioId != radioIdAtStart) return@fold
+                            val playable = programs.filter { it.mainSongId != null }
+                            _uiState.update { current ->
+                                // 整页撞重=服务端重复发批,收尾防 offset 死循环(SimilarSongs 同款)
+                                val fresh = playable.filterNot { p -> current.programs.any { it.id == p.id } }
+                                current.copy(
+                                    programs = current.programs + fresh,
+                                    // 游标按原始页大小推进,不可播节目也占服务端 offset
+                                    rawProgramCount = current.rawProgramCount + programs.size,
+                                    hasMore = more && fresh.isNotEmpty(),
+                                    loadingMore = false,
+                                )
+                            }
+                        },
+                        onFailure = {
+                            if (gen != programsGeneration || radioId != radioIdAtStart) return@fold
+                            _uiState.update { it.copy(loadingMore = false) }
+                        },
+                    )
         }
     }
 

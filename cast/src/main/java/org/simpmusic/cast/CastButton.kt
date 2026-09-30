@@ -12,6 +12,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.mediarouter.R as MediaRouterR
 import androidx.mediarouter.app.MediaRouteButton
 import com.google.android.gms.cast.framework.CastButtonFactory
+import com.maxrave.logger.Logger
 
 /**
  * Cast icon button backed by the original MediaRouter UI.
@@ -49,7 +50,18 @@ fun CastIconButton(
         factory = { viewContext ->
             val themedContext = ContextThemeWrapper(viewContext, MediaRouterR.style.Theme_MediaRouter)
             MediaRouteButton(themedContext).apply {
-                CastButtonFactory.setUpMediaRouteButton(viewContext.applicationContext, this)
+                // Cast 工厂内部会重新进入 CastContext 初始化——无 GMS/Cast 配置异常的设备
+                // 上直接抛(initCast 已捕获降级的同一失败路径,这里没有兜底=进播放页就崩,
+                // 五轮 CR)。只在 Cast 可用时才接 Google Cast 路由;不可用=纯 MediaRouteButton
+                // 只吃 DLNA selector,路由选择器照常可用。initCast 幂等且从不抛,就地补一次
+                // 防依赖 service 侧初始化时序;工厂调用再叠 runCatching 兜异常配置残余路径。
+                if (initCast(viewContext.applicationContext)) {
+                    runCatching {
+                        CastButtonFactory.setUpMediaRouteButton(viewContext.applicationContext, this)
+                    }.onFailure {
+                        Logger.w("CastButton", "setUpMediaRouteButton failed: ${it.message}")
+                    }
+                }
                 routeSelector = combinedRouteSelector
                 // MediaRouteButton inherits Widget.AppCompat.ActionButton, which bakes in 12dp of
                 // horizontal padding and scaleType=center. Removing it keeps the glyph visible in

@@ -28,6 +28,9 @@ class NeteasePodcastCategoryViewModel(
     data class ChartState(
         val radios: List<NeteaseDjRadio> = emptyList(),
         val loaded: Boolean = false,
+        /** 首页在途(tab 按需拉取):切到未加载 tab 时置位,防重复发起+给 UI 渲染加载态
+         *  (页面只看全局 loading,曾把"加载中"显示成"该分类暂无电台",五轮 CR) */
+        val loading: Boolean = false,
         val hasMore: Boolean = false,
         val loadingMore: Boolean = false,
         val failed: Boolean = false,
@@ -61,14 +64,19 @@ class NeteasePodcastCategoryViewModel(
     fun switchTab(tab: ChartTab) {
         if (_uiState.value.tab == tab) return
         _uiState.update { it.copy(tab = tab) }
-        if (!_uiState.value.charts[tab]!!.loaded) {
+        val chart = _uiState.value.charts[tab] ?: return
+        // 快速来回切换对同一未加载 tab 只发一次首页请求(loading 在途即跳过)
+        if (!chart.loaded && !chart.loading) {
+            _uiState.update { s ->
+                s.copy(charts = s.charts + (tab to chart.copy(loading = true)))
+            }
             loadTab(tab)
         }
     }
 
     fun retry() {
         _uiState.update { state ->
-            state.copy(charts = state.charts + (state.tab to (state.charts[state.tab] ?: ChartState()).copy(failed = false)))
+            state.copy(charts = state.charts + (state.tab to (state.charts[state.tab] ?: ChartState()).copy(failed = false, loading = true)))
         }
         loadTab(_uiState.value.tab)
     }

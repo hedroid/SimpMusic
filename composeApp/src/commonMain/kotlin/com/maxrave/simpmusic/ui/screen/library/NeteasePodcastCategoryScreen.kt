@@ -106,10 +106,12 @@ fun NeteasePodcastCategoryScreen(
     val density = LocalDensity.current
 
     Box(Modifier.fillMaxSize()) {
-        if (uiState.loading) {
+        val chart = uiState.current
+        // 未加载 tab(按需拉取的首页在途)也渲染加载态:页面曾只看全局 loading,把
+        // "切到最热加载中"显示成"该分类暂无电台"空态(五轮 CR);failed 由网格内错误分支渲染
+        if (uiState.loading || !chart.loaded) {
             CenterLoadingBox(Modifier.fillMaxSize())
         } else {
-            val chart = uiState.current
             val shouldLoadMore by remember {
                 derivedStateOf {
                     val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0

@@ -415,24 +415,31 @@ private fun FmSongRow(
     onPlay: (index: Int) -> Unit,
 ) {
     val rowState = rememberLazyListState()
-    // 无感预取:尾部前 3 张(~1.5 屏)进入视野即开拉,fling 中途网络已在飞,到手时
-    // 批已续上,不再有"撞到行尾停住等网络"的边界卡顿(用户 2026-09-30 反馈)。布尔
-    // 边沿一次进区只打一发(离开再进才重武装),VM 在飞守卫(fmLoadingMore)双保险
-    // 防风暴;垃圾桶删歌后仍处近尾区会自然补拉。旧"滚停+250ms 复核+最后一张"触发废弃。
+    // 无感预取(2026-09-30 五轮修,用户反馈"到尾要回划再划"):**预取区深度必须大于
+    // 每批增量**——personalRadio 服务端固定每批 3 首,旧区=最后 3 张与批量等深,批落地
+    // 后必须把整批滑完才再触发=零跑道,快划必撞墙。现区=最后 6 张(约 3 屏,含一批余量),
+    // 并在每批落地时(contents.size 变化)重评估:仍在区内立即链发下一批,跑道自动维持;
+    // VM 在飞守卫(fmLoadingMore)防风暴。垃圾桶删歌后 contents 收缩也会重评估自然补拉。
     if (onLoadMore != null) {
-        val shouldLoadMore by remember {
+        val nearEnd by remember {
             derivedStateOf {
                 val info = rowState.layoutInfo
                 val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-                info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 3
+                info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 6
             }
         }
+        // 滚动驱动:进入近尾区触发(布尔边沿,一次进区只打一发;离开再进才重武装)
         LaunchedEffect(rowState) {
-            snapshotFlow { shouldLoadMore }
+            snapshotFlow { nearEnd }
                 .distinctUntilChanged()
                 .collect { near ->
                     if (near) onLoadMore?.invoke()
                 }
+        }
+        // 落地链发:新批到达时若仍处近尾区立即续拉——区深 6>批 3 保证批落地瞬间
+        // nearEnd 仍为 true(用户在旧末尾,新 total-6 通常仍覆盖),跑道逐批+1 直到脱离
+        LaunchedEffect(contents.size, nearEnd) {
+            if (nearEnd && !loadingMore) onLoadMore?.invoke()
         }
     }
     LazyRow(
