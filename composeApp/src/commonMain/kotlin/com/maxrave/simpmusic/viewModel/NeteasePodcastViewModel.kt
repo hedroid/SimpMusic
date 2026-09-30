@@ -11,11 +11,15 @@ import com.maxrave.netease.model.NeteaseDjProgram
 import com.maxrave.netease.model.NeteaseDjRadio
 import com.maxrave.netease.model.NeteasePodcastCategory
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.login_netease_first
@@ -53,6 +57,14 @@ class NeteasePodcastViewModel(
     /** 首拉过一次即不再整页 Loading(静默刷新口径) */
     private var loadedOnce = false
 
+    /** 下拉指示器(手势受理确认口径:首批落地/600ms 先到先收,不表达后台进度) */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> get() = _refreshing.asStateFlow()
+
+    /** 在途刷新批次:新刷新取消旧批次——连续下拉曾可叠加 8×N 并发请求且旧批次晚到
+     *  回写覆盖新批(CR-27);保持各请求独立并行,只是收进同一可取消 job */
+    private var refreshJob: Job? = null
+
     /** chip 页被选中时调用:首拉整页,之后只静默刷新订阅区(详情页订阅/退订要反映回来) */
     fun onPageSelected() {
         if (!loadedOnce) {
@@ -64,45 +76,77 @@ class NeteasePodcastViewModel(
     }
 
     /** 静默刷新:不清已显示分区(下拉刷新口径),各区块独立回写。
-     *  并行发起(每个请求各自 launch,网易主页三分区同口径)——串行 7 个请求要
-     *  1.5~2.5s 才全部落地,并行后总耗时=最慢单请求;回写都是 update{},并发安全。 */
-    fun refresh() {
-        viewModelScope.launch {
-            neteaseRepository.getPodcastCategories().onSuccess { categories ->
-                // 服务端官方分类表 19 个,尾部 7 个是僵尸分类(探针实证恒 0~3 条);
-                // 截前 11 个(用户定案 2026-09-29,前 11 个主分类全部 6 条以上可翻页)
-                _uiState.update { it.copy(categories = categories.take(11)) }
+     *  并行发起(每个请求各自子协程,网易主页三分区同口径)——串行 7 个请求要
+     *  1.5~2.5s 才全部落地,并行后总耗时=最慢单请求;回写都是 update{},并发安全。
+     *  [showIndicator]=下拉触发时才转指示器(首拉/程序化刷新不打扰)。 */
+    fun refresh(showIndicator: Boolean = false) {
+        refreshJob?.cancel()
+        if (showIndicator) _refreshing.value = true
+        refreshJob =
+            viewModelScope.launch {
+                val firstDone = CompletableDeferred<Unit>()
+                try {
+                    coroutineScope {
+                        launch {
+                            neteaseRepository.getPodcastCategories().onSuccess { categories ->
+                                // 服务端官方分类表 19 个,尾部 7 个是僵尸分类(探针实证恒 0~3 条);
+                                // 截前 11 个(用户定案 2026-09-29,前 11 个主分类全部 6 条以上可翻页)
+                                _uiState.update { it.copy(categories = categories.take(11)) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
+                                _uiState.update { it.copy(recommendRadios = radios) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            neteaseRepository.getDjRadioToplist(type = 1).onSuccess { radios ->
+                                _uiState.update { it.copy(hotRadios = radios) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            neteaseRepository.getDjRadioToplist(type = 0).onSuccess { radios ->
+                                _uiState.update { it.copy(newRadios = radios) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            // 热门节目榜:元素是节目形状,过滤不可播(同最新节目口径)
+                            neteaseRepository.getDjProgramToplist().onSuccess { programs ->
+                                _uiState.update { it.copy(programToplist = programs.filter { p -> p.mainSongId != null }) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            // 猜你喜欢:未登录时服务端返回空列表(成功),区块随之隐藏
+                            neteaseRepository.getPersonalizedDjRadios().onSuccess { radios ->
+                                _uiState.update { it.copy(personalizedRadios = radios) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            neteaseRepository.getMyDjRadios().onSuccess { radios ->
+                                _uiState.update { it.copy(myRadios = radios) }
+                            }
+                            firstDone.complete(Unit)
+                        }
+                        launch {
+                            reloadPrograms()
+                            firstDone.complete(Unit)
+                        }
+                        // 指示器收口:首批落地或 600ms 先到先收(手势已受理的确认,不是进度条)
+                        launch {
+                            withTimeoutOrNull(600) { firstDone.await() }
+                            _refreshing.value = false
+                        }
+                    }
+                } finally {
+                    _refreshing.value = false
+                }
             }
-        }
-        viewModelScope.launch {
-            neteaseRepository.getRecommendDjRadios().onSuccess { radios ->
-                _uiState.update { it.copy(recommendRadios = radios) }
-            }
-        }
-        viewModelScope.launch {
-            neteaseRepository.getDjRadioToplist(type = 1).onSuccess { radios ->
-                _uiState.update { it.copy(hotRadios = radios) }
-            }
-        }
-        viewModelScope.launch {
-            neteaseRepository.getDjRadioToplist(type = 0).onSuccess { radios ->
-                _uiState.update { it.copy(newRadios = radios) }
-            }
-        }
-        viewModelScope.launch {
-            // 热门节目榜:元素是节目形状,过滤不可播(同最新节目口径)
-            neteaseRepository.getDjProgramToplist().onSuccess { programs ->
-                _uiState.update { it.copy(programToplist = programs.filter { p -> p.mainSongId != null }) }
-            }
-        }
-        viewModelScope.launch {
-            // 猜你喜欢:未登录时服务端返回空列表(成功),区块随之隐藏
-            neteaseRepository.getPersonalizedDjRadios().onSuccess { radios ->
-                _uiState.update { it.copy(personalizedRadios = radios) }
-            }
-        }
-        refreshMyRadios()
-        viewModelScope.launch { reloadPrograms() }
     }
 
 

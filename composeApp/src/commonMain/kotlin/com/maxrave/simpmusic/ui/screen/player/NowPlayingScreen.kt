@@ -656,11 +656,7 @@ fun NowPlayingScreenContent(
             castState = castState,
             shouldShowVideo = shouldShowVideo,
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
-            isPodcastSong = mediaPlayerHandler.queueData.value?.data?.let { d ->
-                d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null } &&
-                        d.listTracks.map { it.album?.id }.distinct().size == 1 && d.listTracks.first().album?.id?.toLongOrNull() != null)
-            } == true,
+            isPodcastSong = mediaPlayerHandler.queueData.value?.data?.isNeteasePodcastQueue == true,
             remoteLikeState = remoteLikeState,
             // 红心=云端态;未登录源置灰(点击提示登录)
             likeEnabled =
@@ -879,14 +875,24 @@ fun NowPlayingScreenContent(
     // 网易歌评论列表(详情卡评论数入口);songId 取自当前曲目,面板自身负责分页。
     // 用 songEntity.videoId 而非 track.videoId:后者在部分转场时机为 null,
     // 空串进去分页直接"已经到底了"
-    // 播客节目评论线程与歌曲不同(A_DJ_1_<programId> vs R_SO_4_<songId>):队列 playlistId
-    // 带 NETEASE_PODCAST_ 前缀时,用当前 mainSong id 在电台节目列表里反查 programId。
-    // 查不到(网络失败/列表翻页不够深)回退歌曲线程——空数据总比错线程好。
+    // 播客节目评论线程与歌曲不同(A_DJ_1_<programId> vs R_SO_4_<songId>):用当前
+    // mainSong id 在电台节目列表里反查 programId。反查只在"明确播客队列+评论面板
+    // 已打开"时进行(CR-23)——旧实现按每首网易歌切歌都拿 album.id 当 radioId 最多
+    // 翻 5 页,普通歌曲纯浪费且挤占 byradio 限流队列;队列判定只认前缀(身份三键
+    // 持久化后恢复路径带前缀,不再有 SAVED_QUEUE 丢前缀的老问题)。
+    // 值语义:null=反查在途(面板等落地才首发,防首载走错线程) / ""=完成但未命中
+    // (回退歌曲线程——空数据总比错线程好) / A_DJ_1_<id>=命中。
     val podcastProgramThreadId =
-        produceState<String?>(null, nowPlayingVideoId) {
-            // 队列恢复态(SAVED_QUEUE)会丢失播客前缀,不能拿前缀判"不是播客"——
-            // 用当前曲 album.id(radioId,播客构造 toResultSong 时写入)存在即按播客解析
+        produceState<String?>(
+            null,
+            nowPlayingVideoId,
+            queueDataState?.data?.isNeteasePodcastQueue,
+            showNeteaseComments,
+        ) {
             val vid = nowPlayingVideoId ?: return@produceState
+            if (!showNeteaseComments || queueDataState?.data?.isNeteasePodcastQueue != true) {
+                return@produceState
+            }
             val radioId =
                 mediaPlayerHandler.queueData.value?.data?.listTracks
                     ?.firstOrNull { it.videoId == vid }?.album?.id?.toLongOrNull()
@@ -909,7 +915,7 @@ fun NowPlayingScreenContent(
                 offset += page.first.size
             }
             com.maxrave.logger.Logger.w("PodcastComments", "resolved programId=$found")
-            value = found?.let { "A_DJ_1_$it" }
+            value = found?.let { "A_DJ_1_$it" } ?: ""
         }
     if (showNeteaseComments) {
         NeteaseCommentsSheet(
@@ -920,11 +926,7 @@ fun NowPlayingScreenContent(
                     ?: "",
             totalCount = screenDataState.neteaseSongData?.commentCount ?: 0,
             threadId = podcastProgramThreadId.value,
-            isPodcast = mediaPlayerHandler.queueData.value?.data?.let { d ->
-                d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                    (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null } &&
-                        d.listTracks.map { it.album?.id }.distinct().size == 1 && d.listTracks.first().album?.id?.toLongOrNull() != null)
-            } == true,
+            isPodcast = mediaPlayerHandler.queueData.value?.data?.isNeteasePodcastQueue == true,
         )
     }
 

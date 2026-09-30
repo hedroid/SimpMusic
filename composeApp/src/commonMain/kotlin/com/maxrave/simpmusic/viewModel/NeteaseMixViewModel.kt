@@ -200,17 +200,23 @@ class NeteaseMixViewModel(
             notifyFmCapOnce()
             return
         }
+        // 同步置位再进协程:近尾预取与下拉刷新在手势间隙各调一次时,旧实现"launch 内
+        // 才置位"会让两次都过守卫并发拉批(协程调度窗口竞态,CR-32);finally 清位防
+        // 异常/取消把闸门卡死在 true
+        _fmLoadingMore.value = true
         viewModelScope.launch {
-            _fmLoadingMore.value = true
-            val seen = ready.fmContents.mapNotNull { it.videoId }.toSet()
-            val more = neteaseRepository.fetchMoreFmContents(seen)
-            (_state.value as? State.Ready)?.let { current ->
-                val existing = current.fmContents.mapNotNull { it.videoId }.toSet()
-                val merged = (current.fmContents + more.filter { it.videoId !in existing }).take(FM_MAX_SONGS)
-                _state.value = current.copy(fmContents = merged)
-                if (merged.size >= FM_MAX_SONGS) notifyFmCapOnce()
+            try {
+                val seen = ready.fmContents.mapNotNull { it.videoId }.toSet()
+                val more = neteaseRepository.fetchMoreFmContents(seen)
+                (_state.value as? State.Ready)?.let { current ->
+                    val existing = current.fmContents.mapNotNull { it.videoId }.toSet()
+                    val merged = (current.fmContents + more.filter { it.videoId !in existing }).take(FM_MAX_SONGS)
+                    _state.value = current.copy(fmContents = merged)
+                    if (merged.size >= FM_MAX_SONGS) notifyFmCapOnce()
+                }
+            } finally {
+                _fmLoadingMore.value = false
             }
-            _fmLoadingMore.value = false
         }
     }
 

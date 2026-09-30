@@ -378,15 +378,10 @@ fun InfoPlayerBottomSheet(
     val format by sharedViewModel.format.collectAsState(null)
     val extractSource by sharedViewModel.extractSource.collectAsState()
     val downloadProgress by sharedViewModel.downloadFileProgress.collectAsStateWithLifecycle()
-    // 播客队列指纹(与三点菜单同款):mainSong 的点赞数端点恒 0,点赞行不展示
+    // 播客队列判定(统一走 QueueData.isNeteasePodcastQueue,CR-22):mainSong 的点赞数端点恒 0,点赞行不展示
     val isPodcastQueue =
-        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
-            val d = h.queueData.value?.data
-            val t = d?.listTracks.orEmpty()
-            d?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
-                    t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null)
-        }
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
+            .queueData.value?.data?.isNeteasePodcastQueue == true
 
     ModalBottomSheet(
         onDismissRequest = {
@@ -1148,14 +1143,10 @@ fun QueueBottomSheet(
     // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
     val isFmQueue = queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID
 
-    // 播客队列(剧集播完即止):无尽开关整行隐藏。判定双路=前缀或全数字队列指纹
-    // (恢复队列 SAVED_QUEUE 丢前缀;播客节目=纯数字 id,歌曲队列几乎都有 LM/VL/RADAR 等)
-    val isPodcastQueue =
-        queueData?.data?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-            (queueData?.data?.listTracks.orEmpty().let { t ->
-                t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
-                    t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null
-            })
+    // 播客队列(剧集播完即止):无尽开关整行隐藏。
+    // 判定只认前缀(QueueData.isNeteasePodcastQueue,CR-22)——队列身份三键持久化后
+    // 恢复路径同样带前缀;旧"全数字+单一 album.id"指纹与普通网易专辑整队同形,会误伤歌曲队列
+    val isPodcastQueue = queueData?.data?.isNeteasePodcastQueue == true
 
     // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
     // uses (deriveOrderIndex): trust the player's own index when it points at the track
@@ -1747,16 +1738,12 @@ fun NowPlayingBottomSheet(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // 播客队列(节目是"剧集"):艺人/专辑/电台/相似等歌曲向条目整组隐藏。
-    // 判定双路:playlistId 前缀,或队列"全部曲 album.id 同一纯数字值"(恢复队列 SAVED_QUEUE
-    // 会丢播客前缀,但播客构造 Track 时 album.id=radioId 的指纹仍在;普通歌单/专辑各曲不同)
-    val isPodcastQueue = koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>().let { h ->
-        val d = h.queueData.value?.data
-        val t = d?.listTracks.orEmpty()
-        // 指纹三条件:前缀/全数字+单一 album.id(歌单队列也全数字,单一 album 才是播客电台特征)
-        d?.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-            (t.size >= 3 && t.all { it.videoId.toLongOrNull() != null } &&
-                t.map { it.album?.id }.distinct().size == 1 && t.first().album?.id?.toLongOrNull() != null)
-    }
+    // 判定只认前缀(QueueData.isNeteasePodcastQueue,CR-22)——队列身份三键持久化后
+    // 恢复路径同样带前缀;旧"全数字+单一 album.id"指纹与普通网易专辑整队同形,
+    // 会让专辑队列的歌曲菜单条目整组消失,故弃用形状猜测
+    val isPodcastQueue =
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
+            .queueData.value?.data?.isNeteasePodcastQueue == true
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
@@ -4175,9 +4162,10 @@ fun NeteaseCommentsSheet(
     onDismiss: () -> Unit,
     songId: String,
     totalCount: Int,
-    /** 评论线程 id;null=歌曲默认(R_SO_4)。播客节目传 A_DJ_1_<programId> */
+    /** 评论线程 id;null=歌曲默认(R_SO_4)。播客节目传 A_DJ_1_<programId>;""=反查完成未命中(同样回退歌曲线程) */
     threadId: String? = null,
-    /** 播客节目(不依赖 threadId 反查时序):标题不带数字+点赞禁用 */
+    /** 播客节目(不依赖 threadId 反查时序):标题不带数字+点赞禁用。threadId 为按需反查,
+     *  null 且 isPodcast=true 表示反查在途——首载等它落地,否则会拿 R_SO_4 歌曲线程加载错评论 */
     isPodcast: Boolean = false,
     neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
 ) {
@@ -4216,7 +4204,8 @@ fun NeteaseCommentsSheet(
                     sortType = target.wire,
                     cursor = target.firstCursor,
                     pageNo = 1,
-                    threadId = threadId,
+                    // ""=反查未命中的哨兵,按无 threadId 处理回退歌曲线程
+                    threadId = threadId?.takeIf { it.isNotEmpty() },
                 )
             if (page == null) {
                 failed = true
@@ -4355,7 +4344,9 @@ fun NeteaseCommentsSheet(
         }
     }
 
-    LaunchedEffect(songId) {
+    LaunchedEffect(songId, threadId) {
+        // 播客 threadId 是面板打开后才反查的:在途(null)不首发,落地(含 "" 未命中)再载
+        if (isPodcast && threadId == null) return@LaunchedEffect
         loadFirst(sort)
     }
 

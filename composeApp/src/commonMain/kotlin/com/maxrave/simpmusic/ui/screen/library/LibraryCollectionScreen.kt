@@ -245,6 +245,9 @@ fun DownloadedManagementBody(
         Box(modifier = Modifier.weight(1f)) {
             if (downloadedSection == DownloadedSection.Songs) {
                 if (downloadedSongs.isEmpty()) {
+                    // 空态=恒在顶:切页不再统一复位标题,从收起态的深滚动页切到空页时
+                    // 若不上报,标题会继承收起态且没有任何滚动事件可纠正(CR-31)
+                    LaunchedEffect(Unit) { onScrolling(true) }
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             text = stringResource(Res.string.no_downloaded_songs),

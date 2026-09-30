@@ -100,6 +100,7 @@ fun NeteasePodcastScreen(
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
 
     val hasAnyContent =
@@ -111,13 +112,13 @@ fun NeteasePodcastScreen(
     PullToRefreshBox(
         modifier = Modifier.fillMaxSize(),
         state = pullToRefreshState,
-        onRefresh = { viewModel.refresh() },
-        // 指示器=手势受理确认(≤半圈口径),后台工作静默(网易主页同款)
-        isRefreshing = false,
+        onRefresh = { viewModel.refresh(showIndicator = true) },
+        // 指示器=手势受理确认(首批落地/600ms 先到先收,VM 侧收口),后台工作静默(网易主页同款)
+        isRefreshing = refreshing,
         indicator = {
             PullToRefreshDefaults.Indicator(
                 state = pullToRefreshState,
-                isRefreshing = false,
+                isRefreshing = refreshing,
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)

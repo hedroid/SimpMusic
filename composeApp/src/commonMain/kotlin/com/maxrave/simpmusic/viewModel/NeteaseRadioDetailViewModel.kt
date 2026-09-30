@@ -41,6 +41,10 @@ class NeteaseRadioDetailViewModel(
     data class UiState(
         val radio: NeteaseDjRadio? = null,
         val programs: List<NeteaseDjProgram> = emptyList(),
+        /** 服务端游标:已消费的原始节目数(含不可播)。显示列表过滤后与 offset 必须解耦——
+         *  用过滤后 programs.size 当 offset,前页存在不可播节目就会重取旧页,去重后 fresh
+         *  恒空把 hasMore 错杀成 false,后续节目永久不可达(CR-25;core 续页同按原始页大小推进) */
+        val rawProgramCount: Int = 0,
         val loading: Boolean = true,
         val loadingMore: Boolean = false,
         val hasMore: Boolean = false,
@@ -99,7 +103,12 @@ class NeteaseRadioDetailViewModel(
                 // 一瞬,稳态是 Progress/Buffering——判"在播"族即可
                 val nowTrack = mediaPlayerHandler.nowPlayingState.value
                 val vid = nowTrack.track?.videoId ?: nowTrack.songEntity?.videoId
-                val pid = _uiState.value.programs.firstOrNull { it.mainSongId?.toString() == vid }?.id
+                // programId 优先从队列 Track O(1) 直读(播客构造 Track 时携带,core 续页
+                // 追加的节目同样有)——详情 VM 的 programs 只到自己已载的页,播放器续到
+                // 第 2 页以后旧反查永远 miss,记忆就断(CR-26);track 缺槽再回退列表反查
+                val pid =
+                    nowTrack.track?.neteaseProgramId
+                        ?: _uiState.value.programs.firstOrNull { it.mainSongId?.toString() == vid }?.id
                 val state = mediaPlayerHandler.simpleMediaState.value
                 val active = state is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Progress ||
                     state is com.maxrave.domain.mediaservice.handler.SimpleMediaState.Ready ||
@@ -154,20 +163,22 @@ class NeteaseRadioDetailViewModel(
     /** 切换 最新在前/最早在前(byradio asc 参数),清空重拉第一页 */
     fun setAscending(ascending: Boolean) {
         if (_uiState.value.ascending == ascending) return
-        _uiState.update { it.copy(ascending = ascending, programs = emptyList(), hasMore = false, loading = true, programsUnavailable = false) }
+        _uiState.update { it.copy(ascending = ascending, programs = emptyList(), rawProgramCount = 0, hasMore = false, loading = true, programsUnavailable = false) }
         viewModelScope.launch { loadPrograms() }
     }
 
     private suspend fun loadPrograms() {
         neteaseRepository.getDjRadioProgramsPage(radioId, offset = 0, asc = _uiState.value.ascending).fold(
             onSuccess = { (programs, more) ->
-                // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐
+                // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐;
+                // 原始页大小进 rawProgramCount 当服务端游标
                 val playable = programs.filter { it.mainSongId != null }
                 val declared = _uiState.value.radio?.programCount ?: 0
                 val unavailable = playable.isEmpty() && declared > 0
                 _uiState.update {
                     it.copy(
                         programs = playable,
+                        rawProgramCount = programs.size,
                         hasMore = more,
                         loading = false,
                         programsUnavailable = unavailable,
@@ -187,7 +198,7 @@ class NeteaseRadioDetailViewModel(
         _uiState.update { it.copy(loadingMore = true) }
         viewModelScope.launch {
             neteaseRepository
-                .getDjRadioProgramsPage(radioId, offset = state.programs.size, asc = _uiState.value.ascending)
+                .getDjRadioProgramsPage(radioId, offset = state.rawProgramCount, asc = _uiState.value.ascending)
                 .fold(
                     onSuccess = { (programs, more) ->
                         val playable = programs.filter { it.mainSongId != null }
@@ -196,6 +207,8 @@ class NeteaseRadioDetailViewModel(
                             val fresh = playable.filterNot { p -> current.programs.any { it.id == p.id } }
                             current.copy(
                                 programs = current.programs + fresh,
+                                // 游标按原始页大小推进,不可播节目也占服务端 offset
+                                rawProgramCount = current.rawProgramCount + programs.size,
                                 hasMore = more && fresh.isNotEmpty(),
                                 loadingMore = false,
                             )
@@ -241,7 +254,8 @@ class NeteaseRadioDetailViewModel(
                 playlistType = PlaylistType.PLAYLIST,
                 continuation =
                     if (state.hasMore) {
-                        "POD${if (state.ascending) 'A' else 'D'}_${state.programs.size}"
+                        // 令牌 offset=服务端游标(原始节目数,含不可播),core 续页从该 offset 起拉
+                        "POD${if (state.ascending) 'A' else 'D'}_${state.rawProgramCount}"
                     } else {
                         null
                     },

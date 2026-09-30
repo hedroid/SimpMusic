@@ -173,14 +173,11 @@ fun MiniPlayer(
     val nowPlayingVideoIdMini = sharedViewModel.nowPlayingState.collectAsStateWithLifecycle(initialValue = null).value?.track?.videoId
     val likeEnabledMini =
         if (nowPlayingVideoIdMini?.toLongOrNull() != null) miniNeteaseLoggedIn else miniYtLoggedIn
-    // 播客节目(剧集):歌曲红心链路对节目无效(/song/like 报 524)——迷你条红心隐藏
-    // 注意指纹必须含"单一 album.id":网易歌单队列也全是数字 id,只判数字会误伤歌曲功能
+    // 播客节目(剧集):歌曲红心链路对节目无效(/song/like 报 524)——迷你条红心隐藏。
+    // 判定只认 NETEASE_PODCAST_ 前缀(QueueData.isNeteasePodcastQueue,CR-22):
+    // 旧"全数字+单一 album.id"指纹与普通网易专辑整队同形,会把专辑队列的红心一并误伤
     val isPodcastMini =
-        sharedViewModel.getQueueDataState().collectAsStateWithLifecycle(initialValue = null).value?.data?.let { d ->
-            d.playlistId?.startsWith("NETEASE_PODCAST_") == true ||
-                (d.listTracks.size >= 3 && d.listTracks.all { it.videoId.toLongOrNull() != null } &&
-                    d.listTracks.map { it.album?.id }.distinct().size == 1 && d.listTracks.first().album?.id?.toLongOrNull() != null)
-        } == true
+        sharedViewModel.getQueueDataState().collectAsStateWithLifecycle(initialValue = null).value?.data?.isNeteasePodcastQueue == true
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
 
     val layer = rememberGraphicsLayer()

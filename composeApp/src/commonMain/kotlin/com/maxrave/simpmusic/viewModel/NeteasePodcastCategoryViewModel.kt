@@ -47,8 +47,12 @@ class NeteasePodcastCategoryViewModel(
 
     private var categoryId = 0L
 
+    /** 换分类时递增:在途回包按代丢弃,防旧分类/旧档数据写进新状态(CR-24) */
+    private var generation = 0L
+
     fun load(id: Long) {
         if (categoryId == id && _uiState.value.charts.any { it.value.loaded }) return
+        generation++
         categoryId = id
         _uiState.update { it.copy(loading = true, charts = ChartTab.entries.associateWith { ChartState() }) }
         loadTab(ChartTab.RISING)
@@ -71,28 +75,34 @@ class NeteasePodcastCategoryViewModel(
 
     fun loadMore() {
         val state = _uiState.value
+        // 请求瞬间捕获目标档,回包只写这一档——旧实现回包读 s.tab(响应时刻的当前档),
+        // RISING 续页在飞时切到 HOT,数据会追加进 HOT 且 RISING 的 loadingMore 永久卡 true
+        val requestedTab = state.tab
         val chart = state.current
+        val gen = generation
         if (!chart.loaded || !chart.hasMore || chart.loadingMore) return
         _uiState.update { s ->
-            s.copy(charts = s.charts + (s.tab to chart.copy(loadingMore = true)))
+            s.copy(charts = s.charts + (requestedTab to chart.copy(loadingMore = true)))
         }
         viewModelScope.launch {
             neteaseRepository
-                .getDjRadiosByCategory(categoryId, offset = chart.radios.size, type = state.tab.endpointType)
+                .getDjRadiosByCategory(categoryId, offset = chart.radios.size, type = requestedTab.endpointType)
                 .fold(
                     onSuccess = { (radios, more) ->
                         _uiState.update { s ->
-                            val c = s.charts[s.tab] ?: return@update s
+                            if (gen != generation) return@update s
+                            val c = s.charts[requestedTab] ?: return@update s
                             val fresh = radios.filterNot { r -> c.radios.any { it.id == r.id } }
                             s.copy(
-                                charts = s.charts + (s.tab to c.copy(radios = c.radios + fresh, hasMore = more && fresh.isNotEmpty(), loadingMore = false)),
+                                charts = s.charts + (requestedTab to c.copy(radios = c.radios + fresh, hasMore = more && fresh.isNotEmpty(), loadingMore = false)),
                             )
                         }
                     },
                     onFailure = {
                         _uiState.update { s ->
-                            val c = s.charts[s.tab] ?: return@update s
-                            s.copy(charts = s.charts + (s.tab to c.copy(loadingMore = false)))
+                            if (gen != generation) return@update s
+                            val c = s.charts[requestedTab] ?: return@update s
+                            s.copy(charts = s.charts + (requestedTab to c.copy(loadingMore = false)))
                         }
                     },
                 )
@@ -100,12 +110,14 @@ class NeteasePodcastCategoryViewModel(
     }
 
     private fun loadTab(tab: ChartTab) {
+        val gen = generation
         viewModelScope.launch {
             neteaseRepository
                 .getDjRadiosByCategory(categoryId, offset = 0, type = tab.endpointType)
                 .fold(
                     onSuccess = { (radios, more) ->
                         _uiState.update { s ->
+                            if (gen != generation) return@update s
                             s.copy(
                                 loading = false,
                                 charts = s.charts + (tab to ChartState(radios = radios, loaded = true, hasMore = more)),
@@ -115,6 +127,7 @@ class NeteasePodcastCategoryViewModel(
                     onFailure = {
                         log("category radios failed: $it")
                         _uiState.update { s ->
+                            if (gen != generation) return@update s
                             s.copy(
                                 loading = false,
                                 charts = s.charts + (tab to (s.charts[tab] ?: ChartState()).copy(loaded = true, failed = true)),
