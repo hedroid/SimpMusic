@@ -144,6 +144,32 @@ Boolean。剩余空间低于 500 MB 时函数返回 `false` 且不会创建任�
 存量硬编码英文描述（"Mini Player"/"Mute"/"Favorite unchecked"/"Move up" 等）迁移到多语言资源；
 TalkBack 全链路走查。
 
+**建议 4 已执行（2026-10-01，TalkBack 全链路走查，主仓 c8c0fa29 修复阻断项）**：
+
+六屏走查（主页/库/搜索/播放页/下载管理/设置，TalkBack 实开、合并语义口径审计——可交互节点
+以自身或后代 text/desc 计标签，NAF=TalkBack 完全跳过）：
+
+| 屏 | 有标签 | 无名 | NAF(跳过) | 英文硬描述 |
+|---|---:|---:|---:|---|
+| 主页 | 22 | 0 | **4**（顶栏通知/历史/一起听/设置） | 0 |
+| 库页 | 15 | 0 | **1**（顶栏一起听） | 0 |
+| 搜索 | 19 | 0 | 0 | Search history / Search suggestion ×12 |
+| 播放页 | 10 | 4（全屏容器+底部手势区，低害） | **4**（四角：收起/菜单/左下/右下） | Comments / Add to Playlist / Favorite unchecked |
+| 下载管理 | 22 | 0 | **23**（每行 ×2 行尾操作钮） | Favorite unchecked |
+| 设置 | 18 | 0 | **3**（返回钮+2 行内钮） | 0 |
+
+第一批修复验证：传输行五钮全部可达可读，播放中 desc「播放→暂停」随状态切换实证；搜索圆钮
+TalkBack 双击激活端到端可用（语义 onClick 真实分发）。
+
+阻断项已修（c8c0fa29）：主页顶栏四钮+库页一起听+设置返回钮补描述（通知/最近添加/一起听/设置/
+返回，back 为新字符串五语言）；TalkBack 复验主页 NAF 4→0、双击「设置」可进设置页、返回钮
+desc=返回。
+
+走查剩余清单（第二批主体）：下载管理行尾操作钮（23 NAF 重灾区）、播放页四角钮、设置页行内
+操作钮、各屏返回钮（几十处 RippleIconButton 同款无描述）、英文硬描述迁移（Search history /
+Search suggestion / Comments / Add to Playlist / Favorite unchecked / Search / Clear search /
+桌面 Mini Player·Mute）。
+
 建议：
 
 1. `RippleIconButton` 增加必传 `contentDescription: String`，装饰性图标另设明确 API。
