@@ -71,6 +71,8 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import simpmusic.composeapp.generated.resources.n_songs_selected
+import simpmusic.composeapp.generated.resources.select_all
 import simpmusic.composeapp.generated.resources.download_action_pause_all
 import simpmusic.composeapp.generated.resources.download_action_resume_all
 import simpmusic.composeapp.generated.resources.download_action_retry_failed
@@ -228,6 +230,10 @@ fun DownloadedManagementBody(
     var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     // 二期:行删除/取消的确认目标(videoId+标题);在途"取消下载"也走确认防误触
     var deleteRowTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // 多选模式(用户反馈 2026-10):长按行进入;批量删除所选
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var deleteSelectionConfirm by remember { mutableStateOf(false) }
     // 暂停全部只对 DownloadManager 在途(下载中/排队)有效;转存中(EXPORTING)不走队列停不了
     val hasPausable = managementRows.any { listOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: 9).any { r -> r == 0 || r == 2 } }
     val hasPaused = managementRows.any { it.audioStatus == DownloadEntryStatus.PAUSED || it.videoStatus == DownloadEntryStatus.PAUSED }
@@ -282,8 +288,29 @@ fun DownloadedManagementBody(
                             }
                     }
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // 批量操作行(2026-10 二期):按当前列表状态显隐
-                        if (hasPausable || hasPaused || hasFailed) {
+                        if (selectionMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.n_songs_selected, selectedIds.size),
+                                    style = typo().labelMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(onClick = {
+                                    selectedIds = managementRows.map { it.song.videoId }.toSet()
+                                }) { Text(stringResource(Res.string.select_all), style = typo().labelMedium) }
+                                TextButton(
+                                    onClick = { if (selectedIds.isNotEmpty()) deleteSelectionConfirm = true },
+                                ) { Text(stringResource(Res.string.delete), style = typo().labelMedium, color = MaterialTheme.colorScheme.error) }
+                                TextButton(onClick = {
+                                    selectionMode = false
+                                    selectedIds = emptySet()
+                                }) { Text(stringResource(Res.string.cancel), style = typo().labelMedium) }
+                            }
+                        } else if (hasPausable || hasPaused || hasFailed) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 2.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -314,6 +341,17 @@ fun DownloadedManagementBody(
                                 DownloadManagementItem(
                                     row = row,
                                     isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                    selectionMode = selectionMode,
+                                    isSelected = row.song.videoId in selectedIds,
+                                    onLongClick = {
+                                        selectionMode = true
+                                        selectedIds = setOf(row.song.videoId)
+                                    },
+                                    onSelectToggle = {
+                                        selectedIds =
+                                            if (row.song.videoId in selectedIds) selectedIds - row.song.videoId
+                                            else selectedIds + row.song.videoId
+                                    },
                                     onPlay = {
                                         dynamicPlaylistViewModel.playSong(
                                             row.song.videoId,
@@ -352,6 +390,35 @@ fun DownloadedManagementBody(
             onDismiss = { selectedDownloadedSong = null },
             navController = navController,
             song = song,
+        )
+    }
+
+    if (deleteSelectionConfirm) {
+        AlertDialog(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            onDismissRequest = { deleteSelectionConfirm = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteSelectionConfirm = false
+                    selectedIds.forEach { id -> dynamicPlaylistViewModel.deleteDownload(id) }
+                    selectionMode = false
+                    selectedIds = emptySet()
+                }) {
+                    Text(stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteSelectionConfirm = false }) {
+                    Text(stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(stringResource(Res.string.remove_download_title), style = typo().labelSmall) },
+            text = {
+                Text(
+                    stringResource(Res.string.remove_download_message) + " (" + selectedIds.size + ")",
+                    style = typo().bodyMedium,
+                )
+            },
         )
     }
 

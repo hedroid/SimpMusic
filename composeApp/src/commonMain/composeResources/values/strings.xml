@@ -1159,4 +1159,5 @@
     <string name="download_action_cancel_download">Cancel download</string>
     <string name="download_action_redownload">Redownload</string>
     <string name="download_video_label">Video</string>
+    <string name="download_settings_section">Downloads</string>
 </resources>

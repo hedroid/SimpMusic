@@ -502,6 +502,18 @@ class NowPlayingBottomSheetViewModel(
                     }
                 }
 
+                is NowPlayingBottomSheetUIEvent.DeleteDownload -> {
+                    // 显式删除下载(2026-10 用户反馈:sheet 里"下载"保持三态,删除独立成行):
+                    // 文件式删文件+Room,旧缓存条目引擎内分流;容器先降级防 watcher 重排队
+                    demoteDownloadedContainersOf(songUIState.videoId)
+                    downloadUtils.removeDownload(songUIState.videoId)
+                    songRepository.updateDownloadState(
+                        songUIState.videoId,
+                        DownloadState.STATE_NOT_DOWNLOADED,
+                    )
+                    makeToast(getString(Res.string.removed_download))
+                }
+
                 is NowPlayingBottomSheetUIEvent.AddToPlaylist -> {
                     val targetPlaylist = uiState.value.listLocalPlaylist.find { it.id == ev.playlistId } ?: return@launch
                     val newList = (targetPlaylist.tracks ?: emptyList<String>()).toMutableList()
@@ -651,6 +663,9 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     /** 视频文件下载(文件式,仅 YT 歌):音视频双流 merge mp4 落 Movies/SimpMusic */
     data object DownloadVideo : NowPlayingBottomSheetUIEvent()
+
+    /** 删除已下载的文件(独立于下载行的覆盖语义;仅已下载的歌显示入口) */
+    data object DeleteDownload : NowPlayingBottomSheetUIEvent()
 
     data class AddToPlaylist(
         val playlistId: Long,

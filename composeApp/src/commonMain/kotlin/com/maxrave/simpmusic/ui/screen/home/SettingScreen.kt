@@ -266,6 +266,7 @@ import simpmusic.composeapp.generated.resources.download_file_name_title_artist
 import simpmusic.composeapp.generated.resources.download_file_name_title_only
 import simpmusic.composeapp.generated.resources.download_save_lrc
 import simpmusic.composeapp.generated.resources.download_save_lrc_description
+import simpmusic.composeapp.generated.resources.download_settings_section
 import simpmusic.composeapp.generated.resources.download_wifi_only
 import simpmusic.composeapp.generated.resources.simultaneous_downloads
 import simpmusic.composeapp.generated.resources.enable_animated_artwork
@@ -1250,6 +1251,55 @@ fun SettingScreen(
                         )
                     },
                 )
+                SettingItem(
+                    title = stringResource(Res.string.play_video_for_video_track_instead_of_audio_only),
+                    subtitle = stringResource(Res.string.such_as_music_video_lyrics_video_podcasts_and_more),
+                    smallSubtitle = true,
+                    switch = (playVideo to { viewModel.setPlayVideoInsteadOfAudio(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.radio_audio_only),
+                    subtitle = stringResource(Res.string.radio_audio_only_description),
+                    smallSubtitle = true,
+                    switch = (radioAudioOnly to { viewModel.setRadioAudioOnly(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.play_explicit_content),
+                    subtitle = stringResource(Res.string.play_explicit_content_description),
+                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
+                )
+                if (SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE) {
+                    SettingItem(
+                        title = stringResource(Res.string.keep_your_youtube_playlist_offline),
+                        subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
+                        switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
+                    )
+                }
+                SettingItem(
+                    title = stringResource(Res.string.send_back_listening_data_to_google),
+                    subtitle =
+                        stringResource(
+                            Res.string
+                                .upload_your_listening_history_to_youtube_music_server_it_will_make_yt_music_recommendation_system_better_working_only_if_logged_in,
+                        ),
+                    smallSubtitle = true,
+                    switch = (sendData to { viewModel.setSendBackToGoogle(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.proxy),
+                    subtitle = stringResource(Res.string.proxy_description),
+                    switch = (usingProxy to { viewModel.setUsingProxy(it) }),
+                )
+            }
+        }
+        item(key = "downloads") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.download_settings_section),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
                 // 文件式下载(2026-10):统一三档音质(旧 downloadQuality/neteaseDownloadQuality
                 // 两项已删,值经 audioDownloadQuality 读时惰性迁移)
                 SettingItem(
@@ -1426,45 +1476,6 @@ fun SettingScreen(
                     subtitle = stringResource(Res.string.auto_download_liked_songs_description),
                     smallSubtitle = true,
                     switch = (autoDownloadLikedSongs to { viewModel.setAutoDownloadLikedSongs(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.play_video_for_video_track_instead_of_audio_only),
-                    subtitle = stringResource(Res.string.such_as_music_video_lyrics_video_podcasts_and_more),
-                    smallSubtitle = true,
-                    switch = (playVideo to { viewModel.setPlayVideoInsteadOfAudio(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.radio_audio_only),
-                    subtitle = stringResource(Res.string.radio_audio_only_description),
-                    smallSubtitle = true,
-                    switch = (radioAudioOnly to { viewModel.setRadioAudioOnly(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.play_explicit_content),
-                    subtitle = stringResource(Res.string.play_explicit_content_description),
-                    switch = (explicitContentEnabled to { viewModel.setExplicitContentEnabled(it) }),
-                )
-                if (SHOW_KEEP_YOUTUBE_PLAYLIST_OFFLINE) {
-                    SettingItem(
-                        title = stringResource(Res.string.keep_your_youtube_playlist_offline),
-                        subtitle = stringResource(Res.string.keep_your_youtube_playlist_offline_description),
-                        switch = (keepYoutubePlaylistOffline to { viewModel.setKeepYouTubePlaylistOffline(it) }),
-                    )
-                }
-                SettingItem(
-                    title = stringResource(Res.string.send_back_listening_data_to_google),
-                    subtitle =
-                        stringResource(
-                            Res.string
-                                .upload_your_listening_history_to_youtube_music_server_it_will_make_yt_music_recommendation_system_better_working_only_if_logged_in,
-                        ),
-                    smallSubtitle = true,
-                    switch = (sendData to { viewModel.setSendBackToGoogle(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.proxy),
-                    subtitle = stringResource(Res.string.proxy_description),
-                    switch = (usingProxy to { viewModel.setUsingProxy(it) }),
                 )
             }
         }

@@ -1,7 +1,8 @@
 package com.maxrave.simpmusic.ui.screen.library
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,17 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,11 +26,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.maxrave.simpmusic.ui.component.RippleIconButton
-import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
+import com.maxrave.simpmusic.ui.icon.PlaylistRemove
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.icon.Update
 import com.maxrave.simpmusic.ui.theme.typo
@@ -45,10 +40,6 @@ import com.maxrave.simpmusic.viewModel.formatDownloadBytes
 import com.maxrave.simpmusic.viewModel.sortRank
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.delete
-import simpmusic.composeapp.generated.resources.download_action_cancel_download
-import simpmusic.composeapp.generated.resources.download_action_redownload
-import simpmusic.composeapp.generated.resources.download_action_resume_all
 import simpmusic.composeapp.generated.resources.download_status_failed
 import simpmusic.composeapp.generated.resources.download_status_file_missing
 import simpmusic.composeapp.generated.resources.download_status_paused
@@ -57,17 +48,21 @@ import simpmusic.composeapp.generated.resources.download_status_saving
 import simpmusic.composeapp.generated.resources.download_video_label
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
-import simpmusic.composeapp.generated.resources.more
 
 /**
- * 下载管理页的歌曲条目行(2026-10 二期):封面+标题+状态行(进度/大小/失败/丢失)+主操作按钮
- * (暂停/继续/重试/删除)+溢出菜单(取消/重下/删除)。音频为主体,视频条目存在时以
- * "视频 xxx" 追加在状态行;下载中渲染细进度条。
+ * 下载管理页的歌曲条目行(2026-10 二期+用户反馈改版):封面+标题+状态行(进度/大小/失败/
+ * 丢失)+主操作按钮(暂停/继续/重试/重下/删除[playlist_remove])+三点直接弹歌曲操作
+ * sheet(不再用行内下拉菜单)。多选模式:长按进入,行首 Checkbox,点击切换选择。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DownloadManagementItem(
     row: DownloadManagementRow,
     isPlaying: Boolean,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onLongClick: () -> Unit = {},
+    onSelectToggle: () -> Unit = {},
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -81,20 +76,28 @@ fun DownloadManagementItem(
     val contentColor = MaterialTheme.colorScheme.onSurface
     val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
     val failedColor = MaterialTheme.colorScheme.error
-    var menuOpen by remember { mutableStateOf(false) }
+    val playable = row.audioStatus == DownloadEntryStatus.DONE || row.audioStatus == DownloadEntryStatus.FILE_MISSING
 
-    val audioPlaying = row.audioStatus == DownloadEntryStatus.DONE || row.audioStatus == DownloadEntryStatus.FILE_MISSING
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(enabled = audioPlaying) { onPlay() }
+                .combinedClickable(
+                    enabled = selectionMode || playable,
+                    onClick = {
+                        if (selectionMode) onSelectToggle() else onPlay()
+                    },
+                    onLongClick = onLongClick,
+                )
+                .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f) else Color.Transparent)
                 .padding(horizontal = 15.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)),
-        ) {
+        if (selectionMode) {
+            Checkbox(checked = isSelected, onCheckedChange = { onSelectToggle() })
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp))) {
             AsyncImage(
                 model = row.song.thumbnails,
                 contentDescription = null,
@@ -121,11 +124,7 @@ fun DownloadManagementItem(
             Text(
                 text = entryStatusText(row.audioStatus, row.audioLive, row.audioFileBytes),
                 style = typo().bodySmall,
-                color =
-                    when (primaryRank) {
-                        4 -> failedColor
-                        else -> subtitleColor
-                    },
+                color = if (primaryRank == 4) failedColor else subtitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -152,62 +151,19 @@ fun DownloadManagementItem(
                 )
             }
         }
-        Spacer(modifier = Modifier.width(4.dp))
-        // 主操作:在途→暂停;暂停→继续;失败→重试;丢失→重下;完成→删除(确认在调用方)
-        when (primaryRank) {
-            0, 2 -> RippleIconButton(imageVector = SimpIcons.Pause, fillMaxSize = false, tint = contentColor) { onPause() }
-            3 -> RippleIconButton(imageVector = SimpIcons.PlayArrow, fillMaxSize = false, tint = contentColor) { onResume() }
-            4 -> RippleIconButton(imageVector = SimpIcons.Update, fillMaxSize = false, tint = contentColor) { onRetry() }
-            5 -> RippleIconButton(imageVector = SimpIcons.DownloadForOffline, fillMaxSize = false, tint = contentColor) { onRedownload() }
-            6 -> RippleIconButton(imageVector = SimpIcons.Delete, fillMaxSize = false, tint = contentColor) { onDelete() }
-            else -> Unit // EXPORTING(1):转存中不可操作,只留菜单
-        }
-        Box {
-            RippleIconButton(imageVector = SimpIcons.MoreVert, fillMaxSize = false, tint = contentColor) { menuOpen = true }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.more)) },
-                    onClick = {
-                        menuOpen = false
-                        onSongMenu()
-                    },
-                )
-                if (primaryRank <= 3) {
-                    if (primaryRank == 3) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.download_action_resume_all)) },
-                            onClick = {
-                                menuOpen = false
-                                onResume()
-                            },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.download_action_cancel_download)) },
-                        onClick = {
-                            menuOpen = false
-                            onDelete()
-                        },
-                    )
-                } else {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.download_action_redownload)) },
-                        onClick = {
-                            menuOpen = false
-                            onRedownload()
-                        },
-                    )
-                    if (primaryRank == 6) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.delete)) },
-                            onClick = {
-                                menuOpen = false
-                                onDelete()
-                            },
-                        )
-                    }
-                }
+        if (!selectionMode) {
+            Spacer(modifier = Modifier.width(4.dp))
+            // 主操作:在途→暂停;暂停→继续;失败→重试;丢失→重下;完成→删除(playlist_remove)
+            when (primaryRank) {
+                0, 2 -> RippleIconButton(imageVector = SimpIcons.Pause, fillMaxSize = false, tint = contentColor) { onPause() }
+                3 -> RippleIconButton(imageVector = SimpIcons.PlayArrow, fillMaxSize = false, tint = contentColor) { onResume() }
+                4 -> RippleIconButton(imageVector = SimpIcons.Update, fillMaxSize = false, tint = contentColor) { onRetry() }
+                5 -> RippleIconButton(imageVector = SimpIcons.DownloadForOffline, fillMaxSize = false, tint = contentColor) { onRedownload() }
+                6 -> RippleIconButton(imageVector = SimpIcons.PlaylistRemove, fillMaxSize = false, tint = contentColor) { onDelete() }
+                else -> Unit // EXPORTING(1):转存中不可操作
             }
+            // 三点直接弹歌曲操作 sheet(用户反馈:不要下拉菜单,弹框里下载/删除都有)
+            RippleIconButton(imageVector = SimpIcons.MoreVert, fillMaxSize = false, tint = contentColor) { onSongMenu() }
         }
     }
 }

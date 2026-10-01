@@ -166,6 +166,7 @@ import com.maxrave.simpmusic.ui.icon.ContentCopy
 import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.Done
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
+import com.maxrave.simpmusic.ui.icon.PlaylistRemove
 import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Movie
@@ -1750,6 +1751,7 @@ fun NowPlayingBottomSheet(
     var changePlaybackSpeedPitch by remember { mutableStateOf(false) }
     var showCancelDownloadDialog by remember { mutableStateOf(false) }
     var showRemoveDownloadDialog by remember { mutableStateOf(false) }
+    var showDeleteDownloadDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -1882,6 +1884,29 @@ fun NowPlayingBottomSheet(
             text = {
                 Text(text = stringResource(Res.string.overwrite_download_message), style = typo().bodyMedium)
             },
+        )
+    }
+
+    if (showDeleteDownloadDialog) {
+        // 删除下载确认(独立于"重新下载?"弹窗):真删除——文件+缓存条目全清
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showDeleteDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteDownload)
+                }) {
+                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(text = stringResource(Res.string.remove_download_title), style = typo().labelSmall) },
+            text = { Text(text = stringResource(Res.string.remove_download_message), style = typo().bodyMedium) },
         )
     }
 
@@ -2197,6 +2222,17 @@ fun NowPlayingBottomSheet(
                             DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> showCancelDownloadDialog = true
                             DownloadState.STATE_DOWNLOADED -> showRemoveDownloadDialog = true
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                        }
+                    }
+                    // 删除下载(2026-10 用户反馈):独立成行,仅已下载的歌显示——"下载"行对
+                    // 已下载歌是"重新下载?"覆盖语义,真删除放这里(图标用 playlist_remove,
+                    // 不用垃圾桶)
+                    if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                        ActionButton(
+                            icon = SimpIcons.PlaylistRemove,
+                            text = Res.string.remove_download_title,
+                        ) {
+                            showDeleteDownloadDialog = true
                         }
                     }
                     // 视频文件下载(2026-10 文件式,仅 YT 歌):merge mp4 落 Movies/SimpMusic

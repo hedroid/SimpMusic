@@ -714,4 +714,5 @@
     <string name="download_action_cancel_download">다운로드 취소</string>
     <string name="download_action_redownload">다시 다운로드</string>
     <string name="download_video_label">동영상</string>
+    <string name="download_settings_section">다운로드</string>
 </resources>

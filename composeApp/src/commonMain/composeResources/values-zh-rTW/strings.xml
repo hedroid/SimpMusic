@@ -811,4 +811,5 @@
     <string name="download_action_cancel_download">取消下載</string>
     <string name="download_action_redownload">重新下載</string>
     <string name="download_video_label">影片</string>
+    <string name="download_settings_section">下載</string>
 </resources>
