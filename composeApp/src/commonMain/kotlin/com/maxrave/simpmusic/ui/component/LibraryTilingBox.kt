@@ -126,9 +126,12 @@ fun LibraryTilingItem(
     selected: Boolean = false,
     // 磁贴副标题(可选):"已完成"磁贴用它带出"N首·总大小"统计(2026-10-01 用户定)
     subtitle: String? = null,
+    // 标题覆盖(可选):"下载中"磁贴用"下载中 (N)"动态计数(2026-10-02 用户定);
+    // null=用 state.title 资源
+    titleString: String? = null,
     onClick: () -> Unit = {},
 ) {
-    val title = stringResource(state.title)
+    val title = titleString ?: stringResource(state.title)
     ElevatedCard(
         modifier =
             Modifier
@@ -172,7 +175,8 @@ fun LibraryTilingItem(
                 if (subtitle != null) {
                     Text(
                         subtitle,
-                        style = typo().labelSmall,
+                        // bodySmall:用户 2026-10-02 反馈 labelSmall 的"N首·总大小"偏大
+                        style = typo().bodySmall,
                         color = Color.Black.copy(alpha = 0.75f),
                         maxLines = 1,
                     )

@@ -266,6 +266,14 @@ fun DownloadedManagementBody(
     val completedBytes = completedRows.sumOf { (it.audioFileBytes ?: 0L) + (it.videoFileBytes ?: 0L) }
 
     Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
+        // "下载中"磁贴标题带动态计数(2026-10-02 用户定:页内不再有"下载中 (N)"文案,
+        // 计数上磁贴;0 时不带括号)——managementRows 是实时流,增删任务自动刷新
+        val inProgressTitle =
+            if (inFlightRows.isNotEmpty()) {
+                stringResource(Res.string.download_section_in_progress) + " (${inFlightRows.size})"
+            } else {
+                stringResource(Res.string.download_section_in_progress)
+            }
         Row(
             // 库页统一口径:水平边距 15dp 与主页/各 chip 一致(原 10dp 与其它页不同口径)
             modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 10.dp),
@@ -275,6 +283,7 @@ fun DownloadedManagementBody(
                 LibraryTilingItem(
                     state = LibraryTilingState.DownloadInProgress,
                     selected = downloadedSection == DownloadedSection.InProgress,
+                    titleString = inProgressTitle,
                     onClick = { downloadedSection = DownloadedSection.InProgress },
                 )
             }
@@ -395,7 +404,9 @@ fun DownloadedManagementBody(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = bottomPadding),
                         ) {
-                            // 在途 tab 头:计数+批量操作(暂停全部/继续/重试失败)
+                            // 在途 tab 头:批量操作 pills(暂停全部/继续/重试失败)。
+                            // "下载中 (N)"计数文案已撤(2026-10-02 用户定,计数在磁贴上),
+                            // 无可操作项时整行不出
                             if (isInProgressTab && (hasPausable || hasPaused || hasFailed)) {
                                 item(key = "header-inflight") {
                                     Row(
@@ -404,15 +415,8 @@ fun DownloadedManagementBody(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 15.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
-                                        Text(
-                                            text =
-                                                stringResource(Res.string.download_section_in_progress) +
-                                                    " (" + inFlightRows.size + ")",
-                                            style = typo().labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f),
-                                        )
                                         if (hasPausable) {
                                             DownloadHeaderPill(text = stringResource(Res.string.download_action_pause_all)) {
                                                 dynamicPlaylistViewModel.pauseAllDownloads()
