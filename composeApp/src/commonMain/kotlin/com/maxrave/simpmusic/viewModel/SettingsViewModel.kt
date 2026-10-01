@@ -1398,6 +1398,10 @@ class SettingsViewModel(
 
     fun clearDownloadedCache() {
         viewModelScope.launch {
+            // 二期改走一站式清理:删文件+MediaStore 行+Room 双列清零+DownloadIndex 条目
+            // 全清(旧实现只清 SimpleCache 目录+写 state,DownloadIndex 僵尸条目留在表里,
+            // 下次启动被启动扫描重新写成"已下载"——缓存已无、显示已下载的僵尸行)
+            downloadUtils.removeAllDownloads()
             cacheRepository.clearCache(Config.DOWNLOAD_CACHE)
             songRepository.getDownloadedSongs().singleOrNull()?.let { songs ->
                 songs.forEach { song ->

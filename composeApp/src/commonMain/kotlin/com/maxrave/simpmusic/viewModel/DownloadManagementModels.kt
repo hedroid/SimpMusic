@@ -64,23 +64,25 @@ fun resolveDownloadEntryStatus(
                     DownloadEntryStatus.PAUSED
                 } else {
                     // 移除过渡态:以文件/Room 事实为准
-                    if (fileExists) DownloadEntryStatus.DONE else fallbackWithoutEntry(filePath, roomState)
+                    fallbackWithoutEntry(fileExists, filePath, roomState)
                 }
             S.STATE_FAILED -> DownloadEntryStatus.FAILED
             S.STATE_COMPLETED ->
                 // 文件式:COMPLETED≠文件就绪,转存中;旧代(state=3 无路径)或文件已落地=完成
                 if (fileExists || roomState == 3) DownloadEntryStatus.DONE else DownloadEntryStatus.EXPORTING
-            else -> if (fileExists) DownloadEntryStatus.DONE else fallbackWithoutEntry(filePath, roomState)
+            else -> fallbackWithoutEntry(fileExists, filePath, roomState)
         }
     }
-    return fallbackWithoutEntry(filePath, roomState)
+    return fallbackWithoutEntry(fileExists, filePath, roomState)
 }
 
 private fun fallbackWithoutEntry(
+    fileExists: Boolean,
     filePath: String?,
     roomState: Int,
 ): DownloadEntryStatus =
     when {
+        fileExists -> DownloadEntryStatus.DONE // 文件在=真已下载(条目已被清=终态)
         filePath != null -> DownloadEntryStatus.FILE_MISSING // 路径在文件丢(外部删/转存中断)
         roomState == 3 -> DownloadEntryStatus.DONE // 旧缓存代(SimpleCache,无文件路径)
         else -> DownloadEntryStatus.FILE_MISSING // 在途条目消失(取消/异常)——展示为可重下
