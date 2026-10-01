@@ -23,6 +23,7 @@ import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
 import com.maxrave.simpmusic.ui.icon.Album
 import com.maxrave.simpmusic.ui.icon.Movie
+import com.maxrave.simpmusic.ui.icon.MusicNote
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Insights
@@ -228,7 +229,7 @@ data class LibraryTilingState(
             LibraryTilingState(
                 title = Res.string.downloaded_songs_tab,
                 containerColor = Color(0xffC8E6C9),
-                icon = SimpIcons.Downloading,
+                icon = SimpIcons.MusicNote,
                 iconColor = Color(0xff1B5E20),
             )
         val DownloadedPlaylists =

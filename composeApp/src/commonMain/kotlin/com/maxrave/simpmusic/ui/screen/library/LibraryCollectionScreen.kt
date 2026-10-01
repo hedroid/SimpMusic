@@ -1,6 +1,9 @@
 package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import com.maxrave.simpmusic.viewModel.DownloadEntryStatus
 import com.maxrave.simpmusic.viewModel.DownloadManagementRow
 import com.maxrave.simpmusic.ui.screen.library.DownloadViewMode
@@ -336,27 +340,6 @@ fun DownloadedManagementBody(
                                     selectedIds = emptySet()
                                 }) { Text(stringResource(Res.string.cancel), style = typo().labelMedium) }
                             }
-                        } else if (hasPausable || hasPaused || hasFailed) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (hasPausable) {
-                                    TextButton(onClick = dynamicPlaylistViewModel::pauseAllDownloads) {
-                                        Text(stringResource(Res.string.download_action_pause_all), style = typo().labelMedium)
-                                    }
-                                }
-                                if (hasPaused) {
-                                    TextButton(onClick = dynamicPlaylistViewModel::resumeAllDownloads) {
-                                        Text(stringResource(Res.string.download_action_resume_all), style = typo().labelMedium)
-                                    }
-                                }
-                                if (hasFailed) {
-                                    TextButton(onClick = dynamicPlaylistViewModel::retryFailedDownloads) {
-                                        Text(stringResource(Res.string.download_action_retry_failed), style = typo().labelMedium)
-                                    }
-                                }
-                            }
                         }
                         // 统计行(业界标配:完成数+总大小)
                         if (completedCount > 0) {
@@ -389,12 +372,37 @@ fun DownloadedManagementBody(
                         ) {
                             if (inFlightRows.isNotEmpty()) {
                                 item(key = "header-inflight") {
-                                    Text(
-                                        text = stringResource(Res.string.download_section_in_progress),
-                                        style = typo().labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
-                                    )
+                                    Row(
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 15.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text =
+                                                stringResource(Res.string.download_section_in_progress) +
+                                                    " (" + inFlightRows.size + ")",
+                                            style = typo().labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (hasPausable) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_pause_all)) {
+                                                dynamicPlaylistViewModel.pauseAllDownloads()
+                                            }
+                                        }
+                                        if (hasPaused) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_resume_all)) {
+                                                dynamicPlaylistViewModel.resumeAllDownloads()
+                                            }
+                                        }
+                                        if (hasFailed) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_retry_failed)) {
+                                                dynamicPlaylistViewModel.retryFailedDownloads()
+                                            }
+                                        }
+                                    }
                                 }
                                 items(inFlightRows, key = { it.song.videoId }) { row ->
                                     DownloadManagementRowItem(
@@ -539,6 +547,26 @@ fun DownloadedManagementBody(
         )
     }
 
+}
+
+/** "下载中"节头右侧的操作 pill(用户反馈:TextButton 纯文字看不出可点)——secondaryContainer
+ *  圆角底+紧凑内边距,Material 文字按钮的可见变体 */
+@Composable
+private fun DownloadHeaderPill(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = text,
+        style = typo().labelMedium,
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier =
+            Modifier
+                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                .clip(CircleShape)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+    )
 }
 
 /** 两组节共用的行渲染(避免下载中/已完成两段 items 重复二十行接线) */
