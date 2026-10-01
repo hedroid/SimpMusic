@@ -171,6 +171,8 @@ fun LibraryTilingItem(
                     style = typo().titleSmall,
                     color = Color.Black,
                     maxLines = 1,
+                    // "已完成 (N首·大小)"内联统计较长,窄屏溢出时省略号截断
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
                 if (subtitle != null) {
                     Text(

@@ -1161,7 +1161,6 @@
     <string name="download_settings_section">Downloads</string>
     <string name="download_section_in_progress">Downloading</string>
     <string name="download_section_completed">Completed</string>
-    <string name="download_tab_completed_stats">%1$d · %2$s</string>
     <string name="download_no_in_progress">No downloads in progress</string>
     <string name="download_no_completed">No completed downloads</string>
     <string name="download_clear_all">Clear all downloads</string>

@@ -720,7 +720,6 @@
     <string name="download_wifi_only_description">모바일 네트워크에서는 대기하고 Wi-Fi에 연결되면 자동으로 재개합니다</string>
     <string name="download_section_in_progress">다운로드 중</string>
     <string name="download_section_completed">완료됨</string>
-    <string name="download_tab_completed_stats">%1$d곡·%2$s</string>
     <string name="download_no_in_progress">진행 중인 다운로드가 없습니다</string>
     <string name="download_no_completed">완료된 다운로드가 없습니다</string>
     <string name="download_clear_all">모든 다운로드 삭제</string>

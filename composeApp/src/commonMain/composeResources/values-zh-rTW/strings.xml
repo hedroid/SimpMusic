@@ -813,7 +813,6 @@
     <string name="download_settings_section">下載</string>
     <string name="download_section_in_progress">下載中</string>
     <string name="download_section_completed">已完成</string>
-    <string name="download_tab_completed_stats">%1$d首·%2$s</string>
     <string name="download_no_in_progress">暫無下載中的內容</string>
     <string name="download_no_completed">暫無已完成的下載</string>
     <string name="download_clear_all">清除全部下載</string>

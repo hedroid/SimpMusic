@@ -87,7 +87,6 @@ import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.select_all
 import simpmusic.composeapp.generated.resources.download_no_completed
 import simpmusic.composeapp.generated.resources.download_no_in_progress
-import simpmusic.composeapp.generated.resources.download_tab_completed_stats
 import simpmusic.composeapp.generated.resources.download_section_in_progress
 import simpmusic.composeapp.generated.resources.download_section_completed
 import simpmusic.composeapp.generated.resources.download_action_pause_all
@@ -288,15 +287,17 @@ fun DownloadedManagementBody(
                 )
             }
             Box(modifier = Modifier.weight(1f)) {
+                // 统计直接跟在标题后(2026-10-02 用户定):"已完成 (N) 大小"——计数带括号,
+                // 容量在括号外,与"下载中 (N)"同形态;副标题行弃用,空库只显示"已完成"
+                val completedWord = stringResource(Res.string.download_section_completed)
                 LibraryTilingItem(
                     state = LibraryTilingState.DownloadCompleted,
                     selected = downloadedSection == DownloadedSection.Completed,
-                    // 统计上磁贴(2026-10-01 用户定):”N首·总大小”;空库不出”0首·0 B”
-                    subtitle =
+                    titleString =
                         if (completedCount > 0) {
-                            stringResource(Res.string.download_tab_completed_stats, completedCount, formatDownloadBytes(completedBytes))
+                            "$completedWord ($completedCount) " + formatDownloadBytes(completedBytes)
                         } else {
-                            null
+                            completedWord
                         },
                     onClick = { downloadedSection = DownloadedSection.Completed },
                 )

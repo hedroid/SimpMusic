@@ -596,7 +596,6 @@
     <string name="download_wifi_only_description">モバイル回線では待機し、Wi-Fi 接続時に再開します</string>
     <string name="download_section_in_progress">ダウンロード中</string>
     <string name="download_section_completed">完了</string>
-    <string name="download_tab_completed_stats">%1$d曲·%2$s</string>
     <string name="download_no_in_progress">ダウンロード中の項目はありません</string>
     <string name="download_no_completed">完了したダウンロードはありません</string>
     <string name="download_clear_all">すべてのダウンロードを削除</string>
