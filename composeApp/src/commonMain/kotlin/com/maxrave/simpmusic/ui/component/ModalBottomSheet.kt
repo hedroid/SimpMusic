@@ -2253,8 +2253,12 @@ fun NowPlayingBottomSheet(
 
                         else -> Unit
                     }
-                    // 视频文件下载(2026-10 文件式,仅 YT 歌):merge mp4 落 Movies/SimpMusic
-                    if (uiState.songUIState.videoId.toLongOrNull() == null) {
+                    // 视频文件下载(2026-10 文件式,仅 YT 歌且真有视频流):merge mp4 落
+                    // Movies/SimpMusic。ATV=纯音频曲目(player 响应无视频 format),下了
+                    // 也只能 merge 出"只有声音的 mp4"——不显示入口(2026-10-01 用户反馈)
+                    if (uiState.songUIState.videoId.toLongOrNull() == null &&
+                        uiState.songUIState.videoType != "MUSIC_VIDEO_TYPE_ATV"
+                    ) {
                         ActionButton(
                             icon = SimpIcons.Movie,
                             text = Res.string.download_video,

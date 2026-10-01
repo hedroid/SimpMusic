@@ -1,6 +1,7 @@
 package com.maxrave.simpmusic.viewModel
 
 import androidx.lifecycle.viewModelScope
+import com.maxrave.domain.repository.SongRepository
 import com.maxrave.common.Config
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.data.repository.toResultSong
@@ -37,6 +38,7 @@ class NeteaseRadioDetailViewModel(
     private val neteaseRepository: NeteaseRepositoryImpl,
     private val sharedViewModel: SharedViewModel,
     private val dataStoreManager: com.maxrave.domain.manager.DataStoreManager,
+    private val songRepository: SongRepository,
 ) : BaseViewModel() {
     data class UiState(
         val radio: NeteaseDjRadio? = null,
@@ -264,10 +266,18 @@ class NeteaseRadioDetailViewModel(
         startMs: Long = 0L,
     ) {
         val state = _uiState.value
-        val tracks =
-            state.programs
-                .mapNotNull { it.toResultSong() }
-                .map { it.toTrack() }
+        val programs = state.programs.mapNotNull { it.toResultSong() }
+        // 播客归类回填(2026-10-01):updateCatalog 落库是 INSERT IGNORE,旧行(v32 前建的
+        // song 行没有 neteaseProgramId 列值)不会被覆盖——起播时显式 UPDATE,让下载页
+        // 播客 tab 能识别历史行(每行一条轻量 SQL,只补 null)
+        viewModelScope.launch {
+            programs.forEach { rs ->
+                if (rs.videoId.toLongOrNull() != null) {
+                    songRepository.updateNeteaseProgramIdIfNull(rs.videoId, rs.neteaseProgramId)
+                }
+            }
+        }
+        val tracks = programs.map { it.toTrack() }
         val first = tracks.getOrNull(index) ?: return
         setQueueData(
             QueueData.Data(

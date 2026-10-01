@@ -817,7 +817,9 @@
     <string name="download_section_completed">已完成</string>
     <string name="download_stats_songs">%1$d 首歌曲 · %2$s</string>
     <string name="download_stats_videos">%1$d 個影片 · %2$s</string>
+    <string name="download_stats_podcasts">%1$d 期播客 · %2$s</string>
     <string name="download_no_videos">暫無下載的影片</string>
+    <string name="download_no_podcasts">暫無下載的播客</string>
     <string name="download_clear_all">清除全部下載</string>
     <string name="download_clear_all_description">刪除所有已下載的音訊與影片檔案</string>
     <string name="download_artist_album_folder_description_off">儲存到 Music/SimpMusic</string>

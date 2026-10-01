@@ -234,11 +234,14 @@ class LibraryDynamicPlaylistViewModel(
 
     private fun getDownloadedSong() {
         viewModelScope.launch {
-            songRepository.getDownloadedSongs().collectLatest { downloadedSong ->
+            // 实时流(2026-10-01 用户反馈"刚下载完成的歌点击没反应"):旧 getDownloadedSongs 是
+            // flow{} 单发快照,VM init 后新完成的歌永远不进列表,点击时 find 落空静默 return。
+            // 完成口径=文件路径在或 state=3(旧缓存),与 resolveDownloadEntryStatus 的 DONE 对齐
+            songRepository.getDownloadActivitySongs().collectLatest { songs ->
                 _listDownloadedSong.value =
-                    (downloadedSong ?: emptyList()).sortedByDescending {
-                        it.downloadedAt ?: REMOVED_SONG_DATE_TIME
-                    }
+                    songs
+                        .filter { it.downloadedFilePath != null || it.downloadState == 3 }
+                        .sortedByDescending { it.downloadedAt ?: REMOVED_SONG_DATE_TIME }
             }
         }
     }
@@ -330,10 +333,17 @@ class LibraryDynamicPlaylistViewModel(
         videoId: String,
         type: LibraryDynamicPlaylistType,
     ) {
+        // 下载页队列隔离(2026-10-01 用户反馈):点播客下载项组纯播客队列,点歌曲组纯歌曲
+        // 队列——两类不混排;播客队列挂 NETEASE_PODCAST_ 前缀哨兵,无尽钩子按播客早退
         val (targetList, playTrack) =
             when (type) {
                 LibraryDynamicPlaylistType.Favorite -> listFavoriteSong.value to listFavoriteSong.value.find { it.videoId == videoId }
-                LibraryDynamicPlaylistType.Downloaded -> listDownloadedSong.value to listDownloadedSong.value.find { it.videoId == videoId }
+                LibraryDynamicPlaylistType.Downloaded -> {
+                    val all = listDownloadedSong.value
+                    val isPodcast = all.find { it.videoId == videoId }?.neteaseProgramId != null
+                    val scoped = if (isPodcast) all.filter { it.neteaseProgramId != null } else all.filter { it.neteaseProgramId == null }
+                    scoped to scoped.find { it.videoId == videoId }
+                }
                 LibraryDynamicPlaylistType.Followed -> return
                 LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value to listMostPlayedSong.value.find { it.videoId == videoId }
                 is LibraryDynamicPlaylistType.MonthlyRecap ->
@@ -343,11 +353,12 @@ class LibraryDynamicPlaylistViewModel(
                 else -> return
             }
         if (playTrack == null) return
+        val isPodcastQueue = playTrack.neteaseProgramId != null
         setQueueData(
             QueueData.Data(
                 listTracks = targetList.toArrayListTrack(),
                 firstPlayedTrack = playTrack.toTrack(),
-                playlistId = null,
+                playlistId = if (isPodcastQueue) "NETEASE_PODCAST_DOWNLOADED" else null,
                 playlistName = playlistName(type),
                 playlistType = PlaylistType.RADIO,
                 continuation = null,

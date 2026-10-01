@@ -2,6 +2,7 @@ package com.maxrave.simpmusic.ui.screen.library
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +32,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -68,7 +71,9 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
+import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
@@ -83,6 +88,8 @@ import simpmusic.composeapp.generated.resources.select_all
 import simpmusic.composeapp.generated.resources.download_stats_songs
 import simpmusic.composeapp.generated.resources.download_stats_videos
 import simpmusic.composeapp.generated.resources.download_no_videos
+import simpmusic.composeapp.generated.resources.download_no_podcasts
+import simpmusic.composeapp.generated.resources.download_stats_podcasts
 import simpmusic.composeapp.generated.resources.download_section_in_progress
 import simpmusic.composeapp.generated.resources.download_section_completed
 import simpmusic.composeapp.generated.resources.download_action_pause_all
@@ -269,15 +276,27 @@ fun DownloadedManagementBody(
                     onClick = { downloadedSection = DownloadedSection.Videos },
                 )
             }
+            // 播客磁贴只在真有播客下载行时出现(纯歌曲/视频用户不见第三磁贴)
+            if (managementRows.any { it.song.neteaseProgramId != null }) {
+                Box(modifier = Modifier.weight(1f)) {
+                    LibraryTilingItem(
+                        state = LibraryTilingState.DownloadedPodcasts,
+                        selected = downloadedSection == DownloadedSection.Podcasts,
+                        onClick = { downloadedSection = DownloadedSection.Podcasts },
+                    )
+                }
+            }
         }
-        // 视角数据(2026-10-01 用户定案:tab=歌曲/视频,废弃歌单容器分类):歌曲=全部行,
-        // 视频=有视频条目/路径的行;统计行只数已完成态(在途不计大小)
+        // 视角数据(2026-10-01 用户定案:tab=歌曲/视频,废弃歌单容器分类;同日五项反馈加
+        // 播客 tab):歌曲=非播客行(播客节目不混进歌的播放队列),视频=有视频条目的行,
+        // 播客=neteaseProgramId 非空行;统计行只数已完成态(在途不计大小)
         val isVideoTab = downloadedSection == DownloadedSection.Videos
+        val isPodcastTab = downloadedSection == DownloadedSection.Podcasts
         val viewRows =
-            if (isVideoTab) {
-                managementRows.filter { it.videoStatus != null }
-            } else {
-                managementRows
+            when {
+                isVideoTab -> managementRows.filter { it.videoStatus != null }
+                isPodcastTab -> managementRows.filter { it.song.neteaseProgramId != null }
+                else -> managementRows.filter { it.song.neteaseProgramId == null }
             }
         val completedCount =
             viewRows.count {
@@ -297,7 +316,11 @@ fun DownloadedManagementBody(
                         Text(
                             text =
                                 stringResource(
-                                    if (isVideoTab) Res.string.download_no_videos else Res.string.no_downloaded_songs,
+                                    when {
+                                        isVideoTab -> Res.string.download_no_videos
+                                        isPodcastTab -> Res.string.download_no_podcasts
+                                        else -> Res.string.no_downloaded_songs
+                                    },
                                 ),
                             style = typo().labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -324,14 +347,52 @@ fun DownloadedManagementBody(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
+                                // 通用全选控件(2026-10-01 用户定):行首圆圈+文字两态切换
+                                // (全选↔清空),视觉与行多选圆圈同款;不再是纯文字按钮
+                                val allIds = viewRows.map { it.song.videoId }.toSet()
+                                val allSelected = allIds.isNotEmpty() && selectedIds.containsAll(allIds)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier =
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .clickable {
+                                                selectedIds = if (allSelected) emptySet() else allIds
+                                            }.padding(vertical = 4.dp, horizontal = 2.dp),
+                                ) {
+                                    Box(
+                                        modifier =
+                                            Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(if (allSelected) seed else Color.Transparent)
+                                                .border(
+                                                    width = 1.5.dp,
+                                                    color = if (allSelected) seed else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                    shape = CircleShape,
+                                                ),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        if (allSelected) {
+                                            Icon(
+                                                imageVector = SimpIcons.Check,
+                                                contentDescription = null,
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(Res.string.select_all),
+                                        style = typo().labelMedium,
+                                    )
+                                }
                                 Text(
                                     text = stringResource(Res.string.n_songs_selected, selectedIds.size),
                                     style = typo().labelMedium,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).padding(start = 12.dp),
                                 )
-                                TextButton(onClick = {
-                                    selectedIds = managementRows.map { it.song.videoId }.toSet()
-                                }) { Text(stringResource(Res.string.select_all), style = typo().labelMedium) }
                                 TextButton(
                                     onClick = { if (selectedIds.isNotEmpty()) deleteSelectionConfirm = true },
                                 ) { Text(stringResource(Res.string.delete), style = typo().labelMedium, color = MaterialTheme.colorScheme.error) }
@@ -346,7 +407,11 @@ fun DownloadedManagementBody(
                             Text(
                                 text =
                                     stringResource(
-                                        if (isVideoTab) Res.string.download_stats_videos else Res.string.download_stats_songs,
+                                        when {
+                                            isVideoTab -> Res.string.download_stats_videos
+                                            isPodcastTab -> Res.string.download_stats_podcasts
+                                            else -> Res.string.download_stats_songs
+                                        },
                                         completedCount,
                                         formatDownloadBytes(completedBytes),
                                     ),
@@ -609,6 +674,7 @@ private fun DownloadManagementRowItem(
 internal enum class DownloadedSection {
     Songs,
     Videos,
+    Podcasts,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

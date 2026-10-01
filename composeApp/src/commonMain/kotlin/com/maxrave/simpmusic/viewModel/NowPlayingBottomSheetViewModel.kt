@@ -339,6 +339,7 @@ class NowPlayingBottomSheetViewModel(
                                             song.albumName?.takeIf { it.isNotEmpty() }?.let { name ->
                                                 Album(name = name, id = song.albumId ?: "")
                                             },
+                                        videoType = song.videoType,
                                     ),
                             )
                         }
@@ -668,6 +669,8 @@ data class NowPlayingBottomSheetUIState(
         val isAddedToYouTubeLiked: Boolean = false,
         val downloadState: Int = DownloadState.STATE_NOT_DOWNLOADED,
         val album: Album? = null,
+        /** YT 的 MUSIC_VIDEO_TYPE_*(ATV=纯音频曲目,无视频流可下);网易歌为空串 */
+        val videoType: String = "",
     )
 }
 

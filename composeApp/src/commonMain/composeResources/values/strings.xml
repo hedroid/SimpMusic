@@ -1165,7 +1165,9 @@
     <string name="download_section_completed">Completed</string>
     <string name="download_stats_songs">%1$d songs · %2$s</string>
     <string name="download_stats_videos">%1$d videos · %2$s</string>
+    <string name="download_stats_podcasts">%1$d podcasts · %2$s</string>
     <string name="download_no_videos">No downloaded videos</string>
+    <string name="download_no_podcasts">No downloaded podcasts</string>
     <string name="download_clear_all">Clear all downloads</string>
     <string name="download_clear_all_description">Delete all downloaded audio and video files</string>
     <string name="download_artist_album_folder_description_off">Save under Music/SimpMusic</string>

@@ -232,6 +232,13 @@ data class LibraryTilingState(
                 icon = SimpIcons.MusicNote,
                 iconColor = Color(0xff1B5E20),
             )
+        val DownloadedPodcasts =
+            LibraryTilingState(
+                title = Res.string.library_podcasts,
+                containerColor = Color(0xffB3E5FC),
+                icon = SimpIcons.RssFeed,
+                iconColor = Color(0xff01579B),
+            )
         val DownloadedPlaylists =
             LibraryTilingState(
                 title = Res.string.playlists,

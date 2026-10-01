@@ -599,7 +599,9 @@
     <string name="download_section_completed">完了</string>
     <string name="download_stats_songs">%1$d 曲 · %2$s</string>
     <string name="download_stats_videos">%1$d 本の動画 · %2$s</string>
+    <string name="download_stats_podcasts">%1$d 個のポッドキャスト · %2$s</string>
     <string name="download_no_videos">ダウンロードした動画はありません</string>
+    <string name="download_no_podcasts">ダウンロードしたポッドキャストはありません</string>
     <string name="download_clear_all">すべてのダウンロードを削除</string>
     <string name="download_clear_all_description">ダウンロードしたすべての音声と動画ファイルを削除します</string>
     <string name="download_artist_album_folder_description">ダウンロード先を Music/SimpMusic/アーティスト/アルバム に整理</string>
