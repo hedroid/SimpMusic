@@ -94,6 +94,7 @@ class AlbumViewModel(
 
     private var job: Job? = null
     private var collectDownloadStateJob: Job? = null
+    private var collectSongRowJob: Job? = null
 
     fun updateBrowseId(browseId: String) {
         viewModelScope.launch {
@@ -298,6 +299,7 @@ class AlbumViewModel(
     private fun getAlbumFlow(browseId: String) {
         job?.cancel()
         collectDownloadStateJob?.cancel()
+        collectSongRowJob?.cancel()
         job =
             viewModelScope.launch {
                 albumRepository.getAlbumAsFlow(browseId).collectLatest { album ->
@@ -329,6 +331,27 @@ class AlbumViewModel(
                         }
                     }
                 }
+            }
+        // 文件式完成口径(2026-10-02):文件式条目转存完即从 DownloadIndex 清除,上方
+        // downloadTask 翻转在重启后凑不齐已落地歌——按 song 行兜底翻转(与
+        // PlaylistViewModel 同款)。只在"下载中"态动作,不越权改写其它态
+        collectSongRowJob =
+            viewModelScope.launch {
+                songRepository
+                    .getSongsByListVideoId(uiState.value.listTrack.map { it.videoId })
+                    .collect { songs ->
+                        if (uiState.value.downloadState != DownloadState.STATE_DOWNLOADING) return@collect
+                        if (
+                            songs.size == uiState.value.listTrack.size &&
+                            songs.all { it.downloadState == DownloadState.STATE_DOWNLOADED } &&
+                            uiState.value.listTrack.none { downloadUtils.isAudioQueuedOrDownloading(it.videoId) }
+                        ) {
+                            albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADED)
+                            _uiState.update {
+                                it.copy(downloadState = DownloadState.STATE_DOWNLOADED)
+                            }
+                        }
+                    }
             }
     }
 
@@ -447,6 +470,15 @@ class AlbumViewModel(
                 } else {
                     request.notDownloaded
                 }
+            if (target.isEmpty()) {
+                // 跳过且无可入队项=文件都在:直接落"已下载"而非"下载中"(同 PlaylistViewModel:
+                // 文件式条目转存完即从 DownloadIndex 清除,"下载中"永远等不到完成事件)
+                albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADED)
+                _uiState.update {
+                    it.copy(downloadState = DownloadState.STATE_DOWNLOADED)
+                }
+                return@launch
+            }
             albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
             queueBatchDownload(target)
         }

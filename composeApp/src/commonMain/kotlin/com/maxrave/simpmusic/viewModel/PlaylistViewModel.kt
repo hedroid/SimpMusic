@@ -456,8 +456,26 @@ class PlaylistViewModel(
                                                         updatePlaylistDownloadState(id, STATE_DOWNLOADED)
                                                     }
                                                 }
-                                            }
-                                            downloadUtils.downloads.collectLatest { downloads ->
+                                                    }
+                                                    // 文件式完成口径(2026-10-02):转存成功即从 DownloadIndex
+                                                    // 清条目,downloads 流永远凑不齐"全部 COMPLETED",下方
+                                                    // count 翻转对新代下载不可达(整单下完按钮翻不了"已下载")
+                                                    // ——按 song 行兜底翻转(落地对账保证有文件的行=3):一次
+                                                    // 评估治"误置下载中"的卡死,持续收集让最后一首落地即翻态。
+                                                    // 行数须与队列等长,防缺行歌单误翻
+                                                    launch {
+                                                        songRepository.getSongsByListVideoId(tracks.toListVideoId()).collect { songs ->
+                                                            if (downloadState.value != STATE_DOWNLOADING) return@collect
+                                                            if (
+                                                                songs.size == tracks.size &&
+                                                                songs.all { it.downloadState == STATE_DOWNLOADED } &&
+                                                                tracks.none { downloadUtils.isAudioQueuedOrDownloading(it.videoId) }
+                                                            ) {
+                                                                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+                                                            }
+                                                        }
+                                                    }
+                                                    downloadUtils.downloads.collectLatest { downloads ->
                                                 // Same guard as the callback above: a playlist
                                                 // demoted mid-flight must not be written back.
                                                 val live = downloadState.value
@@ -1060,6 +1078,13 @@ class PlaylistViewModel(
                 } else {
                     request.notDownloaded
                 }
+            if (target.isEmpty()) {
+                // 跳过且无可入队项=文件都在:直接落"已下载"。置"下载中"的话,文件式
+                // 条目转存完即从 DownloadIndex 清除,完成事件永远不来,按钮永久卡死
+                // (用户 2026-10-02 实测:整单下完→点下载→跳过→一直"下载中")
+                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+                return@launch
+            }
             updatePlaylistDownloadState(id, STATE_DOWNLOADING)
             queueBatchDownload(target)
         }
