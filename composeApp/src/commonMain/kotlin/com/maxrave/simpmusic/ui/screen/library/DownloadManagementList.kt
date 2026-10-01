@@ -67,7 +67,6 @@ import simpmusic.composeapp.generated.resources.download_status_file_missing
 import simpmusic.composeapp.generated.resources.download_status_paused
 import simpmusic.composeapp.generated.resources.download_status_queued
 import simpmusic.composeapp.generated.resources.download_status_saving
-import simpmusic.composeapp.generated.resources.download_video_label
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 
@@ -234,19 +233,6 @@ fun DownloadManagementItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (!isVideoView) {
-                row.videoStatus?.let { videoStatus ->
-                    Text(
-                        text =
-                            stringResource(Res.string.download_video_label) + " · " +
-                                entryStatusText(videoStatus, row.videoLive, row.videoFileBytes),
-                        style = typo().bodySmall,
-                        color = subtitleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
             progressOf(row, viewMode)?.let { progress ->
                 LinearProgressIndicator(
                     progress = { progress },
