@@ -13,8 +13,8 @@
 | UI-CR-03 | P1 | **已修，边界未实测** | 磁盘不足拒绝入队后仍显示“准备下载”；主仓 `d92a4bda` 已在全部入口回滚状态并提示 |
 | UI-CR-04 | P1 | **已修** | “清除全部下载”只遍历 state=3，遗漏在途/暂停及已有文件的 state 1/2 行；core `21d0813` 改用全量活动查询 |
 | UI-CR-05 | P2 | **已修并有模拟器实证** | 网易 MP3 被无条件二次有损转码；core `21d0813` 改为音频流 copy |
-| UI-CR-06 | P1 | **待修** | 沉浸式深色页面的状态栏图标仍按全局主题明暗决定，存在黑底黑图标 |
-| UI-CR-07 | P1 | **待修** | 通用图标按钮及独立搜索按钮缺少完整无障碍语义 |
+| UI-CR-06 | P1 | **已修** | 沉浸式深色页面的状态栏图标仍按全局主题明暗决定，存在黑底黑图标；主仓 `62afc040` 沉浸计数传导至系统栏 |
+| UI-CR-07 | P1 | **已修(第一批)** | 通用图标按钮及独立搜索按钮缺少完整无障碍语义；主仓 `bbf21a40` 传输行/搜索钮/音源菜单接线，散点调用点遗留 |
 | UI-CR-08 | P1 | **待设计** | 迷你播放器、导航胶囊和搜索圆钮形成过高且割裂的底部浮层系统 |
 | UI-CR-09 | P2 | **待设计** | 搜索既是一级目的地又表现为 FAB，长按搜索切换音源不可发现 |
 | UI-CR-10 | P2 | **待设计** | 库页同时混用音源、内容类型和功能捷径三套导航轴，入口重复 |
@@ -22,7 +22,7 @@
 | UI-CR-12 | P2 | **待拆分** | 设置页承载过多独立领域，单页信息架构与实现均已过载 |
 | UI-CR-13 | P2 | **待修** | 普通列表页重复展示版本版权页尾，并与底部播放器视觉粘连 |
 | UI-CR-14 | P2 | **待重构** | 库页标题显隐依赖 500ms 静默窗和延迟回放，布局动画反向驱动滚动状态 |
-| UI-CR-15 | P3 | **待修** | 库页 chip 行不保证程序选中的项目可见，尾部入口容易被裁出屏幕 |
+| UI-CR-15 | P3 | **已修** | 库页 chip 行不保证程序选中的项目可见；主仓 `052e01fc` LazyRow+选中项滚入视野 |
 
 ## 第一部分：昨日到今日提交的代码 CR
 
@@ -98,7 +98,7 @@ Boolean。剩余空间低于 500 MB 时函数返回 `false` 且不会创建任�
 | 标题收展使用 500ms 静默窗、延迟回放和下载页特例 | 改为明确阈值与滞回，动画只作用于 transform/alpha，不改变列表测量高度 | 当前机制说明标题动画已反向影响滚动；快速反向手势还可能被静默窗吞掉 |
 | chip 行使用普通 `horizontalScroll`，程序切换时不保证选中项可见 | 使用 `LazyRow`，选中后 `animateScrollToItem`，必要时增加边缘渐隐 | 尾部“下载管理”等入口容易被裁出，切源或恢复状态时缺少当前位置反馈 |
 
-### UI-CR-06 系统栏对比度跟随全局主题而不是页面背景【P1·待修】
+### UI-CR-06 系统栏对比度跟随全局主题而不是页面背景【P1·已修：主仓 62afc040】
 
 证据：
 
@@ -106,9 +106,19 @@ Boolean。剩余空间低于 500 MB 时函数返回 `false` 且不会创建任�
 - `PlatformColorScheme.android.kt` 直接以 `!isDark` 设置状态栏与导航栏图标明暗。
 - 当前模拟器深色封面页面可见黑色状态栏图标落在深紫/黑色背景上。
 
+修复复核：
+
+- `AppTheme` 持有 `LocalForceDarkSystemBarDepth`（`MutableIntState`），`ForceDarkContent` 以
+  `DisposableEffect` 进出组合时增减；系统栏效果改读「全局深色 OR 沉浸计数 > 0」，读取隔离在
+  独立小 composable 里，计数变化只重组该节点。
+- `ForceDarkContent` 新增 `affectSystemBars` 参数：平板横屏/桌面 35% 侧栏传 false——状态栏左半边
+  压在随全局主题的页面上，翻图标只是把不可读的一半从面板挪到时钟。
+- 模拟器实证（浅色主题）：库页状态栏深色图标（3315 暗字像素）→ 歌单详情白色图标（3305 亮字像素，
+  时钟区 1789/电池区 1516）→ 返回库页翻回深色（3315），完整往返。
+
 建议验收：浅色主题进入所有强制深色页面，状态栏时间、电量、网络图标保持清晰；滚动封面和渐变变化时不闪色。
 
-### UI-CR-07 关键图标按钮缺少无障碍语义【P1·待修】
+### UI-CR-07 关键图标按钮缺少无障碍语义【P1·已修（第一批）：主仓 bbf21a40】
 
 证据：
 
@@ -116,6 +126,23 @@ Boolean。剩余空间低于 500 MB 时函数返回 `false` 且不会创建任�
 - `BottomNavScreen` 图标全部为空描述；普通 tab 尚可由文本补足，但独立搜索圆钮只使用
   `sourceSwitchGesture(pointerInput)`，没有 clickable/role/content description 语义。
 - 模拟器 UI dump 将返回、搜索、行菜单、播放控制等多个按钮标为 `NAF=true`。
+
+修复复核（渐进式第一批，高频面板优先）：
+
+- `PlayerControlLayout` 五个传输钮全部带本地化描述：随机播放 / 上一首 / 播放暂停（随 isPlaying 切换）/
+  下一首 / 循环（随 RepeatState 三态取 repeat_off/all/one）——三主题播放页、迷你条、桌面胶囊一处接线全覆盖。
+- 搜索圆钮三处（扁平底栏 / 玻璃底栏 / 横屏 rail）接共享 `searchButtonSemantics`：Button 角色 +
+  contentDescription + onClick 动作，长按切源暴露为 `CustomAccessibilityAction`「切换音源」。
+  TalkBack 原本对纯 pointerInput 手势完全不可见、不可激活。
+- 音源菜单两项补 `selected` 语义（trailing Check 无描述，TalkBack 读不出当前源）。
+- `RippleIconButton` 增加可选 `contentDescription` 参数，`PlayPauseButton` 自动按播放态取词；
+  新字符串 play/pause/previous_song/next_song/switch_music_source 五语言。
+- 模拟器实证（dump）：搜索钮 `class=Button content-desc=搜索 clickable=true` 且 NAF 消失；
+  播放页五行 desc 齐全。
+
+剩余范围（后续批次）：散点 `RippleIconButton` 调用点（下载管理/播客/首页等约 30 处）增量迁移；
+存量硬编码英文描述（"Mini Player"/"Mute"/"Favorite unchecked"/"Move up" 等）迁移到多语言资源；
+TalkBack 全链路走查。
 
 建议：
 
@@ -202,11 +229,22 @@ y=2003 延续到 y=2424，约占屏幕高度 17%。代码已有安全区让位�
 - 下载管理、空态、网格和长列表共用同一嵌套滚动契约。
 - 验收必须包含快速来回拖动、列表底部、内容不足一屏、切 chip 恢复深滚动位置。
 
-### UI-CR-15 chip 选中项不保证可见【P3·待修】
+### UI-CR-15 chip 选中项不保证可见【P3·已修：主仓 052e01fc】
 
 库页 chip 使用 `rememberScrollState + Row.horizontalScroll`，切源、恢复状态或程序设置 `currentFilter` 时没有把选中项
 滚入可视区域。建议改为有 key 的 `LazyRow`，状态变化后按 index 执行 `animateScrollToItem`，并用边缘渐隐提示仍有
 更多项目。
+
+修复复核：
+
+- `Row.horizontalScroll` → `LazyRow + rememberLazyListState`（同样 saveable，切页返回保留滚动位），
+  可见 chip 列表折成 `visibleLibraryChips`（显隐规则与渲染同源），按 enum key 渲染。
+- 新增 `LaunchedEffect(currentFilter, 两可见性)`：选中项不完全在视口内才 `animateScrollToItem` 滚入
+  （回落弹回/切源/登出重定向/深滚动位恢复后有当前位置反馈；完全可见时不动，避免与用户手点打架）。
+  可见性作 key：chip 集合增删时同一选中项的 index 平移也覆盖。
+- 验证边界：现行门控下可见 chip 恒 ≤3（网易两+下载 或 YT 两+下载），常规屏不溢出——溢出场景
+  （超大字体）机制已就绪但未可视化实测；基础行为（渲染/选中态/点击切页）模拟器实测通过。
+  边缘渐隐未做（无溢出场景可观察，待有 4+ chip 时再补）。
 
 ## 推荐实施顺序
 
