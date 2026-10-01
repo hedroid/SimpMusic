@@ -1133,9 +1133,10 @@
     <string name="download_artist_album_folder_description">Save under Music/SimpMusic/Artist/Album</string>
     <string name="download_save_lrc">Save lyrics (.lrc)</string>
     <string name="download_save_lrc_description">Write original timed lyrics next to the audio file</string>
-    <string name="download_ai_tags">AI tag completion</string>
+    <string name="download_ai_tags">Use AI Download Tag Completion</string>
     <string name="download_ai_tags_description">Fill missing genre/language tags with AI (uses the lyrics-translation API key)</string>
     <string name="download_wifi_only">Download over Wi-Fi only</string>
+    <string name="download_wifi_only_description">Downloads wait on mobile networks and resume on Wi-Fi</string>
 
 
     <string name="overwrite_download_title">Download again?</string>
@@ -1160,4 +1161,6 @@
     <string name="download_action_redownload">Redownload</string>
     <string name="download_video_label">Video</string>
     <string name="download_settings_section">Downloads</string>
+    <string name="download_section_in_progress">Downloading</string>
+    <string name="download_section_completed">Completed</string>
 </resources>

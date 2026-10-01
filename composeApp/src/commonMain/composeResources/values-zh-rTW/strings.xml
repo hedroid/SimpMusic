@@ -785,9 +785,10 @@
     <string name="download_artist_album_folder_description">儲存到 Music/SimpMusic/歌手/專輯</string>
     <string name="download_save_lrc">同時儲存歌詞檔案</string>
     <string name="download_save_lrc_description">在音訊旁寫入原文時間軸 .lrc</string>
-    <string name="download_ai_tags">AI 補全缺失標籤</string>
+    <string name="download_ai_tags">使用 AI 補全下載標籤</string>
     <string name="download_ai_tags_description">用 AI 補全流派/語言等缺失標籤(使用歌詞翻譯的 API key)</string>
     <string name="download_wifi_only">僅 Wi-Fi 下載</string>
+    <string name="download_wifi_only_description">行動網路下任務排隊等待，連線 Wi-Fi 後自動繼續</string>
 
 
     <string name="overwrite_download_title">重新下載？</string>
@@ -812,4 +813,6 @@
     <string name="download_action_redownload">重新下載</string>
     <string name="download_video_label">影片</string>
     <string name="download_settings_section">下載</string>
+    <string name="download_section_in_progress">下載中</string>
+    <string name="download_section_completed">已完成</string>
 </resources>

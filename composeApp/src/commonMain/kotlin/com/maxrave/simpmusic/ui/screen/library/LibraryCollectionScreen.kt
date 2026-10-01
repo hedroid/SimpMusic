@@ -73,6 +73,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.select_all
+import simpmusic.composeapp.generated.resources.download_section_in_progress
+import simpmusic.composeapp.generated.resources.download_section_completed
 import simpmusic.composeapp.generated.resources.download_action_pause_all
 import simpmusic.composeapp.generated.resources.download_action_resume_all
 import simpmusic.composeapp.generated.resources.download_action_retry_failed
@@ -332,40 +334,78 @@ fun DownloadedManagementBody(
                                 }
                             }
                         }
+                        // 分组(用户 2026-10-01):在途(下载中/排队/暂停/失败/转存中)与已完成
+                        // (含文件丢失/旧缓存)两个节;组内维持既有排序(状态优先+时间倒序)
+                        val inFlightRows =
+                            managementRows.filter {
+                                minOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: Int.MAX_VALUE) <= 4
+                            }
+                        val completedRows = managementRows.filter {
+                            val r = minOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+                            r >= 5
+                        }
                         LazyColumn(
                             state = songsListState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = bottomPadding),
                         ) {
-                            items(managementRows, key = { it.song.videoId }) { row ->
-                                DownloadManagementItem(
-                                    row = row,
-                                    isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
-                                    selectionMode = selectionMode,
-                                    isSelected = row.song.videoId in selectedIds,
-                                    onLongClick = {
-                                        selectionMode = true
-                                        selectedIds = setOf(row.song.videoId)
-                                    },
-                                    onSelectToggle = {
-                                        selectedIds =
-                                            if (row.song.videoId in selectedIds) selectedIds - row.song.videoId
-                                            else selectedIds + row.song.videoId
-                                    },
-                                    onPlay = {
-                                        dynamicPlaylistViewModel.playSong(
-                                            row.song.videoId,
-                                            LibraryDynamicPlaylistType.Downloaded,
-                                        )
-                                    },
-                                    onPause = { dynamicPlaylistViewModel.pauseDownload(row.song.videoId) },
-                                    onResume = { dynamicPlaylistViewModel.resumeDownload(row.song.videoId) },
-                                    onRetry = { dynamicPlaylistViewModel.retryDownload(row.song.videoId) },
-                                    onRedownload = { dynamicPlaylistViewModel.redownload(row.song.videoId) },
-                                    onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
-                                    onSongMenu = { selectedDownloadedSong = row.song },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
+                            if (inFlightRows.isNotEmpty()) {
+                                item(key = "header-inflight") {
+                                    Text(
+                                        text = stringResource(Res.string.download_section_in_progress),
+                                        style = typo().labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
+                                    )
+                                }
+                                items(inFlightRows, key = { it.song.videoId }) { row ->
+                                    DownloadManagementRowItem(
+                                        row = row,
+                                        isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                        selectionMode = selectionMode,
+                                        selectedIds = selectedIds,
+                                        onEnterSelection = {
+                                            selectionMode = true
+                                            selectedIds = setOf(row.song.videoId)
+                                        },
+                                        onToggle = { id ->
+                                            selectedIds =
+                                                if (id in selectedIds) selectedIds - id else selectedIds + id
+                                        },
+                                        dynamicPlaylistViewModel = dynamicPlaylistViewModel,
+                                        onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                        onSongMenu = { selectedDownloadedSong = row.song },
+                                    )
+                                }
+                            }
+                            if (completedRows.isNotEmpty()) {
+                                item(key = "header-completed") {
+                                    Text(
+                                        text = stringResource(Res.string.download_section_completed),
+                                        style = typo().labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
+                                    )
+                                }
+                                items(completedRows, key = { it.song.videoId }) { row ->
+                                    DownloadManagementRowItem(
+                                        row = row,
+                                        isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                        selectionMode = selectionMode,
+                                        selectedIds = selectedIds,
+                                        onEnterSelection = {
+                                            selectionMode = true
+                                            selectedIds = setOf(row.song.videoId)
+                                        },
+                                        onToggle = { id ->
+                                            selectedIds =
+                                                if (id in selectedIds) selectedIds - id else selectedIds + id
+                                        },
+                                        dynamicPlaylistViewModel = dynamicPlaylistViewModel,
+                                        onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                        onSongMenu = { selectedDownloadedSong = row.song },
+                                    )
+                                }
                             }
                             item { EndOfPage(includeBottomBarPadding = false) }
                         }
@@ -445,6 +485,42 @@ fun DownloadedManagementBody(
         )
     }
 
+}
+
+/** 两组节共用的行渲染(避免下载中/已完成两段 items 重复二十行接线) */
+@Composable
+private fun DownloadManagementRowItem(
+    row: com.maxrave.simpmusic.viewModel.DownloadManagementRow,
+    isPlaying: Boolean,
+    selectionMode: Boolean,
+    selectedIds: Set<String>,
+    onEnterSelection: () -> Unit,
+    onToggle: (String) -> Unit,
+    dynamicPlaylistViewModel: LibraryDynamicPlaylistViewModel,
+    onDelete: () -> Unit,
+    onSongMenu: () -> Unit,
+) {
+    DownloadManagementItem(
+        row = row,
+        isPlaying = isPlaying,
+        selectionMode = selectionMode,
+        isSelected = row.song.videoId in selectedIds,
+        onLongClick = onEnterSelection,
+        onSelectToggle = { onToggle(row.song.videoId) },
+        onPlay = {
+            dynamicPlaylistViewModel.playSong(
+                row.song.videoId,
+                LibraryDynamicPlaylistType.Downloaded,
+            )
+        },
+        onPause = { dynamicPlaylistViewModel.pauseDownload(row.song.videoId) },
+        onResume = { dynamicPlaylistViewModel.resumeDownload(row.song.videoId) },
+        onRetry = { dynamicPlaylistViewModel.retryDownload(row.song.videoId) },
+        onRedownload = { dynamicPlaylistViewModel.redownload(row.song.videoId) },
+        onDelete = onDelete,
+        onSongMenu = onSongMenu,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 internal enum class DownloadedSection {

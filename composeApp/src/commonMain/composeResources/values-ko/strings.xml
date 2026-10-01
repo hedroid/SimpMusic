@@ -715,4 +715,10 @@
     <string name="download_action_redownload">다시 다운로드</string>
     <string name="download_video_label">동영상</string>
     <string name="download_settings_section">다운로드</string>
+    <string name="download_ai_tags">AI 다운로드 태그 보완 사용</string>
+    <string name="download_ai_tags_description">다운로드 시 누락된 태그를 AI로 보완합니다</string>
+    <string name="download_wifi_only">Wi-Fi에서만 다운로드</string>
+    <string name="download_wifi_only_description">모바일 네트워크에서는 대기하고 Wi-Fi에 연결되면 자동으로 재개합니다</string>
+    <string name="download_section_in_progress">다운로드 중</string>
+    <string name="download_section_completed">완료됨</string>
 </resources>

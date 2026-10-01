@@ -591,4 +591,10 @@
     <string name="download_action_redownload">再ダウンロード</string>
     <string name="download_video_label">動画</string>
     <string name="download_settings_section">ダウンロード</string>
+    <string name="download_ai_tags">AI でダウンロードのタグを補完</string>
+    <string name="download_ai_tags_description">ダウンロード時に欠けているタグを AI で補完します</string>
+    <string name="download_wifi_only">Wi-Fi のみでダウンロード</string>
+    <string name="download_wifi_only_description">モバイル回線では待機し、Wi-Fi 接続時に再開します</string>
+    <string name="download_section_in_progress">ダウンロード中</string>
+    <string name="download_section_completed">完了</string>
 </resources>

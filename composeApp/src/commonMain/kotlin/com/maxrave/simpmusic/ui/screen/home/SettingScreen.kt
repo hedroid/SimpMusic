@@ -268,6 +268,7 @@ import simpmusic.composeapp.generated.resources.download_save_lrc
 import simpmusic.composeapp.generated.resources.download_save_lrc_description
 import simpmusic.composeapp.generated.resources.download_settings_section
 import simpmusic.composeapp.generated.resources.download_wifi_only
+import simpmusic.composeapp.generated.resources.download_wifi_only_description
 import simpmusic.composeapp.generated.resources.simultaneous_downloads
 import simpmusic.composeapp.generated.resources.enable_animated_artwork
 import simpmusic.composeapp.generated.resources.enable_canvas
@@ -1252,6 +1253,29 @@ fun SettingScreen(
                     },
                 )
                 SettingItem(
+                    title = stringResource(Res.string.video_quality),
+                    subtitle = videoQuality ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.video_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            VIDEO_QUALITY.items.map { item ->
+                                                (item.toString() == videoQuality) to item.toString()
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        viewModel.changeVideoQuality(state.selectOne?.getSelected() ?: "")
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
                     title = stringResource(Res.string.play_video_for_video_track_instead_of_audio_only),
                     subtitle = stringResource(Res.string.such_as_music_video_lyrics_video_podcasts_and_more),
                     smallSubtitle = true,
@@ -1336,29 +1360,6 @@ fun SettingScreen(
                                                 DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_LOSSLESS to Res.string.download_audio_quality_lossless,
                                             ).firstOrNull { runBlocking { getString(it.second) } == label }?.first
                                         key?.let { viewModel.setAudioDownloadQuality(it) }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.video_quality),
-                    subtitle = videoQuality ?: "",
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.video_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            VIDEO_QUALITY.items.map { item ->
-                                                (item.toString() == videoQuality) to item.toString()
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        viewModel.changeVideoQuality(state.selectOne?.getSelected() ?: "")
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
                             ),
@@ -1462,13 +1463,9 @@ fun SettingScreen(
                     switch = (downloadSaveLrc to { viewModel.setDownloadSaveLrc(it) }),
                 )
                 SettingItem(
-                    title = stringResource(Res.string.download_ai_tags),
-                    subtitle = stringResource(Res.string.download_ai_tags_description),
-                    smallSubtitle = true,
-                    switch = (downloadAiTags to { viewModel.setDownloadAiTags(it) }),
-                )
-                SettingItem(
                     title = stringResource(Res.string.download_wifi_only),
+                    subtitle = stringResource(Res.string.download_wifi_only_description),
+                    smallSubtitle = true,
                     switch = (downloadWifiOnly to { viewModel.setDownloadWifiOnly(it) }),
                 )
                 SettingItem(
@@ -2391,6 +2388,13 @@ fun SettingScreen(
                     title = stringResource(Res.string.use_ai_translation),
                     subtitle = stringResource(Res.string.use_ai_translation_description),
                     switch = (useAITranslation to { viewModel.setAITranslation(it) }),
+                    isEnable = isHasApiKey,
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_ai_tags),
+                    subtitle = stringResource(Res.string.download_ai_tags_description),
+                    smallSubtitle = true,
+                    switch = (downloadAiTags to { viewModel.setDownloadAiTags(it) }),
                     isEnable = isHasApiKey,
                 )
             }

@@ -1086,9 +1086,10 @@
     <string name="download_artist_album_folder_description">保存到 Music/SimpMusic/歌手/专辑</string>
     <string name="download_save_lrc">同时保存歌词文件</string>
     <string name="download_save_lrc_description">在音频旁写入原文时间轴 .lrc</string>
-    <string name="download_ai_tags">AI 补全缺失标签</string>
+    <string name="download_ai_tags">使用 AI 补全下载标签</string>
     <string name="download_ai_tags_description">用 AI 补全流派/语言等缺失标签(使用歌词翻译的 API key)</string>
     <string name="download_wifi_only">仅 Wi-Fi 下载</string>
+    <string name="download_wifi_only_description">移动网络下任务排队等待，连接 Wi-Fi 后自动继续</string>
 
 
     <string name="overwrite_download_title">重新下载？</string>
@@ -1113,4 +1114,6 @@
     <string name="download_action_redownload">重新下载</string>
     <string name="download_video_label">视频</string>
     <string name="download_settings_section">下载</string>
+    <string name="download_section_in_progress">下载中</string>
+    <string name="download_section_completed">已完成</string>
 </resources>
