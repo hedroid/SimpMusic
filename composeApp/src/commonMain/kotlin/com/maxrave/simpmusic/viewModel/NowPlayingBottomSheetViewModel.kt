@@ -56,6 +56,7 @@ import simpmusic.composeapp.generated.resources.netease_action_failed
 import simpmusic.composeapp.generated.resources.netease_rate_limited
 import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
+import simpmusic.composeapp.generated.resources.download_no_space
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
@@ -467,12 +468,23 @@ class NowPlayingBottomSheetViewModel(
                                 videoId = songUIState.videoId,
                                 downloadState = DownloadState.STATE_PREPARING,
                             )
-                            downloadUtils.downloadTrack(
-                                videoId = songUIState.videoId,
-                                title = songUIState.title,
-                                thumbnail = songUIState.thumbnails ?: "",
-                            )
-                            makeToast(getString(Res.string.downloading))
+                            val queued =
+                                downloadUtils.downloadTrack(
+                                    videoId = songUIState.videoId,
+                                    title = songUIState.title,
+                                    thumbnail = songUIState.thumbnails ?: "",
+                                )
+                            if (!queued) {
+                                // 磁盘预检拒绝:回滚占位态,否则 UI/Room 永久停在"准备下载"
+                                // (没有任务入队,DownloadManager 不会有状态来纠正它;CR P1-3)
+                                songRepository.updateDownloadState(
+                                    videoId = songUIState.videoId,
+                                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                                )
+                                makeToast(getString(Res.string.download_no_space))
+                            } else {
+                                makeToast(getString(Res.string.downloading))
+                            }
                         }
 
                         else -> {
@@ -480,12 +492,21 @@ class NowPlayingBottomSheetViewModel(
                                 videoId = songUIState.videoId,
                                 downloadState = DownloadState.STATE_PREPARING,
                             )
-                            downloadUtils.downloadTrack(
-                                videoId = songUIState.videoId,
-                                title = songUIState.title,
-                                thumbnail = songUIState.thumbnails ?: "",
-                            )
-                            makeToast(getString(Res.string.downloading))
+                            val queued =
+                                downloadUtils.downloadTrack(
+                                    videoId = songUIState.videoId,
+                                    title = songUIState.title,
+                                    thumbnail = songUIState.thumbnails ?: "",
+                                )
+                            if (!queued) {
+                                songRepository.updateDownloadState(
+                                    videoId = songUIState.videoId,
+                                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                                )
+                                makeToast(getString(Res.string.download_no_space))
+                            } else {
+                                makeToast(getString(Res.string.downloading))
+                            }
                         }
                     }
                 }

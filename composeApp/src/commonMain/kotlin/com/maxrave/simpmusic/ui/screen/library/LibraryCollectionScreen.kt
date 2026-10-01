@@ -235,7 +235,7 @@ fun DownloadedManagementBody(
     var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
     var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
     // 二期:行删除/取消的确认目标(videoId+标题);在途"取消下载"也走确认防误触
-    var deleteRowTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var deleteRowTarget by remember { mutableStateOf<Triple<String, String, Boolean>?>(null) }
     // 多选模式(用户反馈 2026-10):长按行进入;批量删除所选
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -412,7 +412,14 @@ fun DownloadedManagementBody(
                                                 if (id in selectedIds) selectedIds - id else selectedIds + id
                                         },
                                         dynamicPlaylistViewModel = dynamicPlaylistViewModel,
-                                        onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                        onRedownload = {
+                                            if (isVideoTab) {
+                                                dynamicPlaylistViewModel.redownloadVideo(row.song.videoId)
+                                            } else {
+                                                dynamicPlaylistViewModel.redownload(row.song.videoId)
+                                            }
+                                        },
+                                        onDelete = { deleteRowTarget = Triple(row.song.videoId, row.song.title, isVideoTab) },
                                         onSongMenu = { selectedDownloadedSong = row.song },
                                     )
                                 }
@@ -442,7 +449,14 @@ fun DownloadedManagementBody(
                                                 if (id in selectedIds) selectedIds - id else selectedIds + id
                                         },
                                         dynamicPlaylistViewModel = dynamicPlaylistViewModel,
-                                        onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                        onRedownload = {
+                                            if (isVideoTab) {
+                                                dynamicPlaylistViewModel.redownloadVideo(row.song.videoId)
+                                            } else {
+                                                dynamicPlaylistViewModel.redownload(row.song.videoId)
+                                            }
+                                        },
+                                        onDelete = { deleteRowTarget = Triple(row.song.videoId, row.song.title, isVideoTab) },
                                         onSongMenu = { selectedDownloadedSong = row.song },
                                     )
                                 }
@@ -469,7 +483,14 @@ fun DownloadedManagementBody(
             confirmButton = {
                 TextButton(onClick = {
                     deleteSelectionConfirm = false
-                    selectedIds.forEach { id -> dynamicPlaylistViewModel.deleteDownload(id) }
+                    val videoView = downloadedSection == DownloadedSection.Videos
+                    selectedIds.forEach { id ->
+                        if (videoView) {
+                            dynamicPlaylistViewModel.deleteVideoOnly(id)
+                        } else {
+                            dynamicPlaylistViewModel.deleteDownload(id)
+                        }
+                    }
                     selectionMode = false
                     selectedIds = emptySet()
                 }) {
@@ -492,14 +513,18 @@ fun DownloadedManagementBody(
     }
 
     // 二期:条目删除/取消下载确认(在途取消与完成删除都破坏数据,防误触)
-    deleteRowTarget?.let { (videoId, title) ->
+    deleteRowTarget?.let { (videoId, title, isVideo) ->
         AlertDialog(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             onDismissRequest = { deleteRowTarget = null },
             confirmButton = {
                 TextButton(onClick = {
                     deleteRowTarget = null
-                    dynamicPlaylistViewModel.deleteDownload(videoId)
+                    if (isVideo) {
+                        dynamicPlaylistViewModel.deleteVideoOnly(videoId)
+                    } else {
+                        dynamicPlaylistViewModel.deleteDownload(videoId)
+                    }
                 }) {
                     Text(stringResource(Res.string.delete), style = typo().labelSmall)
                 }
@@ -527,6 +552,7 @@ private fun DownloadManagementRowItem(
     onEnterSelection: () -> Unit,
     onToggle: (String) -> Unit,
     dynamicPlaylistViewModel: LibraryDynamicPlaylistViewModel,
+    onRedownload: () -> Unit,
     onDelete: () -> Unit,
     onSongMenu: () -> Unit,
 ) {
@@ -547,7 +573,7 @@ private fun DownloadManagementRowItem(
         onPause = { dynamicPlaylistViewModel.pauseDownload(row.song.videoId) },
         onResume = { dynamicPlaylistViewModel.resumeDownload(row.song.videoId) },
         onRetry = { dynamicPlaylistViewModel.retryDownload(row.song.videoId) },
-        onRedownload = { dynamicPlaylistViewModel.redownload(row.song.videoId) },
+        onRedownload = onRedownload,
         onDelete = onDelete,
         onSongMenu = onSongMenu,
         modifier = Modifier.fillMaxWidth(),

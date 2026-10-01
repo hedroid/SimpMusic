@@ -821,4 +821,5 @@
     <string name="download_clear_all">清除全部下載</string>
     <string name="download_clear_all_description">刪除所有已下載的音訊與影片檔案</string>
     <string name="download_artist_album_folder_description_off">儲存到 Music/SimpMusic</string>
+    <string name="download_no_space">儲存空間不足，無法下載</string>
 </resources>

@@ -48,6 +48,7 @@ import simpmusic.composeapp.generated.resources.unsaved_toast
 import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
+import simpmusic.composeapp.generated.resources.download_no_space
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.download_cancelled
@@ -452,19 +453,31 @@ class AlbumViewModel(
     }
 
     private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>) {
+        var anyRejected = false
         songs.forEach { song ->
             log("Download: ${song.videoId}")
             songRepository.updateDownloadState(
                 videoId = song.videoId,
                 downloadState = DownloadState.STATE_PREPARING,
             )
-            downloadUtils.downloadTrack(
-                song.videoId,
-                song.title,
-                song.thumbnail,
-            )
+            val queued =
+                downloadUtils.downloadTrack(
+                    song.videoId,
+                    song.title,
+                    song.thumbnail,
+                )
+            if (!queued) {
+                // 磁盘预检拒绝:回滚占位态(CR P1-3——不回滚会永久停在"准备下载")
+                songRepository.updateDownloadState(
+                    videoId = song.videoId,
+                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                )
+                anyRejected = true
+            }
         }
-        if (songs.isNotEmpty()) makeToast(getString(Res.string.downloading))
+        if (songs.isNotEmpty()) {
+            makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
+        }
     }
 
     /** Stop an in-flight album download; finished tracks keep their files. */

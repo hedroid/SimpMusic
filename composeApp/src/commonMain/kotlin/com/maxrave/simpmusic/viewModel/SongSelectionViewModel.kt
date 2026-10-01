@@ -36,6 +36,7 @@ import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.all_songs_already_liked
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
+import simpmusic.composeapp.generated.resources.download_no_space
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
@@ -324,18 +325,30 @@ class SongSelectionViewModel(
     }
 
     private suspend fun queueBatch(songs: List<BatchDownloadSong>) {
+        var anyRejected = false
         songs.forEach { song ->
             songRepository.updateDownloadState(
                 videoId = song.videoId,
                 downloadState = DownloadState.STATE_PREPARING,
             )
-            downloadUtils.downloadTrack(
-                videoId = song.videoId,
-                title = song.title,
-                thumbnail = song.thumbnail,
-            )
+            val queued =
+                downloadUtils.downloadTrack(
+                    videoId = song.videoId,
+                    title = song.title,
+                    thumbnail = song.thumbnail,
+                )
+            if (!queued) {
+                // 磁盘预检拒绝:回滚占位态(CR P1-3——不回滚会永久停在"准备下载")
+                songRepository.updateDownloadState(
+                    videoId = song.videoId,
+                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                )
+                anyRejected = true
+            }
         }
-        if (songs.isNotEmpty()) makeToast(getString(Res.string.downloading))
+        if (songs.isNotEmpty()) {
+            makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
+        }
     }
 
     private suspend fun demoteDownloadedContainersOf(videoId: String) =
