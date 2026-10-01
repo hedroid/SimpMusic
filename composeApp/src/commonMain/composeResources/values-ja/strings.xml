@@ -602,4 +602,6 @@
     <string name="download_no_videos">ダウンロードした動画はありません</string>
     <string name="download_clear_all">すべてのダウンロードを削除</string>
     <string name="download_clear_all_description">ダウンロードしたすべての音声と動画ファイルを削除します</string>
+    <string name="download_artist_album_folder_description">ダウンロード先を Music/SimpMusic/アーティスト/アルバム に整理</string>
+    <string name="download_artist_album_folder_description_off">Music/SimpMusic に保存</string>
 </resources>

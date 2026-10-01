@@ -726,4 +726,6 @@
     <string name="download_no_videos">다운로드된 동영상이 없습니다</string>
     <string name="download_clear_all">모든 다운로드 삭제</string>
     <string name="download_clear_all_description">다운로드된 모든 오디오 및 동영상 파일을 삭제합니다</string>
+    <string name="download_artist_album_folder_description">Music/SimpMusic/아티스트/앨범 아래에 저장</string>
+    <string name="download_artist_album_folder_description_off">Music/SimpMusic에 저장</string>
 </resources>

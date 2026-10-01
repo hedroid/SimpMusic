@@ -92,7 +92,7 @@
     <string name="prefer_320kbps_stream">Prefer 320kbps stream</string>
     <string name="prefer_320kbps_stream_description">Automatically search for 320kbps audio stream when available on the internet. Falls back to default quality if not found.</string>
     <string name="download_quality">Download quality</string>
-    <string name="video_download_quality">Video download quality</string>
+    <string name="video_download_quality">Video quality</string>
     <string name="clear_downloaded_cache">Clear Downloaded Cache</string>
     <string name="clear_thumbnail_cache">Clear Thumbnail Cache</string>
     <string name="add">Add</string>
@@ -1120,7 +1120,7 @@
 
     <!-- File-based downloads (gen 2) -->
     <string name="download_section_title">Download</string>
-    <string name="download_audio_quality">Download audio quality</string>
+    <string name="download_audio_quality">Audio quality</string>
     <string name="download_audio_quality_standard">Standard</string>
     <string name="download_audio_quality_high">High</string>
     <string name="download_audio_quality_lossless">Lossless</string>
@@ -1129,12 +1129,12 @@
     <string name="download_file_name_artist_title">Artist-Title</string>
     <string name="download_file_name_title_artist">Title-Artist</string>
     <string name="simultaneous_downloads">Simultaneous downloads</string>
-    <string name="download_artist_album_folder">Artist/Album folders</string>
+    <string name="download_artist_album_folder">Folder by artist/album</string>
     <string name="download_artist_album_folder_description">Save under Music/SimpMusic/Artist/Album</string>
     <string name="download_save_lrc">Save lyrics (.lrc)</string>
     <string name="download_save_lrc_description">Write original timed lyrics next to the audio file</string>
-    <string name="download_ai_tags">Use AI Download Tag Completion</string>
-    <string name="download_ai_tags_description">Fill missing genre/language tags with AI (uses the lyrics-translation API key)</string>
+    <string name="download_ai_tags">Music tag completion</string>
+    <string name="download_ai_tags_description">Fill missing tags with AI when downloading</string>
     <string name="download_wifi_only">Download over Wi-Fi only</string>
     <string name="download_wifi_only_description">Downloads wait on mobile networks and resume on Wi-Fi</string>
 
@@ -1168,4 +1168,5 @@
     <string name="download_no_videos">No downloaded videos</string>
     <string name="download_clear_all">Clear all downloads</string>
     <string name="download_clear_all_description">Delete all downloaded audio and video files</string>
+    <string name="download_artist_album_folder_description_off">Save under Music/SimpMusic</string>
 </resources>

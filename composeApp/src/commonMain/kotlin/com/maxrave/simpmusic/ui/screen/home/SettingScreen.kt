@@ -258,6 +258,7 @@ import simpmusic.composeapp.generated.resources.download_clear_all
 import simpmusic.composeapp.generated.resources.download_clear_all_description
 import simpmusic.composeapp.generated.resources.download_artist_album_folder
 import simpmusic.composeapp.generated.resources.download_artist_album_folder_description
+import simpmusic.composeapp.generated.resources.download_artist_album_folder_description_off
 import simpmusic.composeapp.generated.resources.download_audio_quality
 import simpmusic.composeapp.generated.resources.download_file_name_artist_title
 import simpmusic.composeapp.generated.resources.download_file_name_format
@@ -2573,7 +2574,15 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.download_artist_album_folder),
-                    subtitle = stringResource(Res.string.download_artist_album_folder_description),
+                    // 描述随开关态展示实际落点(用户 2026-10-01):未选中=根目录,选中=艺人/专辑子目录
+                    subtitle =
+                        stringResource(
+                            if (downloadArtistAlbumFolder) {
+                                Res.string.download_artist_album_folder_description
+                            } else {
+                                Res.string.download_artist_album_folder_description_off
+                            },
+                        ),
                     smallSubtitle = true,
                     switch = (downloadArtistAlbumFolder to { viewModel.setDownloadArtistAlbumFolder(it) }),
                 )

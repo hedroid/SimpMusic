@@ -86,7 +86,7 @@
     <string name="prefer_320kbps_stream">优先使用 320kbps 串流</string>
     <string name="prefer_320kbps_stream_description">网络可用时，自动搜索320kbps 音频流。如果找不到的话，则跳回默认质量。</string>
     <string name="download_quality">下载音质</string>
-    <string name="video_download_quality">视频下载质量</string>
+    <string name="video_download_quality">视频质量</string>
     <string name="clear_downloaded_cache">清除已下载缓存</string>
     <string name="clear_thumbnail_cache">清除缩略图缓存</string>
     <string name="add">添加</string>
@@ -1073,21 +1073,21 @@
 
     <!-- File-based downloads (gen 2) -->
     <string name="download_section_title">下载</string>
-    <string name="download_audio_quality">下载音质</string>
+    <string name="download_audio_quality">音质</string>
     <string name="download_audio_quality_standard">标准</string>
     <string name="download_audio_quality_high">高</string>
     <string name="download_audio_quality_lossless">无损</string>
     <string name="download_file_name_format">文件名格式</string>
     <string name="download_file_name_title_only">仅标题</string>
-    <string name="download_file_name_artist_title">主艺人-标题</string>
-    <string name="download_file_name_title_artist">标题-主艺人</string>
+    <string name="download_file_name_artist_title">艺人-标题</string>
+    <string name="download_file_name_title_artist">标题-艺人</string>
     <string name="simultaneous_downloads">同时下载数量</string>
-    <string name="download_artist_album_folder">按歌手/专辑建目录</string>
-    <string name="download_artist_album_folder_description">保存到 Music/SimpMusic/歌手/专辑</string>
+    <string name="download_artist_album_folder">保存目录按艺人/专辑</string>
+    <string name="download_artist_album_folder_description">保存到 Music/SimpMusic/艺人/专辑</string>
     <string name="download_save_lrc">同时保存歌词文件</string>
     <string name="download_save_lrc_description">在音频旁写入原文时间轴 .lrc</string>
-    <string name="download_ai_tags">使用 AI 补全下载标签</string>
-    <string name="download_ai_tags_description">用 AI 补全流派/语言等缺失标签(使用歌词翻译的 API key)</string>
+    <string name="download_ai_tags">补全音乐标签</string>
+    <string name="download_ai_tags_description">启用AI补全下载时缺失的标签</string>
     <string name="download_wifi_only">仅 Wi-Fi 下载</string>
     <string name="download_wifi_only_description">移动网络下任务排队等待，连接 Wi-Fi 后自动继续</string>
 
@@ -1121,4 +1121,5 @@
     <string name="download_no_videos">暂无下载的视频</string>
     <string name="download_clear_all">清除全部下载</string>
     <string name="download_clear_all_description">删除所有已下载的音频与视频文件</string>
+    <string name="download_artist_album_folder_description_off">保存到 Music/SimpMusic</string>
 </resources>
