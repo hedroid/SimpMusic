@@ -605,4 +605,10 @@
     <string name="download_artist_album_folder_description">ダウンロード先を Music/SimpMusic/アーティスト/アルバム に整理</string>
     <string name="download_artist_album_folder_description_off">Music/SimpMusic に保存</string>
     <string name="download_no_space">ストレージ容量が不足しているためダウンロードできません</string>
+    <!-- アクセシビリティ：アイコンのみのコントロールのラベル (UI-CR-07) -->
+    <string name="play">再生</string>
+    <string name="pause">一時停止</string>
+    <string name="previous_song">前の曲</string>
+    <string name="next_song">次の曲</string>
+    <string name="switch_music_source">音源を切り替える</string>
 </resources>

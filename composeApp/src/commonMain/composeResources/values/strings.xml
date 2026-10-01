@@ -1170,4 +1170,10 @@
     <string name="download_clear_all_description">Delete all downloaded audio and video files</string>
     <string name="download_artist_album_folder_description_off">Save under Music/SimpMusic</string>
     <string name="download_no_space">Not enough storage to download</string>
+    <!-- Accessibility labels for icon-only controls (UI-CR-07) -->
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="previous_song">Previous song</string>
+    <string name="next_song">Next song</string>
+    <string name="switch_music_source">Switch music source</string>
 </resources>

@@ -822,4 +822,10 @@
     <string name="download_clear_all_description">刪除所有已下載的音訊與影片檔案</string>
     <string name="download_artist_album_folder_description_off">儲存到 Music/SimpMusic</string>
     <string name="download_no_space">儲存空間不足，無法下載</string>
+    <!-- 無障礙：純圖示控制語義 (UI-CR-07) -->
+    <string name="play">播放</string>
+    <string name="pause">暫停</string>
+    <string name="previous_song">上一首</string>
+    <string name="next_song">下一首</string>
+    <string name="switch_music_source">切換音源</string>
 </resources>

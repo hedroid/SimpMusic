@@ -63,6 +63,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.stringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.search
+import simpmusic.composeapp.generated.resources.switch_music_source
 import java.nio.IntBuffer
 import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.seconds
@@ -340,6 +344,11 @@ actual fun LiquidGlassAppBottomNavigationBar(
                                 luminanceAnimation.value,
                                 CircleShape,
                                 searchFabInteraction,
+                            ).searchButtonSemantics(
+                                description = stringResource(Res.string.search),
+                                switchSourceLabel = stringResource(Res.string.switch_music_source),
+                                onTap = { selectTab(BottomNavScreen.Search.ordinal) },
+                                onLongPress = { showSourceMenu = true },
                             ).sourceSwitchGesture(
                                 onLongPress = { showSourceMenu = true },
                                 onTap = { selectTab(BottomNavScreen.Search.ordinal) },

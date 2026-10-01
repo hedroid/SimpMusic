@@ -14,6 +14,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.expect.HapticFeedback
@@ -83,6 +91,32 @@ fun Modifier.sourceSwitchGesture(
     }
 }
 
+/**
+ * 搜索圆钮的无障碍语义(UI-CR-07)。手势本体是 [sourceSwitchGesture] 的 pointerInput,
+ * TalkBack 看不到也不可激活——这里补 Button 角色、内容描述和点击动作,长按切源以
+ * 自定义无障碍动作暴露(读作"操作:切换音源")。三处搜索钮(扁平底栏/玻璃底栏/横屏 rail)共用。
+ */
+fun Modifier.searchButtonSemantics(
+    description: String,
+    switchSourceLabel: String,
+    onTap: () -> Unit,
+    onLongPress: () -> Unit,
+): Modifier = semantics {
+    contentDescription = description
+    role = Role.Button
+    onClick(label = description) {
+        onTap()
+        true
+    }
+    customActions =
+        listOf(
+            CustomAccessibilityAction(switchSourceLabel) {
+                onLongPress()
+                true
+            },
+        )
+}
+
 /** 音源菜单:标准 Material DropdownMenu,锚定在调用方(搜索按钮)上,自动翻到按钮上方弹出 */
 @Composable
 fun SourceSwitchMenu(
@@ -98,6 +132,8 @@ fun SourceSwitchMenu(
     ) {
         // 网易在前(用户 2026-09-20 定序,与库页 chip 顺序一致)
         DropdownMenuItem(
+            // 勾选图标对 TalkBack 不可见(无描述),用 selected 语义把当前音源读出来
+            modifier = Modifier.semantics { selected = selectedSource == MusicSource.NETEASE },
             text = { Text(stringResource(Res.string.netease)) },
             leadingIcon = {
                 Icon(
@@ -118,6 +154,7 @@ fun SourceSwitchMenu(
             },
         )
         DropdownMenuItem(
+            modifier = Modifier.semantics { selected = selectedSource == MusicSource.YOUTUBE_MUSIC },
             text = { Text("YouTube Music") },
             leadingIcon = {
                 Icon(

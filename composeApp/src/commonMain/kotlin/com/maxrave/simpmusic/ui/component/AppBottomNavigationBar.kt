@@ -216,7 +216,12 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .sourceSwitchGesture(
+                    .searchButtonSemantics(
+                        description = stringResource(Res.string.search),
+                        switchSourceLabel = stringResource(Res.string.switch_music_source),
+                        onTap = { selectTab(BottomNavScreen.Search) },
+                        onLongPress = { showSourceMenu = true },
+                    ).sourceSwitchGesture(
                         onLongPress = { showSourceMenu = true },
                         onTap = { selectTab(BottomNavScreen.Search) },
                     ),
@@ -345,7 +350,12 @@ fun AppNavigationRail(
                     modifier =
                         Modifier
                             .width(80.dp)
-                            .sourceSwitchGesture(
+                            .searchButtonSemantics(
+                                description = stringResource(Res.string.search),
+                                switchSourceLabel = stringResource(Res.string.switch_music_source),
+                                onTap = { selectTab(screen) },
+                                onLongPress = { showSourceMenu = true },
+                            ).sourceSwitchGesture(
                                 onLongPress = { showSourceMenu = true },
                                 onTap = { selectTab(screen) },
                             ),

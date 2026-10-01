@@ -1123,4 +1123,10 @@
     <string name="download_clear_all_description">删除所有已下载的音频与视频文件</string>
     <string name="download_artist_album_folder_description_off">保存到 Music/SimpMusic</string>
     <string name="download_no_space">存储空间不足，无法下载</string>
+    <!-- 无障碍：纯图标控件语义 (UI-CR-07) -->
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="previous_song">上一首</string>
+    <string name="next_song">下一首</string>
+    <string name="switch_music_source">切换音源</string>
 </resources>
