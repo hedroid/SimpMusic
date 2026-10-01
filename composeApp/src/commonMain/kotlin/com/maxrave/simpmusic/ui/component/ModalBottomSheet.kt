@@ -2282,17 +2282,22 @@ fun NowPlayingBottomSheet(
                         viewModel.resetPlaylists()
                         addToAPlaylist = true
                     }
-                    ActionButton(
-                        icon = SimpIcons.PlayCircle,
-                        text = Res.string.play_next,
-                    ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
-                    }
-                    ActionButton(
-                        icon = SimpIcons.QueueMusic,
-                        text = Res.string.add_to_queue,
-                    ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
+                    // 播放页打开(song=null=自动指向当前播放曲)时这两行只剩"自我复制"效果:
+                    // 当前曲本就在队列里,"下一首播放"=复制一份插到自己后面,"添加到队列"=
+                    // 原样追加到队尾。列表页 song 恒非空,不受影响
+                    if (song != null) {
+                        ActionButton(
+                            icon = SimpIcons.PlayCircle,
+                            text = Res.string.play_next,
+                        ) {
+                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
+                        }
+                        ActionButton(
+                            icon = SimpIcons.QueueMusic,
+                            text = Res.string.add_to_queue,
+                        ) {
+                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
+                        }
                     }
                     if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.PeopleAlt,
