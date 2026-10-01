@@ -930,7 +930,13 @@ class SharedViewModel(
             val downloadedCacheKeys = cacheRepository.getAllCacheKeys(DOWNLOAD_CACHE)
             songRepository.getDownloadedSongs().first().let { songs ->
                 songs?.forEach { song ->
-                    if (!downloadedCacheKeys.contains(song.videoId)) {
+                    // 文件式(2026-10 二期)以文件为准:转存成功后 SimpleCache 已清,按缓存
+                    // key 对账会把"文件在+state3"全数误杀成 0(实测 75 行全灭,点击无反应+
+                    // 菜单显示未下载)。缓存 key 对账只管旧 SimpleCache 代;文件丢失态由
+                    // 下载管理页的 FILE_MISSING 展示与播放 resolver 自愈负责。
+                    val fileBased =
+                        song.downloadedFilePath != null || song.downloadedVideoFilePath != null
+                    if (!fileBased && !downloadedCacheKeys.contains(song.videoId)) {
                         songRepository.updateDownloadState(
                             song.videoId,
                             DownloadState.STATE_NOT_DOWNLOADED,
@@ -1264,20 +1270,27 @@ class SharedViewModel(
 
     private fun checkAllDownloadingSongs() {
         viewModelScope.launch {
+            // 只清理"不在 DownloadManager 队列"的 1/2 态遗留(进程被杀后的孤儿态)——
+            // 文件式的"转存中"(state2,条目 COMPLETED 等 exporter)在队列里,误杀会被
+            // collect 重放反复打 0(2026-10 实测与启动对账竞态后 state 全灭)
             songRepository.getDownloadingSongs().collect { songs ->
                 songs?.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
+                    if (downloadUtils.downloads.value[song.videoId] == null) {
+                        songRepository.updateDownloadState(
+                            song.videoId,
+                            DownloadState.STATE_NOT_DOWNLOADED,
+                        )
+                    }
                 }
             }
             songRepository.getPreparingSongs().collect { songs ->
                 songs.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
+                    if (downloadUtils.downloads.value[song.videoId] == null) {
+                        songRepository.updateDownloadState(
+                            song.videoId,
+                            DownloadState.STATE_NOT_DOWNLOADED,
+                        )
+                    }
                 }
             }
         }
