@@ -124,9 +124,10 @@ fun DownloadManagementItem(
             modifier
                 .fillMaxWidth()
                 .combinedClickable(
-                    enabled = selectionMode || playable,
+                    // enabled 门不能放这里:它会同时禁掉长按,在途/失败行就进不了多选
+                    // (批量删除在途行=取消任务,语义健全)——不可播行的限制只作用于播放
                     onClick = {
-                        if (selectionMode) onSelectToggle() else onPlay()
+                        if (selectionMode) onSelectToggle() else if (playable) onPlay()
                     },
                     onLongClick = onLongClick,
                 )
