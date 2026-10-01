@@ -106,25 +106,7 @@ import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
 import kotlin.math.roundToInt
 
-/**
- * The player's actual play/pause state, for the row's playing indicator.
- *
- * Callers pass `isPlaying` meaning "this row is the CURRENT track" — that is the condition for
- * showing the equalizer slot at all — but whether the bars MOVE has to follow the player, or a
- * paused queue shows a dancing equalizer on the current row forever. Reading it here (the
- * SharedViewModel is a Koin single, same pattern as the SongRepository below) gives every one of
- * the 13+ call sites the correct two-state behaviour without each screen wiring its own flow.
- *
- * map + distinctUntilChanged collapses ControlState (which also carries volume etc.) to a Boolean,
- * so rows only recompose when playback actually flips.
- */
-@Composable
-private fun rememberActualPlaying(): Boolean {
-    val sharedViewModel: SharedViewModel = koinInject()
-    return remember(sharedViewModel) {
-        sharedViewModel.controllerState.map { it.isPlaying }.distinctUntilChanged()
-    }.collectAsState(initial = false).value
-}
+// rememberActualPlaying 提升到了 PlaybackIndicators.kt(下载管理行也要同款两态指示)
 
 /**
  * This is the song item in the playlist or other places.
