@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadRequest
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadSong
 import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -247,17 +249,18 @@ class SongSelectionViewModel(
     }
 
     /**
-     * Only starts songs that are not already downloaded or in flight — unlike the single-song
-     * menu, this is not a toggle: a selection of 25 will usually mix downloaded and not, and
-     * toggling would silently delete the ones already on disk.
+     * Batch download entry (multi-select): classify first — in-flight (queued/downloading) is
+     * always skipped; file-based "downloaded" entries raise [batchDownloadRequest] for the
+     * skip/overwrite dialog (2026-09-30 定稿); an all-clean selection queues immediately.
      */
     fun download(videoIds: List<String>) {
         viewModelScope.launch {
             // 防御:涉及源未登录不下载(面板已置灰;2026-09-25 用户定案)
             val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
             val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val songs = songsOf(videoIds)
             val loggedOut =
-                songsOf(videoIds).any { song ->
+                songs.any { song ->
                     (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
                         (song.videoId.toLongOrNull() == null && !ytLoggedIn)
                 }
@@ -265,25 +268,83 @@ class SongSelectionViewModel(
                 makeToast(getString(Res.string.need_login_toast))
                 return@launch
             }
-            val pending =
-                songsOf(videoIds).filter {
-                    it.downloadState == DownloadState.STATE_NOT_DOWNLOADED
+            val notDownloaded = mutableListOf<BatchDownloadSong>()
+            val downloaded = mutableListOf<BatchDownloadSong>()
+            songs.forEach { song ->
+                val meta =
+                    BatchDownloadSong(
+                        videoId = song.videoId,
+                        title = song.title,
+                        thumbnail = song.thumbnails ?: "",
+                    )
+                val inFlight =
+                    song.downloadState == DownloadState.STATE_PREPARING ||
+                        song.downloadState == DownloadState.STATE_DOWNLOADING ||
+                        downloadUtils.isAudioQueuedOrDownloading(song.videoId)
+                val fileOnDisk = song.downloadedFilePath?.let { java.io.File(it).exists() } == true
+                when {
+                    inFlight -> Unit
+                    fileOnDisk -> downloaded += meta
+                    else -> notDownloaded += meta
                 }
-            if (pending.isEmpty()) return@launch
-            pending.forEach { song ->
-                songRepository.updateDownloadState(
-                    videoId = song.videoId,
-                    downloadState = DownloadState.STATE_PREPARING,
-                )
-                downloadUtils.downloadTrack(
-                    videoId = song.videoId,
-                    title = song.title,
-                    thumbnail = song.thumbnails ?: "",
-                )
             }
-            makeToast(getString(Res.string.downloading))
+            if (notDownloaded.isEmpty() && downloaded.isEmpty()) return@launch
+            if (downloaded.isEmpty()) {
+                queueBatch(notDownloaded)
+            } else {
+                _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
+            }
         }
     }
+
+    private val _batchDownloadRequest = MutableStateFlow<BatchDownloadRequest?>(null)
+    val batchDownloadRequest: StateFlow<BatchDownloadRequest?> = _batchDownloadRequest.asStateFlow()
+
+    fun dismissBatchDownload() {
+        _batchDownloadRequest.value = null
+    }
+
+    fun confirmBatchDownload(overwrite: Boolean) {
+        val request = _batchDownloadRequest.value ?: return
+        _batchDownloadRequest.value = null
+        viewModelScope.launch {
+            val target =
+                if (overwrite) {
+                    // 覆盖:先降级引用容器(state=3 的 watcher 会把删掉的歌排回队列),再删文件重下
+                    request.downloaded.forEach { song ->
+                        demoteDownloadedContainersOf(song.videoId)
+                        downloadUtils.removeAudioDownload(song.videoId)
+                    }
+                    request.notDownloaded + request.downloaded
+                } else {
+                    request.notDownloaded
+                }
+            queueBatch(target)
+        }
+    }
+
+    private suspend fun queueBatch(songs: List<BatchDownloadSong>) {
+        songs.forEach { song ->
+            songRepository.updateDownloadState(
+                videoId = song.videoId,
+                downloadState = DownloadState.STATE_PREPARING,
+            )
+            downloadUtils.downloadTrack(
+                videoId = song.videoId,
+                title = song.title,
+                thumbnail = song.thumbnail,
+            )
+        }
+        if (songs.isNotEmpty()) makeToast(getString(Res.string.downloading))
+    }
+
+    private suspend fun demoteDownloadedContainersOf(videoId: String) =
+        demoteDownloadedContainers(
+            videoId = videoId,
+            playlistRepository = playlistRepository,
+            albumRepository = albumRepository,
+            localPlaylistRepository = localPlaylistRepository,
+        )
 
     /**
      * The removal counterpart of [download], offered by the downloaded-songs grid where every

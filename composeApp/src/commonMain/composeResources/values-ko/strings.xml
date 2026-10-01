@@ -697,4 +697,21 @@
     <string name="haptic_feedback_strong">강하게</string>
     <string name="home_login_required_title">YouTube Music에 로그인</string>
     <string name="home_login_required_subtitle">홈 콘텐츠는 로그인이 필요합니다</string>
+
+    <string name="batch_download_confirm_title">%1$d곡 이미 다운로드됨</string>
+    <string name="batch_download_confirm_message">다시 다운로드하면 기존 파일이 교체됩니다. 건너뛸까요, 덮어쓸까요?</string>
+    <string name="batch_download_skip">다운로드된 곡 건너뛰기</string>
+    <string name="batch_download_overwrite">다시 다운로드</string>
+
+    <string name="download_status_queued">대기 중</string>
+    <string name="download_status_paused">일시정지됨</string>
+    <string name="download_status_failed">실패함</string>
+    <string name="download_status_saving">파일 저장 중…</string>
+    <string name="download_status_file_missing">파일 없음</string>
+    <string name="download_action_pause_all">모두 일시정지</string>
+    <string name="download_action_resume_all">모두 재개</string>
+    <string name="download_action_retry_failed">실패 항목 재시도</string>
+    <string name="download_action_cancel_download">다운로드 취소</string>
+    <string name="download_action_redownload">다시 다운로드</string>
+    <string name="download_video_label">동영상</string>
 </resources>

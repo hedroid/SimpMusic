@@ -24,11 +24,15 @@ import com.maxrave.domain.utils.toArrayListTrack
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.logger.LogLevel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadRequest
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadSong
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.first
@@ -45,6 +49,7 @@ import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.unsubscribed_netease_album
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.download_cancelled
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.playlist_is_empty
@@ -380,22 +385,86 @@ class AlbumViewModel(
                 makeToast(getString(Res.string.playlist_is_empty))
                 return@launch
             }
-            val listJob = fullListSong.filter { it.downloadState != DownloadState.STATE_DOWNLOADED }
-            log("List job: $listJob")
-            if (listJob.isEmpty()) {
+            // 三选分类(2026-09-30 定稿):在途跳过;文件式已下载→弹窗;其余直接入队
+            val notDownloaded = mutableListOf<BatchDownloadSong>()
+            val downloaded = mutableListOf<BatchDownloadSong>()
+            fullListSong.forEach { song ->
+                val meta =
+                    BatchDownloadSong(
+                        videoId = song.videoId,
+                        title = song.title,
+                        thumbnail = song.thumbnails ?: "",
+                    )
+                val inFlight =
+                    song.downloadState == DownloadState.STATE_PREPARING ||
+                        song.downloadState == DownloadState.STATE_DOWNLOADING ||
+                        downloadUtils.isAudioQueuedOrDownloading(song.videoId)
+                val fileOnDisk = song.downloadedFilePath?.let { java.io.File(it).exists() } == true
+                when {
+                    inFlight -> Unit
+                    fileOnDisk -> downloaded += meta
+                    else -> notDownloaded += meta
+                }
+            }
+            if (notDownloaded.isEmpty() && downloaded.isEmpty()) {
                 makeToast(getString(Res.string.downloaded))
                 return@launch
             }
-            albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
-            listJob.forEach {
-                log("Download: ${it.videoId} ${it.thumbnails}")
-                downloadUtils.downloadTrack(
-                    it.videoId,
-                    it.title,
-                    it.thumbnails ?: "",
-                )
+            if (downloaded.isEmpty()) {
+                albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
+                queueBatchDownload(notDownloaded)
+            } else {
+                _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
             }
         }
+    }
+
+    private val _batchDownloadRequest = MutableStateFlow<BatchDownloadRequest?>(null)
+    val batchDownloadRequest: StateFlow<BatchDownloadRequest?> = _batchDownloadRequest.asStateFlow()
+
+    fun dismissBatchDownload() {
+        _batchDownloadRequest.value = null
+    }
+
+    fun confirmBatchDownload(overwrite: Boolean) {
+        val request = _batchDownloadRequest.value ?: return
+        _batchDownloadRequest.value = null
+        viewModelScope.launch {
+            val target =
+                if (overwrite) {
+                    // 覆盖:降级引用容器防 watcher 重排队,再删旧文件重新入队
+                    request.downloaded.forEach { song ->
+                        demoteDownloadedContainers(
+                            videoId = song.videoId,
+                            playlistRepository = playlistRepository,
+                            albumRepository = albumRepository,
+                            localPlaylistRepository = localPlaylistRepository,
+                        )
+                        downloadUtils.removeAudioDownload(song.videoId)
+                    }
+                    request.notDownloaded + request.downloaded
+                } else {
+                    request.notDownloaded
+                }
+            albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
+            queueBatchDownload(target)
+        }
+    }
+
+    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>) {
+        songs.forEach { song ->
+            log("Download: ${song.videoId}")
+            songRepository.updateDownloadState(
+                videoId = song.videoId,
+                downloadState = DownloadState.STATE_PREPARING,
+            )
+            downloadUtils.downloadTrack(
+                song.videoId,
+                song.title,
+                song.thumbnail,
+            )
+        }
+        if (songs.isNotEmpty()) makeToast(getString(Res.string.downloading))
     }
 
     /** Stop an in-flight album download; finished tracks keep their files. */

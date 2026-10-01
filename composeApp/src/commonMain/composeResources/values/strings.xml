@@ -1142,4 +1142,21 @@
     <string name="overwrite_download_message">This song was already downloaded as a file. Redownloading replaces the existing file.</string>
     <string name="download_video">Download video</string>
 
+
+    <string name="batch_download_confirm_title">%1$d songs already downloaded</string>
+    <string name="batch_download_confirm_message">Redownloading replaces the existing files. Skip them, or download over them?</string>
+    <string name="batch_download_skip">Skip downloaded</string>
+    <string name="batch_download_overwrite">Redownload</string>
+
+    <string name="download_status_queued">Queued</string>
+    <string name="download_status_paused">Paused</string>
+    <string name="download_status_failed">Failed</string>
+    <string name="download_status_saving">Saving file…</string>
+    <string name="download_status_file_missing">File missing</string>
+    <string name="download_action_pause_all">Pause all</string>
+    <string name="download_action_resume_all">Resume all</string>
+    <string name="download_action_retry_failed">Retry failed</string>
+    <string name="download_action_cancel_download">Cancel download</string>
+    <string name="download_action_redownload">Redownload</string>
+    <string name="download_video_label">Video</string>
 </resources>

@@ -8,9 +8,9 @@ import com.maxrave.common.Config
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
+import com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
 import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
-import com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
@@ -38,11 +38,15 @@ import com.maxrave.simpmusic.viewModel.PlaylistUIState.Loading
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadRequest
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadSong
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -58,6 +62,7 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
+import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
@@ -983,16 +988,95 @@ class PlaylistViewModel(
     fun downloadFullPlaylist() {
         viewModelScope.launch {
             val id = playlistEntity.value?.id ?: return@launch
-            makeToast(getString(Res.string.downloading))
-            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
             getFullTracks { tracks ->
-                tracks.forEach {
-                    viewModelScope.launch {
-                        downloadUtils.downloadTrack(it.videoId, it.title, it.thumbnails?.lastOrNull()?.url ?: "")
+                viewModelScope.launch {
+                    // 三选分类(2026-09-30 定稿):在途跳过;文件式已下载→弹窗;其余直接入队
+                    val songs =
+                        songRepository.getSongsByListVideoId(tracks.toListVideoId()).firstOrNull()
+                            ?: emptyList()
+                    val byId = songs.associateBy { it.videoId }
+                    val notDownloaded = mutableListOf<BatchDownloadSong>()
+                    val downloaded = mutableListOf<BatchDownloadSong>()
+                    tracks.forEach { track ->
+                        val meta =
+                            BatchDownloadSong(
+                                videoId = track.videoId,
+                                title = track.title,
+                                thumbnail = track.thumbnails?.lastOrNull()?.url ?: "",
+                            )
+                        val row = byId[track.videoId]
+                        val inFlight =
+                            row?.downloadState == STATE_PREPARING ||
+                                row?.downloadState == STATE_DOWNLOADING ||
+                                downloadUtils.isAudioQueuedOrDownloading(track.videoId)
+                        val fileOnDisk = row?.downloadedFilePath?.let { java.io.File(it).exists() } == true
+                        when {
+                            inFlight -> Unit
+                            fileOnDisk -> downloaded += meta
+                            else -> notDownloaded += meta
+                        }
+                    }
+                    if (downloaded.isEmpty()) {
+                        if (notDownloaded.isNotEmpty()) {
+                            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
+                            queueBatchDownload(notDownloaded)
+                        } else {
+                            makeToast(getString(Res.string.downloaded))
+                        }
+                    } else {
+                        _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
                     }
                 }
             }
         }
+    }
+
+    private val _batchDownloadRequest = MutableStateFlow<BatchDownloadRequest?>(null)
+    val batchDownloadRequest: StateFlow<BatchDownloadRequest?> = _batchDownloadRequest.asStateFlow()
+
+    fun dismissBatchDownload() {
+        _batchDownloadRequest.value = null
+    }
+
+    fun confirmBatchDownload(overwrite: Boolean) {
+        val request = _batchDownloadRequest.value ?: return
+        _batchDownloadRequest.value = null
+        viewModelScope.launch {
+            val id = playlistEntity.value?.id ?: return@launch
+            val target =
+                if (overwrite) {
+                    // 覆盖:降级引用容器防 watcher 重排队,再删旧文件重新入队
+                    request.downloaded.forEach { song ->
+                        demoteDownloadedContainers(
+                            videoId = song.videoId,
+                            playlistRepository = playlistRepository,
+                            albumRepository = albumRepository,
+                            localPlaylistRepository = localPlaylistRepository,
+                        )
+                        downloadUtils.removeAudioDownload(song.videoId)
+                    }
+                    request.notDownloaded + request.downloaded
+                } else {
+                    request.notDownloaded
+                }
+            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
+            queueBatchDownload(target)
+        }
+    }
+
+    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>) {
+        songs.forEach { song ->
+            songRepository.updateDownloadState(
+                videoId = song.videoId,
+                downloadState = STATE_PREPARING,
+            )
+            downloadUtils.downloadTrack(
+                videoId = song.videoId,
+                title = song.title,
+                thumbnail = song.thumbnail,
+            )
+        }
+        if (songs.isNotEmpty()) makeToast(getString(Res.string.downloading))
     }
 
     /**

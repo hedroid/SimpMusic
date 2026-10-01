@@ -794,4 +794,21 @@
     <string name="overwrite_download_message">這首歌已下載為檔案，重新下載將覆蓋現有檔案。</string>
     <string name="download_video">下載影片</string>
 
+
+    <string name="batch_download_confirm_title">已下載 %1$d 首歌曲</string>
+    <string name="batch_download_confirm_message">重新下載會取代現有檔案。要略過還是覆蓋這些歌曲？</string>
+    <string name="batch_download_skip">略過已下載</string>
+    <string name="batch_download_overwrite">重新下載</string>
+
+    <string name="download_status_queued">排隊中</string>
+    <string name="download_status_paused">已暫停</string>
+    <string name="download_status_failed">下載失敗</string>
+    <string name="download_status_saving">正在儲存檔案…</string>
+    <string name="download_status_file_missing">檔案已遺失</string>
+    <string name="download_action_pause_all">暫停全部</string>
+    <string name="download_action_resume_all">全部繼續</string>
+    <string name="download_action_retry_failed">重試失敗項</string>
+    <string name="download_action_cancel_download">取消下載</string>
+    <string name="download_action_redownload">重新下載</string>
+    <string name="download_video_label">影片</string>
 </resources>

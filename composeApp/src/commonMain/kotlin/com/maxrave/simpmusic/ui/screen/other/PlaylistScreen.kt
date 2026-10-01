@@ -87,6 +87,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kmpalette.rememberPaletteState
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
+import com.maxrave.simpmusic.ui.component.BatchDownloadConfirmDialog
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
@@ -1424,6 +1425,17 @@ fun PlaylistScreen(
                 viewModel.makeToast("Error: ${state.message}")
                 navController.navigateUp()
             }
+        }
+
+        // 整歌单下载"跳过/覆盖/取消"三选弹窗(2026-10 二期)
+        val batchDownloadRequest by viewModel.batchDownloadRequest.collectAsStateWithLifecycle()
+        batchDownloadRequest?.let { request ->
+            BatchDownloadConfirmDialog(
+                downloadedCount = request.downloaded.size,
+                onSkip = { viewModel.confirmBatchDownload(false) },
+                onOverwrite = { viewModel.confirmBatchDownload(true) },
+                onDismiss = { viewModel.dismissBatchDownload() },
+            )
         }
     }
 }

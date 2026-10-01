@@ -573,4 +573,21 @@
     <string name="haptic_feedback_strong">強い</string>
     <string name="home_login_required_title">YouTube Music にログイン</string>
     <string name="home_login_required_subtitle">ホームの内容にはログインが必要です</string>
+
+    <string name="batch_download_confirm_title">%1$d 曲がダウンロード済み</string>
+    <string name="batch_download_confirm_message">再ダウンロードすると既存のファイルが置き換えられます。スキップしますか？上書きしますか？</string>
+    <string name="batch_download_skip">ダウンロード済みをスキップ</string>
+    <string name="batch_download_overwrite">再ダウンロード</string>
+
+    <string name="download_status_queued">待機中</string>
+    <string name="download_status_paused">一時停止中</string>
+    <string name="download_status_failed">失敗しました</string>
+    <string name="download_status_saving">ファイルを保存中…</string>
+    <string name="download_status_file_missing">ファイルが見つかりません</string>
+    <string name="download_action_pause_all">すべて一時停止</string>
+    <string name="download_action_resume_all">すべて再開</string>
+    <string name="download_action_retry_failed">失敗項目を再試行</string>
+    <string name="download_action_cancel_download">ダウンロードをキャンセル</string>
+    <string name="download_action_redownload">再ダウンロード</string>
+    <string name="download_video_label">動画</string>
 </resources>

@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.maxrave.simpmusic.viewModel.DownloadEntryStatus
+import com.maxrave.simpmusic.viewModel.sortRank
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -68,6 +71,9 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import simpmusic.composeapp.generated.resources.download_action_pause_all
+import simpmusic.composeapp.generated.resources.download_action_resume_all
+import simpmusic.composeapp.generated.resources.download_action_retry_failed
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
@@ -215,11 +221,17 @@ fun DownloadedManagementBody(
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
     val downloads by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
-    val downloadedSongs by dynamicPlaylistViewModel.listDownloadedSong.collectAsStateWithLifecycle()
+    val managementRows by dynamicPlaylistViewModel.downloadManagementRows.collectAsStateWithLifecycle()
     val nowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
     var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
     var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
+    // 二期:行删除/取消的确认目标(videoId+标题);在途"取消下载"也走确认防误触
+    var deleteRowTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // 暂停全部只对 DownloadManager 在途(下载中/排队)有效;转存中(EXPORTING)不走队列停不了
+    val hasPausable = managementRows.any { listOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: 9).any { r -> r == 0 || r == 2 } }
+    val hasPaused = managementRows.any { it.audioStatus == DownloadEntryStatus.PAUSED || it.videoStatus == DownloadEntryStatus.PAUSED }
+    val hasFailed = managementRows.any { it.audioStatus == DownloadEntryStatus.FAILED || it.videoStatus == DownloadEntryStatus.FAILED }
 
     Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
         Row(
@@ -244,7 +256,7 @@ fun DownloadedManagementBody(
         }
         Box(modifier = Modifier.weight(1f)) {
             if (downloadedSection == DownloadedSection.Songs) {
-                if (downloadedSongs.isEmpty()) {
+                if (managementRows.isEmpty()) {
                     // 空态=恒在顶:切页不再统一复位标题,从收起态的深滚动页切到空页时
                     // 若不上报,标题会继承收起态且没有任何滚动事件可纠正(CR-31)
                     LaunchedEffect(Unit) { onScrolling(true) }
@@ -269,29 +281,56 @@ fun DownloadedManagementBody(
                                 }
                             }
                     }
-                    LazyColumn(
-                        state = songsListState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = bottomPadding),
-                    ) {
-                        items(downloadedSongs, key = { it.videoId }) { song ->
-                            SongFullWidthItems(
-                                songEntity = song,
-                                isPlaying = nowPlaying?.track?.videoId == song.videoId,
-                                modifier = Modifier.fillMaxWidth(),
-                                onClickListener = {
-                                    dynamicPlaylistViewModel.playSong(
-                                        song.videoId,
-                                        LibraryDynamicPlaylistType.Downloaded,
-                                    )
-                                },
-                                onMoreClickListener = { selectedDownloadedSong = song },
-                                onAddToQueue = {
-                                    sharedViewModel.addListToQueue(arrayListOf(song.toTrack()))
-                                },
-                            )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // 批量操作行(2026-10 二期):按当前列表状态显隐
+                        if (hasPausable || hasPaused || hasFailed) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (hasPausable) {
+                                    TextButton(onClick = dynamicPlaylistViewModel::pauseAllDownloads) {
+                                        Text(stringResource(Res.string.download_action_pause_all), style = typo().labelMedium)
+                                    }
+                                }
+                                if (hasPaused) {
+                                    TextButton(onClick = dynamicPlaylistViewModel::resumeAllDownloads) {
+                                        Text(stringResource(Res.string.download_action_resume_all), style = typo().labelMedium)
+                                    }
+                                }
+                                if (hasFailed) {
+                                    TextButton(onClick = dynamicPlaylistViewModel::retryFailedDownloads) {
+                                        Text(stringResource(Res.string.download_action_retry_failed), style = typo().labelMedium)
+                                    }
+                                }
+                            }
                         }
-                        item { EndOfPage(includeBottomBarPadding = false) }
+                        LazyColumn(
+                            state = songsListState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = bottomPadding),
+                        ) {
+                            items(managementRows, key = { it.song.videoId }) { row ->
+                                DownloadManagementItem(
+                                    row = row,
+                                    isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                    onPlay = {
+                                        dynamicPlaylistViewModel.playSong(
+                                            row.song.videoId,
+                                            LibraryDynamicPlaylistType.Downloaded,
+                                        )
+                                    },
+                                    onPause = { dynamicPlaylistViewModel.pauseDownload(row.song.videoId) },
+                                    onResume = { dynamicPlaylistViewModel.resumeDownload(row.song.videoId) },
+                                    onRetry = { dynamicPlaylistViewModel.retryDownload(row.song.videoId) },
+                                    onRedownload = { dynamicPlaylistViewModel.redownload(row.song.videoId) },
+                                    onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                    onSongMenu = { selectedDownloadedSong = row.song },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            item { EndOfPage(includeBottomBarPadding = false) }
+                        }
                     }
                 }
             } else {
@@ -313,6 +352,29 @@ fun DownloadedManagementBody(
             onDismiss = { selectedDownloadedSong = null },
             navController = navController,
             song = song,
+        )
+    }
+
+    // 二期:条目删除/取消下载确认(在途取消与完成删除都破坏数据,防误触)
+    deleteRowTarget?.let { (videoId, title) ->
+        AlertDialog(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            onDismissRequest = { deleteRowTarget = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteRowTarget = null
+                    dynamicPlaylistViewModel.deleteDownload(videoId)
+                }) {
+                    Text(stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteRowTarget = null }) {
+                    Text(stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(title, style = typo().labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            text = { Text(stringResource(Res.string.remove_download_message), style = typo().bodyMedium) },
         )
     }
 
