@@ -17,6 +17,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.maxrave.simpmusic.viewModel.DownloadEntryStatus
+import com.maxrave.simpmusic.viewModel.DownloadManagementRow
+import com.maxrave.simpmusic.ui.screen.library.DownloadViewMode
+import com.maxrave.simpmusic.viewModel.formatDownloadBytes
 import com.maxrave.simpmusic.viewModel.sortRank
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
@@ -73,6 +76,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.select_all
+import simpmusic.composeapp.generated.resources.download_stats_songs
+import simpmusic.composeapp.generated.resources.download_stats_videos
+import simpmusic.composeapp.generated.resources.download_no_videos
 import simpmusic.composeapp.generated.resources.download_section_in_progress
 import simpmusic.composeapp.generated.resources.download_section_completed
 import simpmusic.composeapp.generated.resources.download_action_pause_all
@@ -224,12 +230,10 @@ fun DownloadedManagementBody(
     // 库页 chip 内嵌时接顶栏收起信号(与其它 chip 页同款);独立路由不传,不参与
     onScrolling: (onTop: Boolean) -> Unit = {},
 ) {
-    val downloads by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val managementRows by dynamicPlaylistViewModel.downloadManagementRows.collectAsStateWithLifecycle()
     val nowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
     var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
     var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
-    var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     // 二期:行删除/取消的确认目标(videoId+标题);在途"取消下载"也走确认防误触
     var deleteRowTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     // 多选模式(用户反馈 2026-10):长按行进入;批量删除所选
@@ -256,21 +260,41 @@ fun DownloadedManagementBody(
             }
             Box(modifier = Modifier.weight(1f)) {
                 LibraryTilingItem(
-                    state = LibraryTilingState.DownloadedPlaylists,
-                    selected = downloadedSection == DownloadedSection.Playlists,
-                    onClick = { downloadedSection = DownloadedSection.Playlists },
+                    state = LibraryTilingState.DownloadedVideos,
+                    selected = downloadedSection == DownloadedSection.Videos,
+                    onClick = { downloadedSection = DownloadedSection.Videos },
                 )
             }
         }
+        // 视角数据(2026-10-01 用户定案:tab=歌曲/视频,废弃歌单容器分类):歌曲=全部行,
+        // 视频=有视频条目/路径的行;统计行只数已完成态(在途不计大小)
+        val isVideoTab = downloadedSection == DownloadedSection.Videos
+        val viewRows =
+            if (isVideoTab) {
+                managementRows.filter { it.videoStatus != null }
+            } else {
+                managementRows
+            }
+        val completedCount =
+            viewRows.count {
+                val r = if (isVideoTab) it.videoStatus?.sortRank() else it.audioStatus.sortRank()
+                r == 6
+            }
+        val completedBytes =
+            viewRows.sumOf {
+                (if (isVideoTab) it.videoFileBytes else it.audioFileBytes) ?: 0L
+            }
         Box(modifier = Modifier.weight(1f)) {
-            if (downloadedSection == DownloadedSection.Songs) {
-                if (managementRows.isEmpty()) {
+            if (viewRows.isEmpty()) {
                     // 空态=恒在顶:切页不再统一复位标题,从收起态的深滚动页切到空页时
                     // 若不上报,标题会继承收起态且没有任何滚动事件可纠正(CR-31)
                     LaunchedEffect(Unit) { onScrolling(true) }
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = stringResource(Res.string.no_downloaded_songs),
+                            text =
+                                stringResource(
+                                    if (isVideoTab) Res.string.download_no_videos else Res.string.no_downloaded_songs,
+                                ),
                             style = typo().labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -334,16 +358,30 @@ fun DownloadedManagementBody(
                                 }
                             }
                         }
-                        // 分组(用户 2026-10-01):在途(下载中/排队/暂停/失败/转存中)与已完成
-                        // (含文件丢失/旧缓存)两个节;组内维持既有排序(状态优先+时间倒序)
-                        val inFlightRows =
-                            managementRows.filter {
-                                minOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: Int.MAX_VALUE) <= 4
-                            }
-                        val completedRows = managementRows.filter {
-                            val r = minOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: Int.MAX_VALUE)
-                            r >= 5
+                        // 统计行(业界标配:完成数+总大小)
+                        if (completedCount > 0) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (isVideoTab) Res.string.download_stats_videos else Res.string.download_stats_songs,
+                                        completedCount,
+                                        formatDownloadBytes(completedBytes),
+                                    ),
+                                style = typo().labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 15.dp, vertical = 2.dp),
+                            )
                         }
+                        // 分组:在途(下载中/排队/暂停/失败/转存中)与已完成(含丢失/旧缓存)两节
+                        val rankOf: (DownloadManagementRow) -> Int = { row ->
+                            if (isVideoTab) {
+                                row.videoStatus?.sortRank() ?: Int.MAX_VALUE
+                            } else {
+                                minOf(row.audioStatus.sortRank(), row.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+                            }
+                        }
+                        val inFlightRows = viewRows.filter { rankOf(it) <= 4 }
+                        val completedRows = viewRows.filter { rankOf(it) >= 5 }
                         LazyColumn(
                             state = songsListState,
                             modifier = Modifier.fillMaxSize(),
@@ -362,6 +400,7 @@ fun DownloadedManagementBody(
                                     DownloadManagementRowItem(
                                         row = row,
                                         isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                        viewMode = if (isVideoTab) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,
                                         selectionMode = selectionMode,
                                         selectedIds = selectedIds,
                                         onEnterSelection = {
@@ -391,6 +430,7 @@ fun DownloadedManagementBody(
                                     DownloadManagementRowItem(
                                         row = row,
                                         isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                        viewMode = if (isVideoTab) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,
                                         selectionMode = selectionMode,
                                         selectedIds = selectedIds,
                                         onEnterSelection = {
@@ -411,17 +451,6 @@ fun DownloadedManagementBody(
                         }
                     }
                 }
-            } else {
-                GridLibraryPlaylist(
-                    navController = navController,
-                    contentPadding = PaddingValues(bottom = bottomPadding),
-                    data = downloads,
-                    emptyText = Res.string.no_playlists_downloaded,
-                    onScrolling = onScrolling,
-                    onRemoveDownload = { removeDownloadTarget = it },
-                    onReload = viewModel::getDownloadedPlaylist,
-                )
-            }
         }
     }
 
@@ -492,6 +521,7 @@ fun DownloadedManagementBody(
 private fun DownloadManagementRowItem(
     row: com.maxrave.simpmusic.viewModel.DownloadManagementRow,
     isPlaying: Boolean,
+    viewMode: DownloadViewMode,
     selectionMode: Boolean,
     selectedIds: Set<String>,
     onEnterSelection: () -> Unit,
@@ -503,6 +533,7 @@ private fun DownloadManagementRowItem(
     DownloadManagementItem(
         row = row,
         isPlaying = isPlaying,
+        viewMode = viewMode,
         selectionMode = selectionMode,
         isSelected = row.song.videoId in selectedIds,
         onLongClick = onEnterSelection,
@@ -525,7 +556,7 @@ private fun DownloadManagementRowItem(
 
 internal enum class DownloadedSection {
     Songs,
-    Playlists,
+    Videos,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

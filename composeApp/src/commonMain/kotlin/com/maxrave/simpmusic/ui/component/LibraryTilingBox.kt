@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
 import com.maxrave.simpmusic.ui.icon.Album
+import com.maxrave.simpmusic.ui.icon.Movie
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Insights
@@ -35,6 +36,7 @@ import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.download_video_label
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloaded_songs_tab
 import simpmusic.composeapp.generated.resources.favorite
@@ -235,6 +237,13 @@ data class LibraryTilingState(
                 containerColor = Color(0xffD5B8FF),
                 icon = SimpIcons.LibraryMusic,
                 iconColor = Color(0xff4A148C),
+            )
+        val DownloadedVideos =
+            LibraryTilingState(
+                title = Res.string.download_video_label,
+                containerColor = Color(0xffB3E5FC),
+                icon = SimpIcons.Movie,
+                iconColor = Color(0xff01579B),
             )
     }
 }

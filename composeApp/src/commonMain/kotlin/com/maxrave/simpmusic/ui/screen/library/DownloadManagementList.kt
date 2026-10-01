@@ -49,16 +49,21 @@ import simpmusic.composeapp.generated.resources.download_video_label
 import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 
+/** 行主视角:歌曲 tab 看音频条目,视频 tab 看视频条目(状态行/进度/主操作全切) */
+enum class DownloadViewMode { AUDIO, VIDEO }
+
 /**
- * 下载管理页的歌曲条目行(2026-10 二期+用户反馈改版):封面+标题+状态行(进度/大小/失败/
+ * 下载管理页的条目行(2026-10 二期+用户反馈改版):封面+标题+状态行(进度/大小/失败/
  * 丢失)+主操作按钮(暂停/继续/重试/重下/删除[playlist_remove])+三点直接弹歌曲操作
- * sheet(不再用行内下拉菜单)。多选模式:长按进入,行首 Checkbox,点击切换选择。
+ * sheet。多选模式:长按进入,行首 Checkbox,点击切换选择。视频 tab 传 [DownloadViewMode.VIDEO]
+ * (播放走 mp4 兜底链路,删除走引擎按列清理)。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DownloadManagementItem(
     row: DownloadManagementRow,
     isPlaying: Boolean,
+    viewMode: DownloadViewMode = DownloadViewMode.AUDIO,
     selectionMode: Boolean = false,
     isSelected: Boolean = false,
     onLongClick: () -> Unit = {},
@@ -72,11 +77,25 @@ fun DownloadManagementItem(
     onSongMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val primaryRank = minOf(row.audioStatus.sortRank(), row.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+    val isVideoView = viewMode == DownloadViewMode.VIDEO
+    val primaryRank =
+        if (isVideoView) {
+            row.videoStatus?.sortRank() ?: Int.MAX_VALUE
+        } else {
+            minOf(row.audioStatus.sortRank(), row.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+        }
+    val primaryStatus = if (isVideoView) row.videoStatus else row.audioStatus
+    val primaryLive = if (isVideoView) row.videoLive else row.audioLive
+    val primaryBytes = if (isVideoView) row.videoFileBytes else row.audioFileBytes
     val contentColor = MaterialTheme.colorScheme.onSurface
     val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
     val failedColor = MaterialTheme.colorScheme.error
-    val playable = row.audioStatus == DownloadEntryStatus.DONE || row.audioStatus == DownloadEntryStatus.FILE_MISSING
+    val playable =
+        if (isVideoView) {
+            row.videoStatus == DownloadEntryStatus.DONE || row.videoStatus == DownloadEntryStatus.FILE_MISSING
+        } else {
+            row.audioStatus == DownloadEntryStatus.DONE || row.audioStatus == DownloadEntryStatus.FILE_MISSING
+        }
 
     Row(
         modifier =
@@ -122,24 +141,26 @@ fun DownloadManagementItem(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = entryStatusText(row.audioStatus, row.audioLive, row.audioFileBytes),
+                text = entryStatusText(primaryStatus ?: DownloadEntryStatus.FILE_MISSING, primaryLive, primaryBytes),
                 style = typo().bodySmall,
                 color = if (primaryRank == 4) failedColor else subtitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            row.videoStatus?.let { videoStatus ->
-                Text(
-                    text =
-                        stringResource(Res.string.download_video_label) + " · " +
-                            entryStatusText(videoStatus, row.videoLive, row.videoFileBytes),
-                    style = typo().bodySmall,
-                    color = subtitleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (!isVideoView) {
+                row.videoStatus?.let { videoStatus ->
+                    Text(
+                        text =
+                            stringResource(Res.string.download_video_label) + " · " +
+                                entryStatusText(videoStatus, row.videoLive, row.videoFileBytes),
+                        style = typo().bodySmall,
+                        color = subtitleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            progressOf(row)?.let { progress ->
+            progressOf(row, viewMode)?.let { progress ->
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier =
@@ -168,15 +189,16 @@ fun DownloadManagementItem(
     }
 }
 
-/** 下载中的整体进度(0..1):音频优先,音频无百分比再看视频 */
-private fun progressOf(row: DownloadManagementRow): Float? {
-    (row.audioLive.takeIf { row.audioStatus == DownloadEntryStatus.DOWNLOADING })?.let { live ->
-        if (live.percentDownloaded >= 0) return live.percentDownloaded / 100f
+/** 下载中的进度(0..1):音频视角看音频条目,视频视角只看视频;音频视角下音频无百分比再看视频 */
+private fun progressOf(
+    row: DownloadManagementRow,
+    viewMode: DownloadViewMode,
+): Float? {
+    val pick: (com.maxrave.domain.mediaservice.handler.DownloadHandler.Download?, DownloadEntryStatus?) -> Float? = { live, status ->
+        if (status == DownloadEntryStatus.DOWNLOADING && live != null && live.percentDownloaded >= 0) live.percentDownloaded / 100f else null
     }
-    (row.videoLive.takeIf { row.videoStatus == DownloadEntryStatus.DOWNLOADING })?.let { live ->
-        if (live.percentDownloaded >= 0) return live.percentDownloaded / 100f
-    }
-    return null
+    if (viewMode == DownloadViewMode.VIDEO) return pick(row.videoLive, row.videoStatus)
+    return pick(row.audioLive, row.audioStatus) ?: pick(row.videoLive, row.videoStatus)
 }
 
 @Composable
