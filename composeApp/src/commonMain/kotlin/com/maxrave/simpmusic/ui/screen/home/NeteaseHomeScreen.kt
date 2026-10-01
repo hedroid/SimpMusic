@@ -78,7 +78,7 @@ import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeItemSong
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
 import com.maxrave.simpmusic.ui.component.HomeShimmer
-import com.maxrave.simpmusic.ui.icon.Delete
+import com.maxrave.simpmusic.ui.icon.PlaylistRemove
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.NeteaseTagDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
@@ -410,8 +410,10 @@ internal fun NeteaseSongCard(
                             .clickable(onClick = onTrash),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // 三横线+右下减号(与歌曲三点 sheet"删除下载?"行同款,2026-10-02 用户定):
+                    // trashFm 语义=从 FM 批次移除并补新曲,PlaylistRemove 比垃圾桶贴切
                     Icon(
-                        imageVector = SimpIcons.Delete,
+                        imageVector = SimpIcons.PlaylistRemove,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(13.dp),
