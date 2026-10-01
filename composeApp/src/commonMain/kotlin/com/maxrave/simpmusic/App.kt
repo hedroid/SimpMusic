@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -110,6 +111,7 @@ import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
@@ -235,6 +237,17 @@ fun App(
         rememberHazeState()
 
     LaunchedEffect(intent) {
+        // NavHost 把 setGraph 推迟到它自己的 effect 里执行,而本 effect 在组合序上先于
+        // NavHost——冷启动 deeplink 的 navigate 会跑在图挂上之前,必崩
+        // "You must call setGraph() before calling getGraph()"。等首屏 back stack 条目
+        // 出现(=图已挂+start 落栈)再导航;5s 超时放弃,防 intent 异常时 activity 空转
+        if (navController.currentBackStackEntry == null) {
+            withTimeoutOrNull(5_000) {
+                while (navController.currentBackStackEntry == null) {
+                    withFrameNanos { }
+                }
+            } ?: return@LaunchedEffect
+        }
         val intent = intent ?: return@LaunchedEffect
         // Launcher shortcuts (long-press the app icon): action-only intents with no data URI.
         // Navigate exactly like tapping the tab itself: pop to start, save/restore sibling tab state.
