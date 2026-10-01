@@ -145,3 +145,15 @@ suspend fun setLoved(
     if (!isLastfmAvailable()) return LastfmOutcome.Error(0, "Last.fm is not configured")
     return LastfmClient.setLoved(apiKey, sharedSecret, sessionKey, artist, track, loved)
 }
+
+/**
+ * track.getInfo's toptags, most-voted first — a read-only genre source for file downloads that
+ * needs no user session, only the build's API key.
+ */
+suspend fun getTopTags(
+    artist: String,
+    track: String,
+): List<String>? {
+    if (!isLastfmAvailable()) return null
+    return LastfmClient.getTopTags(apiKey, sharedSecret, artist, track)
+}

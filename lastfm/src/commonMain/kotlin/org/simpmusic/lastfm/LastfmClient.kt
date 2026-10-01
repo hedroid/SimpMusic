@@ -219,4 +219,36 @@ internal object LastfmClient {
         val response = call(params, secret) ?: return LastfmOutcome.Error(-1, "Network error")
         return response.asErrorOrNull() ?: LastfmOutcome.Ok
     }
+
+    /**
+     * track.getInfo's toptags — read-only, needs no session key. Returns the tag names ordered
+     * by Last.fm's own ranking, most-voted first, so the caller can take the head as "the genre".
+     * Null everywhere means "unavailable" (no key, network, or no tags on this track).
+     */
+    suspend fun getTopTags(
+        apiKey: String,
+        secret: String,
+        artist: String,
+        track: String,
+    ): List<String>? {
+        val params =
+            mapOf(
+                "method" to "track.getInfo",
+                "api_key" to apiKey,
+                "artist" to artist,
+                "track" to track,
+            )
+        val response = call(params, secret) ?: return null
+        response.asErrorOrNull()?.let {
+            Logger.e(TAG, "track.getInfo failed: ${it.code} ${it.message}")
+            return null
+        }
+        val toptags = response["toptags"]?.jsonObject ?: return null
+        // One tag comes back as an object, several as an array — same shape-shifting as scrobble.
+        return when (val entry = toptags["tag"]) {
+            is JsonArray -> entry.mapNotNull { it.jsonObject.stringOrNull("name") }
+            is JsonObject -> listOfNotNull(entry.stringOrNull("name"))
+            else -> null
+        }?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+    }
 }
