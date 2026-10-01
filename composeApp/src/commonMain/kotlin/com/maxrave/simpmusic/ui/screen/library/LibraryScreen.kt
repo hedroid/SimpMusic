@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,8 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -224,7 +224,7 @@ fun LibraryScreen(
         viewModel.getRecentlyAdded()
     }
 
-    val chipRowState = rememberScrollState()
+    val chipRowState = rememberLazyListState()
     val currentFilter by viewModel.currentScreen.collectAsStateWithLifecycle()
     // 顶栏第一排(标题行)随内容滚动收起——与首页顶栏同款效果(用户 2026-09-30)。
     // 信号沿用各 chip 页的 onScrolling(true=在顶/上滑回顶,false=深入内容下滑):
@@ -260,6 +260,46 @@ fun LibraryScreen(
     val sourceIsNetease = selectedSource == MusicSource.NETEASE.name
     val neteaseChipsVisible = neteaseLoggedIn && sourceIsNetease
     val ytChipsVisible = loggedIn && !sourceIsNetease
+
+    // "您的库"chip 页已下线;下载管理升为顶层 chip,本地歌单等独立路由保留但不再从
+    // chip 行进入。顺序(用户 2026-09-20 定序):网易云 → YouTube Music → 排行榜 →
+    // 下载管理(Wrapped 年度回顾 chip 已于 2026-09-30 隐藏,恢复时加回
+    // LibraryChipType.WRAPPED 并放开其内容分支);"进库默认选第一个可见 chip"的
+    // 取值顺序与此保持一致。
+    val topLevelLibraryChips =
+        listOf(
+            LibraryChipType.NETEASE_PLAYLIST,
+            // 网易云播客(仅网易登录显示,未登录不出现——与您的网易云同款门控)
+            LibraryChipType.NETEASE_PODCAST,
+            LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
+            LibraryChipType.CHART,
+            LibraryChipType.DOWNLOADED_PLAYLIST,
+        )
+    // 上面门控的落地点:把显隐规则折成实际渲染的 chip 列表(索引同时供下方滚动 effect 用)
+    val visibleLibraryChips =
+        topLevelLibraryChips.filter { type ->
+            val neteaseChip = type == LibraryChipType.NETEASE_PLAYLIST || type == LibraryChipType.NETEASE_PODCAST
+            val ytChip = type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || type == LibraryChipType.CHART
+            (neteaseChip && neteaseChipsVisible) || (ytChip && ytChipsVisible) ||
+                (!neteaseChip && !ytChip)
+        }
+    // 选中 chip 必须可见(UI-CR-15):程序性变化(回落弹回/切源/登出重定向/深滚动位恢复)
+    // 之后把选中项滚入视野——完全可见时不动,避免与用户手点可见 chip 的滚动打架。
+    // 可见性也作 key:chip 集合增删会让同一选中项的 index 平移(如网易两 chip 插到前面)。
+    LaunchedEffect(currentFilter, neteaseChipsVisible, ytChipsVisible) {
+        val index = visibleLibraryChips.indexOf(currentFilter)
+        if (index >= 0) {
+            val layoutInfo = chipRowState.layoutInfo
+            val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+            val fullyVisible =
+                itemInfo != null &&
+                    itemInfo.offset >= layoutInfo.viewportStartOffset &&
+                    itemInfo.offset + itemInfo.size <= layoutInfo.viewportEndOffset
+            if (!fullyVisible) {
+                chipRowState.animateScrollToItem(index)
+            }
+        }
+    }
 
     // 回落判定:选中 chip 被音源/登录态变化藏掉时弹回第一个可见 chip。门控三流
     // (网易登录/YT 登录/音源)在 effect 内 combine 后消费——组合级 state 在进歌单
@@ -777,38 +817,18 @@ fun LibraryScreen(
                 contentColor = MaterialTheme.colorScheme.onBackground,
             )
         }
-        Row(
+        LazyRow(
+            state = chipRowState,
             modifier =
                 Modifier
-                    .horizontalScroll(chipRowState)
                     .padding(horizontal = 15.dp)
                     .padding(bottom = 8.dp)
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            // LazyRow(UI-CR-15):配合上面的 LaunchedEffect 保证程序性变化后选中项滚入
+            // 视野;rememberLazyListState 同样 saveable,切页返回保留滚动位置。
         ) {
-            // "您的库"chip 页已下线;下载管理升为顶层 chip,本地歌单等独立路由保留但不再从
-            // chip 行进入。顺序(用户 2026-09-20 定序):网易云 → YouTube Music → 排行榜 →
-            // 下载管理(Wrapped 年度回顾 chip 已于 2026-09-30 隐藏,恢复时加回
-            // LibraryChipType.WRAPPED 并放开其内容分支);"进库默认选第一个可见 chip"的
-            // 取值顺序与此保持一致。
-            val topLevelLibraryChips =
-                listOf(
-                    LibraryChipType.NETEASE_PLAYLIST,
-                    // 网易云播客(仅网易登录显示,未登录不出现——与您的网易云同款门控)
-                    LibraryChipType.NETEASE_PODCAST,
-                    LibraryChipType.YOUTUBE_MUSIC_PLAYLIST,
-                    LibraryChipType.CHART,
-                    LibraryChipType.DOWNLOADED_PLAYLIST,
-                )
-            topLevelLibraryChips.forEach { type ->
-                // chip 按音源显隐(用户 2026-09-30 定稿):网易两 chip 只在网易源+登录时
-                // 出现,YT 与排行榜只在 YT 源+登录时出现,不登录不显示;下载管理恒可见
-                if ((type == LibraryChipType.NETEASE_PLAYLIST || type == LibraryChipType.NETEASE_PODCAST) && !neteaseChipsVisible) {
-                    return@forEach
-                }
-                if ((type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || type == LibraryChipType.CHART) && !ytChipsVisible) {
-                    return@forEach
-                }
+            items(visibleLibraryChips, key = { it }) { type ->
                 Chip(
                     isAnimated = false,
                     isSelected = type == currentFilter,
