@@ -254,6 +254,8 @@ import simpmusic.composeapp.generated.resources.download_quality
 import simpmusic.composeapp.generated.resources.downloaded_cache
 import simpmusic.composeapp.generated.resources.download_ai_tags
 import simpmusic.composeapp.generated.resources.download_ai_tags_description
+import simpmusic.composeapp.generated.resources.download_clear_all
+import simpmusic.composeapp.generated.resources.download_clear_all_description
 import simpmusic.composeapp.generated.resources.download_artist_album_folder
 import simpmusic.composeapp.generated.resources.download_artist_album_folder_description
 import simpmusic.composeapp.generated.resources.download_audio_quality
@@ -634,7 +636,6 @@ fun SettingScreen(
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
-    val downloadedCache by viewModel.downloadedCacheSize.collectAsStateWithLifecycle()
     val thumbnailCache by viewModel.thumbCacheSize.collectAsStateWithLifecycle()
     val canvasCache by viewModel.canvasCacheSize.collectAsStateWithLifecycle()
     val limitPlayerCache by viewModel.playerCacheLimit.collectAsStateWithLifecycle()
@@ -1310,158 +1311,6 @@ fun SettingScreen(
                     title = stringResource(Res.string.proxy),
                     subtitle = stringResource(Res.string.proxy_description),
                     switch = (usingProxy to { viewModel.setUsingProxy(it) }),
-                )
-            }
-        }
-        item(key = "downloads") {
-            Column {
-                Text(
-                    text = stringResource(Res.string.download_settings_section),
-                    style = typo().labelMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                // 文件式下载(2026-10):统一三档音质(旧 downloadQuality/neteaseDownloadQuality
-                // 两项已删,值经 audioDownloadQuality 读时惰性迁移)
-                SettingItem(
-                    // 2026-10-01 对齐网易在线音质:8 档同款(含 VIP 档),网易直传降级链兜底,
-                    // YT 折 itag;旧 HIGH 值读时归一 EXHIGH
-                    title = stringResource(Res.string.download_audio_quality),
-                    subtitle =
-                        NETEASE_QUALITY_OPTIONS[audioDownloadQuality]?.let { stringResource(it) }
-                            ?: stringResource(Res.string.netease_quality_exhigh),
-                    smallSubtitle = true,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.download_audio_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
-                                                (key == audioDownloadQuality) to runBlocking { getString(res) }
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        val label = state.selectOne?.getSelected()
-                                        NETEASE_QUALITY_OPTIONS.entries
-                                            .firstOrNull { runBlocking { getString(it.value) } == label }
-                                            ?.key
-                                            ?.let { viewModel.setAudioDownloadQuality(it) }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.video_download_quality),
-                    subtitle = videoDownloadQuality ?: "",
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.video_download_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            VIDEO_QUALITY.items.map { item ->
-                                                (item.toString() == videoDownloadQuality) to item.toString()
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        viewModel.setVideoDownloadQuality(state.selectOne?.getSelected() ?: "")
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.download_file_name_format),
-                    subtitle =
-                        when (downloadFileNameFormat) {
-                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY -> stringResource(Res.string.download_file_name_title_only)
-                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE -> stringResource(Res.string.download_file_name_artist_title)
-                            else -> stringResource(Res.string.download_file_name_title_artist)
-                        },
-                    smallSubtitle = true,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.download_file_name_format) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            listOf(
-                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
-                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
-                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
-                                            ).map { (key, res) ->
-                                                (key == downloadFileNameFormat) to runBlocking { getString(res) }
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        val label = state.selectOne?.getSelected()
-                                        listOf(
-                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
-                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
-                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
-                                        ).firstOrNull { runBlocking { getString(it.second) } == label }?.first
-                                            ?.let { viewModel.setDownloadFileNameFormat(it) }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.simultaneous_downloads),
-                    subtitle = simultaneousDownloads.toString(),
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.simultaneous_downloads) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect = (1..10).map { (it == simultaneousDownloads) to it.toString() },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        state.selectOne?.getSelected()?.toIntOrNull()?.let {
-                                            viewModel.setSimultaneousDownloads(it)
-                                        }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.download_artist_album_folder),
-                    subtitle = stringResource(Res.string.download_artist_album_folder_description),
-                    smallSubtitle = true,
-                    switch = (downloadArtistAlbumFolder to { viewModel.setDownloadArtistAlbumFolder(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.download_save_lrc),
-                    subtitle = stringResource(Res.string.download_save_lrc_description),
-                    smallSubtitle = true,
-                    switch = (downloadSaveLrc to { viewModel.setDownloadSaveLrc(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.download_wifi_only),
-                    subtitle = stringResource(Res.string.download_wifi_only_description),
-                    smallSubtitle = true,
-                    switch = (downloadWifiOnly to { viewModel.setDownloadWifiOnly(it) }),
-                )
-                SettingItem(
-                    title = stringResource(Res.string.auto_download_liked_songs),
-                    subtitle = stringResource(Res.string.auto_download_liked_songs_description),
-                    smallSubtitle = true,
-                    switch = (autoDownloadLikedSongs to { viewModel.setAutoDownloadLikedSongs(it) }),
                 )
             }
         }
@@ -2596,6 +2445,180 @@ fun SettingScreen(
             }
         }
         if (getPlatform() == Platform.Android) {
+        item(key = "downloads") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.download_settings_section),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                // 文件式下载(2026-10):统一三档音质(旧 downloadQuality/neteaseDownloadQuality
+                // 两项已删,值经 audioDownloadQuality 读时惰性迁移)
+                SettingItem(
+                    // 2026-10-01 对齐网易在线音质:8 档同款(含 VIP 档),网易直传降级链兜底,
+                    // YT 折 itag;旧 HIGH 值读时归一 EXHIGH
+                    title = stringResource(Res.string.download_audio_quality),
+                    subtitle =
+                        NETEASE_QUALITY_OPTIONS[audioDownloadQuality]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_quality_exhigh),
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.download_audio_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
+                                                (key == audioDownloadQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val label = state.selectOne?.getSelected()
+                                        NETEASE_QUALITY_OPTIONS.entries
+                                            .firstOrNull { runBlocking { getString(it.value) } == label }
+                                            ?.key
+                                            ?.let { viewModel.setAudioDownloadQuality(it) }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.video_download_quality),
+                    subtitle = videoDownloadQuality ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.video_download_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            VIDEO_QUALITY.items.map { item ->
+                                                (item.toString() == videoDownloadQuality) to item.toString()
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        viewModel.setVideoDownloadQuality(state.selectOne?.getSelected() ?: "")
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_file_name_format),
+                    subtitle =
+                        when (downloadFileNameFormat) {
+                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY -> stringResource(Res.string.download_file_name_title_only)
+                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE -> stringResource(Res.string.download_file_name_artist_title)
+                            else -> stringResource(Res.string.download_file_name_title_artist)
+                        },
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.download_file_name_format) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            listOf(
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
+                                            ).map { (key, res) ->
+                                                (key == downloadFileNameFormat) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val label = state.selectOne?.getSelected()
+                                        listOf(
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
+                                        ).firstOrNull { runBlocking { getString(it.second) } == label }?.first
+                                            ?.let { viewModel.setDownloadFileNameFormat(it) }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.simultaneous_downloads),
+                    subtitle = simultaneousDownloads.toString(),
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.simultaneous_downloads) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect = (1..10).map { (it == simultaneousDownloads) to it.toString() },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        state.selectOne?.getSelected()?.toIntOrNull()?.let {
+                                            viewModel.setSimultaneousDownloads(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_artist_album_folder),
+                    subtitle = stringResource(Res.string.download_artist_album_folder_description),
+                    smallSubtitle = true,
+                    switch = (downloadArtistAlbumFolder to { viewModel.setDownloadArtistAlbumFolder(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_save_lrc),
+                    subtitle = stringResource(Res.string.download_save_lrc_description),
+                    smallSubtitle = true,
+                    switch = (downloadSaveLrc to { viewModel.setDownloadSaveLrc(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_wifi_only),
+                    subtitle = stringResource(Res.string.download_wifi_only_description),
+                    smallSubtitle = true,
+                    switch = (downloadWifiOnly to { viewModel.setDownloadWifiOnly(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.auto_download_liked_songs),
+                    subtitle = stringResource(Res.string.auto_download_liked_songs_description),
+                    smallSubtitle = true,
+                    switch = (autoDownloadLikedSongs to { viewModel.setAutoDownloadLikedSongs(it) }),
+                )
+                SettingItem(
+                    // 原"已下载缓存"(存储分区):文件式后 SimpleCache 只是转存前的临时
+                    // 落点,大小恒近 0,缓存语义已死——改造为一键全删(动作本就是
+                    // removeAllDownloads 一站式:文件+MediaStore+Room+条目)
+                    title = stringResource(Res.string.download_clear_all),
+                    subtitle = stringResource(Res.string.download_clear_all_description),
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setBasicAlertData(
+                            SettingBasicAlertState(
+                                title = runBlocking { getString(Res.string.download_clear_all) },
+                                message = null,
+                                confirm =
+                                    runBlocking { getString(Res.string.clear) } to {
+                                        viewModel.clearDownloadedCache()
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+
+            }
+        }
             item(key = "storage") {
                 Column {
                     Text(
@@ -2615,23 +2638,6 @@ fun SettingScreen(
                                     confirm =
                                         runBlocking { getString(Res.string.clear) } to {
                                             viewModel.clearPlayerCache()
-                                        },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
-                                ),
-                            )
-                        },
-                    )
-                    SettingItem(
-                        title = stringResource(Res.string.downloaded_cache),
-                        subtitle = "${downloadedCache.bytesToMB()} MB",
-                        onClick = {
-                            viewModel.setBasicAlertData(
-                                SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_downloaded_cache) },
-                                    message = null,
-                                    confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
-                                            viewModel.clearDownloadedCache()
                                         },
                                     dismiss = runBlocking { getString(Res.string.cancel) },
                                 ),

@@ -1166,4 +1166,6 @@
     <string name="download_stats_songs">%1$d songs · %2$s</string>
     <string name="download_stats_videos">%1$d videos · %2$s</string>
     <string name="download_no_videos">No downloaded videos</string>
+    <string name="download_clear_all">Clear all downloads</string>
+    <string name="download_clear_all_description">Delete all downloaded audio and video files</string>
 </resources>

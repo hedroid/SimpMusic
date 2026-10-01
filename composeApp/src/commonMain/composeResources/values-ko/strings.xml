@@ -724,4 +724,6 @@
     <string name="download_stats_songs">%1$d곡 · %2$s</string>
     <string name="download_stats_videos">%1$d개 동영상 · %2$s</string>
     <string name="download_no_videos">다운로드된 동영상이 없습니다</string>
+    <string name="download_clear_all">모든 다운로드 삭제</string>
+    <string name="download_clear_all_description">다운로드된 모든 오디오 및 동영상 파일을 삭제합니다</string>
 </resources>
