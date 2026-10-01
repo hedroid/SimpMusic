@@ -1917,7 +1917,11 @@ fun NowPlayingBottomSheet(
             confirmButton = {
                 TextButton(onClick = {
                     showCancelDownloadDialog = false
-                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                    // DeleteDownload 而非 Download:两者对在途态的清理代码完全相同
+                    // (demote+removeDownload+落 0),但 Download 是三态事件——若用户盯着
+                    // 确认框时下载恰好完成,它会落进"已下载→重新下载"分支变成覆盖重下,
+                    // 与用户刚确认的"取消/删除"意图相反;DeleteDownload 恒为移除,免竞态。
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteDownload)
                 }) {
                     Text(text = stringResource(Res.string.cancel_download_confirm), style = typo().labelSmall)
                 }
@@ -2224,16 +2228,30 @@ fun NowPlayingBottomSheet(
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                         }
                     }
-                    // 删除下载(2026-10 用户反馈):独立成行,仅已下载的歌显示——"下载"行对
-                    // 已下载歌是"重新下载?"覆盖语义,真删除放这里(图标用 playlist_remove,
-                    // 不用垃圾桶)
-                    if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
-                        ActionButton(
-                            icon = SimpIcons.PlaylistRemove,
-                            text = Res.string.remove_download_title,
-                        ) {
-                            showDeleteDownloadDialog = true
+                    // 删除下载(2026-10 用户反馈):独立成行——"下载"行对已下载歌是"重新
+                    // 下载?"覆盖语义,真删除放这里(图标用 playlist_remove,不用垃圾桶)。
+                    // 下载中/准备中也显示(用户 2026-10-01:下载中的歌也要能从三点里删,
+                    // 原"下载"行的取消语义藏在状态文案里不可发现),确认走"取消下载?"弹窗
+                    // (文案准确:停止并清掉未完成部分);视频视角的行打开同一歌曲 sheet,
+                    // 音频先完成的视频在途条目走 STATE_DOWNLOADED 分支本就有此行。
+                    when (uiState.songUIState.downloadState) {
+                        DownloadState.STATE_DOWNLOADED,
+                        DownloadState.STATE_PREPARING,
+                        DownloadState.STATE_DOWNLOADING,
+                        -> {
+                            ActionButton(
+                                icon = SimpIcons.PlaylistRemove,
+                                text = Res.string.remove_download_title,
+                            ) {
+                                if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                                    showDeleteDownloadDialog = true
+                                } else {
+                                    showCancelDownloadDialog = true
+                                }
+                            }
                         }
+
+                        else -> Unit
                     }
                     // 视频文件下载(2026-10 文件式,仅 YT 歌):merge mp4 落 Movies/SimpMusic
                     if (uiState.songUIState.videoId.toLongOrNull() == null) {
