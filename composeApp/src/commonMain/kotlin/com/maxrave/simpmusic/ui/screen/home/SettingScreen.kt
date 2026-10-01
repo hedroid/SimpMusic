@@ -257,9 +257,6 @@ import simpmusic.composeapp.generated.resources.download_ai_tags_description
 import simpmusic.composeapp.generated.resources.download_artist_album_folder
 import simpmusic.composeapp.generated.resources.download_artist_album_folder_description
 import simpmusic.composeapp.generated.resources.download_audio_quality
-import simpmusic.composeapp.generated.resources.download_audio_quality_high
-import simpmusic.composeapp.generated.resources.download_audio_quality_lossless
-import simpmusic.composeapp.generated.resources.download_audio_quality_standard
 import simpmusic.composeapp.generated.resources.download_file_name_artist_title
 import simpmusic.composeapp.generated.resources.download_file_name_format
 import simpmusic.composeapp.generated.resources.download_file_name_title_artist
@@ -1327,13 +1324,12 @@ fun SettingScreen(
                 // 文件式下载(2026-10):统一三档音质(旧 downloadQuality/neteaseDownloadQuality
                 // 两项已删,值经 audioDownloadQuality 读时惰性迁移)
                 SettingItem(
+                    // 2026-10-01 对齐网易在线音质:8 档同款(含 VIP 档),网易直传降级链兜底,
+                    // YT 折 itag;旧 HIGH 值读时归一 EXHIGH
                     title = stringResource(Res.string.download_audio_quality),
                     subtitle =
-                        when (audioDownloadQuality) {
-                            DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_STANDARD -> stringResource(Res.string.download_audio_quality_standard)
-                            DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_LOSSLESS -> stringResource(Res.string.download_audio_quality_lossless)
-                            else -> stringResource(Res.string.download_audio_quality_high)
-                        },
+                        NETEASE_QUALITY_OPTIONS[audioDownloadQuality]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_quality_exhigh),
                     smallSubtitle = true,
                     onClick = {
                         viewModel.setAlertData(
@@ -1342,24 +1338,17 @@ fun SettingScreen(
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            listOf(
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_STANDARD to Res.string.download_audio_quality_standard,
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_HIGH to Res.string.download_audio_quality_high,
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_LOSSLESS to Res.string.download_audio_quality_lossless,
-                                            ).map { (key, res) ->
+                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
                                                 (key == audioDownloadQuality) to runBlocking { getString(res) }
                                             },
                                     ),
                                 confirm =
                                     runBlocking { getString(Res.string.change) } to { state ->
                                         val label = state.selectOne?.getSelected()
-                                        val key =
-                                            listOf(
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_STANDARD to Res.string.download_audio_quality_standard,
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_HIGH to Res.string.download_audio_quality_high,
-                                                DataStoreManager.Values.AUDIO_DOWNLOAD_QUALITY_LOSSLESS to Res.string.download_audio_quality_lossless,
-                                            ).firstOrNull { runBlocking { getString(it.second) } == label }?.first
-                                        key?.let { viewModel.setAudioDownloadQuality(it) }
+                                        NETEASE_QUALITY_OPTIONS.entries
+                                            .firstOrNull { runBlocking { getString(it.value) } == label }
+                                            ?.key
+                                            ?.let { viewModel.setAudioDownloadQuality(it) }
                                     },
                                 dismiss = runBlocking { getString(Res.string.cancel) },
                             ),
@@ -1653,25 +1642,14 @@ fun SettingScreen(
                     onClick = { showNeteaseAccountDialog = true },
                 )
                 // 与 YTM 音质同款 SettingAlertState 单选弹框
-                val neteaseQualityOptions =
-                    mapOf(
-                        "JYMASTER" to Res.string.netease_quality_jymaster,
-                        "SKY" to Res.string.netease_quality_sky,
-                        "JYEFFECT" to Res.string.netease_quality_jyeffect,
-                        "HIRES" to Res.string.netease_quality_hires,
-                        "LOSSLESS" to Res.string.netease_quality_lossless,
-                        "EXHIGH" to Res.string.netease_quality_exhigh,
-                        "HIGHER" to Res.string.netease_quality_higher,
-                        "STANDARD" to Res.string.netease_quality_standard,
-                    )
                 val qualityLabelToKey =
-                    neteaseQualityOptions.entries.associate { (key, res) ->
+                    NETEASE_QUALITY_OPTIONS.entries.associate { (key, res) ->
                         runBlocking { getString(res) } to key
                     }
                 SettingItem(
                     title = stringResource(Res.string.quality),
                     subtitle =
-                        neteaseQualityOptions[neteaseQuality]?.let { stringResource(it) }
+                        NETEASE_QUALITY_OPTIONS[neteaseQuality]?.let { stringResource(it) }
                             ?: stringResource(Res.string.netease_quality_exhigh),
                     smallSubtitle = true,
                     isEnable = neteaseLoggedIn,
@@ -1682,7 +1660,7 @@ fun SettingScreen(
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
                                                 (key == neteaseQuality) to runBlocking { getString(res) }
                                             },
                                     ),
@@ -3996,6 +3974,19 @@ fun SettingScreen(
  * Only dismissible once the import has finished — cancelling mid-write would leave the database
  * half-populated with no way to tell the user which half.
  */
+/** 网易音质 8 档(在线"音质"与"下载音质"共用,降序;值=NeteaseQuality name,直传取流) */
+private val NETEASE_QUALITY_OPTIONS =
+    linkedMapOf(
+        "JYMASTER" to Res.string.netease_quality_jymaster,
+        "SKY" to Res.string.netease_quality_sky,
+        "JYEFFECT" to Res.string.netease_quality_jyeffect,
+        "HIRES" to Res.string.netease_quality_hires,
+        "LOSSLESS" to Res.string.netease_quality_lossless,
+        "EXHIGH" to Res.string.netease_quality_exhigh,
+        "HIGHER" to Res.string.netease_quality_higher,
+        "STANDARD" to Res.string.netease_quality_standard,
+    )
+
 @Composable
 private fun ImportProgressDialog(
     progress: ImportProgress,
