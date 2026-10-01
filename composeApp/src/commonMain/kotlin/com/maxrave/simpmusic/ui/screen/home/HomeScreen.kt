@@ -173,6 +173,10 @@ import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.commute
+import simpmusic.composeapp.generated.resources.listen_together
+import simpmusic.composeapp.generated.resources.notification
+import simpmusic.composeapp.generated.resources.recently_added
+import simpmusic.composeapp.generated.resources.settings
 import simpmusic.composeapp.generated.resources.do_not_show_again
 import simpmusic.composeapp.generated.resources.energize
 import simpmusic.composeapp.generated.resources.feel_good
@@ -871,15 +875,31 @@ fun HomeTopAppBar(navController: NavController) {
             }
         },
         actions = {
-            RippleIconButton(imageVector = SimpIcons.Notifications, tint = MaterialTheme.colorScheme.onBackground) {
+            // 顶栏图标钮必须带描述:无描述的 IconButton 在 TalkBack 下是 NAF、被完全跳过
+            // (UI-CR-07 走查实证:设置/通知/历史/一起听入口曾整体不可达)
+            RippleIconButton(
+                imageVector = SimpIcons.Notifications,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.notification),
+            ) {
                 navController.navigate(NotificationDestination)
             }
-            RippleIconButton(imageVector = SimpIcons.History, tint = MaterialTheme.colorScheme.onBackground) {
+            RippleIconButton(
+                imageVector = SimpIcons.History,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.recently_added),
+            ) {
                 navController.navigate(RecentlySongsDestination)
             }
             // Fourth button, immediately before Settings — the position the design canvas fixes.
-            ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
-            RippleIconButton(imageVector = SimpIcons.Settings, tint = MaterialTheme.colorScheme.onBackground) {
+            ListenTogetherIconButton(
+                contentDescription = stringResource(Res.string.listen_together),
+            ) { navController.navigate(ListenTogetherDestination) }
+            RippleIconButton(
+                imageVector = SimpIcons.Settings,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.settings),
+            ) {
                 navController.navigate(SettingsDestination)
             }
         },

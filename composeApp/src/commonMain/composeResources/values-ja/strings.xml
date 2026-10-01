@@ -611,4 +611,5 @@
     <string name="previous_song">前の曲</string>
     <string name="next_song">次の曲</string>
     <string name="switch_music_source">音源を切り替える</string>
+    <string name="back">戻る</string>
 </resources>

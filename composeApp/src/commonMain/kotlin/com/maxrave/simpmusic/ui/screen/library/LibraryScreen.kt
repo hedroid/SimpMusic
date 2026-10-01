@@ -115,6 +115,7 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.download_management
+import simpmusic.composeapp.generated.resources.listen_together
 import simpmusic.composeapp.generated.resources.netease_podcast
 
 import simpmusic.composeapp.generated.resources.chart
@@ -780,7 +781,9 @@ fun LibraryScreen(
                 // The Library bar had no actions slot at all — added for the Listen Together entry,
                 // which the design canvas puts on Home AND Library.
                 actions = {
-                    ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
+                    ListenTogetherIconButton(
+                        contentDescription = stringResource(Res.string.listen_together),
+                    ) { navController.navigate(ListenTogetherDestination) }
                 },
             )
         }

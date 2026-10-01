@@ -1176,4 +1176,5 @@
     <string name="previous_song">Previous song</string>
     <string name="next_song">Next song</string>
     <string name="switch_music_source">Switch music source</string>
+    <string name="back">Back</string>
 </resources>

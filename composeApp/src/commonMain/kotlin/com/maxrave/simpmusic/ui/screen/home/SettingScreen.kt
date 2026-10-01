@@ -188,6 +188,7 @@ import simpmusic.composeapp.generated.resources.add_an_account
 import simpmusic.composeapp.generated.resources.ai
 import simpmusic.composeapp.generated.resources.ai_api_key
 import simpmusic.composeapp.generated.resources.ai_api_key_message
+import simpmusic.composeapp.generated.resources.back
 import simpmusic.composeapp.generated.resources.ai_provider
 import simpmusic.composeapp.generated.resources.anonymous
 import simpmusic.composeapp.generated.resources.app_name
@@ -3955,6 +3956,7 @@ fun SettingScreen(
                             .size(32.dp),
                         true,
                         tint = MaterialTheme.colorScheme.onSurface,
+                        contentDescription = stringResource(Res.string.back),
                     ) {
                         navController.navigateUp()
                     }

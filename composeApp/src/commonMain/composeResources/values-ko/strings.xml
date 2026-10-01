@@ -735,4 +735,5 @@
     <string name="previous_song">이전 곡</string>
     <string name="next_song">다음 곡</string>
     <string name="switch_music_source">음원 전환</string>
+    <string name="back">뒤로</string>
 </resources>

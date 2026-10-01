@@ -828,4 +828,5 @@
     <string name="previous_song">上一首</string>
     <string name="next_song">下一首</string>
     <string name="switch_music_source">切換音源</string>
+    <string name="back">返回</string>
 </resources>
