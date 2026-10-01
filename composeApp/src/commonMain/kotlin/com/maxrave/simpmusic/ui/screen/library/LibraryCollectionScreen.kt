@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,7 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -52,7 +50,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,9 +68,6 @@ import com.maxrave.simpmusic.ui.component.RippleIconButton
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
-import com.maxrave.simpmusic.ui.icon.Pause
-import com.maxrave.simpmusic.ui.icon.PlayArrow
-import com.maxrave.simpmusic.ui.icon.Refresh
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryDynamicPlaylistViewModel
@@ -394,26 +388,17 @@ fun DownloadedManagementBody(
                                             modifier = Modifier.weight(1f),
                                         )
                                         if (hasPausable) {
-                                            DownloadHeaderPill(
-                                                icon = SimpIcons.Pause,
-                                                contentDescription = stringResource(Res.string.download_action_pause_all),
-                                            ) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_pause_all)) {
                                                 dynamicPlaylistViewModel.pauseAllDownloads()
                                             }
                                         }
                                         if (hasPaused) {
-                                            DownloadHeaderPill(
-                                                icon = SimpIcons.PlayArrow,
-                                                contentDescription = stringResource(Res.string.download_action_resume_all),
-                                            ) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_resume_all)) {
                                                 dynamicPlaylistViewModel.resumeAllDownloads()
                                             }
                                         }
                                         if (hasFailed) {
-                                            DownloadHeaderPill(
-                                                icon = SimpIcons.Refresh,
-                                                contentDescription = stringResource(Res.string.download_action_retry_failed),
-                                            ) {
+                                            DownloadHeaderPill(text = stringResource(Res.string.download_action_retry_failed)) {
                                                 dynamicPlaylistViewModel.retryFailedDownloads()
                                             }
                                         }
@@ -564,25 +549,21 @@ fun DownloadedManagementBody(
 
 }
 
-/** "下载中"节头右侧的操作 pill(用户反馈:文字太大)——图标圆钮替代文字,原语义转
- *  contentDescription 保住无障碍朗读;secondaryContainer 圆底 */
+/** "下载中"节头右侧的操作(用户定稿:纯文字无底色,primary 色提示可点) */
 @Composable
 private fun DownloadHeaderPill(
-    icon: ImageVector,
-    contentDescription: String,
+    text: String,
     onClick: () -> Unit,
 ) {
-    Icon(
-        imageVector = icon,
-        contentDescription = contentDescription,
-        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+    Text(
+        text = text,
+        style = typo().labelMedium,
+        color = MaterialTheme.colorScheme.primary,
         modifier =
             Modifier
-                .size(30.dp)
-                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                 .clip(CircleShape)
                 .clickable(onClick = onClick)
-                .padding(6.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
 

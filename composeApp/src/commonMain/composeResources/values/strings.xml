@@ -1156,7 +1156,7 @@
     <string name="download_status_file_missing">File missing</string>
     <string name="download_action_pause_all">Pause all</string>
     <string name="download_action_resume_all">Resume all</string>
-    <string name="download_action_retry_failed">Retry failed</string>
+    <string name="download_action_retry_failed">Retry</string>
     <string name="download_action_cancel_download">Cancel download</string>
     <string name="download_action_redownload">Redownload</string>
     <string name="download_video_label">Video</string>
