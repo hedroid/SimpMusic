@@ -174,13 +174,6 @@ class LibraryDynamicPlaylistViewModel(
         }
     }
 
-    /** 视频视角删除(2026-10 CR P1-2):只删视频条目和文件,音频保留(歌曲级 state 由引擎按音频在否落 3/0) */
-    fun deleteVideoOnly(videoId: String) {
-        viewModelScope.launch {
-            downloadUtils.removeVideoDownload(videoId)
-        }
-    }
-
     /** 删除:文件式=删文件+Room;旧缓存条目引擎内分流走原 removeDownload */
     fun deleteDownload(videoId: String) {
         viewModelScope.launch {

@@ -576,7 +576,9 @@ fun LibraryScreen(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                             ) {
                                 LibraryTilingItem(
-                                    state = LibraryTilingState.DownloadedSongs,
+                                    // 管理页已并入"下载中/已完成"两视角(2026-10-01),入口
+                                    // 磁贴不再叫"歌曲",用通用"下载"
+                                    state = LibraryTilingState.Downloaded,
                                     onClick = {
                                         navController.navigate(
                                             LibraryDynamicPlaylistDestination(

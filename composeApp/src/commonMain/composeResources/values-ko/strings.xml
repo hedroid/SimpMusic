@@ -713,7 +713,6 @@
     <string name="download_action_retry_failed">실패 항목 재시도</string>
     <string name="download_action_cancel_download">다운로드 취소</string>
     <string name="download_action_redownload">다시 다운로드</string>
-    <string name="download_video_label">동영상</string>
     <string name="download_settings_section">다운로드</string>
     <string name="download_ai_tags">AI 다운로드 태그 보완 사용</string>
     <string name="download_ai_tags_description">다운로드 시 누락된 태그를 AI로 보완합니다</string>
@@ -721,11 +720,9 @@
     <string name="download_wifi_only_description">모바일 네트워크에서는 대기하고 Wi-Fi에 연결되면 자동으로 재개합니다</string>
     <string name="download_section_in_progress">다운로드 중</string>
     <string name="download_section_completed">완료됨</string>
-    <string name="download_stats_songs">%1$d곡 · %2$s</string>
-    <string name="download_stats_videos">%1$d개 동영상 · %2$s</string>
-    <string name="download_stats_podcasts">%1$d개 팟캐스트 · %2$s</string>
-    <string name="download_no_videos">다운로드된 동영상이 없습니다</string>
-    <string name="download_no_podcasts">다운로드한 팟캐스트 없음</string>
+    <string name="download_tab_completed_stats">%1$d곡·%2$s</string>
+    <string name="download_no_in_progress">진행 중인 다운로드가 없습니다</string>
+    <string name="download_no_completed">완료된 다운로드가 없습니다</string>
     <string name="download_clear_all">모든 다운로드 삭제</string>
     <string name="download_clear_all_description">다운로드된 모든 오디오 및 동영상 파일을 삭제합니다</string>
     <string name="download_artist_album_folder_description">Music/SimpMusic/아티스트/앨범 아래에 저장</string>

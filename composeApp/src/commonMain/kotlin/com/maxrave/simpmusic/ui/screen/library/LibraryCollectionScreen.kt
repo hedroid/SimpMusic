@@ -85,11 +85,9 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.n_songs_selected
 import simpmusic.composeapp.generated.resources.select_all
-import simpmusic.composeapp.generated.resources.download_stats_songs
-import simpmusic.composeapp.generated.resources.download_stats_videos
-import simpmusic.composeapp.generated.resources.download_no_videos
-import simpmusic.composeapp.generated.resources.download_no_podcasts
-import simpmusic.composeapp.generated.resources.download_stats_podcasts
+import simpmusic.composeapp.generated.resources.download_no_completed
+import simpmusic.composeapp.generated.resources.download_no_in_progress
+import simpmusic.composeapp.generated.resources.download_tab_completed_stats
 import simpmusic.composeapp.generated.resources.download_section_in_progress
 import simpmusic.composeapp.generated.resources.download_section_completed
 import simpmusic.composeapp.generated.resources.download_action_pause_all
@@ -104,7 +102,6 @@ import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.library_podcasts
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
-import simpmusic.composeapp.generated.resources.no_downloaded_songs
 import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist_name
@@ -226,9 +223,11 @@ fun LibraryCollectionScreen(
 }
 
 /**
- * “下载管理”页体(歌曲/歌单两段切换):既被独立路由 [LibraryCollectionScreen] 用,也被
+ * “下载管理”页体(下载中/已完成两视角):既被独立路由 [LibraryCollectionScreen] 用,也被
  * 库页 chip 页(DOWNLOADED_PLAYLIST 分支)直接内嵌——chip 页没有自己的 TopAppBar,
  * 两处共用同一份内容,各自处理顶/底 padding。
+ * 2026-10-01 用户定稿:tab 不再按内容分(歌曲/视频/播客),改为按状态分——行全量混排,
+ * 视角行渲染按”有无视频条目”切;统计(N首·总大小)放”已完成”磁贴副标题上。
  */
 @Composable
 fun DownloadedManagementBody(
@@ -243,10 +242,10 @@ fun DownloadedManagementBody(
 ) {
     val managementRows by dynamicPlaylistViewModel.downloadManagementRows.collectAsStateWithLifecycle()
     val nowPlaying by sharedViewModel.nowPlayingState.collectAsStateWithLifecycle()
-    var downloadedSection by remember { mutableStateOf(DownloadedSection.Songs) }
+    var downloadedSection by remember { mutableStateOf(DownloadedSection.Completed) }
     var selectedDownloadedSong by remember { mutableStateOf<com.maxrave.domain.data.entities.SongEntity?>(null) }
-    // 二期:行删除/取消的确认目标(videoId+标题);在途"取消下载"也走确认防误触
-    var deleteRowTarget by remember { mutableStateOf<Triple<String, String, Boolean>?>(null) }
+    // 行删除/取消的确认目标(videoId+标题);在途”取消下载”也走确认防误触
+    var deleteRowTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     // 多选模式(用户反馈 2026-10):长按行进入;批量删除所选
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -256,6 +255,16 @@ fun DownloadedManagementBody(
     val hasPaused = managementRows.any { it.audioStatus == DownloadEntryStatus.PAUSED || it.videoStatus == DownloadEntryStatus.PAUSED }
     val hasFailed = managementRows.any { it.audioStatus == DownloadEntryStatus.FAILED || it.videoStatus == DownloadEntryStatus.FAILED }
 
+    // 分组=两个 tab:在途(下载中/排队/暂停/失败/转存中)与已完成(含丢失/旧缓存);混排不分类
+    val rankOf: (DownloadManagementRow) -> Int = { row ->
+        minOf(row.audioStatus.sortRank(), row.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+    }
+    val inFlightRows = managementRows.filter { rankOf(it) <= 4 }
+    val completedRows = managementRows.filter { rankOf(it) >= 5 }
+    // “已完成”磁贴统计:只数真完成(文件在=rank 6,丢失行不计大小也不计数)
+    val completedCount = completedRows.count { rankOf(it) == 6 }
+    val completedBytes = completedRows.sumOf { (it.audioFileBytes ?: 0L) + (it.videoFileBytes ?: 0L) }
+
     Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
         Row(
             // 库页统一口径:水平边距 15dp 与主页/各 chip 一致(原 10dp 与其它页不同口径)
@@ -264,51 +273,30 @@ fun DownloadedManagementBody(
         ) {
             Box(modifier = Modifier.weight(1f)) {
                 LibraryTilingItem(
-                    state = LibraryTilingState.DownloadedSongs,
-                    selected = downloadedSection == DownloadedSection.Songs,
-                    onClick = { downloadedSection = DownloadedSection.Songs },
+                    state = LibraryTilingState.DownloadInProgress,
+                    selected = downloadedSection == DownloadedSection.InProgress,
+                    onClick = { downloadedSection = DownloadedSection.InProgress },
                 )
             }
             Box(modifier = Modifier.weight(1f)) {
                 LibraryTilingItem(
-                    state = LibraryTilingState.DownloadedVideos,
-                    selected = downloadedSection == DownloadedSection.Videos,
-                    onClick = { downloadedSection = DownloadedSection.Videos },
+                    state = LibraryTilingState.DownloadCompleted,
+                    selected = downloadedSection == DownloadedSection.Completed,
+                    // 统计上磁贴(2026-10-01 用户定):”N首·总大小”;空库不出”0首·0 B”
+                    subtitle =
+                        if (completedCount > 0) {
+                            stringResource(Res.string.download_tab_completed_stats, completedCount, formatDownloadBytes(completedBytes))
+                        } else {
+                            null
+                        },
+                    onClick = { downloadedSection = DownloadedSection.Completed },
                 )
             }
-            // 播客磁贴只在真有播客下载行时出现(纯歌曲/视频用户不见第三磁贴)
-            if (managementRows.any { it.song.neteaseProgramId != null }) {
-                Box(modifier = Modifier.weight(1f)) {
-                    LibraryTilingItem(
-                        state = LibraryTilingState.DownloadedPodcasts,
-                        selected = downloadedSection == DownloadedSection.Podcasts,
-                        onClick = { downloadedSection = DownloadedSection.Podcasts },
-                    )
-                }
-            }
         }
-        // 视角数据(2026-10-01 用户定案:tab=歌曲/视频,废弃歌单容器分类;同日五项反馈加
-        // 播客 tab):歌曲=非播客行(播客节目不混进歌的播放队列),视频=有视频条目的行,
-        // 播客=neteaseProgramId 非空行;统计行只数已完成态(在途不计大小)
-        val isVideoTab = downloadedSection == DownloadedSection.Videos
-        val isPodcastTab = downloadedSection == DownloadedSection.Podcasts
-        val viewRows =
-            when {
-                isVideoTab -> managementRows.filter { it.videoStatus != null }
-                isPodcastTab -> managementRows.filter { it.song.neteaseProgramId != null }
-                else -> managementRows.filter { it.song.neteaseProgramId == null }
-            }
-        val completedCount =
-            viewRows.count {
-                val r = if (isVideoTab) it.videoStatus?.sortRank() else it.audioStatus.sortRank()
-                r == 6
-            }
-        val completedBytes =
-            viewRows.sumOf {
-                (if (isVideoTab) it.videoFileBytes else it.audioFileBytes) ?: 0L
-            }
+        val isInProgressTab = downloadedSection == DownloadedSection.InProgress
+        val tabRows = if (isInProgressTab) inFlightRows else completedRows
         Box(modifier = Modifier.weight(1f)) {
-            if (viewRows.isEmpty()) {
+            if (tabRows.isEmpty()) {
                     // 空态=恒在顶:切页不再统一复位标题,从收起态的深滚动页切到空页时
                     // 若不上报,标题会继承收起态且没有任何滚动事件可纠正(CR-31)
                     LaunchedEffect(Unit) { onScrolling(true) }
@@ -316,10 +304,10 @@ fun DownloadedManagementBody(
                         Text(
                             text =
                                 stringResource(
-                                    when {
-                                        isVideoTab -> Res.string.download_no_videos
-                                        isPodcastTab -> Res.string.download_no_podcasts
-                                        else -> Res.string.no_downloaded_songs
+                                    if (isInProgressTab) {
+                                        Res.string.download_no_in_progress
+                                    } else {
+                                        Res.string.download_no_completed
                                     },
                                 ),
                             style = typo().labelSmall,
@@ -349,7 +337,7 @@ fun DownloadedManagementBody(
                             ) {
                                 // 通用全选控件(2026-10-01 用户定):行首圆圈+文字两态切换
                                 // (全选↔清空),视觉与行多选圆圈同款;不再是纯文字按钮
-                                val allIds = viewRows.map { it.song.videoId }.toSet()
+                                val allIds = tabRows.map { it.song.videoId }.toSet()
                                 val allSelected = allIds.isNotEmpty() && selectedIds.containsAll(allIds)
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -402,40 +390,13 @@ fun DownloadedManagementBody(
                                 }) { Text(stringResource(Res.string.cancel), style = typo().labelMedium) }
                             }
                         }
-                        // 统计行(业界标配:完成数+总大小)
-                        if (completedCount > 0) {
-                            Text(
-                                text =
-                                    stringResource(
-                                        when {
-                                            isVideoTab -> Res.string.download_stats_videos
-                                            isPodcastTab -> Res.string.download_stats_podcasts
-                                            else -> Res.string.download_stats_songs
-                                        },
-                                        completedCount,
-                                        formatDownloadBytes(completedBytes),
-                                    ),
-                                style = typo().labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 15.dp, vertical = 2.dp),
-                            )
-                        }
-                        // 分组:在途(下载中/排队/暂停/失败/转存中)与已完成(含丢失/旧缓存)两节
-                        val rankOf: (DownloadManagementRow) -> Int = { row ->
-                            if (isVideoTab) {
-                                row.videoStatus?.sortRank() ?: Int.MAX_VALUE
-                            } else {
-                                minOf(row.audioStatus.sortRank(), row.videoStatus?.sortRank() ?: Int.MAX_VALUE)
-                            }
-                        }
-                        val inFlightRows = viewRows.filter { rankOf(it) <= 4 }
-                        val completedRows = viewRows.filter { rankOf(it) >= 5 }
                         LazyColumn(
                             state = songsListState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = bottomPadding),
                         ) {
-                            if (inFlightRows.isNotEmpty()) {
+                            // 在途 tab 头:计数+批量操作(暂停全部/继续/重试失败)
+                            if (isInProgressTab && (hasPausable || hasPaused || hasFailed)) {
                                 item(key = "header-inflight") {
                                     Row(
                                         modifier =
@@ -469,70 +430,35 @@ fun DownloadedManagementBody(
                                         }
                                     }
                                 }
-                                items(inFlightRows, key = { it.song.videoId }) { row ->
-                                    DownloadManagementRowItem(
-                                        row = row,
-                                        isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
-                                        viewMode = if (isVideoTab) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,
-                                        selectionMode = selectionMode,
-                                        selectedIds = selectedIds,
-                                        onEnterSelection = {
-                                            selectionMode = true
-                                            selectedIds = setOf(row.song.videoId)
-                                        },
-                                        onToggle = { id ->
-                                            selectedIds =
-                                                if (id in selectedIds) selectedIds - id else selectedIds + id
-                                        },
-                                        dynamicPlaylistViewModel = dynamicPlaylistViewModel,
-                                        onRedownload = {
-                                            if (isVideoTab) {
-                                                dynamicPlaylistViewModel.redownloadVideo(row.song.videoId)
-                                            } else {
-                                                dynamicPlaylistViewModel.redownload(row.song.videoId)
-                                            }
-                                        },
-                                        onDelete = { deleteRowTarget = Triple(row.song.videoId, row.song.title, isVideoTab) },
-                                        onSongMenu = { selectedDownloadedSong = row.song },
-                                    )
-                                }
                             }
-                            if (completedRows.isNotEmpty()) {
-                                item(key = "header-completed") {
-                                    Text(
-                                        text = stringResource(Res.string.download_section_completed),
-                                        style = typo().labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 8.dp),
-                                    )
-                                }
-                                items(completedRows, key = { it.song.videoId }) { row ->
-                                    DownloadManagementRowItem(
-                                        row = row,
-                                        isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
-                                        viewMode = if (isVideoTab) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,
-                                        selectionMode = selectionMode,
-                                        selectedIds = selectedIds,
-                                        onEnterSelection = {
-                                            selectionMode = true
-                                            selectedIds = setOf(row.song.videoId)
-                                        },
-                                        onToggle = { id ->
-                                            selectedIds =
-                                                if (id in selectedIds) selectedIds - id else selectedIds + id
-                                        },
-                                        dynamicPlaylistViewModel = dynamicPlaylistViewModel,
-                                        onRedownload = {
-                                            if (isVideoTab) {
-                                                dynamicPlaylistViewModel.redownloadVideo(row.song.videoId)
-                                            } else {
-                                                dynamicPlaylistViewModel.redownload(row.song.videoId)
-                                            }
-                                        },
-                                        onDelete = { deleteRowTarget = Triple(row.song.videoId, row.song.title, isVideoTab) },
-                                        onSongMenu = { selectedDownloadedSong = row.song },
-                                    )
-                                }
+                            items(tabRows, key = { it.song.videoId }) { row ->
+                                DownloadManagementRowItem(
+                                    row = row,
+                                    isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                    // 行视角(混排后):有视频条目的行看视频条目(mp4 是它的
+                                    // 落地产物,在途进度也在视频上),纯音频行看音频
+                                    viewMode = if (row.videoStatus != null) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,
+                                    selectionMode = selectionMode,
+                                    selectedIds = selectedIds,
+                                    onEnterSelection = {
+                                        selectionMode = true
+                                        selectedIds = setOf(row.song.videoId)
+                                    },
+                                    onToggle = { id ->
+                                        selectedIds =
+                                            if (id in selectedIds) selectedIds - id else selectedIds + id
+                                    },
+                                    dynamicPlaylistViewModel = dynamicPlaylistViewModel,
+                                    onRedownload = {
+                                        if (row.videoStatus != null) {
+                                            dynamicPlaylistViewModel.redownloadVideo(row.song.videoId)
+                                        } else {
+                                            dynamicPlaylistViewModel.redownload(row.song.videoId)
+                                        }
+                                    },
+                                    onDelete = { deleteRowTarget = row.song.videoId to row.song.title },
+                                    onSongMenu = { selectedDownloadedSong = row.song },
+                                )
                             }
                             item { EndOfPage(includeBottomBarPadding = false) }
                         }
@@ -556,13 +482,9 @@ fun DownloadedManagementBody(
             confirmButton = {
                 TextButton(onClick = {
                     deleteSelectionConfirm = false
-                    val videoView = downloadedSection == DownloadedSection.Videos
+                    // 混排 tab(2026-10-01):删除=整行清理(音视频文件+条目+Room)
                     selectedIds.forEach { id ->
-                        if (videoView) {
-                            dynamicPlaylistViewModel.deleteVideoOnly(id)
-                        } else {
-                            dynamicPlaylistViewModel.deleteDownload(id)
-                        }
+                        dynamicPlaylistViewModel.deleteDownload(id)
                     }
                     selectionMode = false
                     selectedIds = emptySet()
@@ -585,19 +507,15 @@ fun DownloadedManagementBody(
         )
     }
 
-    // 二期:条目删除/取消下载确认(在途取消与完成删除都破坏数据,防误触)
-    deleteRowTarget?.let { (videoId, title, isVideo) ->
+    // 条目删除/取消下载确认(在途取消与完成删除都破坏数据,防误触)
+    deleteRowTarget?.let { (videoId, title) ->
         AlertDialog(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             onDismissRequest = { deleteRowTarget = null },
             confirmButton = {
                 TextButton(onClick = {
                     deleteRowTarget = null
-                    if (isVideo) {
-                        dynamicPlaylistViewModel.deleteVideoOnly(videoId)
-                    } else {
-                        dynamicPlaylistViewModel.deleteDownload(videoId)
-                    }
+                    dynamicPlaylistViewModel.deleteDownload(videoId)
                 }) {
                     Text(stringResource(Res.string.delete), style = typo().labelSmall)
                 }
@@ -671,10 +589,10 @@ private fun DownloadManagementRowItem(
     )
 }
 
+/** 下载管理页两视角(2026-10-01 用户定):下载中/已完成,行混排不按内容分类 */
 internal enum class DownloadedSection {
-    Songs,
-    Videos,
-    Podcasts,
+    InProgress,
+    Completed,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

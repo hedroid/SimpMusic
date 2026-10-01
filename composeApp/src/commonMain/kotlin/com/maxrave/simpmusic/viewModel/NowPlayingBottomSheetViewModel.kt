@@ -340,6 +340,7 @@ class NowPlayingBottomSheetViewModel(
                                                 Album(name = name, id = song.albumId ?: "")
                                             },
                                         videoType = song.videoType,
+                                        neteaseProgramId = song.neteaseProgramId,
                                     ),
                             )
                         }
@@ -671,6 +672,8 @@ data class NowPlayingBottomSheetUIState(
         val album: Album? = null,
         /** YT 的 MUSIC_VIDEO_TYPE_*(ATV=纯音频曲目,无视频流可下);网易歌为空串 */
         val videoType: String = "",
+        /** 播客节目行(网易电台剧集):非空=下载入口整组隐藏(2026-10-01 用户定,播客不提供下载) */
+        val neteaseProgramId: Long? = null,
     )
 }
 

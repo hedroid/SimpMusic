@@ -727,7 +727,6 @@
     <string name="import_failed">匯入失敗</string>
     <string name="import_invalid_file">該文件不是有效的 SimpMusic 匯入文件。請先在 simpmusic.org 轉換您的媒體庫。</string>
     <!-- Listen Together -->
-    <string name="downloaded_songs_tab">歌曲</string>
     <string name="no_downloaded_songs">暫無已下載歌曲</string>
     <string name="haptic_feedback">觸感回饋</string>
     <string name="haptic_feedback_description">點擊時的震動回饋</string>
@@ -811,15 +810,12 @@
     <string name="download_action_retry_failed">重試</string>
     <string name="download_action_cancel_download">取消下載</string>
     <string name="download_action_redownload">重新下載</string>
-    <string name="download_video_label">影片</string>
     <string name="download_settings_section">下載</string>
     <string name="download_section_in_progress">下載中</string>
     <string name="download_section_completed">已完成</string>
-    <string name="download_stats_songs">%1$d 首歌曲 · %2$s</string>
-    <string name="download_stats_videos">%1$d 個影片 · %2$s</string>
-    <string name="download_stats_podcasts">%1$d 期播客 · %2$s</string>
-    <string name="download_no_videos">暫無下載的影片</string>
-    <string name="download_no_podcasts">暫無下載的播客</string>
+    <string name="download_tab_completed_stats">%1$d首·%2$s</string>
+    <string name="download_no_in_progress">暫無下載中的內容</string>
+    <string name="download_no_completed">暫無已完成的下載</string>
     <string name="download_clear_all">清除全部下載</string>
     <string name="download_clear_all_description">刪除所有已下載的音訊與影片檔案</string>
     <string name="download_artist_album_folder_description_off">儲存到 Music/SimpMusic</string>

@@ -2194,7 +2194,11 @@ fun NowPlayingBottomSheet(
                         },
                     )
 
-                    ActionButton(
+                    // 播客节目不提供下载(2026-10-01 用户定):"下载/删除下载"两行隐藏。
+                    // 只按行自身 neteaseProgramId 判定——不能用队列哨兵:播客队列播放期间
+                    // 打开普通歌曲的 sheet 会把歌曲的下载行一起误隐(实测踩坑)
+                    val isPodcastEpisode = uiState.songUIState.neteaseProgramId != null
+                    if (!isPodcastEpisode) ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
                                 DownloadState.STATE_NOT_DOWNLOADED -> SimpIcons.DownloadForOfflineOutlined
@@ -2234,24 +2238,27 @@ fun NowPlayingBottomSheet(
                     // 原"下载"行的取消语义藏在状态文案里不可发现),确认走"取消下载?"弹窗
                     // (文案准确:停止并清掉未完成部分);视频视角的行打开同一歌曲 sheet,
                     // 音频先完成的视频在途条目走 STATE_DOWNLOADED 分支本就有此行。
-                    when (uiState.songUIState.downloadState) {
-                        DownloadState.STATE_DOWNLOADED,
-                        DownloadState.STATE_PREPARING,
-                        DownloadState.STATE_DOWNLOADING,
-                        -> {
-                            ActionButton(
-                                icon = SimpIcons.PlaylistRemove,
-                                text = Res.string.remove_download_title,
-                            ) {
-                                if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
-                                    showDeleteDownloadDialog = true
-                                } else {
-                                    showCancelDownloadDialog = true
+                    // 播客行不显示(入口随"下载"一并移除)。
+                    if (!isPodcastEpisode) {
+                        when (uiState.songUIState.downloadState) {
+                            DownloadState.STATE_DOWNLOADED,
+                            DownloadState.STATE_PREPARING,
+                            DownloadState.STATE_DOWNLOADING,
+                            -> {
+                                ActionButton(
+                                    icon = SimpIcons.PlaylistRemove,
+                                    text = Res.string.remove_download_title,
+                                ) {
+                                    if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                                        showDeleteDownloadDialog = true
+                                    } else {
+                                        showCancelDownloadDialog = true
+                                    }
                                 }
                             }
-                        }
 
-                        else -> Unit
+                            else -> Unit
+                        }
                     }
                     // 视频文件下载(2026-10 文件式,仅 YT 歌且真有视频流):merge mp4 落
                     // Movies/SimpMusic。ATV=纯音频曲目(player 响应无视频 format),下了
