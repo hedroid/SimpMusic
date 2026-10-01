@@ -158,6 +158,7 @@ import com.maxrave.simpmusic.viewModel.AiModelsState
 import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
+import com.maxrave.simpmusic.viewModel.formatDownloadBytes
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.mohamedrejeb.calf.core.ExperimentalCalfApi
 import com.mohamedrejeb.calf.io.getPath
@@ -607,6 +608,8 @@ fun SettingScreen(
     val downloadSaveLrc by viewModel.downloadSaveLrc.collectAsStateWithLifecycle()
     val downloadAiTags by viewModel.downloadAiTags.collectAsStateWithLifecycle()
     val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsStateWithLifecycle()
+    // "清除全部下载"描述的实时总容量(文件字节和,null=未量到)
+    val downloadedFilesBytes by viewModel.downloadedFilesBytes.collectAsStateWithLifecycle()
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val playVideo by remember { viewModel.playVideoInsteadOfAudio.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
@@ -2608,9 +2611,13 @@ fun SettingScreen(
                 SettingItem(
                     // 原"已下载缓存"(存储分区):文件式后 SimpleCache 只是转存前的临时
                     // 落点,大小恒近 0,缓存语义已死——改造为一键全删(动作本就是
-                    // removeAllDownloads 一站式:文件+MediaStore+Room+条目)
+                    // removeAllDownloads 一站式:文件+MediaStore+Room+条目+空文件夹)
+                    // 描述带实时总容量(2026-10-02 用户定)
                     title = stringResource(Res.string.download_clear_all),
-                    subtitle = stringResource(Res.string.download_clear_all_description),
+                    subtitle =
+                        stringResource(Res.string.download_clear_all_description) +
+                            (downloadedFilesBytes?.takeIf { it > 0 }
+                                ?.let { " · " + formatDownloadBytes(it) } ?: ""),
                     smallSubtitle = true,
                     onClick = {
                         viewModel.setBasicAlertData(

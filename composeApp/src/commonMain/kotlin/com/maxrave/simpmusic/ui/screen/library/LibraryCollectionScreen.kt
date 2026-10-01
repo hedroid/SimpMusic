@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import com.maxrave.simpmusic.viewModel.DownloadEntryStatus
 import com.maxrave.simpmusic.viewModel.DownloadManagementRow
 import com.maxrave.simpmusic.ui.screen.library.DownloadViewMode
-import com.maxrave.simpmusic.viewModel.formatDownloadBytes
 import com.maxrave.simpmusic.viewModel.sortRank
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AlertDialog
@@ -260,9 +259,8 @@ fun DownloadedManagementBody(
     }
     val inFlightRows = managementRows.filter { rankOf(it) <= 4 }
     val completedRows = managementRows.filter { rankOf(it) >= 5 }
-    // “已完成”磁贴统计:只数真完成(文件在=rank 6,丢失行不计大小也不计数)
+    // “已完成”磁贴统计:只数真完成(文件在=rank 6,丢失行不计也不数)
     val completedCount = completedRows.count { rankOf(it) == 6 }
-    val completedBytes = completedRows.sumOf { (it.audioFileBytes ?: 0L) + (it.videoFileBytes ?: 0L) }
 
     Column(modifier = Modifier.fillMaxSize().padding(top = topPadding)) {
         // "下载中"磁贴标题带动态计数(2026-10-02 用户定:页内不再有"下载中 (N)"文案,
@@ -287,18 +285,13 @@ fun DownloadedManagementBody(
                 )
             }
             Box(modifier = Modifier.weight(1f)) {
-                // 统计直接跟在标题后(2026-10-02 用户定):"已完成 (N) 大小"——计数带括号,
-                // 容量在括号外,与"下载中 (N)"同形态;副标题行弃用,空库只显示"已完成"
+                // 统计直接跟在标题后(2026-10-02 用户定):"已完成 (N)"——只带计数不带容量
+                // (用户复定:容量可能展示不开);空库只显示"已完成"
                 val completedWord = stringResource(Res.string.download_section_completed)
                 LibraryTilingItem(
                     state = LibraryTilingState.DownloadCompleted,
                     selected = downloadedSection == DownloadedSection.Completed,
-                    titleString =
-                        if (completedCount > 0) {
-                            "$completedWord ($completedCount) " + formatDownloadBytes(completedBytes)
-                        } else {
-                            completedWord
-                        },
+                    titleString = if (completedCount > 0) "$completedWord ($completedCount)" else completedWord,
                     onClick = { downloadedSection = DownloadedSection.Completed },
                 )
             }

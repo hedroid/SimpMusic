@@ -301,7 +301,7 @@ class SettingsViewModel(
         getLanguage()
         getQuality()
         getPlayerCacheSize()
-        getDownloadedCacheSize()
+        observeDownloadedFilesBytes()
         getPlayerCacheLimit()
         getLoggedIn()
         getNormalizeVolume()
@@ -1396,6 +1396,28 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * 已下载文件总大小(实时流,"清除全部下载"描述用,2026-10-02 用户定):SimpleCache 的
+     * [downloadedCacheSize] 转存后恒近 0,真容量=磁盘上音频+视频文件字节和。
+     * 走 getDownloadActivitySongs 实时流,下载/删除自动刷新;IO 线程量文件。
+     */
+    private val _downloadedFilesBytes: MutableStateFlow<Long?> = MutableStateFlow(null)
+    val downloadedFilesBytes: StateFlow<Long?> = _downloadedFilesBytes
+
+    private fun observeDownloadedFilesBytes() {
+        viewModelScope.launch {
+            songRepository.getDownloadActivitySongs().collect { songs ->
+                _downloadedFilesBytes.value =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        songs.sumOf { song ->
+                            (song.downloadedFilePath?.let { java.io.File(it).takeIf(java.io.File::exists)?.length() } ?: 0L) +
+                                (song.downloadedVideoFilePath?.let { java.io.File(it).takeIf(java.io.File::exists)?.length() } ?: 0L)
+                        }
+                    }
+            }
+        }
+    }
+
     fun clearDownloadedCache() {
         viewModelScope.launch {
             // 二期改走一站式清理:删文件+MediaStore 行+Room 双列清零+DownloadIndex 条目
@@ -1421,8 +1443,7 @@ class SettingsViewModel(
                 localPlaylistRepository.updateLocalPlaylistDownloadState(DownloadState.STATE_NOT_DOWNLOADED, playlist.id)
             }
             makeToast(getString(Res.string.clear_downloaded_cache))
-            getDownloadedCacheSize()
-            downloadUtils.removeAllDownloads()
+            // 顺修:尾部曾有第二个 removeAllDownloads(与开头重复,把刚清完的状态再写一遍)
         }
     }
 
