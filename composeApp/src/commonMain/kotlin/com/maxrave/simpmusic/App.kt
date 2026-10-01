@@ -790,7 +790,9 @@ fun App(
                                                 },
                                             ),
                                     ) {
-                                        ForceDarkContent {
+                                        // Side panel only: the status bar is shared with the page
+                                        // behind, so this dark subtree must not claim it.
+                                        ForceDarkContent(affectSystemBars = false) {
                                             NowPlayingScreenContent(
                                                 navController = navController,
                                                 sharedViewModel = viewModel,
