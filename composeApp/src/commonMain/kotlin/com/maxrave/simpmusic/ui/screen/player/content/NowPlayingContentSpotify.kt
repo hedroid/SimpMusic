@@ -117,13 +117,16 @@ import com.maxrave.simpmusic.expect.ui.MediaPlayerView
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.parseTimestampToMilliseconds
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricText
 import com.maxrave.simpmusic.ui.component.AIBadge
 import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
@@ -159,7 +162,6 @@ import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.UIEvent
-import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -600,7 +602,7 @@ fun NowPlayingContentSpotify(
                                             size = 24.dp,
                                             modifier =
                                                 Modifier
-                                                    .align(Alignment.TopEnd)
+                                                   .align(Alignment.TopEnd)
                                                     .padding(10.dp)
                                                     .alpha(if (pageHidesArtwork) 0f else 1f),
                                         )
@@ -616,11 +618,14 @@ fun NowPlayingContentSpotify(
                                         var internalShowSubtitle by rememberSaveable {
                                             mutableStateOf(true)
                                         }
+                                        // The frame takes the video's own shape, fitted into the
+                                        // square slot: a wide video spans its width, a tall one
+                                        // its height. The slot itself never changes, so nothing
+                                        // below the artwork moves.
                                         Box(
                                             modifier =
                                                 Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(16f / 9)
+                                                    .aspectRatio(state.videoAspectRatio)
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(Color.Black),
                                         ) {
@@ -919,18 +924,21 @@ fun NowPlayingContentSpotify(
                                     animationSpec = tween(durationMillis = 300),
                                     label = "inlineLyricLine",
                                 ) { lineText ->
-                                Text(
-                                    text = lineText,
-                                    style = typo().labelSmall,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 20.dp),
-                                )
-                            }
+                                   LyricText(
+                                        text = lineText,
+                                        style = typo().labelSmall,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        modifier =
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 20.dp)
+                                                .basicMarquee(
+                                                    iterations = Int.MAX_VALUE,
+                                                    animationMode = MarqueeAnimationMode.Immediately,
+                                                ).focusable(),
+                                    )
+                                }
                             }
 
                             // Info Layout
@@ -1150,7 +1158,7 @@ fun NowPlayingContentSpotify(
                                                     Column(
                                                         modifier = Modifier.fillMaxWidth(),
                                                     ) {
-                                                        Text(
+                                                        LyricText(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
@@ -1174,7 +1182,7 @@ fun NowPlayingContentSpotify(
                                                                 ?.words
                                                                 ?.stripRichSyncTimestamps()
                                                         if (!translatedLineText.isNullOrBlank()) {
-                                                            Text(
+                                                            LyricText(
                                                                 modifier =
                                                                     Modifier
                                                                         .fillMaxWidth()
@@ -1185,6 +1193,7 @@ fun NowPlayingContentSpotify(
                                                                             animationMode = MarqueeAnimationMode.Immediately,
                                                                         ).focusable(),
                                                                 text = translatedLineText,
+                                                                alignmentText = lineText,
                                                                 style = typo().bodyMedium,
                                                                 color = Color.Yellow,
                                                                 maxLines = 1,
@@ -2012,7 +2021,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -2064,7 +2073,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             )
         }
         Text(
-            text = formatDuration(state.timelineState.total),
+            text = state.timelineState.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,

@@ -3,9 +3,11 @@ package com.maxrave.simpmusic.extension
 import androidx.compose.runtime.Composable
 import com.maxrave.common.SponsorBlockType
 import com.maxrave.domain.data.model.browse.artist.ArtistBrowse
+import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.extension.now
 import com.maxrave.domain.utils.FilterState
 import com.maxrave.domain.utils.toTrack
+import kotlin.math.roundToLong
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.viewModel.ArtistScreenData
 import kotlinx.datetime.LocalDateTime
@@ -23,6 +25,7 @@ import simpmusic.composeapp.generated.resources.interaction
 import simpmusic.composeapp.generated.resources.intro
 import simpmusic.composeapp.generated.resources.month_s_ago
 import simpmusic.composeapp.generated.resources.music_off_topic
+import simpmusic.composeapp.generated.resources.live_badge
 import simpmusic.composeapp.generated.resources.na_na
 import simpmusic.composeapp.generated.resources.netease_rate_limited
 import simpmusic.composeapp.generated.resources.newer_first
@@ -92,6 +95,17 @@ fun LocalDateTime.formatTimeAgo(): String {
         else -> stringResource(Res.string.recently)
     }
 }
+
+/**
+ * The elapsed-time label under a seek bar sitting at [progress] (0..1) of the track. Blank for a live
+ * broadcast: where playback sits in the broadcast's seek window means nothing to a listener.
+ */
+@Composable
+fun TimeLine.elapsedLabel(progress: Float): String = if (isLive) "" else formatDuration((total * progress).roundToLong())
+
+/** The track's length under a seek bar, or LIVE for a live broadcast, which has none. */
+@Composable
+fun TimeLine.lengthLabel(): String = if (isLive) stringResource(Res.string.live_badge) else formatDuration(total)
 
 @Composable
 fun formatDuration(duration: Long): String {
@@ -261,18 +275,22 @@ fun FilterState.displayNameRes(): StringResource =
 fun String?.ifNullOrEmpty(defaultValue: @Composable () -> String): String = if (isNullOrEmpty()) defaultValue() else this
 
 @Composable
-fun SponsorBlockType.displayString(): String =
+fun SponsorBlockType.displayString(): String = stringResource(displayRes())
+
+/** The resource behind [displayString], for callers outside composition (the skip toast). */
+fun SponsorBlockType.displayRes(): StringResource =
     when (this) {
-        SponsorBlockType.FILLER -> stringResource(Res.string.filler)
-        SponsorBlockType.INTERACTION -> stringResource(Res.string.interaction)
-        SponsorBlockType.INTRO -> stringResource(Res.string.intro)
-        SponsorBlockType.MUSIC_OFF_TOPIC -> stringResource(Res.string.music_off_topic)
-        SponsorBlockType.OUTRO -> stringResource(Res.string.outro)
-        SponsorBlockType.POI_HIGHLIGHT -> stringResource(Res.string.poi_highlight)
-        SponsorBlockType.PREVIEW -> stringResource(Res.string.preview)
-        SponsorBlockType.SELF_PROMOTION -> stringResource(Res.string.self_promotion)
-        SponsorBlockType.SPONSOR -> stringResource(Res.string.sponsor)
+        SponsorBlockType.FILLER -> Res.string.filler
+        SponsorBlockType.INTERACTION -> Res.string.interaction
+        SponsorBlockType.INTRO -> Res.string.intro
+        SponsorBlockType.MUSIC_OFF_TOPIC -> Res.string.music_off_topic
+        SponsorBlockType.OUTRO -> Res.string.outro
+        SponsorBlockType.POI_HIGHLIGHT -> Res.string.poi_highlight
+        SponsorBlockType.PREVIEW -> Res.string.preview
+        SponsorBlockType.SELF_PROMOTION -> Res.string.self_promotion
+        SponsorBlockType.SPONSOR -> Res.string.sponsor
     }
+
 /** 网易写操作失败的文案分流:405(端点频控/账号风控窗口,重试会续期)给"操作过于频繁"
  *  专属提示,其余失败维持各调用点原兜底文案。仅对 onFailure 异常判型——业务 code!=200
  *  被 repo 折叠成 success(false) 的路径拿不到异常,继续走笼统文案。 */

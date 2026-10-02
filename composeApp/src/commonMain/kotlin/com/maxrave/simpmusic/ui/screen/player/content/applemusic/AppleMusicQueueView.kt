@@ -108,6 +108,8 @@ internal fun AppleMusicQueueView(
     activePillContainer: Color,
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
+    outputName: String?,
+    onOpenOutput: () -> Unit,
     modifier: Modifier = Modifier,
     isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
@@ -127,7 +129,7 @@ internal fun AppleMusicQueueView(
     // read/write that list (and the player timeline) at the SAME position — confirmed by reading
     // MediaServiceHandlerImpl.removeMediaItem/swap and ExoPlayerAdapter.moveMediaItem/
     // removeMediaItem/getUnshuffledIndex, which all treat their index argument as "current
-    // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
+   // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
     // local index == absolute index — no offset arithmetic to get wrong anywhere.
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -253,10 +255,12 @@ internal fun AppleMusicQueueView(
 
         // Same per-item sheet the old queue sheet opens from a row's ⋯ (move up/down/delete).
         var queueItemSheetIndex by remember { mutableStateOf(-1) }
+        var queueItemSheetVideoId by remember { mutableStateOf<String?>(null) }
         if (queueItemSheetIndex >= 0) {
             QueueItemBottomSheet(
                 onDismiss = { queueItemSheetIndex = -1 },
                 index = queueItemSheetIndex,
+                videoId = queueItemSheetVideoId,
             )
         }
 
@@ -309,7 +313,7 @@ internal fun AppleMusicQueueView(
                         },
             ) {
                 itemsIndexed(
-                    state.artworkQueue,
+                   state.artworkQueue,
                     // Same key shape QueueBottomSheet uses over the full list.
                     key = { i, t -> i.toString() + t.videoId },
                 ) { index, track ->
@@ -332,7 +336,10 @@ internal fun AppleMusicQueueView(
                             onClickListener = { videoId ->
                                 if (videoId == track.videoId) actions.onSeekToQueueIndex(queueIndex)
                             },
-                            onMoreClickListener = { queueItemSheetIndex = queueIndex },
+                            onMoreClickListener = {
+                                queueItemSheetVideoId = track.videoId
+                                queueItemSheetIndex = queueIndex
+                            },
                         )
                     }
                 }
@@ -367,11 +374,13 @@ internal fun AppleMusicQueueView(
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
             deviceVolumeController = deviceVolumeController,
-            compact = isCompact,
+           compact = isCompact,
             // Compact queue keeps transport + dock only: this list has no tap-to-toggle surface
             // the way the lyrics page does, so the cluster is always in-flow — the full block
             // (slider/times/volume) left the list under ~90dp in the side panel.
             transportOnly = isCompact,
+           outputName = outputName,
+            onOpenOutput = onOpenOutput,
         )
     }
 }

@@ -24,6 +24,7 @@
     <string name="hide">Hide</string>
     <string name="show">Show</string>
     <string name="na_na">NA:NA</string>
+    <string name="live_badge">LIVE</string>
     <string name="cache_size">%1$s MB</string>
     <string name="favorite">Favorite</string>
     <string name="followed">Followed</string>
@@ -142,6 +143,7 @@
     <string name="version">Version</string>
     <string name="github">Github</string>
     <string name="maxrave_dev">hedroid</string>
+    <string name="follow_me_on_x">Follow me on X</string>
     <string name="buy_me_a_coffee">Buy me a coffee</string>
     <string name="developer_blog">Developer Blog</string>
     <string name="developer_blog_tagline">Read dev notes, tutorials &amp; behind-the-scenes</string>
@@ -342,8 +344,8 @@
     <string name="audio_quality">Audio quality</string>
     <string name="play_video_for_video_track_instead_of_audio_only">Play video for video track instead of audio only</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">Such as Music Video, Lyrics Video, Podcasts, and more</string>
-    <string name="radio_audio_only">Keep radio audio-only</string>
-    <string name="radio_audio_only_description">Skip music videos, remixes and mashups that YouTube mixes into a radio. Playlists and albums are not affected</string>
+    <string name="radio_audio_only">Play audio version instead of MV in radio</string>
+    <string name="radio_audio_only_description">Play the audio version instead of the music video when there is one, and skip remixes and mashups that only exist as videos. Playlists and albums are not affected</string>
     <string name="video_quality">Video Quality</string>
     <plurals name="n_song">
         <item quantity="one">%d song</item>
@@ -796,6 +798,14 @@
     <string name="listen_to_downloaded">Listen to downloaded music</string>
     <string name="playing_on_device">Playing on %1$s</string>
     <string name="not_available_while_casting">Not available while casting</string>
+    <string name="audio_output">Audio output</string>
+    <string name="audio_output_playing_here">Playing here</string>
+    <string name="audio_output_cast">Cast</string>
+    <string name="audio_output_system_default">System default</string>
+    <string name="audio_output_wired">Wired headphones</string>
+    <string name="audio_output_bluetooth">Bluetooth</string>
+    <string name="audio_output_usb">USB audio</string>
+    <string name="audio_output_hdmi">HDMI</string>
     <string name="import_data">Import playlists</string>
     <string name="import_playlists_from_other_apps">Import playlists from another app</string>
     <string name="import_data_intro">Import brings in playlists converted from Spotify or another YT Music client app.\nConverting tool: https://www.simpmusic.org/tools\nIn SimpMusic, only playlist files in our own format can be imported</string>

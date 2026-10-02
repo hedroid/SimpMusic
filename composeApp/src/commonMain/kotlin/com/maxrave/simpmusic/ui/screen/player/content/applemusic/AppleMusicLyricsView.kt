@@ -91,6 +91,8 @@ internal fun AppleMusicLyricsView(
     activePillContainer: Color,
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
+    outputName: String?,
+    onOpenOutput: () -> Unit,
     modifier: Modifier = Modifier,
     isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
@@ -305,6 +307,8 @@ internal fun AppleMusicLyricsView(
                 activePillContent = activePillContent,
                 deviceVolumeController = deviceVolumeController,
                 compact = isCompact,
+                outputName = outputName,
+                onOpenOutput = onOpenOutput,
             )
         }
     }

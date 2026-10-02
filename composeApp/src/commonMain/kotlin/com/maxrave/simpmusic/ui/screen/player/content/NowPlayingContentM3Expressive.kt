@@ -92,11 +92,14 @@ import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.isPlatformCastAvailable
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricText
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.heartBurst
 import com.maxrave.simpmusic.ui.component.rememberHeartBurstState
@@ -119,7 +122,6 @@ import com.maxrave.simpmusic.ui.screen.player.content.expressive.WavySeekBar
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.UIEvent
-import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -237,8 +239,8 @@ private fun NowPlayingM3ExpressiveLayout(
     }
     LaunchedEffect(
         topAppBarHeightDp,
-        // Unlike Classic, the M3E artwork frame CHANGES height (square ↔ 16:9 while a video
-        // plays), so the fold math must re-run when the measured middle height moves too —
+        // Unlike Classic, the M3E artwork frame CHANGES height (square ↔ the video's shape while
+        // a video plays), so the fold math must re-run when the measured middle height moves too —
         // without this key the gap keeps the previous track's numbers and the layout drifts.
         middleLayoutHeightDp,
         screenInfo,
@@ -410,8 +412,9 @@ private fun NowPlayingM3ExpressiveLayout(
                         // The artwork card is rendered by the pager above; reserve the same
                         // vertical space so the info layout keeps its Y position. Spacer has
                         // no pointer input so pager swipes fall through. Its ratio MUST match
-                        // the card's (16:9 while a video plays, else square) or the fold math
-                        // drifts from what the pager actually draws.
+                        // the card's slot (the video's shape capped at square while a video
+                        // plays, else square) or the fold math drifts from what the pager
+                        // actually draws — hence the one shared expressiveCardSlotRatio().
                         Spacer(
                             modifier =
                                 Modifier
@@ -425,9 +428,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                     .value
                                                     .toInt()
                                             }
-                                    }.aspectRatio(
-                                        if (state.screenData.isVideo && state.shouldShowVideo) 16f / 9 else 1f,
-                                    ),
+                                    }.aspectRatio(state.expressiveCardSlotRatio()),
                         )
 
                         // === 5. Inline current-lyric line, centered in the lower gap ===
@@ -465,12 +466,11 @@ private fun NowPlayingM3ExpressiveLayout(
                                 animationSpec = tween(durationMillis = 300),
                                 label = "inlineLyricLineExpressive",
                             ) { lineText ->
-                                Text(
+                                LyricText(
                                     text = lineText,
                                     style = typo().labelSmall,
                                     color = Color.White,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
@@ -577,7 +577,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                 Column(
                                                     modifier = Modifier.fillMaxWidth(),
                                                 ) {
-                                                    Text(
+                                                    LyricText(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
@@ -601,7 +601,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                             ?.words
                                                             ?.stripRichSyncTimestamps()
                                                     if (!translatedLineText.isNullOrBlank()) {
-                                                        Text(
+                                                        LyricText(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
@@ -612,6 +612,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                                         animationMode = MarqueeAnimationMode.Immediately,
                                                                     ).focusable(),
                                                             text = translatedLineText,
+                                                            alignmentText = lineText,
                                                             style = typo().bodyMedium,
                                                             color = Color.Yellow,
                                                             maxLines = 1,
@@ -852,7 +853,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -903,7 +904,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             )
         }
         Text(
-            text = formatDuration(state.timelineState.total),
+            text = state.timelineState.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,

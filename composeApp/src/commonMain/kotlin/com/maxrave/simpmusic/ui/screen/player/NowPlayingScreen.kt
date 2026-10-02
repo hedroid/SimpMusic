@@ -64,10 +64,12 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.kmpalette.rememberPaletteState
+import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.rememberVideoAspectRatio
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
@@ -88,6 +90,7 @@ import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.VoteLyricsDialog
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
@@ -97,6 +100,7 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentSpotify
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.PlayerBackdropColor
 import com.maxrave.simpmusic.ui.screen.player.content.toAudioCodecLabel
+import com.maxrave.simpmusic.ui.screen.player.content.toAudioQualityLabel
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
@@ -196,10 +200,11 @@ fun NowPlayingScreenContent(
     // lyric reports what the ear is hearing, and those two are what the offset separates.
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
-    val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
+ val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
     val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
-    val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
+   // Apple Music style's quality line under the progress bar — see NowPlayingContentState.toAudioQualityLabel.
+ val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
     val shouldShowVideo by sharedViewModel.getVideo.collectAsStateWithLifecycle()
     val translatedVoteState by sharedViewModel.translatedVoteState.collectAsStateWithLifecycle()
@@ -685,12 +690,15 @@ fun NowPlayingScreenContent(
             mainScrollState = mainScrollState,
             isExpanded = isExpanded,
             dismissIcon = dismissIcon,
-            // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
+         // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
             // `audio/webm; codecs="opus"` with a regex and stores the two halves in SEPARATE
             // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for
             // the codec therefore never matched anything and the badge never rendered, on any track.
             audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
-        )
+           audioQualityLabel = formatState.toAudioQualityLabel(),
+            lyricsOffsetMs = lyricsOffsetMs.toLong(),
+            videoAspectRatio = rememberVideoAspectRatio(MAIN_PLAYER) ?: 16f / 9,
+     )
     val actions =
         NowPlayingContentActions(
             onUIEvent = { sharedViewModel.onUIEvent(it) },
@@ -727,7 +735,11 @@ fun NowPlayingScreenContent(
                     )
                 }
             },
-            onShowMoreSheet = { showSheet = true },
+           onOpenListenTogether = {
+                onDismiss()
+                navController.navigate(ListenTogetherDestination)
+            },
+         onShowMoreSheet = { showSheet = true },
             onShowQueue = { showQueueBottomSheet = true },
             onShowInfo = { showInfoBottomSheet = true },
             onShowAddToPlaylist = { showAddToPlaylistDirectly = true },

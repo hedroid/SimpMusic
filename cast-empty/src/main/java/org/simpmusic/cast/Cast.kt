@@ -33,3 +33,23 @@ fun CastIconButton(
 ) {
     // No-op: Google Cast is not available in this build flavor.
 }
+
+data class CastRouteInfo(
+    val id: String,
+    val name: String,
+    val isSelected: Boolean,
+)
+
+@Composable
+fun rememberCastRoutes(discover: Boolean): List<CastRouteInfo> = emptyList()
+
+fun selectCastRoute(
+    context: Context,
+    id: String,
+) {
+    // No-op: Google Cast is not available in this build flavor.
+}
+
+fun stopCasting(context: Context) {
+    // No-op: Google Cast is not available in this build flavor.
+}

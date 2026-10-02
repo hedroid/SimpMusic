@@ -294,10 +294,11 @@
     <string name="normalize_volume">音量平衡</string>
     <string name="audio">音訊</string>
     <string name="no_equalizer">您的裝置不支援等化器</string>
-    <string name="open_system_equalizer">打開等化器</string>
+    <string name="open_system_equalizer">打開系統等化器</string>
     <string name="use_your_system_equalizer">使用系統等化器</string>
     <string name="streaming_data_provider_piped">串流資料提供者</string>
     <string name="itag">標籤</string>
+    <string name="extract_source">提取来源</string>
     <string name="mime_type">Mime 類型</string>
     <string name="bitrate">位元率</string>
     <string name="warning">警告</string>

@@ -318,6 +318,10 @@ class MainActivity : AppCompatActivity() {
                     ToastType.UnavailableQueueExhausted -> {
                         runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.UNAVAILABLE_SONG_QUEUE_EXHAUSTED) }
                     }
+
+                    is ToastType.SponsorBlockSkip -> {
+                        runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.SPONSOR_BLOCK_SKIP, type.category) }
+                    }
                 },
             )
         }
