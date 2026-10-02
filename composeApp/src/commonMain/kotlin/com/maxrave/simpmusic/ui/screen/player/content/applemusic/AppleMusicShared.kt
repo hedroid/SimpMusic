@@ -405,6 +405,11 @@ internal fun AppleMusicHeaderActions(
                 }
             }
         }
+        // 网易歌:评论入口(收藏心右边),打开 NeteaseCommentsSheet;与 dock 版互斥——2026-10-02
+        // 用户定案从 dock 第四钮移到这里,更贴近"对这首歌"的语义。
+        if (state.isNeteaseSong) {
+            AppleMusicGlyphButton(icon = SimpIcons.Comment, onClick = { actions.onShowNeteaseComments() })
+        }
         AppleMusicGlyphButton(icon = SimpIcons.MoreVert, onClick = { actions.onShowMoreSheet() })
     }
 }
@@ -876,8 +881,6 @@ internal fun AppleMusicDockButton(
  * lives now) and which people (Listen Together). Joined by a hairline rather than a gap, so the
  * two read as one object.
  *
- * (fork) 网易歌多一枚第四钮 Comments——打开 NeteaseCommentsSheet(无视图切换、无 active 态),
- * YT 队列维持三槽 dock。
  */
 @Composable
 internal fun AppleMusicActionRow(
@@ -886,10 +889,8 @@ internal fun AppleMusicActionRow(
     lyricsAvailable: Boolean,
     activeColor: Color,
     activeContentColor: Color,
-   onOpenOutput: () -> Unit,
+    onOpenOutput: () -> Unit,
     onOpenListenTogether: () -> Unit,
-   showComments: Boolean = false,
-    onShowComments: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Straight off the repository, like ListenTogetherIconButton: one boolean off a StateFlow is all
@@ -899,7 +900,7 @@ internal fun AppleMusicActionRow(
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // A quarter of the spare width at each end, the rest between — BitChord's spacing. SpaceEvenly
         // over the full row pushed the two glyphs out to the gutters, away from the capsule.
-        val content = DOCK_BUTTON_SIZE * (if (showComments) 3 else 2) + CAPSULE_SEGMENT_WIDTH * 2 + 1.dp
+        val content = DOCK_BUTTON_SIZE * 2 + CAPSULE_SEGMENT_WIDTH * 2 + 1.dp
         val edgeInset = ((maxWidth - content) / 4).coerceAtLeast(0.dp)
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = edgeInset),
@@ -956,15 +957,6 @@ internal fun AppleMusicActionRow(
                     onSelectView(if (viewState == AppleMusicView.QUEUE) AppleMusicView.MAIN else AppleMusicView.QUEUE)
                 },
             )
-            if (showComments) {
-                AppleMusicDockButton(
-                    icon = SimpIcons.Comment,
-                    active = false,
-                    activeColor = activeColor,
-                    activeContentColor = activeContentColor,
-                    onClick = onShowComments,
-                )
-            }
         }
     }
 }
@@ -1082,8 +1074,6 @@ internal fun AppleMusicBottomCluster(
     onOpenOutput: () -> Unit,
     modifier: Modifier = Modifier,
     topPadding: Dp = 8.dp,
-    showComments: Boolean = false,
-    onShowComments: () -> Unit = {},
     compact: Boolean = false,
     transportOnly: Boolean = false,
 ) {
@@ -1122,8 +1112,6 @@ internal fun AppleMusicBottomCluster(
             lyricsAvailable = state.screenData.lyricsData != null && !state.isPodcastSong,
             activeColor = activePillContainer,
             activeContentColor = activePillContent,
-            showComments = showComments,
-            onShowComments = onShowComments,
             onOpenOutput = onOpenOutput,
             onOpenListenTogether = actions.onOpenListenTogether,        )
         Spacer(modifier = Modifier.height(14.dp))

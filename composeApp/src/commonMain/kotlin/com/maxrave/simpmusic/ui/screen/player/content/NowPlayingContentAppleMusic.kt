@@ -594,9 +594,6 @@ private fun AppleMusicMainView(
                     outputName = outputName,
                     onOpenOutput = onOpenOutput,
                     compact = isCompact,
-                    // 网易歌:dock 加第四枚评论钮,打开 NeteaseCommentsSheet
-                    showComments = state.isNeteaseSong,
-                    onShowComments = actions.onShowNeteaseComments,
                     // The lyric sits right on the progress bar: it is read with the bar, not the title.
                     topPadding = 2.dp,
                 )
