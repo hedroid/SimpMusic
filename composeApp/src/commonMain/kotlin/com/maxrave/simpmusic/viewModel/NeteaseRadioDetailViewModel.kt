@@ -138,7 +138,10 @@ class NeteaseRadioDetailViewModel(
     private var programsJob: kotlinx.coroutines.Job? = null
     private var programsGeneration = 0L
 
-    fun load(id: Long) {
+    fun load(
+        id: Long,
+        navName: String = "",
+    ) {
         if (radioId == id && !_uiState.value.loading) return
         programsGeneration++
         programsJob?.cancel()
@@ -158,7 +161,26 @@ class NeteaseRadioDetailViewModel(
             // 并行会有详情未回(declared=0)的误判窗口
             neteaseRepository.getDjRadioDetail(id).fold(
                 onSuccess = { radio -> _uiState.update { it.copy(radio = radio) } },
-                onFailure = { log("radio detail failed: $it") },
+                onFailure = {
+                    log("radio detail failed: $it")
+                    // 下架/版权到期电台 /djradio/get 回 code=401 无 djRadio 字段(2026-10-02
+                    // 探针实证,凯叔讲西游记第一部),radio=null 会让 header 整块消失。
+                    // 订阅列表 /djradio/get/subed 对下架电台形状仍健康——按 id 兜底
+                    // (能订阅到列表里的必然已订阅,subed 钉 true);未订阅命中不了时用
+                    // 导航传入的电台名构造最小实体,保住 header 与播放按钮
+                    val fallback =
+                        neteaseRepository.getMyDjRadios().getOrNull()
+                            ?.firstOrNull { it.id == id }
+                            ?.copy(subed = true)
+                            ?: NeteaseDjRadio(
+                                id = id,
+                                name = navName,
+                                coverUrl = null,
+                                programCount = 0,
+                                djNickname = null,
+                            )
+                    _uiState.update { it.copy(radio = fallback) }
+                },
             )
             loadPrograms()
         }

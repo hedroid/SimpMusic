@@ -91,7 +91,7 @@ fun NeteaseRadioDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(radioId) {
-        viewModel.load(radioId)
+        viewModel.load(radioId, radioName)
     }
 
     Column(Modifier.fillMaxSize()) {
