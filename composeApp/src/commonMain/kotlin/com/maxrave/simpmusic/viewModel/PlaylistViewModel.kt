@@ -1038,7 +1038,9 @@ class PlaylistViewModel(
                     if (downloaded.isEmpty()) {
                         if (notDownloaded.isNotEmpty()) {
                             updatePlaylistDownloadState(id, STATE_DOWNLOADING)
-                            queueBatchDownload(notDownloaded)
+                            if (!queueBatchDownload(notDownloaded)) {
+                                updatePlaylistDownloadState(id, STATE_NOT_DOWNLOADED)
+                            }
                         } else {
                             makeToast(getString(Res.string.downloaded))
                         }
@@ -1086,12 +1088,17 @@ class PlaylistViewModel(
                 return@launch
             }
             updatePlaylistDownloadState(id, STATE_DOWNLOADING)
-            queueBatchDownload(target)
+            if (!queueBatchDownload(target)) {
+                // 全部被磁盘预检拒绝=没有任何任务能纠正容器态,回滚(否则永久"下载中",CR P1-3)
+                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+            }
         }
     }
 
-    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>) {
+    /** 返回 true=有至少一首成功入队;全部被磁盘预检拒绝时 false(调用点回滚容器态) */
+    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>): Boolean {
         var anyRejected = false
+        var anyQueued = false
         songs.forEach { song ->
             songRepository.updateDownloadState(
                 videoId = song.videoId,
@@ -1110,11 +1117,14 @@ class PlaylistViewModel(
                     downloadState = STATE_NOT_DOWNLOADED,
                 )
                 anyRejected = true
+            } else {
+                anyQueued = true
             }
         }
         if (songs.isNotEmpty()) {
             makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
         }
+        return anyQueued
     }
 
     /**

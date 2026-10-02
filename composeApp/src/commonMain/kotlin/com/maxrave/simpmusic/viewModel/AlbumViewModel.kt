@@ -436,7 +436,10 @@ class AlbumViewModel(
             }
             if (downloaded.isEmpty()) {
                 albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
-                queueBatchDownload(notDownloaded)
+                if (!queueBatchDownload(notDownloaded)) {
+                    // 全部被拒回滚(部分拒绝完成判定能自然收敛,这里管"零任务"死锁)
+                    albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_NOT_DOWNLOADED)
+                }
             } else {
                 _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
             }
@@ -480,12 +483,17 @@ class AlbumViewModel(
                 return@launch
             }
             albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADING)
-            queueBatchDownload(target)
+            if (!queueBatchDownload(target)) {
+                // 覆盖路径全拒:回"已下载"(target 里的旧文件还在,语义仍是已下载)
+                albumRepository.updateAlbumDownloadState(uiState.value.browseId, DownloadState.STATE_DOWNLOADED)
+            }
         }
     }
 
-    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>) {
+    /** 返回 true=有至少一首成功入队;全部被磁盘预检拒绝时 false(调用点回滚容器态) */
+    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>): Boolean {
         var anyRejected = false
+        var anyQueued = false
         songs.forEach { song ->
             log("Download: ${song.videoId}")
             songRepository.updateDownloadState(
@@ -505,11 +513,14 @@ class AlbumViewModel(
                     downloadState = DownloadState.STATE_NOT_DOWNLOADED,
                 )
                 anyRejected = true
+            } else {
+                anyQueued = true
             }
         }
         if (songs.isNotEmpty()) {
             makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
         }
+        return anyQueued
     }
 
     /** Stop an in-flight album download; finished tracks keep their files. */

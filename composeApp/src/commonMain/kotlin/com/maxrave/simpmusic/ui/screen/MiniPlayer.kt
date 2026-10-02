@@ -170,7 +170,11 @@ fun MiniPlayer(
     // 红心=云端账号状态;未登录源置灰+点击提示登录
     val miniNeteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     val miniYtLoggedIn by sharedViewModel.isUserLoggedInFlow().collectAsStateWithLifecycle(initialValue = false)
-    val nowPlayingVideoIdMini = sharedViewModel.nowPlayingState.collectAsStateWithLifecycle(initialValue = null).value?.track?.videoId
+    // 双源判定(queue rebuild 窗口 track 可能恒 null,songEntity(DB)兜底)——
+    // 否则从重建过的队列(如下载页)播放时网易歌被误判成 YT,红心登录门控反了
+    val nowPlayingVideoIdMini =
+        sharedViewModel.nowPlayingState.collectAsStateWithLifecycle(initialValue = null).value
+            ?.let { it.songEntity?.videoId ?: it.track?.videoId }
     val likeEnabledMini =
         if (nowPlayingVideoIdMini?.toLongOrNull() != null) miniNeteaseLoggedIn else miniYtLoggedIn
     // 播客节目(剧集):歌曲红心链路对节目无效(/song/like 报 524)——迷你条红心隐藏。

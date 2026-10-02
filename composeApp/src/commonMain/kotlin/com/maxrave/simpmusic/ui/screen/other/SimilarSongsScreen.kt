@@ -74,7 +74,7 @@ fun SimilarSongsScreen(
     val hazeState = rememberHazeState()
     val listState = rememberLazyListState()
     val playingTrack by remember {
-        sharedViewModel.nowPlayingState.map { it?.track?.videoId }
+        sharedViewModel.nowPlayingState.map { it?.songEntity?.videoId ?: it?.track?.videoId }
     }.collectAsState(null)
     var showBottomSheet by remember { mutableStateOf(false) }
     var menuSong by remember { mutableStateOf<SongEntity?>(null) }

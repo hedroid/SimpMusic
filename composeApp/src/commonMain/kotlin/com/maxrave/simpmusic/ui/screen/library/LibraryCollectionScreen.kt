@@ -432,7 +432,11 @@ fun DownloadedManagementBody(
                             items(tabRows, key = { it.song.videoId }) { row ->
                                 DownloadManagementRowItem(
                                     row = row,
-                                    isPlaying = nowPlaying?.track?.videoId == row.song.videoId,
+                                    // 正在播放判定双源(2026-10-02):track 在队列 rebuild 窗口
+                                    // (updateCatalog 清空回填)里 find 落空恒 null,拿 DB 落的
+                                    // songEntity 兜底——与 NowPlayingScreen 同款口径
+                                    isPlaying =
+                                        (nowPlaying?.songEntity?.videoId ?: nowPlaying?.track?.videoId) == row.song.videoId,
                                     // 行视角(混排后):有视频条目的行看视频条目(mp4 是它的
                                     // 落地产物,在途进度也在视频上),纯音频行看音频
                                     viewMode = if (row.videoStatus != null) DownloadViewMode.VIDEO else DownloadViewMode.AUDIO,

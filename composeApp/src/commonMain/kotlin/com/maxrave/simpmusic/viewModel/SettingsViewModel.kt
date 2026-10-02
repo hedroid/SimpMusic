@@ -422,10 +422,9 @@ class SettingsViewModel(
     private fun getVideoDownloadQuality() {
         viewModelScope.launch {
             dataStoreManager.videoDownloadQuality.collect { videoQuality ->
-                when (videoQuality) {
-                    VIDEO_QUALITY.items[0].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[0].toString())
-                    VIDEO_QUALITY.items[1].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[1].toString())
-                    VIDEO_QUALITY.items[2].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[2].toString())
+                // 4 档全收(2026-10-02 加 480p 后原 when 只列了 3 档:选 360p 回显不生效)
+                VIDEO_QUALITY.items.firstOrNull { it.toString() == videoQuality }?.let {
+                    _videoDownloadQuality.emit(it.toString())
                 }
             }
         }
