@@ -20,12 +20,19 @@ data class CastRouteInfo(
 /**
  * The Cast receivers this app can play to, for a picker of its own rather than the stock chooser
  * dialog. Scanning the network is only requested while [discover] is true — the list is on screen —
- * because discovery keeps the radio busy. Empty when Cast is unavailable.
+ * because discovery keeps the radio busy.
+ *
+ * (fork) The selector is the COMBINED Cast + DLNA one — the same one the native chooser runs on
+ * ([CastIconButton]). castRouteSelector() reads the CastContext mergedSelector: it is null
+ * without Google Play services (the list came back empty), and even with GMS it lacks
+ * DLNA_CONTROL_CATEGORY, so the DLNA renderers our DlnaMediaRouteProvider publishes never
+ * matched and never showed here. ensureDlnaMediaRouteProvider also installs the provider, whose
+ * discovery runs off the callback's selector below.
  */
 @Composable
 fun rememberCastRoutes(discover: Boolean): List<CastRouteInfo> {
     val context = LocalContext.current
-    val selector = remember { castRouteSelector() } ?: return emptyList()
+    val selector = remember(context) { ensureDlnaMediaRouteProvider(context) }
     val router = remember(context) { MediaRouter.getInstance(context.applicationContext) }
     var routes by remember { mutableStateOf(emptyList<CastRouteInfo>()) }
     DisposableEffect(router, selector, discover) {

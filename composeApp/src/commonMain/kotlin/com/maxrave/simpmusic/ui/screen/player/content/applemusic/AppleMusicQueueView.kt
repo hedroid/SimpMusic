@@ -270,6 +270,20 @@ internal fun AppleMusicQueueView(
                     .weight(1f)
                     .appleMusicVerticalFadeEdges(topFade = QUEUE_TOP_FADE, bottomFade = QUEUE_BOTTOM_FADE),
         ) {
+            // Keyed by the track, NOT by its position: a radio queue drops played tracks off
+            // the front (RadioQueueTrim), and a position-based key changes for every row when
+            // that happens, so the list loses its scroll anchor and jumps. The occurrence number
+            // keeps the key unique when a radio repeats a song — same shape QueueBottomSheet and
+            // upstream use. (fork 完整队列模型不变,只换 key。)
+            val queueRowKeys =
+                remember(state.artworkQueue) {
+                    val seen = HashMap<String, Int>(state.artworkQueue.size)
+                    state.artworkQueue.map { track ->
+                        val occurrence = seen.getOrElse(track.videoId) { 0 }
+                        seen[track.videoId] = occurrence + 1
+                        "${track.videoId}#$occurrence"
+                    }
+                }
             LazyColumn(
                 state = lazyListState,
                 // Space at BOTH ends equal to the fade at that end, so each fade lands on blank
@@ -313,9 +327,8 @@ internal fun AppleMusicQueueView(
                         },
             ) {
                 itemsIndexed(
-                   state.artworkQueue,
-                    // Same key shape QueueBottomSheet uses over the full list.
-                    key = { i, t -> i.toString() + t.videoId },
+                    state.artworkQueue,
+                    key = { i, t -> queueRowKeys.getOrElse(i) { t.videoId } },
                 ) { index, track ->
                     // Local index == absolute queue index (whole list is shown), so everything the
                     // PLAYER is told — click seeks, ⋯ sheet, drag reorder — takes this directly.

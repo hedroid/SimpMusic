@@ -165,7 +165,12 @@ internal fun AppleMusicOutputSheet(
                             status = if (receiver.isConnected) stringResource(Res.string.audio_output_playing_here) else null,
                             selected = receiver.isConnected,
                             colors = colors,
-                            onClick = { if (!receiver.isConnected) cast.connect(receiver.id) },
+                            // Close on pick like the local-output branch above — upstream missed
+                            // this one (their sheet stays open after choosing a receiver).
+                            onClick = {
+                                if (!receiver.isConnected) cast.connect(receiver.id)
+                                closeSheet()
+                            },
                         )
                     }
                 }
