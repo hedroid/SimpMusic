@@ -38,6 +38,8 @@ import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
@@ -307,6 +309,17 @@ class NowPlayingBottomSheetViewModel(
     private val _cloudLiked = MutableStateFlow<Boolean?>(null)
     val cloudLiked: StateFlow<Boolean?> = _cloudLiked
 
+    /**
+     * "下载视频"行的下载中态:DownloadManager 视频条目在途实时流 × 当前歌曲。
+     * 视频在途态不落 Room,音频行的 downloadState 流盖不住它,走内存条目流
+     * (isVideoQueuedOrDownloading 的口径=视频条目在途,或双产物任务整体在途)。
+     */
+    val videoDownloading: StateFlow<Boolean> =
+        combine(_uiState, downloadUtils.downloads) { state, _ ->
+            val id = state.songUIState.videoId
+            id.isNotEmpty() && downloadUtils.isVideoQueuedOrDownloading(id)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private fun refreshCloudLiked(videoId: String) {
         viewModelScope.launch {
             _cloudLiked.value = songRepository.getRemoteLikeStatus(videoId)
@@ -341,6 +354,7 @@ class NowPlayingBottomSheetViewModel(
                                             },
                                         videoType = song.videoType,
                                         neteaseProgramId = song.neteaseProgramId,
+                                        downloadedVideoFilePath = song.downloadedVideoFilePath,
                                     ),
                             )
                         }
@@ -516,13 +530,31 @@ class NowPlayingBottomSheetViewModel(
                 is NowPlayingBottomSheetUIEvent.DownloadVideo -> {
                     // 仅 YT 歌(网易无视频流);重复提交在 DownloadManager 侧天然幂等
                     if (songUIState.videoId.toLongOrNull() == null) {
-                        downloadUtils.downloadVideo(
-                            videoId = songUIState.videoId,
-                            title = songUIState.title,
-                            thumbnail = songUIState.thumbnails ?: "",
-                        )
-                        makeToast(getString(Res.string.downloading))
+                        // 已下载视频的重新下载=覆盖:先删旧视频文件+条目再入队
+                        // (addDownload 对存量 COMPLETED 条目不重启,不清等于白点)
+                        if (downloadUtils.isVideoFileDownloaded(songUIState.videoId)) {
+                            downloadUtils.removeVideoDownload(songUIState.videoId)
+                        }
+                        val queued =
+                            downloadUtils.downloadVideo(
+                                videoId = songUIState.videoId,
+                                title = songUIState.title,
+                                thumbnail = songUIState.thumbnails ?: "",
+                            )
+                        if (queued) {
+                            makeToast(getString(Res.string.downloading))
+                        } else {
+                            // 磁盘预检拒绝(未入队),提示与音频下载行同源
+                            makeToast(getString(Res.string.download_no_space))
+                        }
                     }
+                }
+
+                is NowPlayingBottomSheetUIEvent.CancelVideoDownload -> {
+                    // 只撤视频条目:双产物任务的音频半程(在途或已落文件)原样保留——
+                    // 与 DeleteDownload(音频+视频全清)语义区分
+                    downloadUtils.removeVideoDownload(songUIState.videoId)
+                    makeToast(getString(Res.string.removed_download))
                 }
 
                 is NowPlayingBottomSheetUIEvent.DeleteDownload -> {
@@ -674,6 +706,8 @@ data class NowPlayingBottomSheetUIState(
         val videoType: String = "",
         /** 播客节目行(网易电台剧集):非空=下载入口整组隐藏(2026-10-01 用户定,播客不提供下载) */
         val neteaseProgramId: Long? = null,
+        /** 视频文件路径(Room 实时流):非空且文件在="下载视频"行显示已下载态 */
+        val downloadedVideoFilePath: String? = null,
     )
 }
 
@@ -688,8 +722,11 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     data object Download : NowPlayingBottomSheetUIEvent()
 
-    /** 视频文件下载(文件式,仅 YT 歌):音视频双流 merge mp4 落 Movies/SimpMusic */
+    /** 视频文件下载(文件式,仅 YT 歌):音视频双流 merge mp4 落 Music/SimpMusic[/主艺人/专辑](与音频同树,回落 Movies) */
     data object DownloadVideo : NowPlayingBottomSheetUIEvent()
+
+    /** 取消视频下载(只撤视频条目,音频任务/已落文件不动) */
+    data object CancelVideoDownload : NowPlayingBottomSheetUIEvent()
 
     /** 删除已下载的文件(独立于下载行的覆盖语义;仅已下载的歌显示入口) */
     data object DeleteDownload : NowPlayingBottomSheetUIEvent()

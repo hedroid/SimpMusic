@@ -1759,6 +1759,8 @@ fun NowPlayingBottomSheet(
             .queueData.value?.data?.isNeteasePodcastQueue == true
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
+    // "下载视频"行的下载中态(DownloadManager 视频条目在途实时流)
+    val videoDownloading by viewModel.videoDownloading.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(
@@ -1782,6 +1784,9 @@ fun NowPlayingBottomSheet(
     var showCancelDownloadDialog by remember { mutableStateOf(false) }
     var showRemoveDownloadDialog by remember { mutableStateOf(false) }
     var showDeleteDownloadDialog by remember { mutableStateOf(false) }
+    // 视频行专属:在途取消(只撤视频条目)/已下载重下(覆盖),与音频行的弹窗同文案不同事件
+    var showCancelVideoDownloadDialog by remember { mutableStateOf(false) }
+    var showRedownloadVideoDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -1958,6 +1963,61 @@ fun NowPlayingBottomSheet(
             },
             dismissButton = {
                 TextButton(onClick = { showCancelDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.cancel_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.cancel_download_message), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showRedownloadVideoDialog) {
+        // 视频重新下载确认(文案与音频覆盖弹窗同源;确认走 DownloadVideo——
+        // 事件内先删旧视频文件+条目再入队)
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showRedownloadVideoDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRedownloadVideoDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
+                }) {
+                    Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRedownloadVideoDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.overwrite_download_message), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showCancelVideoDownloadDialog) {
+        // 视频下载取消确认:只撤视频条目(CancelVideoDownload),音频任务/已落文件不动
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showCancelVideoDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelVideoDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.CancelVideoDownload)
+                }) {
+                    Text(text = stringResource(Res.string.cancel_download_confirm), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelVideoDownloadDialog = false }) {
                     Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
                 }
             },
@@ -2269,7 +2329,9 @@ fun NowPlayingBottomSheet(
                     // (文案准确:停止并清掉未完成部分);视频视角的行打开同一歌曲 sheet,
                     // 音频先完成的视频在途条目走 STATE_DOWNLOADED 分支本就有此行。
                     // 播客行不显示(入口随"下载"一并移除)。
-                    if (!isPodcastEpisode) {
+                    // 播放页入口(song=null)不显示(2026-10-03 用户定:播放页三点隐藏删除
+                    // 下载,删除走下载管理页);列表歌曲菜单保留
+                    if (!isPodcastEpisode && song != null) {
                         when (uiState.songUIState.downloadState) {
                             DownloadState.STATE_DOWNLOADED,
                             DownloadState.STATE_PREPARING,
@@ -2291,16 +2353,41 @@ fun NowPlayingBottomSheet(
                         }
                     }
                     // 视频文件下载(2026-10 文件式,仅 YT 歌且真有视频流):merge mp4 落
-                    // Movies/SimpMusic。ATV=纯音频曲目(player 响应无视频 format),下了
-                    // 也只能 merge 出"只有声音的 mp4"——不显示入口(2026-10-01 用户反馈)
+                    // Music/SimpMusic[/主艺人/专辑](与音频同树,回落 Movies)。ATV=纯音频
+                    // 曲目(player 响应无视频 format),下了也只能 merge 出"只有声音的
+                    // mp4"——不显示入口(2026-10-01 用户反馈)。
+                    // 三态与音频下载行同构(2026-10-03 用户问"状态会随已下载更新吗"):
+                    // 在途=下载中(点击只撤视频条目),文件在=已下载(点击"重新下载?"覆盖),
+                    // 否则=下载视频;视频态独立于音频态,Room 路径列+内存条目流双源
                     if (uiState.songUIState.videoId.toLongOrNull() == null &&
                         uiState.songUIState.videoType != "MUSIC_VIDEO_TYPE_ATV"
                     ) {
-                        ActionButton(
-                            icon = SimpIcons.Movie,
-                            text = Res.string.download_video,
-                        ) {
-                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
+                        when {
+                            videoDownloading ->
+                                ActionButton(
+                                    icon = SimpIcons.Downloading,
+                                    text = Res.string.downloading,
+                                ) {
+                                    showCancelVideoDownloadDialog = true
+                                }
+
+                            uiState.songUIState.downloadedVideoFilePath != null ->
+                                ActionButton(
+                                    icon = SimpIcons.Movie,
+                                    // 同音频"已下载"行:共享 symbol 是中性色,完成态明说颜色
+                                    iconColor = Color(0xFF00A0CB),
+                                    text = Res.string.downloaded,
+                                ) {
+                                    showRedownloadVideoDialog = true
+                                }
+
+                            else ->
+                                ActionButton(
+                                    icon = SimpIcons.Movie,
+                                    text = Res.string.download_video,
+                                ) {
+                                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
+                                }
                         }
                     }
                     // 播客节目不进歌单(剧集不是歌)——隐藏(2026-09-29 用户定)
