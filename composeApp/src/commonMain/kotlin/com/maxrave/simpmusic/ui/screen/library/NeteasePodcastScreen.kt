@@ -65,6 +65,7 @@ import com.maxrave.simpmusic.extension.formatTimeAgo
 import com.maxrave.simpmusic.extension.scrollReportingEffect
 import kotlinx.datetime.toLocalDateTime
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
+import com.maxrave.simpmusic.ui.utils.scrollSettleTapRescue
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -337,7 +338,10 @@ internal fun NeteaseDjRadioCard(
             Modifier
                 .width(160.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                // 兜底 snap 收尾弹簧期间点击被 scrollable 吞掉(见工具文档):横滑货架后
+                // 立刻点封面,第一下有时只停了动画没触发导航
+                .scrollSettleTapRescue(onClick),
     ) {
         Box {
             AsyncImage(
