@@ -49,7 +49,7 @@ import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.utils.LocalResource
-import com.maxrave.simpmusic.extension.isScrollingUp
+import com.maxrave.simpmusic.extension.scrollReportingEffect
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
@@ -108,17 +108,7 @@ internal fun LibraryNeteaseTab(
     var unsubscribeAlbumTarget by remember { mutableStateOf<AlbumsResult?>(null) }
     var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
-    val isScrollingUp by state.isScrollingUp()
-    LaunchedEffect(state) {
-        snapshotFlow { state.firstVisibleItemIndex }
-            .collect {
-                if (it <= 1) {
-                    onScrolling.invoke(true)
-                } else {
-                    onScrolling.invoke(isScrollingUp)
-                }
-            }
-    }
+    state.scrollReportingEffect(onScrolling)
     val pullToRefreshState = rememberPullToRefreshState()
 
     // 排针(临时):三分区状态每次变化打一行,排查"切 YTM 后歌单分区不渲染"

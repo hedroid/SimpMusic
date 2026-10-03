@@ -48,7 +48,7 @@ import com.maxrave.domain.data.model.searchResult.albums.AlbumsResult
 import com.maxrave.domain.data.model.searchResult.artists.ArtistsResult
 import com.maxrave.domain.data.model.searchResult.playlists.PlaylistsResult
 import com.maxrave.domain.utils.LocalResource
-import com.maxrave.simpmusic.extension.isScrollingUp
+import com.maxrave.simpmusic.extension.scrollReportingEffect
 import com.maxrave.simpmusic.ui.component.CenterLoadingBox
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
@@ -106,17 +106,7 @@ internal fun LibraryYouTubeTab(
     var unsubscribePlaylistTarget by remember { mutableStateOf<PlaylistsResult?>(null) }
     var showCreatePlaylist by remember { mutableStateOf(false) }
     val state = rememberLazyGridState()
-    val isScrollingUp by state.isScrollingUp()
-    LaunchedEffect(state) {
-        snapshotFlow { state.firstVisibleItemIndex }
-            .collect {
-                if (it <= 1) {
-                    onScrolling.invoke(true)
-                } else {
-                    onScrolling.invoke(isScrollingUp)
-                }
-            }
-    }
+    state.scrollReportingEffect(onScrolling)
     val pullToRefreshState = rememberPullToRefreshState()
 
     val playlistList = (playlists as? LocalResource.Success)?.data.orEmpty()

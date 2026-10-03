@@ -60,7 +60,7 @@ import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.extension.copy
-import com.maxrave.simpmusic.extension.isScrollingUp
+import com.maxrave.simpmusic.extension.scrollReportingEffect
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.GridLibraryPlaylist
 import com.maxrave.simpmusic.ui.component.LibraryTilingItem
@@ -318,19 +318,10 @@ fun DownloadedManagementBody(
                         )
                     }
                 } else {
-                    // 顶栏收起信号:Songs 列表自报(与其它 chip 页同一套口径)
+                    // 顶栏收起信号:Songs 列表自报(与其它 chip 页同一套口径,
+                    // 含几何反馈断路,见 scrollReportingEffect 注释)
                     val songsListState = rememberLazyListState()
-                    val songsScrollingUp by songsListState.isScrollingUp()
-                    LaunchedEffect(songsListState) {
-                        snapshotFlow { songsListState.firstVisibleItemIndex }
-                            .collect {
-                                if (it <= 1) {
-                                    onScrolling.invoke(true)
-                                } else {
-                                    onScrolling.invoke(songsScrollingUp)
-                                }
-                            }
-                    }
+                    songsListState.scrollReportingEffect(onScrolling)
                     Column(modifier = Modifier.fillMaxSize()) {
                         if (selectionMode) {
                             Row(

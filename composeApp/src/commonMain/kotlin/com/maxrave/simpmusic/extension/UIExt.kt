@@ -478,6 +478,51 @@ fun LazyGridState.isScrollingUp(): State<Boolean> {
     }
 }
 
+/**
+ * 库页各 chip 页的滚动上报效果(驱动顶栏标题行显隐 + App 底栏 isScrolledToTop)。
+ *
+ * 几何反馈断路:底栏(液态玻璃形变)显隐形变会改 Scaffold 的 innerPadding.bottom,
+ * 顶栏标题行收展会改下载管理页的视口(实时高度)——两者都让贴底的列表重新钳制,
+ * firstVisibleItemIndex 变化又触发上报→底栏再形变/标题再翻转,自持振荡(用户实测
+ * "下载页贴底迷你条+导航栏来回跳")。钳制发生在无手势时刻,因此除首帧外只在
+ * isScrollInProgress(真实手势/惯性滚动)中放行;首帧必须放行——切页靠 Crossfade 的
+ * 保存态恢复滚动,首帧上报是纠正标题/底栏状态的唯一信号(CR-30 口径)。
+ * index<=1 的"回顶"上报恒放行:贴底钳制永远不会把 index 钳到 1 以下,不构成回路。
+ */
+@Composable
+fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
+    val isScrollingUp by isScrollingUp()
+    LaunchedEffect(this) {
+        var firstReport = true
+        snapshotFlow { firstVisibleItemIndex }
+            .collect { index ->
+                if (index <= 1) {
+                    onScrolling(true)
+                } else if (firstReport || isScrollInProgress) {
+                    firstReport = false
+                    onScrolling(isScrollingUp)
+                }
+            }
+    }
+}
+
+@Composable
+fun LazyGridState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
+    val isScrollingUp by isScrollingUp()
+    LaunchedEffect(this) {
+        var firstReport = true
+        snapshotFlow { firstVisibleItemIndex }
+            .collect { index ->
+                if (index <= 1) {
+                    onScrolling(true)
+                } else if (firstReport || isScrollInProgress) {
+                    firstReport = false
+                    onScrolling(isScrollingUp)
+                }
+            }
+    }
+}
+
 fun Palette?.getColorFromPalette(): Color {
     val p = this ?: return Color.Black
     val defaultColor = 0x000000

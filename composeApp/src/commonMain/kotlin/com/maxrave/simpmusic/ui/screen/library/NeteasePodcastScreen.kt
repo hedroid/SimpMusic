@@ -62,7 +62,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.list.NeteasePodcastCatego
 import com.maxrave.simpmusic.ui.navigation.destination.list.NeteaseRadioDetailDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.extension.formatTimeAgo
-import com.maxrave.simpmusic.extension.isScrollingUp
+import com.maxrave.simpmusic.extension.scrollReportingEffect
 import kotlinx.datetime.toLocalDateTime
 import com.maxrave.simpmusic.ui.utils.formatCompactCount
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
@@ -135,17 +135,7 @@ fun NeteasePodcastScreen(
         }
         val listState = rememberLazyListState()
         // 顶栏收起信号:与 GridLibraryPlaylist/各 chip 页同一套口径(index<=1 视作在顶)
-        val scrollingUp by listState.isScrollingUp()
-        LaunchedEffect(listState) {
-            snapshotFlow { listState.firstVisibleItemIndex }
-                .collect {
-                    if (it <= 1) {
-                        onScrolling.invoke(true)
-                    } else {
-                        onScrolling.invoke(scrollingUp)
-                    }
-                }
-        }
+        listState.scrollReportingEffect(onScrolling)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
