@@ -489,6 +489,12 @@ fun LazyGridState.isScrollingUp(): State<Boolean> {
  * 形变不再改列表几何;下载页标题收展的残余反馈由 500ms 静默窗吞掉。index<=1 视作
  * 在顶(各页原口径)。深处保存态恢复时首帧 index==previous、offset 相等→上报 false
  * (收起),与 CR-30"深处首帧上报即 false=正确语义"一致。
+ *
+ * 边界防误判:fling 撞到列表末端被拦截时,最后一项的 offset 会被钳制值回吸
+ * (数字逐帧递减,实测 105→96),逐帧比较把它读成"上滑"→上报 true→底栏刚收起又
+ * 跳回展开(用户实测"快速滑到底部,迷你条先合并到导航栏然后自己又跳回去")。修:
+ * canScrollForward=false(已到底)时 offset 回吸不判上滑——只在离底至少一行时才认
+ * 同向边界的方向翻转;顶部对称处理(canScrollBackward=false 时 index<=1 分支已兜住)。
  */
 @Composable
 fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
@@ -500,6 +506,9 @@ fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
                 val up =
                     if (index != previousIndex) {
                         index < previousIndex
+                    } else if (!canScrollForward) {
+                        // 已到底:同项 offset 递减=末端钳制回吸,不是上滑
+                        false
                     } else {
                         offset < previousOffset
                     }
@@ -524,6 +533,9 @@ fun LazyGridState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
                 val up =
                     if (index != previousIndex) {
                         index < previousIndex
+                    } else if (!canScrollForward) {
+                        // 已到底:同项 offset 递减=末端钳制回吸,不是上滑(见 List 版注释)
+                        false
                     } else {
                         offset < previousOffset
                     }
