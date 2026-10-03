@@ -174,6 +174,7 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.crossfading
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
+import simpmusic.composeapp.generated.resources.comments
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.fans_count
 import simpmusic.composeapp.generated.resources.likes_count
@@ -974,7 +975,8 @@ fun NowPlayingContentSpotify(
                                     } else {
                                         Spacer(Modifier.height(16.dp))
                                     }
-                                    // List Bottom Buttons: Info+Cast 左 · 评论 中(仅网易歌) · 加歌+队列 右
+                                    // List Bottom Buttons: Info+Cast 左 · 加歌+队列 右。评论已移到
+                                    // NowPlayingTrackInfoRow 的收藏心右侧,和歌曲互动操作归为一组。
                                     Row(
                                         modifier =
                                             Modifier
@@ -1020,31 +1022,6 @@ fun NowPlayingContentSpotify(
                                                         color = Color.Cyan,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // Comments Button (Center) — 网易歌专属,三主题统一开 NeteaseCommentsSheet
-                                        Box(
-                                            modifier = Modifier.weight(1f),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            if (state.isNeteaseSong) {
-                                                IconButton(
-                                                    modifier =
-                                                        Modifier
-                                                            .size(24.dp)
-                                                            .aspectRatio(1f)
-                                                            .clip(CircleShape),
-                                                    onClick = {
-                                                        actions.onShowNeteaseComments()
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        imageVector = SimpIcons.Comment,
-                                                        tint = Color.White,
-                                                        contentDescription = "Comments",
                                                     )
                                                 }
                                             }
@@ -1870,15 +1847,37 @@ internal fun NowPlayingTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(12.dp))
-        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
-        if (!state.isPodcastSong) Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            HeartCheckBox(
-                checked = state.controllerState.isLiked,
-                size = 32,
-                enabled = state.likeEnabled,
-                modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
-            ) {
-                actions.onUIEvent(UIEvent.ToggleLike)
+        // 歌曲互动区:收藏在左、网易评论在右。播客没有收藏语义,但保留原有评论入口,
+        // 此时评论按钮单独占据行尾,避免移动位置时把播客评论功能一起删掉。
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
+            if (!state.isPodcastSong) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    HeartCheckBox(
+                        checked = state.controllerState.isLiked,
+                        size = 32,
+                        enabled = state.likeEnabled,
+                        modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+                    ) {
+                        actions.onUIEvent(UIEvent.ToggleLike)
+                    }
+                }
+            }
+            if (state.isNeteaseSong) {
+                IconButton(
+                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                    onClick = { actions.onShowNeteaseComments() },
+                ) {
+                    Icon(
+                        imageVector = SimpIcons.Comment,
+                        tint = Color.White,
+                        contentDescription = stringResource(Res.string.comments),
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
     }

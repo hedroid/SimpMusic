@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -796,10 +797,11 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // QUEUE or LYRICS that pager does not exist. Changing track there fed nothing, and the page
     // fell back to a flat gradient.
     //
-    // The loader below sits OUTSIDE the Crossfade so it covers every body, and it is an AsyncImage
-    // rather than an imperative ImageLoader.execute(): the pager's AsyncImage demonstrably loads
-    // this exact url while the execute() call did not, so this uses the path already proven to
-    // work rather than a second one that has to be kept working.
+    // The MAIN pager already decoded the current cover and stored it in screenData.bitmap. Reuse
+    // that exact bitmap when Lyrics/Queue is opened: recreating this subtree during the 300 ms view
+    // Crossfade must not also start a fresh image decode. When the track changes while MAIN is not
+    // composed, bitmap is reset to null with the new NowPlayingScreenData and the proven AsyncImage
+    // URL path below remains the fallback; its success feeds the bitmap again.
     var backdropUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
 
     // The approved mock's page gradient is THREE stops — a clearly-tinted top, ~55%-darkened by
@@ -831,7 +833,15 @@ internal fun BoxScope.AppleMusicArtworkBackdrop(
     // The heavy blur radius is safe because the whole style is gated behind Android 12 for
     // exactly this reason (isLyricsBlurSupported), and Crop + fillMaxSize means the artwork is
     // scaled far past its own resolution — at this blur that costs nothing visually.
-    if (!backdropUrl.isNullOrBlank()) {
+    val decodedArtwork = state.screenData.bitmap
+    if (decodedArtwork != null) {
+        Image(
+            bitmap = decodedArtwork,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(BACKDROP_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded),
+        )
+    } else if (!backdropUrl.isNullOrBlank()) {
         AsyncImage(
             model =
                 ImageRequest

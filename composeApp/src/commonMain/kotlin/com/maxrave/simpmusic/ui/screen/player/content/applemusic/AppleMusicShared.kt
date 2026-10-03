@@ -732,6 +732,10 @@ internal fun AppleMusicTransportRow(
                 wideGap
             }
         Row(
+            // (fix) The Row must FILL the BoxWithConstraints: a wrap-content row hugs the box's
+            // start, so the "centered cluster" sat ~30dp left of centre (user 2026-10-03: 播放按钮
+            // 一排左右边距不一样). CenterHorizontally inside a wrap-content row is a no-op.
+            modifier = Modifier.fillMaxWidth(),
             // Mock: a tight centered cluster — NOT SpaceEvenly, which spreads the
             // rewind/forward glyphs to the screen edges (first device screenshots).
             // With shuffle and repeat on the two ends the five span the row instead, the way

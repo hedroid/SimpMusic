@@ -515,26 +515,34 @@ fun NowPlayingScreenContent(
     // (perf) slider drag state moved into each style's playback controls — the shell no longer
     // tracks the slider, so a 50 ms tick never reaches this file's composition at all.
 
-    // Crossfade: RGB rainbow color cycling when transitioning between tracks
-    val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
-    val rainbowHue by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rainbowHue",
-    )
-    val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
     // (perf) isCrossfading rides the 50 ms TimeLine object; mapped+distinct it only recomposes
-    // this colour when a crossfade actually starts or ends.
+    // this colour when a crossfade actually starts or ends. More importantly, the infinite hue
+    // loop below only EXISTS while crossfading: keeping it composed while idle read an animation
+    // state on every vsync and invalidated this whole player scope even though the selected target
+    // colour was always white.
     val isCrossfading by remember {
         sharedViewModel.timeline.map { it.isCrossfading }.distinctUntilChanged()
     }.collectAsStateWithLifecycle(false)
+    val crossfadeTargetColor =
+        if (isCrossfading) {
+            val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
+            val rainbowHue by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(1000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "rainbowHue",
+            )
+            hsvToColor(rainbowHue, 1f, 1f)
+        } else {
+            Color.White
+        }
     val sliderTrackColor by animateColorAsState(
-        targetValue = if (isCrossfading) rainbowColor else Color.White,
+        // Preserve the old 300 ms settle back to white after the active loop leaves composition.
+        targetValue = crossfadeTargetColor,
         animationSpec = tween(300),
         label = "sliderCrossfadeColor",
     )
