@@ -169,6 +169,10 @@ internal fun AppleMusicQueueView(
                 activePillContent = activePillContent,
                 // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
                 isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
+                // 播客队列不显示无尽开关(与 QueueBottomSheet 同款门控,判定只认前缀 CR-22):
+                // 播客队列播完即止,无尽语义不适用。2026-10-02 上游合并重做 AM 播放器时
+                // 该门控丢失(用户复报"播客播放页无尽队列又回来了")
+                isPodcastQueue = queueDataState?.data?.isNeteasePodcastQueue == true,
                 onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
@@ -488,6 +492,8 @@ private fun AppleMusicContinuePlayingHeader(
     activePillContainer: Color,
     activePillContent: Color,
     isFmQueue: Boolean,
+    // 播客队列隐藏无尽开关(整个 label+Switch,与 QueueBottomSheet 同款门控)
+    isPodcastQueue: Boolean = false,
     onEndlessDisabled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -530,26 +536,28 @@ private fun AppleMusicContinuePlayingHeader(
                 }
             }
             // The switch needs its own label, exactly like the queue sheet's — unlabelled it
-            // reads as a mystery toggle.
-            Text(
-                text = stringResource(Res.string.endless_queue),
-                style = typography.queueSectionSubtitle,
-                modifier = Modifier.padding(end = 8.dp),
-            )
-            Switch(
-                checked = isFmQueue || endlessQueueEnabled,
-                onCheckedChange = { checked ->
-                    if (isFmQueue) {
-                        showToast(
-                            runBlocking { getString(Res.string.endless_queue_fm_locked) },
-                            ToastGravity.Bottom,
-                        )
-                    } else {
-                        // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
-                        if (!checked) onEndlessDisabled()
-                        coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
-                    }
-                },
+            // reads as a mystery toggle. Podcast queues hide the whole pair (播完即止,无尽
+            // 语义不适用).
+            if (!isPodcastQueue) {
+                Text(
+                    text = stringResource(Res.string.endless_queue),
+                    style = typography.queueSectionSubtitle,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                Switch(
+                    checked = isFmQueue || endlessQueueEnabled,
+                    onCheckedChange = { checked ->
+                        if (isFmQueue) {
+                            showToast(
+                                runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                                ToastGravity.Bottom,
+                            )
+                        } else {
+                            // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                            if (!checked) onEndlessDisabled()
+                            coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                        }
+                    },
                 colors =
                     SwitchDefaults.colors(
                         // On state takes the artwork-derived pair this style already uses for its
@@ -567,7 +575,8 @@ private fun AppleMusicContinuePlayingHeader(
                         uncheckedThumbColor = Color.White.copy(alpha = 0.75f),
                     ),
                 modifier = Modifier.appleMusicPressInflate(pressedScale = 1.08f),
-            )
+                )
+            }
         }
     }
 }
