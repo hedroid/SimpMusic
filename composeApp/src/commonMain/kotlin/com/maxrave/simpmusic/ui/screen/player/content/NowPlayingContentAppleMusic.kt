@@ -465,6 +465,11 @@ private fun AppleMusicMainView(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
+            // 橡皮筋落位+fling 限一页(见 rememberArtworkPagerFlingBehavior)。这里此前漏接:
+            // ArtworkSnapSpring 的注释宣称三主题共用,AM 实际一直是 pager 默认 fling —— 按
+            // velocity 惯性选目标页,快甩飞过 2-3 页再弹回,扫过页的未加载封面一帧灰闪
+            // (2026-10-03 手势滑切封面闪的主根因之一)。
+            flingBehavior = rememberArtworkPagerFlingBehavior(state.artworkPagerState),
             // 稳定页 key,与 Spotify/M3 同源(NowPlayingScreen.artworkPageKeys):重排/洗牌时按歌
             // 复用页面,而不是按下标销毁重建(曾致切歌闪动+封面页重建)。
             key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },

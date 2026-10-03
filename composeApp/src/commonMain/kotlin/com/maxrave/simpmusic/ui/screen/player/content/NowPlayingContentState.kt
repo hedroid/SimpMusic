@@ -5,6 +5,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -67,6 +70,22 @@ internal val ArtworkSnapSpring: AnimationSpec<Float> =
     spring(
         dampingRatio = 0.38f, // MediumBouncy(0.5)弹幅约 12px 偏含蓄;0.38 弹感明显(用户点名"更强")
         stiffness = 700f, // 落位 ~250ms:弹得干脆,不拖沓
+    )
+
+/**
+ * 封面 pager 的统一 fling 行为。`PagerSnapDistance.atMost(1)` 是这里的主角:
+ * 默认 fling 按 velocity 惯性选目标页,一次快甩会飞过 2-3 页再被落位弹簧拽回来——
+ * 途中扫过的页面若封面尚未加载,一帧 holder 灰渐变就"啪"地划过屏幕(手势滑切
+ * "封面闪一下"的真凶,2026-10-03 录帧+探针实证:Loading 灰帧恰在越页窗口出现);
+ * 即便都已加载,封面飞过头再弹回也读作"跳"。夹到 1 页 = 一次手势一页,
+ * Spotify/YTM 同款手感。按上一首/下一首不走 fling,天然不受影响。
+ */
+@Composable
+internal fun rememberArtworkPagerFlingBehavior(state: PagerState): TargetedFlingBehavior =
+    PagerDefaults.flingBehavior(
+        state = state,
+        pagerSnapDistance = PagerSnapDistance.atMost(1),
+        snapAnimationSpec = ArtworkSnapSpring,
     )
 
 private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")

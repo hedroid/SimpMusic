@@ -80,17 +80,25 @@ internal fun PlayerPageArtwork(
     val baseUrl = remember(pageTrack?.videoId) { pageTrack.playerArtworkUrl() }
     var artworkUrl by remember(baseUrl) { mutableStateOf(baseUrl) }
 
-    val painter =
-        rememberAsyncImagePainter(
+    // The request MUST be remembered: coil3's model equality is reference-based for ImageRequest,
+    // so a freshly built instance on every recomposition (e.g. when isCurrentPage flips at the
+    // swipe-settle) reads as a model change and RESTARTS the painter — a frame of the holder
+    // placeholder plus a crossfade over an already-decoded cover, which is the "cover flashes on
+    // swipe-settle" users kept reporting. Same URL in → same instance out → no restart.
+    val platformContext = LocalPlatformContext.current
+    val request =
+        remember(artworkUrl, platformContext) {
             ImageRequest
-                .Builder(LocalPlatformContext.current)
+                .Builder(platformContext)
                 .data(artworkUrl)
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .diskCacheKey(artworkUrl)
                 .size(1080)
                 .crossfade(250)
-                .build(),
-        )
+                .build()
+        }
+
+    val painter = rememberAsyncImagePainter(request)
 
     // 每次成功加载:喂页调色板;maxres 404 退 hqdefault 一次。
     // painter.state 在 coil3 是 StateFlow(StateFlow<State>),直接 collect — 订阅即重发当前值。

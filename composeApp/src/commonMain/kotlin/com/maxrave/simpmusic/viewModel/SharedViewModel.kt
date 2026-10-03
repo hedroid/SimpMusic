@@ -527,6 +527,12 @@ class SharedViewModel(
                                 canvasData = null,
                                 lyricsData = previousData.lyricsData,
                                 lyricsVideoId = previousData.lyricsVideoId,
+                                // bitmap 同歌词的 stale-while-revalidate:Apple Music 主题的
+                                // 磨砂背景直接画它,整包重建丢回 null 会让背景层塌成纯渐变,
+                                // 新位图到位前是"背景闪一下"。旧值最多存活到下一次
+                                // onArtworkBitmap 喂入(滑动 settle/翻页补发,内存缓存命中
+                                // 几乎立即),远好于塌灰。
+                                bitmap = previousData.bitmap,
                                 songInfoData = null,
                                 playlistName =
                                     mediaPlayerHandler.queueData.value
