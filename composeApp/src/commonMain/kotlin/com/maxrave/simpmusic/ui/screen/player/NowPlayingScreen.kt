@@ -19,6 +19,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -50,6 +53,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntOffset
@@ -112,6 +118,8 @@ import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.time.TimeSource
+import kotlin.time.Duration.Companion.milliseconds
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
@@ -158,17 +166,90 @@ fun NowPlayingScreen(
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
-        NowPlayingScreenContent(
-            sharedViewModel = sharedViewModel,
-            navController = navController,
-            isExpanded = sheetState.currentValue == SheetValue.Expanded,
-            dismissIcon = SimpIcons.KeyboardArrowDown,
-            onDismiss = {
-                hideSheet()
-            },
-        )
+        // (fix) 打开动画未稳住时的下滑兜底——见 earlySheetDismissFallback 的说明。包在
+        // 内容外层(Main 通道旁观),不影响任何子组件手势。
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .earlySheetDismissFallback(
+                        sheetState = sheetState,
+                        onDismissNow = { onDismiss() },
+                    ),
+        ) {
+            NowPlayingScreenContent(
+                sharedViewModel = sharedViewModel,
+                navController = navController,
+                isExpanded = sheetState.currentValue == SheetValue.Expanded,
+                dismissIcon = SimpIcons.KeyboardArrowDown,
+                onDismiss = {
+                    hideSheet()
+                },
+            )
+        }
     }
 }
+
+/**
+ * (fix) 从迷你条打开播放页后,第一次下滑关闭经常没反应。
+ *
+ * material3(JetBrains 1.12)ModalBottomSheet 的打开动画仍在跑时,AnchoredDraggable 的拖拽
+ * 互斥锁被 animateTo 持有,用户下滑被整体吞掉约 0.6~1s——动画视觉上早已到位,内部却还没
+ * 结束(模拟器实测:窗口内点击/暂停全部正常、竖直拖拽零响应,0.6s 必失效/1.0s 恢复;与
+ * Google issue tracker #481364105"展开后 ~0.5-1s 不识别滑动手势"同族)。库不可改,这里在
+ * 内容层旁观兜底:
+ * - 仅在兜底窗内(动画仍在跑,或打开后未满 800ms——后者盖住动画尚未 START 的那几帧)才
+ *   累计"未被任何子组件消费"
+ *   的向下位移(Main 通道,子组件已先处理;positionChange 对已消费变更为 0,列表滚动/滑条/
+ *   横滑封面 pager 的位移天然不累计);
+ * - 越过阈值即刻直接 onDismiss 关页(与点遮罩同款瞬时语义;不走 sheetState.hide()——它同样
+ *   要排队等动画锁释放,反而拖出半秒延迟);
+ * - 动画一结束(且兜底窗已过)立刻停手退位,正常跟手拖拽(拖一半松手弹回)不受任何影响。
+ *   本观察器不消费任何事件。
+ */
+@Composable
+private fun Modifier.earlySheetDismissFallback(
+    sheetState: SheetState,
+    onDismissNow: () -> Unit,
+): Modifier {
+    val openedAt = remember { TimeSource.Monotonic.markNow() }
+    val currentSheetState by rememberUpdatedState(sheetState)
+    val currentDismiss by rememberUpdatedState(onDismissNow)
+    return this.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val pointerId = down.id
+            var accY = 0f
+            val thresholdPx = EARLY_SHEET_DISMISS_THRESHOLD.toPx()
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Main)
+                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                if (!change.pressed) break
+                // 武装条件二选一:动画仍在跑(=库在吞手势),或打开后还没满兜底窗
+                // (动画可能还没 START——down 落在 animateTo 启动前的那几帧,随后动画照样
+                // 会锁住并吞掉手势;只盯 isAnimationRunning 会在这一小段误退位)。
+                val animating = currentSheetState.isAnimationRunning
+                val inWindow = openedAt.elapsedNow() < EARLY_SHEET_DISMISS_WINDOW
+                if (!animating && !inWindow) break
+                val dy = change.positionChange().y
+                if (dy > 0f) {
+                    accY += dy
+                    if (accY >= thresholdPx) {
+                        Logger.w(TAG, "Early sheet dismiss fallback fired (accY=${accY.toInt()}px)")
+                        currentDismiss()
+                        break
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 一记有意的下滑(非误触)在 56dp(≈147px@2.625x)以上;列表滚动被消费不计入。
+private val EARLY_SHEET_DISMISS_THRESHOLD = 56.dp
+
+// 打开后的兜底窗:盖住"动画未启动"与"动画未结束"两段(实测库吞手势窗口 ~0.6-1s)。
+private val EARLY_SHEET_DISMISS_WINDOW = 800.milliseconds
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -498,6 +579,12 @@ fun NowPlayingScreenContent(
 
     LaunchedEffect(Unit) {
         snapshotFlow { paletteState.palette }
+            // kmpalette 在重新 generate(缓存未命中)时先把状态置 Loading——palette 属性随之为
+            // null。null 若照发,getColorFromPalette() 回落 Color.Black,背景会先向黑动画、新
+            // 调色板落地后再弹回:切歌瞬间整页发暗"跳一下"的根源(三主题共用本管线,三主题
+            // 都跳的原因)。过滤掉 null,Loading 期间保持上一首的颜色,新调色板落地后一次
+            // 平滑过渡。
+            .filterNotNull()
             .distinctUntilChanged()
             .collectLatest {
                 spotShadowColor = it.getColorFromPalette()
@@ -709,6 +796,14 @@ fun NowPlayingScreenContent(
                 mediaPlayerHandler.playMediaItemInMediaSource(index)
             },
             onArtworkBitmap = { sharedViewModel.setBitmap(it) },
+            // Spotify 主题翻页瞬间把 startColor 对齐滑入页正在显示的按页色(见 actions 字段注释);
+            // 调色板重新生成落地后,动画从用户正看着的颜色平滑走向新色,不再闪上一首的旧色。
+            onSnapPaletteColor = { color ->
+                coroutineScope.launch {
+                    startColor.snapTo(color)
+                    endColor.snapTo(PlayerBackdropColor)
+                }
+            },
             onToggleControls = {
                 showHideJob = true
                 showHideControlLayout = !showHideControlLayout

@@ -40,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -99,6 +100,7 @@ import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicHeade
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicLyricStrip
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicLyricsView
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicMeshBackdrop
+import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicMeshInput
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicOutputSheet
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicQueueView
 import com.maxrave.simpmusic.ui.screen.player.content.applemusic.AppleMusicTypography
@@ -421,9 +423,11 @@ private fun AppleMusicMainView(
     var bottomContentHeightDp by remember { mutableIntStateOf(430) }
 
     // What the page's mesh is read from: the cover, or the animated artwork's still once it is up —
-    // the page should continue whatever is actually on screen above it.
-    var coverBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var clipStill by remember(animatedArtwork?.url) { mutableStateOf<ImageBitmap?>(null) }
+    // the page should continue whatever is actually on screen above it. Both are carried as
+    // AppleMusicMeshInput (bitmap+seed in one value) — see that class for why they must not be
+    // separate states.
+    var coverMeshInput by remember { mutableStateOf<AppleMusicMeshInput?>(null) }
+    var clipMeshInput by remember(animatedArtwork?.url) { mutableStateOf<AppleMusicMeshInput?>(null) }
     var clipFrameHeight by remember(animatedArtwork?.url) { mutableStateOf(0.dp) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -435,17 +439,14 @@ private fun AppleMusicMainView(
         val artworkHeight = minOf(maxWidth, maxHeight * ARTWORK_MAX_HEIGHT_FRACTION)
         val clipMaxHeight = maxHeight * ANIMATED_ARTWORK_MAX_HEIGHT_FRACTION
         val artworkFade = artworkHeight * ARTWORK_FADE_FRACTION
-        val showsClip = animatedArtwork != null && clipStill != null
+        val showsClip = animatedArtwork != null && clipMeshInput != null
 
         // The page itself. A video keeps the frosted cover behind it and a fullscreen canvas the black
         // page, as before; everything else stands on the mesh, hung from where the artwork ends.
         val meshPage = !fullscreenCanvas && !isVideoBackdrop
         val mesh =
             if (meshPage) {
-                rememberAppleMusicMesh(
-                    artwork = if (showsClip) clipStill else coverBitmap,
-                    seed = (animatedArtwork?.url ?: state.screenData.thumbnailURL).hashCode(),
-                )
+                rememberAppleMusicMesh(clipMeshInput ?: coverMeshInput)
             } else {
                 null
             }
@@ -485,10 +486,12 @@ private fun AppleMusicMainView(
                 onToggleVideoOverlay = { showVideoOverlay = !showVideoOverlay },
                 showSubtitle = showSubtitle,
                 onToggleSubtitle = { showSubtitle = !showSubtitle },
-                onCoverBitmap = { coverBitmap = it },
-                onClipStill = { still, height ->
-                    clipStill = still
+                onCoverBitmap = { bitmap, seed ->
+                    coverMeshInput = AppleMusicMeshInput(bitmap, seed)
+                },
+                onClipStill = { still, height, seed ->
                     clipFrameHeight = height
+                    clipMeshInput = still?.let { AppleMusicMeshInput(it, seed) }
                 },
             )
         }
@@ -912,10 +915,14 @@ internal fun AppleMusicMainTitleRow(
 }
 
 /**
- * One pager page. Current page: the cover stays composed (alpha 0 under a fullscreen canvas/video,
- * or once an animated artwork has faded in over it) so [NowPlayingContentActions.onArtworkBitmap]
- * keeps feeding the palette — otherwise the page colours would go stale on the next track if it
- * also opens on a canvas. Adjacent pages: a static thumbnail in the same full-width square.
+ * One pager page. EVERY page renders its own track's artwork through [PlayerPageArtwork] (fork
+ * 2026-09-24, lost in the 2026-10-02 upstream rework and reinstated here): the current/adjacent
+ * flip is a parameter change, not a subtree swap — the upstream two-branch structure disposed the
+ * adjacent page's thumbnail at the flip and rebuilt a live-cover AsyncImage (placeholder +
+ * crossfade + a different disk key, and a frame of the OUTGOING track's URL while screenData
+ * caught up), which read as the cover "jumping" on every swipe-settle. The current page layers
+ * its extras (animated artwork, canvas/video, palette+mesh feeding) on top; the cover stays
+ * composed under them so [NowPlayingContentActions.onArtworkBitmap] keeps feeding the palette.
  */
 @Composable
 private fun AppleMusicArtworkPage(
@@ -935,8 +942,8 @@ private fun AppleMusicArtworkPage(
     onToggleVideoOverlay: () -> Unit,
     showSubtitle: Boolean,
     onToggleSubtitle: () -> Unit,
-    onCoverBitmap: (ImageBitmap) -> Unit,
-    onClipStill: (ImageBitmap?, Dp) -> Unit,
+    onCoverBitmap: (ImageBitmap, Int) -> Unit,
+    onClipStill: (ImageBitmap?, Dp, Int) -> Unit,
 ) {
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentPage = page == state.currentOrderIndex
@@ -955,51 +962,55 @@ private fun AppleMusicArtworkPage(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isCurrentPage) {
-            var artworkUrl by remember(state.screenData.thumbnailURL) { mutableStateOf(state.screenData.thumbnailURL) }
-            val coverRequest =
+        // The base cover: ONE data-driven node for every page (see the page KDoc). The dissolve
+        // mask rides the modifier — the artwork fades into the page (alpha mask) instead of being
+        // covered by a colour overlay, which had to land on exactly the page's colour at that Y
+        // and drew a hard line whenever it drifted.
+        val coverAlpha = if (pageShowsFullscreen) 0f else 1f - clipAlpha
+        val pageUrl = remember(pageTrack?.videoId) { pageTrack.playerArtworkUrl() }
+        // The top band's blurred copy reads the same URL at the same explicit size as
+        // PlayerPageArtwork's request, so it shares the decoded entry instead of a second fetch.
+        val platformContext = LocalPlatformContext.current
+        val bandRequest =
+            remember(pageUrl) {
                 ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(artworkUrl)
+                    .Builder(platformContext)
+                    .data(pageUrl)
                     .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(artworkUrl + "BIGGER")
-                    .crossfade(550)
+                    .diskCacheKey(pageUrl)
+                    .size(1080)
                     .build()
-            val coverAlpha = if (pageShowsFullscreen) 0f else 1f - clipAlpha
-            Box(
+            }
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(artworkHeight),
+        ) {
+            // (fix 背景迟滞)喂养身份="当前页 **或** 用户已滑到本页停稳(settledPage)":mesh
+            // 与调色板在滑停瞬间就开始换色,不等 currentOrderIndex(要等播放器转场确认)。
+            val pagerSettledHere by remember {
+                derivedStateOf { state.artworkPagerState.settledPage == page }
+            }
+            PlayerPageArtwork(
+                pageTrack = pageTrack,
+                isCurrentPage = isCurrentPage || pagerSettledHere,
+                // Feeds the VM palette (and, at the flip, the page's mesh input — bitmap and seed
+                // handed over together, see AppleMusicMeshInput) with the already-decoded bitmap.
+                onCurrentArtworkLoaded = { bitmap ->
+                    actions.onArtworkBitmap(bitmap)
+                    pageTrack?.videoId?.let { onCoverBitmap(bitmap, it.hashCode()) }
+                },
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkHeight),
-            ) {
-                AsyncImage(
-                    model = coverRequest,
-                    contentDescription = "",
-                    onSuccess = {
-                        val bitmap = it.result.image.toImageBitmap()
-                        actions.onArtworkBitmap(bitmap)
-                        onCoverBitmap(bitmap)
-                    },
-                    onError = {
-                        val fallback = artworkUrl?.replace("maxresdefault", "hqdefault")
-                        if (fallback != null && fallback != artworkUrl) artworkUrl = fallback
-                    },
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    // The artwork DISSOLVES (alpha mask) instead of being covered by a colour
-                    // overlay: that overlay had to land on exactly the page's colour at that Y,
-                    // and any drift drew a hard horizontal line across the screen. Masking lets
-                    // the real background show through — nothing left to match.
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .alpha(coverAlpha)
-                            .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = artworkFade),
-                )
-                TopBandBlur(model = coverRequest, solidTo = topBandSolid, fadeTo = topBand, modifier = Modifier.alpha(coverAlpha))
-            }
+                        .fillMaxSize()
+                        .alpha(coverAlpha)
+                        .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = artworkFade),
+            )
+            TopBandBlur(model = bandRequest, solidTo = topBandSolid, fadeTo = topBand, modifier = Modifier.alpha(coverAlpha))
+        }
+        if (isCurrentPage) {
             if (pageShowsClip && animatedArtwork != null) {
                 AnimatedArtworkFrame(
                     canvas = animatedArtwork,
@@ -1007,9 +1018,9 @@ private fun AppleMusicArtworkPage(
                     topBandSolid = topBandSolid,
                     topBand = topBand,
                     alpha = clipAlpha,
-                    onStill = { still, height ->
+                    onStill = { still, height, seed ->
                         clipReady = true
-                        onClipStill(still, height)
+                        onClipStill(still, height, seed)
                     },
                 )
             }
@@ -1195,34 +1206,6 @@ private fun AppleMusicArtworkPage(
                     )
                 }
             }
-        } else if (pageTrack != null) {
-            val staticThumb = pageTrack.thumbnails?.maxByOrNull { it.width * it.height }?.url
-            val thumbRequest =
-                ImageRequest
-                    .Builder(LocalPlatformContext.current)
-                    .data(staticThumb)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(staticThumb)
-                    .crossfade(300)
-                    .build()
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .height(artworkHeight),
-            ) {
-                AsyncImage(
-                    model = thumbRequest,
-                    contentDescription = pageTrack.title,
-                    contentScale = ContentScale.Crop,
-                    placeholder = rememberHolderPainter(),
-                    error = rememberHolderPainter(),
-                    modifier = Modifier.fillMaxSize().appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = artworkFade),
-                )
-                // Blurred like the current page's, or its top band would turn sharp mid-swipe.
-                TopBandBlur(model = thumbRequest, solidTo = topBandSolid, fadeTo = topBand)
-            }
         }
     }
 }
@@ -1242,7 +1225,7 @@ private fun BoxScope.AnimatedArtworkFrame(
     topBandSolid: Dp,
     topBand: Dp,
     alpha: Float,
-    onStill: (ImageBitmap?, Dp) -> Unit,
+    onStill: (ImageBitmap?, Dp, Int) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()) {
         var aspect by remember(canvas.url) { mutableFloatStateOf(DEFAULT_ANIMATED_ARTWORK_ASPECT) }
@@ -1250,7 +1233,7 @@ private fun BoxScope.AnimatedArtworkFrame(
         val frameHeight = (frameWidth / aspect).coerceAtMost(heightLimit)
         // No still to wait for (an older cached row): show the frame straight away.
         LaunchedEffect(canvas.url, canvas.thumbUrl) {
-            if (canvas.thumbUrl == null) onStill(null, frameHeight)
+            if (canvas.thumbUrl == null) onStill(null, frameHeight, canvas.url.hashCode())
         }
         Box(
             modifier =
@@ -1276,7 +1259,7 @@ private fun BoxScope.AnimatedArtworkFrame(
                     onSuccess = {
                         val image = it.result.image
                         if (image.width > 0 && image.height > 0) aspect = image.width.toFloat() / image.height
-                        onStill(image.toImageBitmap(), (frameWidth / aspect).coerceAtMost(heightLimit))
+                        onStill(image.toImageBitmap(), (frameWidth / aspect).coerceAtMost(heightLimit), canvas.url.hashCode())
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

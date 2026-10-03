@@ -49,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -317,9 +318,15 @@ internal fun ExpressiveArtworkCardPage(
                 // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
                 // "灰占位→crossfade 重绘"。卡片在 canvas/视频下保持组合(alpha 0),调色板
                 // 照常馈送(翻转时用已解码位图补发),与旧 live 分支同一契约。
+                // (fix 背景迟滞)喂养身份="当前页 **或** 用户已滑到本页停稳(settledPage)":
+                // 不等 currentOrderIndex(要等播放器转场确认,网易源 ~0.4s),背景与封面
+                // 同步开始变色,不再"封面已切、背景半秒后才追上来"。
+                val pagerSettledHere by remember {
+                    derivedStateOf { state.artworkPagerState.settledPage == page }
+                }
                 PlayerPageArtwork(
                     pageTrack = pageTrack,
-                    isCurrentPage = isCurrentArtworkPage,
+                    isCurrentPage = isCurrentArtworkPage || pagerSettledHere,
                     onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                     modifier =
                         Modifier

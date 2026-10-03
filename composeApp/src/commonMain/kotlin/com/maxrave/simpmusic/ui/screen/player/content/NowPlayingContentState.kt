@@ -195,6 +195,13 @@ class NowPlayingContentActions(
     val onUIEvent: (UIEvent) -> Unit,
     val onSeekToQueueIndex: (Int) -> Unit,
     val onArtworkBitmap: (ImageBitmap) -> Unit,
+    /**
+     * (fix 滑切背景闪)Spotify 主题:邻页翻成当前页的瞬间,把壳层 startColor 先 SNAP 到
+     * 该页自己的按页渐变色(用户此刻正看着的颜色)。否则邻页的 per-page backdrop 层随
+     * "current 跳过 Layer 0"的设计关掉,露出还停在**上一首歌**颜色的壳层渐变,调色板
+     * 重新生成后才从旧色动画到新色——滑切瞬间背景"旧色闪一下再变过去"的根源。
+     */
+    val onSnapPaletteColor: (Color) -> Unit = {},
     val onToggleControls: () -> Unit,
     val onNavigateToArtist: () -> Unit,
     val onOpenListenTogether: () -> Unit,

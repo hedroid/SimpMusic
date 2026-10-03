@@ -74,6 +74,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -167,6 +168,7 @@ import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -356,18 +358,38 @@ fun NowPlayingContentSpotify(
                     // (onSuccess), so we use the SAME bitmap that's painted on screen —
                     // matches the outer Column's palette extraction characteristics.
                     val pagePaletteState = rememberPaletteState()
+                    // (fix) 起步色=壳层当前 startColor,不是 Black:滑入页若为新组合(如打开
+                    // 播放页后的首次滑动、远跳),它的按页调色板要 ~100-300ms 才落地,期间
+                    // Layer 0 一直是纯黑渐变——滑动安定后背景先黑一段再变绿,正是"跳一下"。
+                    // 播种成当前背景色后,新页背景与页面浑然一体,调色板落地后再动画到自己的
+                    // 颜色;翻成当前页时的 snap 也因此永远拿到真实色(不再被 Black 守卫拦掉)。
                     val pageStartColor =
                         remember(pageTrack?.videoId) {
-                            Animatable(Color.Black)
+                            Animatable(state.startColor.value)
                         }
                     LaunchedEffect(pagePaletteState, pageTrack?.videoId) {
                         snapshotFlow { pagePaletteState.palette }
+                            // 同壳层管线:Loading 期 null 不过发(否则 animateTo(Black) 把邻页
+                            // 自己的背景瞬间压黑再弹回)
+                            .filterNotNull()
                             .distinctUntilChanged()
                             .collectLatest { palette ->
                                 pageStartColor.animateTo(
                                     palette.getColorFromPalette(),
                                 )
                             }
+                    }
+
+                    // (fix 滑切背景闪)本页翻成当前页的瞬间:壳层 startColor 先对齐本页按页
+                    // 渐变的现值(用户正看着的颜色)。否则 current 页按设计跳过 Layer 0,
+                    // 露出的壳层渐变还停在上一首歌的颜色,要等调色板重新生成后才从旧色
+                    // 动画过来——滑切瞬间背景"闪回旧色再变过去"。邻页预组合
+                    // (beyondViewportPageCount=1)时按页调色板早已就绪;远跳新建页尚未就绪
+                    // (仍为 Black)则跳过,保持旧行为,绝不把背景闪黑。
+                    LaunchedEffect(isCurrentArtworkPage, pageTrack?.videoId) {
+                        if (isCurrentArtworkPage && pageStartColor.value != Color.Black) {
+                            actions.onSnapPaletteColor(pageStartColor.value)
+                        }
                     }
 
                     Box(
@@ -575,9 +597,15 @@ fun NowPlayingContentSpotify(
                                                 ambientColor = Color.Transparent,
                                             ),
                                 ) {
+                                    // (fix 背景迟滞)滑到本页停稳(settledPage)即喂壳层调色板:
+                                    // 不等 currentOrderIndex(它要等播放器转场确认,网易源 ~0.4s)。
+                                    // 背景从此与封面上屏同步开始变色,不再"封面已切、背景半秒后才追"。
+                                    val pagerSettledHere by remember {
+                                        derivedStateOf { state.artworkPagerState.settledPage == page }
+                                    }
                                     PlayerPageArtwork(
                                         pageTrack = pageTrack,
-                                        isCurrentPage = isCurrentArtworkPage,
+                                        isCurrentPage = isCurrentArtworkPage || pagerSettledHere,
                                         onArtworkLoaded = { bitmap ->
                                             palettePageScope.launch {
                                                 pagePaletteState.generate(bitmap)

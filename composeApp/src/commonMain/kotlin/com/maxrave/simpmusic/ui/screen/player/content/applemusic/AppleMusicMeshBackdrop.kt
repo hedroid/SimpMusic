@@ -63,20 +63,30 @@ internal class AppleMusicMesh(
 )
 
 /**
- * The mesh for [artwork], or null until one has been read. [seed] fixes the sideways shift, so the
+ * The bitmap and the seed that arranges it, as ONE value: the two must flip in the same update.
+ * Carried separately (bitmap from the cover load, seed from the track), a track change lands as
+ * two steps — old bitmap under the new seed, then the new bitmap — and each step is its own mesh
+ * crossfade, which reads as the background colour "jumping twice" on every swipe-to-skip.
+ */
+@Immutable
+internal data class AppleMusicMeshInput(
+    val artwork: ImageBitmap,
+    val seed: Int,
+)
+
+/**
+ * The mesh for [input], or null until one has been read. The seed fixes the sideways shift, so the
  * same artwork always lands in the same arrangement. The previous mesh stays until the new one is
  * ready, so a skip crossfades between two colourings instead of flashing the fallback between them.
  */
 @Composable
-internal fun rememberAppleMusicMesh(
-    artwork: ImageBitmap?,
-    seed: Int,
-): AppleMusicMesh? {
+internal fun rememberAppleMusicMesh(input: AppleMusicMeshInput?): AppleMusicMesh? {
     var mesh by remember { mutableStateOf<AppleMusicMesh?>(null) }
-    LaunchedEffect(artwork, seed) {
-        val source = artwork ?: return@LaunchedEffect
+    LaunchedEffect(input) {
+        val source = input ?: return@LaunchedEffect
         // No suspension inside meshOf, so nothing here can swallow a cancellation.
-        val read = withContext(Dispatchers.Default) { runCatching { meshOf(source, seed) }.getOrNull() }
+        val read =
+            withContext(Dispatchers.Default) { runCatching { meshOf(source.artwork, source.seed) }.getOrNull() }
         if (read != null) mesh = read
     }
     return mesh
