@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
@@ -50,6 +51,15 @@ internal fun Track?.playerArtworkIsVideo(): Boolean {
 }
 
 /**
+ * 队列数据自带的原始缩略图 URL(网易 param=500y500 / YT w544)——**不做升档**。
+ * 这是渐进加载的底层:迷你条/通知栏渲染当前曲用的就是它,磁盘缓存大概率已在;
+ * 播放页滑到一个从未加载过 1080 版的页时,先拿它垫底(同图低清),1080 到位后
+ * 无缝盖上——封面不再以灰块等网络(2026-10-03 手势滑切"封面闪"六轮根因)。
+ */
+internal fun Track?.playerArtworkUrlLow(): String? =
+    this?.thumbnails?.maxByOrNull { it.width * it.height }?.url
+
+/**
  * artwork pager 的统一封面节点 — “按页数据驱动”的落点。
  *
  * 旧结构是“当前页画 screenData.thumbnailURL / 相邻页画 Track 缩略图”两个分支:滑到/翻到
@@ -79,6 +89,9 @@ internal fun PlayerPageArtwork(
 ) {
     val baseUrl = remember(pageTrack?.videoId) { pageTrack.playerArtworkUrl() }
     var artworkUrl by remember(baseUrl) { mutableStateOf(baseUrl) }
+    // 渐进加载底层:队列原始缩略图(磁盘几乎必命中——迷你条/通知渲染的就是它)。
+    // 1080 版首次要走网络时它先顶上,新图到位由上层 crossfade 盖住,封面永不等网络。
+    val lowUrl = remember(pageTrack?.videoId) { pageTrack.playerArtworkUrlLow() }
 
     // The request MUST be remembered: coil3's model equality is reference-based for ImageRequest,
     // so a freshly built instance on every recomposition (e.g. when isCurrentPage flips at the
@@ -118,8 +131,16 @@ internal fun PlayerPageArtwork(
     }
 
     // 翻成当前页:用已加载位图立即补发一次(见类注释),不等下一次网络事件。
+    // 另兼任 Error 重试:滑入时网络抖动失败的页,painter 停在 Error 且永不重发;每次
+    // "翻成当前页"重置一次 artworkUrl 触发重载(仅一次,流内不循环重试——网络死时
+    // 不打转,离开再回来才会再试)。
     LaunchedEffect(painter, isCurrentPage) {
         if (!isCurrentPage) return@LaunchedEffect
+        if (painter.state.value is AsyncImagePainter.State.Error) {
+            val retry = artworkUrl
+            artworkUrl = null
+            artworkUrl = retry
+        }
         painter.state.collectLatest { state ->
             if (state is AsyncImagePainter.State.Success) {
                 onCurrentArtworkLoaded?.invoke(state.result.image.toImageBitmap())
@@ -134,6 +155,26 @@ internal fun PlayerPageArtwork(
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
         )
+        // 底层:原始缩略图。同 URL 同 size 与列表/迷你条共享内存缓存条目;contentDescription
+        // null——它是垫底图,页面语义已由上层封面携带。
+        lowUrl?.let { url ->
+            val lowRequest =
+                remember(url) {
+                    ImageRequest
+                        .Builder(platformContext)
+                        .data(url)
+                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .diskCacheKey(url)
+                        .size(1080)
+                        .build()
+                }
+            AsyncImage(
+                model = lowRequest,
+                contentDescription = null,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Image(
             painter = painter,
             contentDescription = pageTrack?.title,
