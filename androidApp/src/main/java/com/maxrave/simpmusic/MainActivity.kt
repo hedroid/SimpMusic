@@ -230,6 +230,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 媒体读权限(音频+视频):下载文件走共享存储文件路径直读,app 自建文件凭归属
+        // 即可读,但 OEM/恢复场景归属失效时需运行时授权兜底(视频 mp4 实测 EACCES)。
+        // 只问一次(不弹自定义重试对话框,拒绝=完全靠归属路径,影响面=异常归属的文件)。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val mediaPerms =
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VIDEO)
+                .filter { !EasyPermissions.hasPermissions(this, it) }
+                .toTypedArray()
+            val wasMediaAsked = getString("media_permission_asked")
+            if (mediaPerms.isNotEmpty() && wasMediaAsked != "true") {
+                EasyPermissions.requestPermissions(
+                    this,
+                    runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.NOTIFICATION_REQUEST) },
+                    2,
+                    *mediaPerms,
+                )
+                putString("media_permission_asked", "true")
+            }
+        }
+
         if (!EasyPermissions.hasPermissions(this, Manifest.permission.POST_NOTIFICATIONS)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val doNotAsk = getString("notification_permission_do_not_ask")
