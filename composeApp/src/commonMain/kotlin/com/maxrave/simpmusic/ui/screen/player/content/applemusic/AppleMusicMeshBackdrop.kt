@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -119,16 +118,17 @@ internal fun AppleMusicMeshBackdrop(
         incoming = null
     }
 
+    // (perf) No runtime blur: the texture is already smoothstep-resampled to MESH_TEX and the GPU
+    // bilinear-stretches it (FilterQuality.Low), which is smooth on its own. A full-screen 44dp
+    // RenderEffect blur re-ran on every re-record of this layer — the heaviest single cost on the
+    // page — for softness the resample already provides.
     Canvas(
         modifier =
             modifier
                 .fillMaxSize()
-                // Outside the blur, so it is an opaque floor the blur cannot thin out — the page is a
-                // sheet over the rest of the app and every pixel of it has to be opaque.
-                .background(MeshFallback)
-                // The default edge treatment clamps; Unbounded would fade alpha in from every edge and
-                // let the page underneath show through down the sides.
-                .blur(MESH_BLUR),
+                // Opaque floor: the page is a sheet over the rest of the app and every pixel of it
+                // has to be opaque.
+                .background(MeshFallback),
     ) {
         val seamY = seam.toPx().coerceIn(0f, size.height)
         shown?.let { drawMesh(it, seamY, alpha = 1f) }
@@ -328,8 +328,8 @@ private fun Int.lifted(): Int {
 /** How many cells across the mesh is: enough that a cover's layout survives, few enough that nothing recognisable does. */
 private const val MESH_GRID = 6
 
-/** What the grid is smoothed to before the GPU stretches it. */
-private const val MESH_TEX = 32
+/** What the grid is smoothed to before the GPU stretches it (drawn unblurred — see the Canvas note). */
+private const val MESH_TEX = 64
 
 /** What the artwork is read at before it is averaged — a whole multiple of [MESH_GRID]. */
 private const val MESH_SOURCE_PX = 120
@@ -337,12 +337,9 @@ private const val MESH_SOURCE_PX = 120
 private const val MESH_VIBRANCE = 1.12f
 private const val MESH_FLOOR = 0.045f
 
-/** How long the page takes to change colour on a skip: long enough to read as a change, not a cut. */
-private const val MESH_FADE_MS = 900
-
-// Wider than BitChord's 32dp: the owner asked for the page to be visibly smooth, and at 44dp no
-// cell edge survives even on a cover with hard colour blocks.
-private val MESH_BLUR = 44.dp
+// How long the page takes to change colour on a skip: kept short so two full-screen textures are
+// only drawn together for a blink (the crossfade draws both).
+private const val MESH_FADE_MS = 300
 
 /** Drawn only until an artwork has been read. */
 private val MeshFallback = Color(0xFF121212)

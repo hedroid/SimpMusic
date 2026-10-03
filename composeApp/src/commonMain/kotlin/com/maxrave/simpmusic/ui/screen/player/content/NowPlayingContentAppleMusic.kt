@@ -208,11 +208,31 @@ fun NowPlayingContentAppleMusic(
     // Backdrop source for the Desktop dismiss button below. The glass layers MUST be a sibling of
     // the button, never its parent: nesting the button inside the source is the render-feedback
     // loop that crashes the RuntimeShader.
-    val panelBackdrop = rememberBackdrop(Color.Black)
+    // (perf) Android has no glass button, so the full-screen capture only re-recorded the whole
+    // background layer every frame for nothing — create and mount the backdrop on Desktop alone.
+    val isDesktop = getPlatform() == Platform.Desktop
+    val panelBackdrop = if (isDesktop) rememberBackdrop(Color.Black) else null
+
+    // (perf) The MAIN body draws an OPAQUE full-screen mesh over this backdrop, so the frosted
+    // cover behind it — and behind a fullscreen canvas' black layer — can never be seen on MAIN.
+    // Only the Lyrics/Queue bodies and a letterboxed video actually show it. The palette and the
+    // mesh source stay fed on MAIN by the artwork pager's own cover load. Swapping this gate is
+    // instant, so during the 300ms view Crossfade both backdrops briefly coexist — accepted over
+    // animating the swap.
+    val videoBackdropOnMain =
+        state.screenData.canvasData == null && state.screenData.isVideo && state.shouldShowVideo
+    val showBlurredBackdrop = viewState != AppleMusicView.MAIN || videoBackdropOnMain
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        Box(modifier = Modifier.matchParentSize().layerBackdrop(panelBackdrop)) {
-            AppleMusicArtworkBackdrop(state = state, actions = actions, seedColor = seedColor)
+        Box(
+            modifier =
+                Modifier
+                    .matchParentSize()
+                    .then(if (panelBackdrop != null) Modifier.layerBackdrop(panelBackdrop) else Modifier),
+        ) {
+            if (showBlurredBackdrop) {
+                AppleMusicArtworkBackdrop(state = state, actions = actions, seedColor = seedColor)
+            }
             // Flat black only for a CANVAS (it fills the screen). A video letterboxes, so a black page
             // turns the bars above and below it into dead black slabs — keep the artwork-tinted
             // gradient there.
@@ -276,10 +296,10 @@ fun NowPlayingContentAppleMusic(
         // both draw state.dismissIcon in their top bar.
         // MAIN only: Queue and Lyrics each have their own header, and a floating button over
         // those reads as belonging to the list rather than to the panel.
-        if (getPlatform() == Platform.Desktop) {
+        if (isDesktop) {
             if (viewState == AppleMusicView.MAIN) {
                 LiquidGlassIconButton(
-                    backdrop = panelBackdrop,
+                    backdrop = requireNotNull(panelBackdrop),
                     imageVector = state.dismissIcon,
                     shape = RoundedCornerShape(24.dp),
                     // Same as AnalyticsScreen's back button: a 48dp circle catches only a short arc
@@ -444,10 +464,9 @@ private fun AppleMusicMainView(
             modifier = Modifier.fillMaxSize(),
             beyondViewportPageCount = 1,
             userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-            key = { idx ->
-                val vid = state.artworkQueue.getOrNull(idx)?.videoId.orEmpty()
-                "appleMusicArtwork_${vid}_$idx"
-            },
+            // 稳定页 key,与 Spotify/M3 同源(NowPlayingScreen.artworkPageKeys):重排/洗牌时按歌
+            // 复用页面,而不是按下标销毁重建(曾致切歌闪动+封面页重建)。
+            key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
         ) { page ->
             AppleMusicArtworkPage(
                 state = state,
