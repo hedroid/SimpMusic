@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -692,7 +691,7 @@ private fun AppleMusicMainView(
                                                 Modifier
                                                     .fillMaxWidth()
                                                     .padding(horizontal = 20.dp, vertical = 2.dp)
-                                                    .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                                                    .basicMarquee()
                                                     .focusable(),
                                         )
                                         val translatedLineText =
@@ -713,7 +712,7 @@ private fun AppleMusicMainView(
                                                     Modifier
                                                         .fillMaxWidth()
                                                         .padding(horizontal = 20.dp, vertical = 2.dp)
-                                                        .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                                                        .basicMarquee()
                                                         .focusable(),
                                             )
                                         }
@@ -753,7 +752,7 @@ private fun AppleMusicMainView(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                                                .basicMarquee()
                                                 .focusable(),
                                     )
                                     Spacer(modifier = Modifier.height(3.dp))
@@ -764,7 +763,7 @@ private fun AppleMusicMainView(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
-                                                .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                                                .basicMarquee()
                                                 .focusable(),
                                     )
                                 }
@@ -877,7 +876,7 @@ internal fun AppleMusicMainTitleRow(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                        .basicMarquee()
                         .focusable(),
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -891,7 +890,7 @@ internal fun AppleMusicMainTitleRow(
                     maxLines = 1,
                     modifier =
                         Modifier
-                            .basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)
+                            .basicMarquee()
                             .focusable()
                             .clickable { actions.onNavigateToArtist() },
                 )
@@ -1060,7 +1059,7 @@ private fun AppleMusicArtworkPage(
                                 shouldShowSubtitle = showSubtitle,
                                 shouldPip = false,
                                 shouldScaleDownSubtitle = true,
-                                timelineState = state.timelineState,
+                                timelineFlow = state.timelineFlow,
                                 lyricsData = state.screenData.lyricsData?.lyrics,
                                 translatedLyricsData = state.screenData.lyricsData?.translatedLyrics?.first,
                                 isInPipMode = state.isInPipMode,

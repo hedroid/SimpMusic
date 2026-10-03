@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -30,9 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,11 +43,14 @@ import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.maxrave.domain.data.model.metadata.Line
+import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.simpmusic.extension.ParsedRichSyncLine
 import com.maxrave.simpmusic.extension.parseRichSyncWords
 import com.maxrave.simpmusic.ui.component.rememberLyricLayoutDirection
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.stripRichSyncTimestamps
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToLong
@@ -87,7 +87,8 @@ internal fun AppleMusicLyricStrip(
 
     val playhead =
         rememberSweepPlayhead(
-            rawMs = state.timelineState.current - state.lyricsOffsetMs,
+            timelineFlow = state.timelineFlow,
+            offsetMs = state.lyricsOffsetMs,
             running = line != null && richSynced && state.controllerState.isPlaying,
         )
 
@@ -171,7 +172,7 @@ private fun StripText(
         style = typography.lyricStrip.copy(textDirection = TextDirection.ContentOrLtr),
         maxLines = 1,
         softWrap = false,
-        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately),
+        modifier = Modifier.basicMarquee(),
     )
 }
 
@@ -206,7 +207,7 @@ private fun SweptLine(
     var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
     // The marquee sits on the Box, not on each Text, so the dim and bright copies scroll as one and
     // the sweep stays over the word it belongs to.
-    Box(modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, animationMode = MarqueeAnimationMode.Immediately)) {
+    Box(modifier = Modifier.basicMarquee()) {
         Text(
             text = text,
             style = typography.lyricStrip.copy(color = UNSUNG, textDirection = TextDirection.ContentOrLtr),
@@ -264,45 +265,65 @@ private fun sweepX(
  * one keeps its own time on the frame clock and only leans toward the reports, so it moves at a
  * steady speed and never steps back. A report further off than [SWEEP_SNAP_MS] is a seek, and it
  * goes straight there. While [running] is false it simply follows the reports.
+ *
+ * (perf) The flow is collected INSIDE the effect, so a tick never recomposes the strip. And the
+ * frame loop writes the state at most [SWEEP_WRITE_INTERVAL_NS] apart (~30 fps) — on a 60/120 Hz
+ * display most frame callbacks become no-ops instead of invalidating the sweep's draw every frame.
+ * Paused, un-synced or off the MAIN view the loop does not run at all.
  */
 @Composable
 private fun rememberSweepPlayhead(
-    rawMs: Long,
+    timelineFlow: StateFlow<TimeLine>,
+    offsetMs: Long,
     running: Boolean,
 ): State<Long> {
-    val playhead = remember { mutableLongStateOf(rawMs) }
-    val latestRaw by rememberUpdatedState(rawMs)
-    LaunchedEffect(running) {
+    val playhead = remember { mutableLongStateOf(timelineFlow.value.current - offsetMs) }
+    LaunchedEffect(running, timelineFlow, offsetMs) {
         if (!running) {
-            snapshotFlow { latestRaw }.collect { playhead.longValue = it }
+            timelineFlow.collect { playhead.longValue = it.current - offsetMs }
             return@LaunchedEffect
         }
-        var reported = latestRaw
-        var reportedAt = -1L
-        var lastFrame = -1L
         var position = playhead.longValue.toDouble()
-        while (true) {
-            withFrameNanos { now ->
-                if (reportedAt < 0L || latestRaw != reported) {
-                    reported = latestRaw
-                    reportedAt = now
+        var reported = timelineFlow.value.current - offsetMs
+        var reportArrived = false
+        var reportedAt = -1L
+        var lastWrite = -1L
+        val reports =
+            launch {
+                timelineFlow.collect {
+                    reported = it.current - offsetMs
+                    reportArrived = true
                 }
-                // Where the last report puts the song by now. Capped, so a player that has stalled
-                // (no new report while it buffers) cannot drag the light on without it.
-                val target = reported + ((now - reportedAt) / 1_000_000.0).coerceAtMost(SWEEP_MAX_EXTRAPOLATION_MS)
-                val step = if (lastFrame < 0L) 0.0 else (now - lastFrame) / 1_000_000.0
-                lastFrame = now
-                position =
-                    if (abs(target - position) > SWEEP_SNAP_MS) {
-                        target
-                    } else {
-                        // Close a share of the gap each frame, in proportion to the frame's length so
-                        // 60 Hz and 120 Hz settle alike; max() keeps it from ever running backwards.
-                        val advanced = position + step
-                        max(position, advanced + (target - advanced) * (step / SWEEP_CATCH_UP_MS).coerceAtMost(1.0))
-                    }
-                playhead.longValue = position.roundToLong()
             }
+        try {
+            while (true) {
+                withFrameNanos { now ->
+                    if (reportArrived || reportedAt < 0L) {
+                        reportedAt = now
+                        reportArrived = false
+                    }
+                    if (lastWrite < 0L || now - lastWrite >= SWEEP_WRITE_INTERVAL_NS) {
+                        // Where the last report puts the song by now. Capped, so a player that has
+                        // stalled (no new report while it buffers) cannot drag the light on without it.
+                        val target = reported + ((now - reportedAt) / 1_000_000.0).coerceAtMost(SWEEP_MAX_EXTRAPOLATION_MS)
+                        val step = if (lastWrite < 0L) 0.0 else (now - lastWrite) / 1_000_000.0
+                        lastWrite = now
+                        position =
+                            if (abs(target - position) > SWEEP_SNAP_MS) {
+                                target
+                            } else {
+                                // Close a share of the gap each write, in proportion to the elapsed
+                                // time so 60 Hz and 120 Hz settle alike; max() keeps it from ever
+                                // running backwards.
+                                val advanced = position + step
+                                max(position, advanced + (target - advanced) * (step / SWEEP_CATCH_UP_MS).coerceAtMost(1.0))
+                            }
+                        playhead.longValue = position.roundToLong()
+                    }
+                }
+            }
+        } finally {
+            reports.cancel()
         }
     }
     return playhead
@@ -328,3 +349,8 @@ private const val LAST_WORD_FALLBACK_MS = 600L
 private const val SWEEP_CATCH_UP_MS = 150.0
 private const val SWEEP_SNAP_MS = 500.0
 private const val SWEEP_MAX_EXTRAPOLATION_MS = 250.0
+
+// (perf) Minimum spacing between two playhead writes — one frame callback runs every vsync, but
+// only those at least this far apart invalidate the draw. ~30 fps; a word-light has no detail
+// past that, and the layer it invalidates sits over the page's whole blur stack.
+private const val SWEEP_WRITE_INTERVAL_NS = 33_000_000L

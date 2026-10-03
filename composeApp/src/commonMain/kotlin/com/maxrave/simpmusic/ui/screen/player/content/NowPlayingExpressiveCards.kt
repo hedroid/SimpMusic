@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -371,7 +372,7 @@ internal fun ExpressiveArtworkCardPage(
                                     shouldShowSubtitle = internalShowSubtitle,
                                     shouldPip = false,
                                     shouldScaleDownSubtitle = true,
-                                    timelineState = state.timelineState,
+                                    timelineFlow = state.timelineFlow,
                                     lyricsData = state.screenData.lyricsData?.lyrics,
                                     translatedLyricsData = state.screenData.lyricsData?.translatedLyrics?.first,
                                     isInPipMode = state.isInPipMode,
@@ -847,13 +848,15 @@ internal fun ExpressiveBelowTheFold(
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(10.dp))
+                        // (perf) 点击才需要时长:只收 total(每歌一变),不收 50ms 的 position 流。
+                        val infoTotalMs by state.timelineFlow.collectTotalMs()
                         DescriptionView(
                             text = state.screenData.songInfoData?.description ?: "",
                             onTimeClicked = { raw ->
                                 val timestamp = parseTimestampToMilliseconds(raw)
-                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                if (timestamp != 0.0 && infoTotalMs > 0L && timestamp < infoTotalMs) {
                                     actions.onUIEvent(
-                                        UIEvent.UpdateProgress(((timestamp * 100) / state.timelineState.total).toFloat()),
+                                        UIEvent.UpdateProgress(((timestamp * 100) / infoTotalMs).toFloat()),
                                     )
                                 }
                             },
@@ -906,6 +909,9 @@ internal fun ExpressiveCollapsedToolbar(
         enter = fadeIn() + slideInVertically(),
         exit = fadeOut() + slideOutVertically(),
     ) {
+        // (perf) The 50 ms flow is collected only while the toolbar is shown, so its ticks
+        // recompose this one row and never the body behind it.
+        val timeline by state.timelineFlow.collectAsStateWithLifecycle()
         ElevatedCard(
             elevation = CardDefaults.elevatedCardElevation(10.dp),
             shape = RectangleShape,
@@ -988,7 +994,7 @@ internal fun ExpressiveCollapsedToolbar(
                         actions.onUIEvent(UIEvent.ToggleLike)
                     }
                     Spacer(modifier = Modifier.width(15.dp))
-                    Crossfade(targetState = state.timelineState.loading, label = "") {
+                    Crossfade(targetState = timeline.loading, label = "") {
                         if (it) {
                             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
@@ -1015,7 +1021,7 @@ internal fun ExpressiveCollapsedToolbar(
                             .align(Alignment.BottomCenter),
                 ) {
                     LinearProgressIndicator(
-                        progress = { state.timelineState.current.toFloat() / state.timelineState.total },
+                        progress = { timeline.current.toFloat() / timeline.total },
                         modifier =
                             Modifier
                                 .fillMaxWidth()

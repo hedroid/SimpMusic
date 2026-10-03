@@ -6,10 +6,13 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.data.entities.NewFormatEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.streams.TimeLine
@@ -21,6 +24,8 @@ import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
 import com.maxrave.simpmusic.viewModel.RemoteSongLikeState
 import com.maxrave.simpmusic.viewModel.UIEvent
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
 /**
@@ -127,7 +132,10 @@ private fun Int.toKhzLabel(): String {
 class NowPlayingContentState(
     val screenData: NowPlayingScreenData,
     val controllerState: ControlState,
-    val timelineState: TimeLine,
+    // (perf) The 50 ms position snapshot does NOT live here on purpose: a TimeLine field made this
+    // whole object new twenty times a second, re-executing every style's tree on each tick. The
+    // flow is the only timeline channel — the widgets that actually render position (the three
+    // styles' playback controls, the Apple lyric strip's sweep) collect it inside themselves.
     val timelineFlow: StateFlow<TimeLine>,
     val castState: GenericCastState,
     val shouldShowVideo: Boolean,
@@ -153,7 +161,6 @@ class NowPlayingContentState(
     val spotShadowColor: Color,
     val gradientOffset: GradientOffset,
     val sliderTrackColor: Color,
-    val sliderValue: Float,
     val currentLyricLineIndex: Int,
     val showControlLayout: Boolean,
     val controlLayoutAlpha: Float,
@@ -188,8 +195,6 @@ class NowPlayingContentActions(
     val onUIEvent: (UIEvent) -> Unit,
     val onSeekToQueueIndex: (Int) -> Unit,
     val onArtworkBitmap: (ImageBitmap) -> Unit,
-    val onSliderChange: (Float) -> Unit,
-    val onSliderChangeFinished: () -> Unit,
     val onToggleControls: () -> Unit,
     val onNavigateToArtist: () -> Unit,
     val onOpenListenTogether: () -> Unit,
@@ -213,3 +218,11 @@ class NowPlayingContentActions(
     /** Removes one queue entry. `index` is an absolute index into [NowPlayingContentState.artworkQueue]. */
     val onRemoveQueueItem: (index: Int) -> Unit,
 )
+
+/**
+ * (perf) 只取 [TimeLine.total] 的低频读法(每首歌才变一次):歌词卡时间戳点击这类只在
+ * 点击时需要时长的位置用,避免为它收整条 50ms 的 position 流、把所在面板拖进逐帧重组。
+ */
+@Composable
+internal fun StateFlow<TimeLine>.collectTotalMs(): State<Long> =
+    map { it.total }.distinctUntilChanged().collectAsStateWithLifecycle(0L)

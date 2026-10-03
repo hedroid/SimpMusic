@@ -188,7 +188,7 @@ fun FullscreenPlayer(
                     .fillMaxSize(),
             shouldPip = true,
             shouldShowSubtitle = shouldShowSubtitle,
-            timelineState = timelineState,
+            timelineFlow = sharedViewModel.timeline,
             lyricsData = nowPlayingState.lyricsData?.lyrics,
             translatedLyricsData = nowPlayingState.lyricsData?.translatedLyrics?.first,
             isInPipMode = isInPipMode,

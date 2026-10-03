@@ -75,6 +75,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +83,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -636,7 +638,7 @@ fun NowPlayingContentSpotify(
                                                     shouldShowSubtitle = internalShowSubtitle,
                                                     shouldPip = false,
                                                     shouldScaleDownSubtitle = true,
-                                                    timelineState = state.timelineState,
+                                                    timelineFlow = state.timelineFlow,
                                                     lyricsData = state.screenData.lyricsData?.lyrics,
                                                     translatedLyricsData = state.screenData.lyricsData?.translatedLyrics?.first,
                                                     isInPipMode = state.isInPipMode,
@@ -1560,14 +1562,16 @@ fun NowPlayingContentSpotify(
                                             color = Color.White,
                                         )
                                         Spacer(modifier = Modifier.height(10.dp))
+                                        // (perf) 点击才需要时长:只收 total(每歌一变),不收 50ms 流。
+                                        val infoTotalMs by state.timelineFlow.collectTotalMs()
                                         DescriptionView(
                                             text = state.screenData.songInfoData?.description ?: "",
                                             onTimeClicked = { raw ->
                                                 val timestamp = parseTimestampToMilliseconds(raw)
-                                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                                if (timestamp != 0.0 && infoTotalMs > 0L && timestamp < infoTotalMs) {
                                                     actions.onUIEvent(
                                                         UIEvent.UpdateProgress(
-                                                            ((timestamp * 100) / state.timelineState.total).toFloat(),
+                                                            ((timestamp * 100) / infoTotalMs).toFloat(),
                                                         ),
                                                     )
                                                 }
@@ -1624,6 +1628,9 @@ fun NowPlayingContentSpotify(
                             top = with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() },
                         ),
                 ) {
+                    // (perf) The 50 ms flow is collected only while this collapsed toolbar exists,
+                    // so its ticks recompose this row and never the page behind it.
+                    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier =
@@ -1693,7 +1700,7 @@ fun NowPlayingContentSpotify(
                             actions.onUIEvent(UIEvent.ToggleLike)
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        Crossfade(targetState = state.timelineState.loading, label = "") {
+                        Crossfade(targetState = timeline.loading, label = "") {
                             if (it) {
                                 Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(
@@ -1716,7 +1723,7 @@ fun NowPlayingContentSpotify(
                                 .align(Alignment.BottomCenter),
                     ) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.current.toFloat() / state.timelineState.total },
+                            progress = { timeline.current.toFloat() / timeline.total },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1887,6 +1894,10 @@ internal fun ColumnScope.SpotifyPlaybackControls(
     actions: NowPlayingContentActions,
     sliderModifier: Modifier = Modifier,
 ) {
+    // (perf) 高频层:50ms 的进度流只进这根滑条与时间行,壳层与其余控件不再逐帧重建。
+    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    var isScrubbing by remember { mutableStateOf(false) }
     // Real Slider
     Box(
         Modifier
@@ -1902,7 +1913,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                     .height(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(state.timelineState.loading) {
+            Crossfade(timeline.loading) {
                 if (it) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
@@ -1923,7 +1934,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 } else {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.bufferedPercent.toFloat() / 100 },
+                            progress = { timeline.bufferedPercent.toFloat() / 100 },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1956,12 +1967,21 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 // sliderValue stays on the 0..100 scale that
                 // UIEvent.UpdateProgress and the time labels
                 // are built around.
-                value = state.sliderValue / 100f,
+                value =
+                    if (isScrubbing) {
+                        scrubValue / 100f
+                    } else if (timeline.total > 0L) {
+                        timeline.current.toFloat() / timeline.total
+                    } else {
+                        0f
+                    },
                 onValueChangeFinished = {
-                    actions.onSliderChangeFinished()
+                    actions.onUIEvent(UIEvent.UpdateProgress(scrubValue))
+                    isScrubbing = false
                 },
                 onValueChange = {
-                    actions.onSliderChange(it * 100f)
+                    isScrubbing = true
+                    scrubValue = it * 100f
                 },
                 modifier =
                     Modifier
@@ -2021,7 +2041,11 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
+            text =
+                timeline.elapsedLabel(
+                    if (isScrubbing) scrubValue / 100f
+                    else if (timeline.total > 0L) timeline.current.toFloat() / timeline.total else 0f,
+                ),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -2044,7 +2068,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = timeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
@@ -2073,7 +2097,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             )
         }
         Text(
-            text = state.timelineState.lengthLabel(),
+            text = timeline.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,

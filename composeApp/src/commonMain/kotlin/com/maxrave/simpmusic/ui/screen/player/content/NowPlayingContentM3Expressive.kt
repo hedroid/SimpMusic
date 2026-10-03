@@ -62,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,6 +93,7 @@ import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.isPlatformCastAvailable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
 import com.maxrave.simpmusic.extension.lengthLabel
@@ -814,6 +816,10 @@ internal fun ColumnScope.ExpressivePlaybackControls(
     showShuffleAndRepeat: Boolean = false,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    // (perf) 高频层:50ms 的进度流只进这根波形条与时间行,壳层与其余控件不再逐帧重建。
+    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    var isScrubbing by remember { mutableStateOf(false) }
     Box(
         Modifier
             .padding(
@@ -822,21 +828,34 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .then(sliderModifier),
     ) {
         WavySeekBar(
-            progressFraction = state.sliderValue / 100f,
+            progressFraction =
+                if (isScrubbing) {
+                    scrubValue / 100f
+                } else if (timeline.total > 0L) {
+                    timeline.current.toFloat() / timeline.total
+                } else {
+                    0f
+                },
             isPlaying = state.controllerState.isPlaying,
             // Classic swaps the slider color to the rainbow while
             // crossfading (state.sliderTrackColor); tonal primary
             // otherwise.
             activeColor =
-                if (state.timelineState.isCrossfading) {
+                if (timeline.isCrossfading) {
                     state.sliderTrackColor
                 } else {
                     colorScheme.primary
                 },
             trackColor = colorScheme.secondaryContainer,
             thumbColor = colorScheme.primary,
-            onSliderChange = actions.onSliderChange,
-            onSliderChangeFinished = actions.onSliderChangeFinished,
+            onSliderChange = {
+                isScrubbing = true
+                scrubValue = it
+            },
+            onSliderChangeFinished = {
+                actions.onUIEvent(UIEvent.UpdateProgress(scrubValue))
+                isScrubbing = false
+            },
         )
     }
     // Time row — same math and negative guard as Classic
@@ -853,7 +872,11 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = state.timelineState.elapsedLabel(state.sliderValue / 100f),
+            text =
+                timeline.elapsedLabel(
+                    if (isScrubbing) scrubValue / 100f
+                    else if (timeline.total > 0L) timeline.current.toFloat() / timeline.total else 0f,
+                ),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -876,7 +899,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = timeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
@@ -904,7 +927,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             )
         }
         Text(
-            text = state.timelineState.lengthLabel(),
+            text = timeline.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,
@@ -918,7 +941,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
     )
     ExpressiveTransportRow(
         controllerState = state.controllerState,
-        loading = state.timelineState.loading,
+        loading = timeline.loading,
         onUIEvent = actions.onUIEvent,
         modifier = Modifier.padding(horizontal = 20.dp),
         showShuffleAndRepeat = showShuffleAndRepeat,
