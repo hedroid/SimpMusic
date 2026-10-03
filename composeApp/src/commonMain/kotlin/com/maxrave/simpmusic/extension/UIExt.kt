@@ -481,26 +481,34 @@ fun LazyGridState.isScrollingUp(): State<Boolean> {
 /**
  * 库页各 chip 页的滚动上报效果(驱动顶栏标题行显隐 + App 底栏 isScrolledToTop)。
  *
- * 几何反馈断路:底栏(液态玻璃形变)显隐形变会改 Scaffold 的 innerPadding.bottom,
- * 顶栏标题行收展会改下载管理页的视口(实时高度)——两者都让贴底的列表重新钳制,
- * firstVisibleItemIndex 变化又触发上报→底栏再形变/标题再翻转,自持振荡(用户实测
- * "下载页贴底迷你条+导航栏来回跳")。钳制发生在无手势时刻,因此除首帧外只在
- * isScrollInProgress(真实手势/惯性滚动)中放行;首帧必须放行——切页靠 Crossfade 的
- * 保存态恢复滚动,首帧上报是纠正标题/底栏状态的唯一信号(CR-30 口径)。
- * index<=1 的"回顶"上报恒放行:贴底钳制永远不会把 index 钳到 1 以下,不构成回路。
+ * 信号粒度=每次滚动位移(index+offset),方向内联计算,不用 index-only 流:贴底微调
+ * 常落在同一 item 内(拿不到 index 变化=零上报,底栏/标题卡死在上一个方向),且
+ * snapshotFlow 对 index 跳变做 conflated 后方向推导会读到陈旧 previous(2026-10-03
+ * 实测"下滚后迷你条不再沉到导航行"两案)。防振荡不靠吞报告,靠切断几何燃料:各
+ * chip 列表底部 padding 锁定展开态高度(见 LibraryScreen lockedBottomPadding),底栏
+ * 形变不再改列表几何;下载页标题收展的残余反馈由 500ms 静默窗吞掉。index<=1 视作
+ * 在顶(各页原口径)。深处保存态恢复时首帧 index==previous、offset 相等→上报 false
+ * (收起),与 CR-30"深处首帧上报即 false=正确语义"一致。
  */
 @Composable
 fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
-    val isScrollingUp by isScrollingUp()
     LaunchedEffect(this) {
-        var firstReport = true
-        snapshotFlow { firstVisibleItemIndex }
-            .collect { index ->
+        var previousIndex = firstVisibleItemIndex
+        var previousOffset = firstVisibleItemScrollOffset
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val up =
+                    if (index != previousIndex) {
+                        index < previousIndex
+                    } else {
+                        offset < previousOffset
+                    }
+                previousIndex = index
+                previousOffset = offset
                 if (index <= 1) {
                     onScrolling(true)
-                } else if (firstReport || isScrollInProgress) {
-                    firstReport = false
-                    onScrolling(isScrollingUp)
+                } else {
+                    onScrolling(up)
                 }
             }
     }
@@ -508,16 +516,23 @@ fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
 
 @Composable
 fun LazyGridState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
-    val isScrollingUp by isScrollingUp()
     LaunchedEffect(this) {
-        var firstReport = true
-        snapshotFlow { firstVisibleItemIndex }
-            .collect { index ->
+        var previousIndex = firstVisibleItemIndex
+        var previousOffset = firstVisibleItemScrollOffset
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val up =
+                    if (index != previousIndex) {
+                        index < previousIndex
+                    } else {
+                        offset < previousOffset
+                    }
+                previousIndex = index
+                previousOffset = offset
                 if (index <= 1) {
                     onScrolling(true)
-                } else if (firstReport || isScrollInProgress) {
-                    firstReport = false
-                    onScrolling(isScrollingUp)
+                } else {
+                    onScrolling(up)
                 }
             }
     }

@@ -218,6 +218,16 @@ fun LibraryScreen(
     var topBarLiveHeight by remember {
         mutableStateOf(0.dp)
     }
+    // 各 chip 列表的底部留白:锁定"展开态"底栏高度(maxOf),不跟随底栏形变动画。
+    // 液态玻璃底栏随 isScrolledToTop 在两行(迷你条+导航)与一行(沉到导航行)间形变,
+    // innerPadding.bottom 逐帧变——若列表 contentPadding.bottom 跟随,贴底位置每次
+    // 形变都重钳制→index 变化→上报→底栏再形变,自持振荡(2026-10-03 用户实测"下载页
+    // 贴底迷你条+导航栏来回跳");锁定后形变不再扰动列表几何,上报可全量放行(方向
+    // 恒真实,含贴底回弹),代价仅收起态下列表尾部多留一段空白。只增不减。
+    var lockedBottomPadding by remember {
+        mutableStateOf(0.dp)
+    }
+    lockedBottomPadding = maxOf(lockedBottomPadding, innerPadding.calculateBottomPadding())
     var showAddSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(nowPlaying) {
@@ -447,7 +457,7 @@ fun LibraryScreen(
                 val sharedVm: SharedViewModel = koinInject()
                 DownloadedManagementBody(
                     topPadding = topBarLiveHeight,
-                    bottomPadding = innerPadding.calculateBottomPadding(),
+                    bottomPadding = lockedBottomPadding,
                     navController = navController,
                     viewModel = viewModel,
                     dynamicPlaylistViewModel = dynamicViewModel,
@@ -459,7 +469,7 @@ fun LibraryScreen(
             LibraryChipType.YOUTUBE_MUSIC_PLAYLIST -> {
                 LibraryYouTubeTab(
                     navController = navController,
-                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    contentPadding = innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     playlists = youTubePlaylist,
                     likedPlaylists = youTubeLikedPlaylists,
                     autoPlaylists = youTubeAutoPlaylists,
@@ -477,7 +487,7 @@ fun LibraryScreen(
             LibraryChipType.NETEASE_PLAYLIST -> {
                 LibraryNeteaseTab(
                     navController = navController,
-                    contentPadding = innerPadding.copy(top = topAppBarHeight),
+                    contentPadding = innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     playlists = neteasePlaylist,
                     artists = subscribedArtists,
                     albums = starredAlbums,
@@ -495,7 +505,7 @@ fun LibraryScreen(
 
             LibraryChipType.NETEASE_PODCAST -> {
                 NeteasePodcastScreen(
-                    innerPadding = innerPadding.copy(top = topAppBarHeight),
+                    innerPadding = innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     navController = navController,
                     viewModel = neteasePodcastViewModel,
                     onScrolling = tabScrolling,
@@ -509,7 +519,7 @@ fun LibraryScreen(
             LibraryChipType.LOCAL_PLAYLIST -> {
                 GridLibraryPlaylist(
                     navController,
-                    innerPadding.copy(top = topAppBarHeight),
+                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     yourLocalPlaylist,
                     onScrolling = tabScrolling,
                     emptyText = Res.string.no_playlists_added,
@@ -534,7 +544,7 @@ fun LibraryScreen(
             LibraryChipType.FAVORITE_PLAYLIST -> {
                 GridLibraryPlaylist(
                     navController,
-                    innerPadding.copy(top = topAppBarHeight),
+                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     favoritePlaylist,
                     emptyText = Res.string.no_favorite_playlists,
                     // 混源网格:网易来源的收藏条目带品牌角标
@@ -557,7 +567,7 @@ fun LibraryScreen(
             LibraryChipType.DOWNLOADED_PLAYLIST -> {
                 GridLibraryPlaylist(
                     navController,
-                    innerPadding.copy(top = topAppBarHeight),
+                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     downloadedPlaylist,
                     emptyText = Res.string.no_playlists_downloaded,
                     onScrolling = tabScrolling,
@@ -607,7 +617,7 @@ fun LibraryScreen(
             LibraryChipType.FAVORITE_PODCAST -> {
                 GridLibraryPlaylist(
                     navController,
-                    innerPadding.copy(top = topAppBarHeight),
+                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     favoritePodcasts,
                     emptyText = Res.string.no_favorite_podcasts,
                     onScrolling = tabScrolling,
@@ -629,7 +639,7 @@ fun LibraryScreen(
             LibraryChipType.CHART -> {
                 GridLibraryPlaylist(
                     navController,
-                    innerPadding.copy(top = topAppBarHeight),
+                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
                     chartPlaylists,
                     emptyText = Res.string.no_charts_found,
                     onScrolling = tabScrolling,
