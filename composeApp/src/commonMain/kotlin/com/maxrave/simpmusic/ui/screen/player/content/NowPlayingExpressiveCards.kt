@@ -324,9 +324,12 @@ internal fun ExpressiveArtworkCardPage(
                 val pagerSettledHere by remember {
                     derivedStateOf { state.artworkPagerState.settledPage == page }
                 }
+                // 角标/喂养共用的"当前语义":手势停稳即翻(不等转场确认),否则页面静止后
+                // 角标才弹出=手势切歌"封面跳一下"(按键不闪:flip 先于滑入)。
+                val pageShowsCurrentChrome = isCurrentArtworkPage || pagerSettledHere
                 PlayerPageArtwork(
                     pageTrack = pageTrack,
-                    isCurrentPage = isCurrentArtworkPage || pagerSettledHere,
+                    isCurrentPage = pageShowsCurrentChrome,
                     onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                     modifier =
                         Modifier
@@ -514,7 +517,7 @@ internal fun ExpressiveArtworkCardPage(
                 // 当前页播视频时与封面图同条件隐藏(相邻页静态卡恒显)
                 artworkBadgeSource(
                     pageTrackVideoId = pageTrack?.videoId,
-                    isCurrentPage = isCurrentArtworkPage,
+                    isCurrentPage = pageShowsCurrentChrome,
                     isNeteaseSong = state.isNeteaseSong,
                 )?.let { badgeSource ->
                     SourceBadge(
@@ -525,7 +528,7 @@ internal fun ExpressiveArtworkCardPage(
                                 .align(Alignment.TopEnd)
                                 .padding(12.dp)
                                 .alpha(
-                                    if (!isCurrentArtworkPage || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
+                                    if (!pageShowsCurrentChrome || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
                                 ),
                     )
                 }

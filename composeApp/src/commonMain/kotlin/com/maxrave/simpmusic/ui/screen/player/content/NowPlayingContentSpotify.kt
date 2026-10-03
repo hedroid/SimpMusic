@@ -393,8 +393,13 @@ fun NowPlayingContentSpotify(
                     val pagerSettledHere by remember {
                         derivedStateOf { state.artworkPagerState.settledPage == page }
                     }
+                    // 页面的"当前语义"三处消费(调色板喂养/snap/角标与投影色)都认这个:手势
+                    // 滑到本页停稳的瞬间就翻,而不是等 currentOrderIndex(播放器转场确认,
+                    // 网易源 ~0.3-0.4s)。否则页面已静止、角标/投影色才"啪"地变化——手势
+                    // 切歌"封面跳一下"的残余(按键不闪:flip 先于滑入,角标随页面滑进来)。
+                    val pageShowsCurrentChrome = isCurrentArtworkPage || pagerSettledHere
                     LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
-                        if ((isCurrentArtworkPage || pagerSettledHere) && pageStartColor.value != Color.Black) {
+                        if (pageShowsCurrentChrome && pageStartColor.value != Color.Black) {
                             actions.onSnapPaletteColor(pageStartColor.value)
                         }
                     }
@@ -610,7 +615,7 @@ fun NowPlayingContentSpotify(
                                                 elevation = 3.dp,
                                                 shape = RoundedCornerShape(8.dp),
                                                 spotColor =
-                                                    if (isCurrentArtworkPage) {
+                                                    if (pageShowsCurrentChrome) {
                                                         state.spotShadowColor.copy(alpha = 0.6f)
                                                     } else {
                                                         Color.Black.copy(alpha = 0.4f)
@@ -624,7 +629,7 @@ fun NowPlayingContentSpotify(
                                     // 背景从此与封面上屏同步开始变色,不再"封面已切、背景半秒后才追"。
                                     PlayerPageArtwork(
                                         pageTrack = pageTrack,
-                                        isCurrentPage = isCurrentArtworkPage || pagerSettledHere,
+                                        isCurrentPage = pageShowsCurrentChrome,
                                         onArtworkLoaded = { bitmap ->
                                             palettePageScope.launch {
                                                 pagePaletteState.generate(bitmap)
@@ -644,7 +649,7 @@ fun NowPlayingContentSpotify(
                                     // 封面右上角的源品牌角标(网易/YTM);canvas/视频模式随封面一起隐去
                                     artworkBadgeSource(
                                         pageTrackVideoId = pageTrack?.videoId,
-                                        isCurrentPage = isCurrentArtworkPage,
+                                        isCurrentPage = pageShowsCurrentChrome,
                                         isNeteaseSong = state.isNeteaseSong,
                                     )?.let { badgeSource ->
                                         SourceBadge(
