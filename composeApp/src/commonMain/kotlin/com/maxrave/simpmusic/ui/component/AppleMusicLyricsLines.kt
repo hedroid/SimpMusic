@@ -48,7 +48,8 @@ import kotlin.math.abs
 // Expressed against the font size rather than in fixed dp, so changing the type size keeps the
 // depth of field proportional.
 private const val BLUR_PER_LINE_EM = 0.095f
-private const val BLUR_MAX_EM = 0.45f
+// (perf) The distance-scaled radius (per-line × N, capped) is gone: only the neighbour line
+// blurs now, so the cap has nothing left to cap.
 // AMLL's resolveOpacity returns a flat 1 for unsung lines, but the reference screenshots plainly
 // fade with distance — the line under the sung one sits at roughly half, the next at a third, and
 // beyond that they all but vanish. AMLL is reproducing Apple, not defining it, and on this point
@@ -182,10 +183,14 @@ fun Modifier.appleMusicLyricFocus(
         }
     val fontSizeDp = with(LocalDensity.current) { AppleMusicLyricFontSize.toDp() }
     val targetBlur: Dp =
-        if (!blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0) {
-            0.dp
-        } else {
-            fontSizeDp * (distance * BLUR_PER_LINE_EM).coerceAtMost(BLUR_MAX_EM)
+        when {
+            !blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0 -> 0.dp
+            // (perf) Only the line ONE step away keeps a light blur, ahead or behind; anything
+            // farther dims by alpha alone. The distance-scaled radius put a RenderEffect blur
+            // layer on EVERY visible line and re-animated each on every line change — two light
+            // layers read the same on a page whose far lines already sit at a quarter alpha.
+            abs(distanceFromCurrent) > 1 -> 0.dp
+            else -> fontSizeDp * BLUR_PER_LINE_EM
         }
     val targetAlpha =
         when {
