@@ -67,6 +67,8 @@
     <string name="removed_download">移除下載</string>
     <string name="remove_download_title">移除下載？</string>
     <string name="remove_download_message">已下載的歌曲將被刪除，可隨時重新下載。</string>
+    <string name="delete_video_title">刪除影片？</string>
+    <string name="delete_video_message">將刪除已下載的影片檔案，你可以隨時重新下載。</string>
     <string name="cancel_download_title">取消下載？</string>
     <string name="cancel_download_message">將停止下載並刪除未完成的部分，已完成的歌曲保持不變。</string>
     <string name="cancel_download_confirm">取消下載</string>

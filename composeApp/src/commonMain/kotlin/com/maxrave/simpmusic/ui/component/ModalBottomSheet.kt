@@ -273,6 +273,8 @@ import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
 import simpmusic.composeapp.generated.resources.download_this_song_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.delete_video_message
+import simpmusic.composeapp.generated.resources.delete_video_title
 import simpmusic.composeapp.generated.resources.download_video
 import simpmusic.composeapp.generated.resources.overwrite_download_message
 import simpmusic.composeapp.generated.resources.overwrite_download_title
@@ -1784,9 +1786,10 @@ fun NowPlayingBottomSheet(
     var showCancelDownloadDialog by remember { mutableStateOf(false) }
     var showRemoveDownloadDialog by remember { mutableStateOf(false) }
     var showDeleteDownloadDialog by remember { mutableStateOf(false) }
-    // 视频行专属:在途取消(只撤视频条目)/已下载重下(覆盖),与音频行的弹窗同文案不同事件
+    // 视频行专属:在途取消(只撤视频条目)/已下载重下(覆盖)/已落文件删除,与音频行的弹窗同文案不同事件
     var showCancelVideoDownloadDialog by remember { mutableStateOf(false) }
     var showRedownloadVideoDialog by remember { mutableStateOf(false) }
+    var showDeleteVideoDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -2027,6 +2030,29 @@ fun NowPlayingBottomSheet(
             text = {
                 Text(text = stringResource(Res.string.cancel_download_message), style = typo().bodyMedium)
             },
+        )
+    }
+
+    if (showDeleteVideoDialog) {
+        // 删除已下载视频:只删视频文件/条目,音频不受影响(视频歌本就不产音频)
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showDeleteVideoDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteVideoDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteVideoDownload)
+                }) {
+                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteVideoDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(text = stringResource(Res.string.delete_video_title), style = typo().labelSmall) },
+            text = { Text(text = stringResource(Res.string.delete_video_message), style = typo().bodyMedium) },
         )
     }
 
@@ -2288,7 +2314,12 @@ fun NowPlayingBottomSheet(
                     // 只按行自身 neteaseProgramId 判定——不能用队列哨兵:播客队列播放期间
                     // 打开普通歌曲的 sheet 会把歌曲的下载行一起误隐(实测踩坑)
                     val isPodcastEpisode = uiState.songUIState.neteaseProgramId != null
-                    if (!isPodcastEpisode) ActionButton(
+                    // 视频歌=真实视频类型(OMV/UGC;ATV=纯音频曲目):mv 不需要音频下载,
+                    // 整组只留"下载视频/删除视频"(2026-10-03 用户定)
+                    val isRealVideoSong =
+                        uiState.songUIState.videoType.isNotBlank() &&
+                            uiState.songUIState.videoType != "MUSIC_VIDEO_TYPE_ATV"
+                    if (!isPodcastEpisode && !isRealVideoSong) ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
                                 DownloadState.STATE_NOT_DOWNLOADED -> SimpIcons.DownloadForOfflineOutlined
@@ -2320,36 +2351,6 @@ fun NowPlayingBottomSheet(
                             DownloadState.STATE_PREPARING, DownloadState.STATE_DOWNLOADING -> showCancelDownloadDialog = true
                             DownloadState.STATE_DOWNLOADED -> showRemoveDownloadDialog = true
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
-                        }
-                    }
-                    // 删除下载(2026-10 用户反馈):独立成行——"下载"行对已下载歌是"重新
-                    // 下载?"覆盖语义,真删除放这里(图标用 playlist_remove,不用垃圾桶)。
-                    // 下载中/准备中也显示(用户 2026-10-01:下载中的歌也要能从三点里删,
-                    // 原"下载"行的取消语义藏在状态文案里不可发现),确认走"取消下载?"弹窗
-                    // (文案准确:停止并清掉未完成部分);视频视角的行打开同一歌曲 sheet,
-                    // 音频先完成的视频在途条目走 STATE_DOWNLOADED 分支本就有此行。
-                    // 播客行不显示(入口随"下载"一并移除)。
-                    // 播放页入口(song=null)不显示(2026-10-03 用户定:播放页三点隐藏删除
-                    // 下载,删除走下载管理页);列表歌曲菜单保留
-                    if (!isPodcastEpisode && song != null) {
-                        when (uiState.songUIState.downloadState) {
-                            DownloadState.STATE_DOWNLOADED,
-                            DownloadState.STATE_PREPARING,
-                            DownloadState.STATE_DOWNLOADING,
-                            -> {
-                                ActionButton(
-                                    icon = SimpIcons.PlaylistRemove,
-                                    text = Res.string.remove_download_title,
-                                ) {
-                                    if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
-                                        showDeleteDownloadDialog = true
-                                    } else {
-                                        showCancelDownloadDialog = true
-                                    }
-                                }
-                            }
-
-                            else -> Unit
                         }
                     }
                     // 视频文件下载(2026-10 文件式,仅 YT 歌且真有视频流):merge mp4 落
@@ -2388,6 +2389,47 @@ fun NowPlayingBottomSheet(
                                 ) {
                                     viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
                                 }
+                        }
+                    }
+                    // 删除下载(2026-10 用户反馈):独立成行——"下载"行对已下载歌是"重新
+                    // 下载?"覆盖语义,真删除放这里(图标用 playlist_remove,不用垃圾桶)。
+                    // 下载中/准备中也显示(用户 2026-10-01:下载中的歌也要能从三点里删,
+                    // 原"下载"行的取消语义藏在状态文案里不可发现),确认走"取消下载?"弹窗
+                    // (文案准确:停止并清掉未完成部分)。播客行不显示(入口随"下载"一并移除)。
+                    // 播放页入口(song=null)不显示(2026-10-03 用户定:播放页三点隐藏删除
+                    // 下载,删除走下载管理页);列表歌曲菜单保留。
+                    // 位置在"下载视频"按钮之下(2026-10-03 用户定);视频歌=删除视频
+                    // (音频不下载,在途取消在视频行,这里只管已落文件)
+                    if (!isPodcastEpisode && song != null) {
+                        if (isRealVideoSong) {
+                            if (uiState.songUIState.downloadedVideoFilePath != null) {
+                                ActionButton(
+                                    icon = SimpIcons.PlaylistRemove,
+                                    text = Res.string.delete_video_title,
+                                ) {
+                                    showDeleteVideoDialog = true
+                                }
+                            }
+                        } else {
+                            when (uiState.songUIState.downloadState) {
+                                DownloadState.STATE_DOWNLOADED,
+                                DownloadState.STATE_PREPARING,
+                                DownloadState.STATE_DOWNLOADING,
+                                -> {
+                                    ActionButton(
+                                        icon = SimpIcons.PlaylistRemove,
+                                        text = Res.string.remove_download_title,
+                                    ) {
+                                        if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                                            showDeleteDownloadDialog = true
+                                        } else {
+                                            showCancelDownloadDialog = true
+                                        }
+                                    }
+                                }
+
+                                else -> Unit
+                            }
                         }
                     }
                     // 播客节目不进歌单(剧集不是歌)——隐藏(2026-09-29 用户定)

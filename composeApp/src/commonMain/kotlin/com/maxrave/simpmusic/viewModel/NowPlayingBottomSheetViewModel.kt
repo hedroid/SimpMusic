@@ -557,6 +557,12 @@ class NowPlayingBottomSheetViewModel(
                     makeToast(getString(Res.string.removed_download))
                 }
 
+                is NowPlayingBottomSheetUIEvent.DeleteVideoDownload -> {
+                    // 删除已下载视频(只删视频文件+条目;视频歌本就不产音频)
+                    downloadUtils.removeVideoDownload(songUIState.videoId)
+                    makeToast(getString(Res.string.removed_download))
+                }
+
                 is NowPlayingBottomSheetUIEvent.DeleteDownload -> {
                     // 显式删除下载(2026-10 用户反馈:sheet 里"下载"保持三态,删除独立成行):
                     // 文件式删文件+Room,旧缓存条目引擎内分流;容器先降级防 watcher 重排队
@@ -727,6 +733,9 @@ sealed class NowPlayingBottomSheetUIEvent {
 
     /** 取消视频下载(只撤视频条目,音频任务/已落文件不动) */
     data object CancelVideoDownload : NowPlayingBottomSheetUIEvent()
+
+    /** 删除已下载视频(只删视频文件+条目) */
+    data object DeleteVideoDownload : NowPlayingBottomSheetUIEvent()
 
     /** 删除已下载的文件(独立于下载行的覆盖语义;仅已下载的歌显示入口) */
     data object DeleteDownload : NowPlayingBottomSheetUIEvent()

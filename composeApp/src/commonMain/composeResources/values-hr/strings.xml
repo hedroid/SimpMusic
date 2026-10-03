@@ -840,4 +840,6 @@
     <string name="month_full_oct">October</string>
     <string name="month_full_nov">Nevember</string>
     <string name="month_full_dec">December</string>
+    <string name="delete_video_title">Izbrisati video?</string>
+    <string name="delete_video_message">Preuzeta video datoteka bit će uklonjena. Možete je ponovno preuzeti u svakom trenutku.</string>
 </resources>

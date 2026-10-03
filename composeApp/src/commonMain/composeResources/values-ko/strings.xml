@@ -48,6 +48,8 @@
     <string name="removed_download">다운로드 제거 완료</string>
     <string name="remove_download_title">다운로드를 삭제할까요?</string>
     <string name="remove_download_message">다운로드한 곡이 삭제됩니다. 언제든지 다시 다운로드할 수 있습니다.</string>
+    <string name="delete_video_title">동영상을 삭제할까요?</string>
+    <string name="delete_video_message">다운로드한 동영상 파일이 삭제됩니다. 언제든지 다시 다운로드할 수 있습니다.</string>
     <string name="cancel_download_title">다운로드를 취소할까요?</string>
     <string name="cancel_download_message">다운로드를 중지하고 완료되지 않은 부분을 삭제합니다. 완료된 곡은 유지됩니다.</string>
     <string name="cancel_download_confirm">다운로드 취소</string>

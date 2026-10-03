@@ -885,4 +885,6 @@
     <string name="login_sync_failed">Något gick fel. Försök igen.</string>
     <string name="modified_build_title">Inofficiell app</string>
     <string name="modified_build_message">Du använder en inofficiell kopia av SimpMusic som har ändrats eller paketerats om av någon annan. Den kan inte användas. Hämta den officiella versionen från simpmusic.org.</string>
+    <string name="delete_video_title">Ta bort videon?</string>
+    <string name="delete_video_message">Den nedladdade videofilen tas bort. Du kan ladda ner den igen när som helst.</string>
 </resources>
