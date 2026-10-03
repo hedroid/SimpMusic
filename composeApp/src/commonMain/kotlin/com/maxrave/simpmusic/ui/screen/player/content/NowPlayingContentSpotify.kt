@@ -380,14 +380,21 @@ fun NowPlayingContentSpotify(
                             }
                     }
 
-                    // (fix 滑切背景闪)本页翻成当前页的瞬间:壳层 startColor 先对齐本页按页
-                    // 渐变的现值(用户正看着的颜色)。否则 current 页按设计跳过 Layer 0,
-                    // 露出的壳层渐变还停在上一首歌的颜色,要等调色板重新生成后才从旧色
-                    // 动画过来——滑切瞬间背景"闪回旧色再变过去"。邻页预组合
-                    // (beyondViewportPageCount=1)时按页调色板早已就绪;远跳新建页尚未就绪
-                    // (仍为 Black)则跳过,保持旧行为,绝不把背景闪黑。
-                    LaunchedEffect(isCurrentArtworkPage, pageTrack?.videoId) {
-                        if (isCurrentArtworkPage && pageStartColor.value != Color.Black) {
+                    // (fix 滑切背景闪/追色平台段)壳层 startColor 对齐本页按页渐变现值的时机
+                    // 有两个,都不依赖 currentOrderIndex(它要等播放器转场确认,网易源
+                    // ~0.3-0.4s——那段时间壳层渐变停在上一首的颜色,Layer 0 一淡出就是
+                    // 一段旧色平台,读作"背景跳一下"):
+                    // ①用户滑到本页停稳(settledPage)那一刻——此时本页 Layer 0 顶在最上
+                    //   面,snap 到它自己的颜色在视觉上是零变化;flip 后 Layer 0 淡出,
+                    //   底下的壳层渐变已经就位,不存在平台段;
+                    // ②flip 成当前页(settled 时调色板还没落地的兜底;远跳新建页从种子色
+                    //   起步,snap 无害)。
+                    // 黑色守卫:按页色尚未就绪时不 snap,绝不把背景闪黑。
+                    val pagerSettledHere by remember {
+                        derivedStateOf { state.artworkPagerState.settledPage == page }
+                    }
+                    LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
+                        if ((isCurrentArtworkPage || pagerSettledHere) && pageStartColor.value != Color.Black) {
                             actions.onSnapPaletteColor(pageStartColor.value)
                         }
                     }
@@ -429,28 +436,42 @@ fun NowPlayingContentSpotify(
                         // ── Layer 0: per-page backdrop (adjacent pages only) ──
                         // Palette gradient (startColor → endColor) so the adjacent page never
                         // falls back to a flat dark void during a swipe.
-                        // The CURRENT page deliberately skips this layer so the existing
-                        // gradient / canvas on the Column stays visible.
-                        if (!isCurrentArtworkPage && pageTrack != null) {
-                            // Palette is fed by Layer 2's adjacent-thumbnail AsyncImage
-                            // (see below) so the gradient color stays consistent with
-                            // the bitmap actually painted for that page.
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors =
-                                                    listOf(
-                                                        pageStartColor.value,
-                                                        Color.Black,
-                                                    ),
-                                                start = state.gradientOffset.start,
-                                                end = state.gradientOffset.end,
+                        // The CURRENT page skips this layer so the existing gradient / canvas on
+                        // the Column stays visible — but the skip must FADE, not flip: the flip
+                        // lands in the same recomposition that turns the page current, while the
+                        // shell's snap/animation catches up a frame or two later, so a hard
+                        // skip exposed one-to-three frames of the shell gradient still holding
+                        // the OUTGOING track's colour — the "background flashes the old colour
+                        // on settle" that survived the first fix round. A 250ms fade-out keeps
+                        // the page's own colour on screen while the shell lands underneath it.
+                        if (pageTrack != null) {
+                            // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility
+                            // member otherwise shadows the top-level BoxScope overload.
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = !isCurrentArtworkPage,
+                                enter = fadeIn(animationSpec = tween(0)),
+                                exit = fadeOut(animationSpec = tween(PAGE_BACKDROP_FADE_MS)),
+                            ) {
+                                // Palette is fed by Layer 2's adjacent-thumbnail AsyncImage
+                                // (see below) so the gradient color stays consistent with
+                                // the bitmap actually painted for that page.
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors =
+                                                        listOf(
+                                                            pageStartColor.value,
+                                                            Color.Black,
+                                                        ),
+                                                    start = state.gradientOffset.start,
+                                                    end = state.gradientOffset.end,
+                                                ),
                                             ),
-                                        ),
-                            )
+                                )
+                            }
                         }
 
                         // ── Layer 1: fullscreen canvas backdrop (current track + canvas data) ──
@@ -597,12 +618,10 @@ fun NowPlayingContentSpotify(
                                                 ambientColor = Color.Transparent,
                                             ),
                                 ) {
-                                    // (fix 背景迟滞)滑到本页停稳(settledPage)即喂壳层调色板:
-                                    // 不等 currentOrderIndex(它要等播放器转场确认,网易源 ~0.4s)。
+                                    // (fix 背景迟滞)滑到本页停稳(settledPage)即喂壳层调色板
+                                    // (pagerSettledHere 已在上方 snap 钩子处定义):不等
+                                    // currentOrderIndex(它要等播放器转场确认,网易源 ~0.4s)。
                                     // 背景从此与封面上屏同步开始变色,不再"封面已切、背景半秒后才追"。
-                                    val pagerSettledHere by remember {
-                                        derivedStateOf { state.artworkPagerState.settledPage == page }
-                                    }
                                     PlayerPageArtwork(
                                         pageTrack = pageTrack,
                                         isCurrentPage = isCurrentArtworkPage || pagerSettledHere,
@@ -2144,3 +2163,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
         actions.onUIEvent(it)
     }
 }
+
+// 邻页渐变层在翻成当前页时的淡出时长:盖住壳层 startColor snap/动画追上来的 1-3 帧
+// (硬跳过会露出还停在上一首歌颜色的壳层渐变,即滑停瞬间"背景闪旧色")。
+private val PAGE_BACKDROP_FADE_MS = 250
