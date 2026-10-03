@@ -34,6 +34,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.memory.MemoryCache
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -169,6 +172,21 @@ fun App(
     onDismissDesktopNotificationPermissionDialog: (doNotShowAgain: Boolean) -> Unit = {},
     onOpenDesktopNotificationSettings: (doNotShowAgain: Boolean) -> Unit = {},
 ) {
+    // FM 高强度滑切压测的 OOM(2026-10-04,192MB 堆灌满)的位图侧配合修:coil 默认内存缓存
+    // =可用内存 25%(~48MB),播放页 1080 封面 hardware bitmap 不占 Java 堆但占 native,滑过
+    // 的每首歌都进缓存。钉到 ~10% 提前 LRU 驱逐,压住总内存与 GC 压力。Desktop 自带的工厂
+    // 与这里互不冲突:首设生效,两边配置一致性由同一处代码保证。
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader
+            .Builder(context)
+            .memoryCache {
+                MemoryCache
+                    .Builder()
+                    .maxSizePercent(context, 0.10)
+                    .build()
+            }
+            .build()
+    }
     val windowSize = currentWindowAdaptiveInfo().windowSizeClass
     val navController = rememberNavController()
     val isDesktopShell = getPlatform() == Platform.Desktop
