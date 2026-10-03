@@ -98,6 +98,7 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
+import com.maxrave.simpmusic.ui.screen.player.content.ArtworkPagerSnapAnimation
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentAppleMusic
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentM3Expressive
@@ -342,8 +343,8 @@ fun NowPlayingScreenContent(
     }
     // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
     // background and the centered square thumbnail in each page, so we don't need two
-    // pagers + state mirroring. 橡皮筋落位弹簧在各主题 HorizontalPager 的 flingBehavior
-    // (PagerDefaults.flingBehavior + ArtworkSnapSpring);跟歌的 scrollToPage 直跳不受影响。
+    // pagers + state mirroring. 手势落位参数只属于 flingBehavior；按钮切歌继续使用
+    // Pager 原生的程序化翻页节奏，避免为了修手势而让高频按钮操作变钝。
     val artworkPagerState =
         rememberPagerState(
             initialPage = currentOrderIndex.coerceAtLeast(0),
@@ -353,6 +354,33 @@ fun NowPlayingScreenContent(
     var isUserDraggingActive by remember { mutableStateOf(false) }
     // Whether a real finger-drag is waiting to be turned into a seek. See the latch below.
     var pendingUserSwipe by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentOrderIndex, nowPlayingVideoId, artworkQueue) {
+        Logger.w(
+            TAG,
+            "ARTWORK_PROBE model order=$currentOrderIndex player=${mediaPlayerHandler.currentOrderIndex()} " +
+                "video=$nowPlayingVideoId queue=${artworkQueue.map { it.videoId }} " +
+                "pager=${artworkPagerState.currentPage}/${artworkPagerState.settledPage}/${artworkPagerState.targetPage}",
+        )
+    }
+
+    LaunchedEffect(artworkPagerState) {
+        snapshotFlow {
+            listOf(
+                artworkPagerState.currentPage,
+                artworkPagerState.settledPage,
+                artworkPagerState.targetPage,
+                if (artworkPagerState.isScrollInProgress) 1 else 0,
+            )
+        }.distinctUntilChanged().collect { pager ->
+            Logger.w(
+                TAG,
+                "ARTWORK_PROBE pager current=${pager[0]} settled=${pager[1]} target=${pager[2]} " +
+                    "scroll=${pager[3]} model=$currentOrderIndex player=${mediaPlayerHandler.currentOrderIndex()} " +
+                    "drag=$isUserDraggingActive fromPlayer=$isAnimatingFromPlayer pending=$pendingUserSwipe",
+            )
+        }
+    }
 
     // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
     // by the outer Modifier.scrollable on the Column) and programmatic
@@ -375,19 +403,28 @@ fun NowPlayingScreenContent(
 
     // ① Player → Pager: follow track changes.
     //
-    // Deliberately a SNAP (scrollToPage), never animateScrollToPage: the rest of the player
-    // (title/artist) switches to the new track the moment the transition fires, so a sliding
-    // pager keeps the OLD artwork visible for the duration of the sweep — and sweeps across
-    // every page in between when the jump is far (radio appends, shuffle). Both read as
-    // "the previous song's cover flashes". The cover must change in the same frame as the
-    // text. User-swipe page turning is untouched — that gesture owns its own animation.
+    // 直接操控 + 单次落位（用户 2026-10-04 定调）：拖动归手指，松手后落位只走一次；播放器
+    // 切歌回调在这里只许"确认"——targetPage/settledPage 已在目标页时绝不发 scroll 指令。
+    // 第二次位移（手势切歌封面"来回一下"）就是本 effect 在落位窗口内被播放器回调再次触发
+    // 造成的：旧守卫读的 currentPage 在快照调度下滞后于落位动画，一拍没对齐就重新接管。
+    // 只有 Pager 完全不在目标页（按钮切歌/队列重排/灰歌 SKIP 跳页）才由这里接管：相邻页走
+    // 与手势落位同一条无过冲曲线（ArtworkPagerSnapAnimation，共用 flingBehavior 的落位），
+    // 非相邻跳转 snap 直跳，避免扫过几十张无关封面。
     // Keyed on the track ALONE for the re-entrancy reasons documented below.
     LaunchedEffect(currentOrderIndex) {
         val target = currentOrderIndex
+        val pagerOnTarget =
+            artworkPagerState.targetPage == target || artworkPagerState.settledPage == target
+        Logger.w(
+            TAG,
+            "ARTWORK_PROBE playerToPager target=$target current=${artworkPagerState.currentPage} " +
+                "settled=${artworkPagerState.settledPage} targetPage=${artworkPagerState.targetPage} " +
+                "onTarget=$pagerOnTarget drag=$isUserDraggingActive",
+        )
+        if (pagerOnTarget) return@LaunchedEffect
         if (!isUserDraggingActive &&
             artworkQueue.isNotEmpty() &&
-            target in 0 until artworkQueue.size &&
-            target != artworkPagerState.currentPage
+            target in 0 until artworkQueue.size
         ) {
             isAnimatingFromPlayer = true
             try {
@@ -396,7 +433,10 @@ fun NowPlayingScreenContent(
                 // current track's index by dozens without changing the track, and animating that
                 // flings the pager through dozens of covers to land on the same song.
                 if (abs(target - artworkPagerState.currentPage) <= 1) {
-                    artworkPagerState.animateScrollToPage(target)
+                    artworkPagerState.animateScrollToPage(
+                        target,
+                        animationSpec = ArtworkPagerSnapAnimation,
+                    )
                 } else {
                     artworkPagerState.scrollToPage(target)
                 }
@@ -429,6 +469,11 @@ fun NowPlayingScreenContent(
         snapshotFlow { artworkPagerState.settledPage }
             .distinctUntilChanged()
             .collect { settled ->
+                Logger.w(
+                    TAG,
+                    "ARTWORK_PROBE pagerSettled=$settled model=$latestOrderIndex " +
+                        "fromPlayer=$isAnimatingFromPlayer pending=$pendingUserSwipe",
+                )
                 if (isAnimatingFromPlayer) return@collect
                 // The seek is a response to a SWIPE, so there must have been one. This is what
                 // stops the Apple Music queue from being overruled: tapping a row seeks correctly,
@@ -766,6 +811,7 @@ fun NowPlayingScreenContent(
             artworkPageKeys = artworkPageKeys,
             currentOrderIndex = currentOrderIndex,
             artworkPagerState = artworkPagerState,
+            artworkMotionInProgress = isAnimatingFromPlayer || artworkPagerState.isScrollInProgress,
             startColor = startColor,
             endColor = endColor,
             spotShadowColor = spotShadowColor,

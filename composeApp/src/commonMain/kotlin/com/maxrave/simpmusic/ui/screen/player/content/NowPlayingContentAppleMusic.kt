@@ -454,8 +454,10 @@ private fun AppleMusicMainView(
         if (meshPage) AppleMusicMeshBackdrop(mesh = mesh, seam = meshSeam)
 
         // The band under the status bar and the grabber, where a bright or busy sleeve drowns their
-        // white glyphs: blurred (TopBandBlur, inside each page so it moves with it) and darkened
-        // (the wash below). Android only — Desktop has neither, and its dismiss button is glass.
+        // white glyphs: darkened by the wash below. The blurred copy (TopBandBlur) now lives only
+        // inside the animated-artwork frame, whose clip still it reuses — the static page's own copy
+        // was dropped when pages were reduced to moving static covers only (nothing re-requests art
+        // mid-motion). Android only — Desktop has neither, and its dismiss button is glass.
         val statusBarHeight = with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() }
         val topBand =
             if (meshPage && getPlatform() == Platform.Android) statusBarHeight + TOP_BAND_STRIP else 0.dp
@@ -466,7 +468,7 @@ private fun AppleMusicMainView(
             beyondViewportPageCount = 1,
             userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
             // 橡皮筋落位+fling 限一页(见 rememberArtworkPagerFlingBehavior)。这里此前漏接:
-            // ArtworkSnapSpring 的注释宣称三主题共用,AM 实际一直是 pager 默认 fling —— 按
+            // ArtworkPagerSnapAnimation 的注释宣称三主题共用,AM 实际一直是 pager 默认 fling —— 按
             // velocity 惯性选目标页,快甩飞过 2-3 页再弹回,扫过页的未加载封面一帧灰闪
             // (2026-10-03 手势滑切封面闪的主根因之一)。
             flingBehavior = rememberArtworkPagerFlingBehavior(state.artworkPagerState),
@@ -952,8 +954,12 @@ private fun AppleMusicArtworkPage(
 ) {
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentPage = page == state.currentOrderIndex
-    val pageShowsFullscreen = isCurrentPage && (fullscreenCanvas || isVideoBackdrop)
-    val pageShowsClip = isCurrentPage && animatedArtwork != null
+    // 翻页期间只移动静态封面。Surface/动态封面不参与 Pager 运动，避免播放器回调切换
+    // currentOrderIndex 时这些重层在半途中拆装，制造看起来像封面闪烁的帧。
+    val pageShowsFullscreen =
+        !state.artworkMotionInProgress && isCurrentPage && (fullscreenCanvas || isVideoBackdrop)
+    val pageShowsClip =
+        !state.artworkMotionInProgress && isCurrentPage && animatedArtwork != null
     // How much of the artwork dissolves into the page: BitChord's 42% of the frame, on a
     // smoothstep curve (appleMusicVerticalFadeEdges), so there is no line where the fade starts.
     val artworkFade = artworkHeight * ARTWORK_FADE_FRACTION
@@ -972,20 +978,6 @@ private fun AppleMusicArtworkPage(
         // covered by a colour overlay, which had to land on exactly the page's colour at that Y
         // and drew a hard line whenever it drifted.
         val coverAlpha = if (pageShowsFullscreen) 0f else 1f - clipAlpha
-        val pageUrl = remember(pageTrack?.videoId) { pageTrack.playerArtworkUrl() }
-        // The top band's blurred copy reads the same URL at the same explicit size as
-        // PlayerPageArtwork's request, so it shares the decoded entry instead of a second fetch.
-        val platformContext = LocalPlatformContext.current
-        val bandRequest =
-            remember(pageUrl) {
-                ImageRequest
-                    .Builder(platformContext)
-                    .data(pageUrl)
-                    .diskCachePolicy(CachePolicy.ENABLED)
-                    .diskCacheKey(pageUrl)
-                    .size(1080)
-                    .build()
-            }
         Box(
             modifier =
                 Modifier
@@ -993,14 +985,16 @@ private fun AppleMusicArtworkPage(
                     .fillMaxWidth()
                     .height(artworkHeight),
         ) {
-            // (fix 背景迟滞)喂养身份="当前页 **或** 用户已滑到本页停稳(settledPage)":mesh
-            // 与调色板在滑停瞬间就开始换色,不等 currentOrderIndex(要等播放器转场确认)。
+            // Pager 与播放器都确认同一页后再提交当前页。按钮与手势的先后顺序相反；
+            // 双条件避免手势落位后先切 mesh/调色板、播放器回调后再切一次。
             val pagerSettledHere by remember {
                 derivedStateOf { state.artworkPagerState.settledPage == page }
             }
             PlayerPageArtwork(
                 pageTrack = pageTrack,
-                isCurrentPage = isCurrentPage || pagerSettledHere,
+                isCurrentPage = pagerSettledHere && isCurrentPage,
+                isSettledPage = pagerSettledHere,
+                isPagerMoving = state.artworkMotionInProgress,
                 // Feeds the VM palette (and, at the flip, the page's mesh input — bitmap and seed
                 // handed over together, see AppleMusicMeshInput) with the already-decoded bitmap.
                 onCurrentArtworkLoaded = { bitmap ->
@@ -1013,7 +1007,6 @@ private fun AppleMusicArtworkPage(
                         .alpha(coverAlpha)
                         .appleMusicVerticalFadeEdges(topFade = 0.dp, bottomFade = artworkFade),
             )
-            TopBandBlur(model = bandRequest, solidTo = topBandSolid, fadeTo = topBand, modifier = Modifier.alpha(coverAlpha))
         }
         if (isCurrentPage) {
             if (pageShowsClip && animatedArtwork != null) {

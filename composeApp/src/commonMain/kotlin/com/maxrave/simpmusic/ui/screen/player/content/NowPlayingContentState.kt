@@ -1,9 +1,11 @@
 package com.maxrave.simpmusic.ui.screen.player.content
 
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector4D
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.TargetedFlingBehavior
 import androidx.compose.foundation.pager.PagerDefaults
@@ -61,15 +63,21 @@ internal fun NowPlayingScreenData.LyricsData?.canVote(): Boolean {
 internal val PlayerBackdropColor = Color(0xFF121212)
 
 /**
- * 封面 pager 的落位弹簧(用户 2026-09-24 要求"橡皮筋效果更强"):中低刚度+可见回弹,
- * 松手后页面冲过头再弹回来 —— "拉断橡皮筋"的弹性落位感。默认 spring(无回弹)读作
- * 平移到位,没有弹的感觉。三主题的 pager 落位共用它(shell 的 snapAnimationSpec +
- * 各 HorizontalPager 的 flingBehavior);播放器跟歌的 scrollToPage 是直跳,不经此弹簧。
+ * 封面 pager 的统一落位曲线。这里刻意不用 spring：手势松开时 Pager 会把横向速度
+ * 传给弹簧，即使临界阻尼也可能先越过目标再反向修正，表现为新封面左右跳一次。
+ * 200ms 强 ease-out 严格单向收敛；拖动阶段仍由手指 1:1 控制，仅松手后的剩余距离走它。
  */
+internal val ArtworkPagerSnapAnimation: AnimationSpec<Float> =
+    tween(
+        durationMillis = 200,
+        easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f),
+    )
+
+/** 迷你播放条原有的拉断回弹；与全屏封面 Pager 的单向吸附刻意分离。 */
 internal val ArtworkSnapSpring: AnimationSpec<Float> =
     spring(
-        dampingRatio = 0.38f, // MediumBouncy(0.5)弹幅约 12px 偏含蓄;0.38 弹感明显(用户点名"更强")
-        stiffness = 700f, // 落位 ~250ms:弹得干脆,不拖沓
+        dampingRatio = 0.38f,
+        stiffness = 700f,
     )
 
 /**
@@ -77,7 +85,7 @@ internal val ArtworkSnapSpring: AnimationSpec<Float> =
  * 默认 fling 按 velocity 惯性选目标页,一次快甩会飞过 2-3 页再被落位弹簧拽回来——
  * 途中扫过的页面若封面尚未加载,一帧 holder 灰渐变就"啪"地划过屏幕(手势滑切
  * "封面闪一下"的真凶,2026-10-03 录帧+探针实证:Loading 灰帧恰在越页窗口出现);
- * 即便都已加载,封面飞过头再弹回也读作"跳"。夹到 1 页 = 一次手势一页,
+ * 即便都已加载,跨多页也读作"跳"。夹到 1 页 = 一次手势一页,
  * Spotify/YTM 同款手感。按上一首/下一首不走 fling,天然不受影响。
  */
 @Composable
@@ -85,7 +93,7 @@ internal fun rememberArtworkPagerFlingBehavior(state: PagerState): TargetedFling
     PagerDefaults.flingBehavior(
         state = state,
         pagerSnapDistance = PagerSnapDistance.atMost(1),
-        snapAnimationSpec = ArtworkSnapSpring,
+        snapAnimationSpec = ArtworkPagerSnapAnimation,
     )
 
 private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")
@@ -175,6 +183,8 @@ class NowPlayingContentState(
     val artworkPageKeys: List<String> = emptyList(),
     val currentOrderIndex: Int,
     val artworkPagerState: PagerState,
+    /** 手势拖动、惯性落位或按钮触发的程序化翻页期间均为 true；封面据此锁住可见位图。 */
+    val artworkMotionInProgress: Boolean,
     val startColor: Animatable<Color, AnimationVector4D>,
     val endColor: Animatable<Color, AnimationVector4D>,
     val spotShadowColor: Color,

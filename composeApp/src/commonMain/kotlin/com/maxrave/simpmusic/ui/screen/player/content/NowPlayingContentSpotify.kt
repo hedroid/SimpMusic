@@ -346,7 +346,10 @@ fun NowPlayingContentSpotify(
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex
-                    val pageHasCanvas = isCurrentArtworkPage && state.screenData.canvasData != null
+                    val pageHasCanvas =
+                        !state.artworkMotionInProgress &&
+                            isCurrentArtworkPage &&
+                            state.screenData.canvasData != null
 
                     // Per-page palette state for the gradient backdrop.
                     // The bitmap is fed in by Layer 2's adjacent-thumbnail AsyncImage
@@ -388,11 +391,11 @@ fun NowPlayingContentSpotify(
                     val pagerSettledHere by remember {
                         derivedStateOf { state.artworkPagerState.settledPage == page }
                     }
-                    // 页面的"当前语义"三处消费(调色板喂养/snap/角标与投影色)都认这个:手势
-                    // 滑到本页停稳的瞬间就翻,而不是等 currentOrderIndex(播放器转场确认,
-                    // 网易源 ~0.3-0.4s)。否则页面已静止、角标/投影色才"啪"地变化——手势
-                    // 切歌"封面跳一下"的残余(按键不闪:flip 先于滑入,角标随页面滑进来)。
-                    val pageShowsCurrentChrome = isCurrentArtworkPage || pagerSettledHere
+                    // 只有 Pager 已落位、播放器也确认切到同一首时，才提交“当前页”状态。
+                    // 按钮路径是播放器先变，手势路径是 Pager 先落位；只认任意一侧都会
+                    // 让两条路径中的一条提前切调色板/角标，随后另一侧回调时再切一次。
+                    // AND 让过渡期间没有页做状态提升，只移动完整的静态页面。
+                    val pageShowsCurrentChrome = pagerSettledHere && isCurrentArtworkPage
                     LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
                         if (pageShowsCurrentChrome && pageStartColor.value != Color.Black) {
                             actions.onSnapPaletteColor(pageStartColor.value)
@@ -448,7 +451,7 @@ fun NowPlayingContentSpotify(
                             // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility
                             // member otherwise shadows the top-level BoxScope overload.
                             androidx.compose.animation.AnimatedVisibility(
-                                visible = !isCurrentArtworkPage,
+                                visible = !pageShowsCurrentChrome,
                                 enter = fadeIn(animationSpec = tween(0)),
                                 exit = fadeOut(animationSpec = tween(PAGE_BACKDROP_FADE_MS)),
                             ) {
@@ -597,7 +600,8 @@ fun NowPlayingContentSpotify(
                                 val palettePageScope = rememberCoroutineScope()
                                 val pageIsVideoTrack = pageTrack.playerArtworkIsVideo()
                                 val pageHidesArtwork =
-                                    isCurrentArtworkPage &&
+                                    !state.artworkMotionInProgress &&
+                                        isCurrentArtworkPage &&
                                         state.screenData.isVideo &&
                                         state.shouldShowVideo
                                 Box(
@@ -618,13 +622,12 @@ fun NowPlayingContentSpotify(
                                                 ambientColor = Color.Transparent,
                                             ),
                                 ) {
-                                    // (fix 背景迟滞)滑到本页停稳(settledPage)即喂壳层调色板
-                                    // (pagerSettledHere 已在上方 snap 钩子处定义):不等
-                                    // currentOrderIndex(它要等播放器转场确认,网易源 ~0.4s)。
-                                    // 背景从此与封面上屏同步开始变色,不再"封面已切、背景半秒后才追"。
+                                    // 只在 Pager 唯一落位页向壳层喂色，不跟播放器索引竞速。
                                     PlayerPageArtwork(
                                         pageTrack = pageTrack,
                                         isCurrentPage = pageShowsCurrentChrome,
+                                        isSettledPage = pagerSettledHere,
+                                        isPagerMoving = state.artworkMotionInProgress,
                                         onArtworkLoaded = { bitmap ->
                                             palettePageScope.launch {
                                                 pagePaletteState.generate(bitmap)

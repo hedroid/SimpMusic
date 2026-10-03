@@ -173,12 +173,25 @@ internal fun ExpressiveArtworkCardPage(
     val colorScheme = MaterialTheme.colorScheme
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentArtworkPage = page == state.currentOrderIndex
-    val pageHasCanvas = isCurrentArtworkPage && state.screenData.canvasData != null
+    val pageHasCanvas =
+        !state.artworkMotionInProgress &&
+            isCurrentArtworkPage &&
+            state.screenData.canvasData != null
     // While a video plays, the card itself takes the video's shape — no letterbox bands inside a
     // square card — fitted into a slot no taller than the square card a song gets, so a tall video
     // narrows the card instead of pushing the page past the fold. Every page shares the slot so the
     // pager height matches the measuring spacer in the content column (expressiveCardSlotRatio).
-    val cardAspectRatio = if (state.screenData.isVideo && state.shouldShowVideo) state.videoAspectRatio else 1f
+    val pageArtworkRatio = if (pageTrack.playerArtworkIsVideo()) 16f / 9f else 1f
+    val cardAspectRatio =
+        if (!state.artworkMotionInProgress &&
+            isCurrentArtworkPage &&
+            state.screenData.isVideo &&
+            state.shouldShowVideo
+        ) {
+            state.videoAspectRatio
+        } else {
+            pageArtworkRatio
+        }
 
     Box(
         contentAlignment = Alignment.Center,
@@ -318,18 +331,18 @@ internal fun ExpressiveArtworkCardPage(
                 // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
                 // "灰占位→crossfade 重绘"。卡片在 canvas/视频下保持组合(alpha 0),调色板
                 // 照常馈送(翻转时用已解码位图补发),与旧 live 分支同一契约。
-                // (fix 背景迟滞)喂养身份="当前页 **或** 用户已滑到本页停稳(settledPage)":
-                // 不等 currentOrderIndex(要等播放器转场确认,网易源 ~0.4s),背景与封面
-                // 同步开始变色,不再"封面已切、背景半秒后才追上来"。
+                // 背景/角标/调色板的视觉当前页只认 Pager 的 settledPage。
                 val pagerSettledHere by remember {
                     derivedStateOf { state.artworkPagerState.settledPage == page }
                 }
-                // 角标/喂养共用的"当前语义":手势停稳即翻(不等转场确认),否则页面静止后
-                // 角标才弹出=手势切歌"封面跳一下"(按键不闪:flip 先于滑入)。
-                val pageShowsCurrentChrome = isCurrentArtworkPage || pagerSettledHere
+                // Pager 与播放器都确认同一页后再提升为视觉当前页。按钮和手势的事件
+                // 到达顺序相反，单独依赖任一侧都会在交接窗口提前切一次页内状态。
+                val pageShowsCurrentChrome = pagerSettledHere && isCurrentArtworkPage
                 PlayerPageArtwork(
                     pageTrack = pageTrack,
                     isCurrentPage = pageShowsCurrentChrome,
+                    isSettledPage = pagerSettledHere,
+                    isPagerMoving = state.artworkMotionInProgress,
                     onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                     modifier =
                         Modifier
@@ -345,7 +358,8 @@ internal fun ExpressiveArtworkCardPage(
                             ).alpha(
                                 if (pageHasCanvas ||
                                     (
-                                        isCurrentArtworkPage &&
+                                        !state.artworkMotionInProgress &&
+                                            isCurrentArtworkPage &&
                                             state.screenData.isVideo &&
                                             state.shouldShowVideo
                                         )
