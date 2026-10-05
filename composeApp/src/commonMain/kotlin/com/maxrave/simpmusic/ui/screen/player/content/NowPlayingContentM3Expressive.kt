@@ -203,7 +203,6 @@ private fun NowPlayingM3ExpressiveLayout(
     val localDensity = LocalDensity.current
     val colorScheme = MaterialTheme.colorScheme
 
-    val isRepeatOne = state.controllerState.repeatState is RepeatState.One
 
     // Canvas mode fades the info block in and out. The shell's shared 500ms linear alpha exposes
     // a long half-blended phase in which container-backed buttons pick up the bright canvas
@@ -291,11 +290,10 @@ private fun NowPlayingM3ExpressiveLayout(
                     modifier =
                         Modifier
                             .height(screenInfo.hDP.dp)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .artworkDragPager(state, actions),
                     beyondViewportPageCount = 1,
-                    userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    // 橡皮筋落位+fling 限一页(见 rememberArtworkPagerFlingBehavior)
-                    flingBehavior = rememberArtworkPagerFlingBehavior(state.artworkPagerState),
+                    userScrollEnabled = false,
                     key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     ExpressiveArtworkCardPage(
@@ -410,7 +408,7 @@ private fun NowPlayingM3ExpressiveLayout(
 
                         // The artwork card is rendered by the pager above; reserve the same
                         // vertical space so the info layout keeps its Y position. Spacer has
-                        // no pointer input so pager swipes fall through. Its ratio MUST match
+                        // no pointer input so artwork swipes fall through. Its ratio MUST match
                         // the card's slot (the video's shape capped at square while a video
                         // plays, else square) or the fold math drifts from what the pager
                         // actually draws — hence the one shared expressiveCardSlotRatio().
@@ -698,11 +696,12 @@ internal fun ExpressiveTrackInfoRow(
                         (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
                         SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
+                modifier = Modifier.height(with(LocalDensity.current) { 27.sp.toDp() }),
                 label = "expressiveTitle",
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
-                // lineHeight 钉死防中英文行高差传导成整页弹跳(同 Classic 主题,见其注释)。
+                // 固定槽位隔离中英文 Text 测量差异,lineHeight 保持字行一致。
                 Text(
                     text = title,
                     style = typo().titleMedium.copy(lineHeight = 27.sp),
@@ -740,11 +739,11 @@ internal fun ExpressiveTrackInfoRow(
                             (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
                             SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(with(LocalDensity.current) { 20.sp.toDp() }),
                     label = "expressiveArtist",
                 ) { artist ->
                     // marquee 同上,超长省略号。
-                    // lineHeight 钉死同理:艺人名中英文测量行高不同,固定后同高。
+                    // 固定槽位隔离艺人名的字体回退测量差异。
                     Text(
                         text = artist,
                         style = typo().bodyMedium.copy(lineHeight = 20.sp),

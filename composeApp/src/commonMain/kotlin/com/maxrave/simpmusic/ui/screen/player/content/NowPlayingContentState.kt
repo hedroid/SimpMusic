@@ -3,28 +3,36 @@ package com.maxrave.simpmusic.ui.screen.player.content
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector4D
-import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.gestures.TargetedFlingBehavior
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.PagerSnapDistance
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maxrave.domain.data.entities.NewFormatEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
+import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
@@ -65,42 +73,84 @@ internal fun NowPlayingScreenData.LyricsData?.canVote(): Boolean {
 internal val PlayerBackdropColor = Color(0xFF121212)
 
 /**
- * 封面 Pager 的统一落位曲线。禁止 spring：Pager 会把松手速度传给它，即使是
- * 临界阻尼也可能越过目标后回拉。固定时长、单调的 tween 只从松手位置向目标页移动，
- * 不存在反向分量。与下面的高摩擦 decay 组合，彻底撤销旧版橡皮筋手感。
+ * Drag the Pager by exactly the consumed finger delta, capped at one neighbouring page. Pager's
+ * fling is disabled: release sends the player skip once and animates only the remaining distance
+ * with [ArtworkPagerSnapAnimation]. No velocity decay or spring can overshoot and pull the cover
+ * back. The shell keeps the visual track on the old page until both player and Pager agree.
  */
+@Composable
+internal fun Modifier.artworkDragPager(
+    state: NowPlayingContentState,
+    actions: NowPlayingContentActions,
+): Modifier {
+    val pager = state.artworkPagerState
+    val onUIEvent by rememberUpdatedState(actions.onUIEvent)
+    val onDragChanged by rememberUpdatedState(actions.onArtworkDragChanged)
+    val onSkipRequested by rememberUpdatedState(actions.onArtworkSkipRequested)
+    val enabled =
+        state.artworkQueue.isNotEmpty() &&
+            state.controllerState.repeatState !is RepeatState.One &&
+            (!state.artworkMotionInProgress || state.artworkDragInProgress)
+    val canNext = state.controllerState.isNextAvailable
+    val canPrevious = state.controllerState.isPreviousAvailable
+    val thresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
+    var startPage by remember(pager) { mutableIntStateOf(0) }
+    var dragPx by remember(pager) { mutableFloatStateOf(0f) }
+    val dragState = rememberDraggableState { delta ->
+        val pageWidth = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat()
+        if (pageWidth > 0f) {
+            val next = (dragPx + delta).coerceIn(
+                if (canNext) -pageWidth else 0f,
+                if (canPrevious) pageWidth else 0f,
+            )
+            val consumed = next - dragPx
+            dragPx = next
+            pager.dispatchRawDelta(-consumed)
+        }
+    }
+    return draggable(
+        state = dragState,
+        orientation = Orientation.Horizontal,
+        enabled = enabled,
+        onDragStarted = {
+            startPage = pager.settledPage
+            dragPx = 0f
+            onDragChanged(true)
+        },
+        onDragStopped = {
+            val target =
+                when {
+                    dragPx <= -thresholdPx && canNext -> startPage + 1
+                    dragPx >= thresholdPx && canPrevious -> startPage - 1
+                    else -> startPage
+                }.coerceIn(0, state.artworkQueue.lastIndex)
+            try {
+                if (target != startPage) {
+                    // Previous would restart the current song after a few seconds; a right drag
+                    // always means the previous track, as it did before this gesture rewrite.
+                    onSkipRequested(target)
+                    onUIEvent(if (target > startPage) UIEvent.Next else UIEvent.SkipToPrevious)
+                }
+                pager.animateScrollToPage(target, animationSpec = ArtworkPagerSnapAnimation)
+            } finally {
+                onDragChanged(false)
+            }
+        },
+    )
+}
+
+/** Monotonic page transition shared by transport buttons and artwork swipes. */
 internal val ArtworkPagerSnapAnimation: AnimationSpec<Float> =
     tween(
         durationMillis = 240,
         easing = LinearOutSlowInEasing,
     )
 
-/** 快速消掉 fling 速度，不让 Pager 先飞过目标页再返向吸附。 */
-private val ArtworkPagerDecayAnimation: DecayAnimationSpec<Float> =
-    exponentialDecay(frictionMultiplier = 8f)
-
 /** 迷你播放条原有的拉断回弹；与全屏封面 Pager 的单向吸附刻意分离。 */
 internal val ArtworkSnapSpring: AnimationSpec<Float> =
     spring(
         dampingRatio = 0.38f,
         stiffness = 700f,
-    )
-
-/**
- * 封面 pager 的统一 fling 行为。`PagerSnapDistance.atMost(1)` 是这里的主角:
- * 默认 fling 按 velocity 惯性选目标页,一次快甩会飞过 2-3 页再被落位弹簧拽回来——
- * 途中扫过的页面若封面尚未加载,一帧 holder 灰渐变就"啪"地划过屏幕(手势滑切
- * "封面闪一下"的真凶,2026-10-03 录帧+探针实证:Loading 灰帧恰在越页窗口出现);
- * 即便都已加载,跨多页也读作"跳"。夹到 1 页 = 一次手势一页,
- * Spotify/YTM 同款手感。按上一首/下一首不走 fling,天然不受影响。
- */
-@Composable
-internal fun rememberArtworkPagerFlingBehavior(state: PagerState): TargetedFlingBehavior =
-    PagerDefaults.flingBehavior(
-        state = state,
-        pagerSnapDistance = PagerSnapDistance.atMost(1),
-        decayAnimationSpec = ArtworkPagerDecayAnimation,
-        snapAnimationSpec = ArtworkPagerSnapAnimation,
     )
 
 private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")
@@ -192,7 +242,8 @@ class NowPlayingContentState(
     /** Pager 已经落稳、用户此刻实际看到的页面。文字和颜色只跟它走。 */
     val visualOrderIndex: Int,
     val artworkPagerState: PagerState,
-    /** 手势拖动、惯性落位或按钮触发的程序化翻页期间均为 true；封面据此锁住可见位图。 */
+    val artworkDragInProgress: Boolean,
+    /** 播放器触发的程序化翻页期间为 true；封面据此锁住可见位图。 */
     val artworkMotionInProgress: Boolean,
     val startColor: Animatable<Color, AnimationVector4D>,
     val endColor: Animatable<Color, AnimationVector4D>,
@@ -248,6 +299,8 @@ class NowPlayingContentState(
 @Stable
 class NowPlayingContentActions(
     val onUIEvent: (UIEvent) -> Unit,
+    val onArtworkDragChanged: (Boolean) -> Unit = {},
+    val onArtworkSkipRequested: (Int) -> Unit = {},
     val onSeekToQueueIndex: (Int) -> Unit,
     val onArtworkBitmap: (ImageBitmap) -> Unit,
     /**

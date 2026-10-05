@@ -340,71 +340,34 @@ fun NowPlayingScreenContent(
             )
         }
     }
-    // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
-    // background and the centered square thumbnail in each page, so we don't need two
-    // pagers + state mirroring. 手势落位参数只属于 flingBehavior；按钮切歌继续使用
-    // Pager 原生的程序化翻页节奏，避免为了修手势而让高频按钮操作变钝。
+    // One PagerState for artwork. A finger moves it directly; transport actions animate it.
     val artworkPagerState =
         rememberPagerState(
             initialPage = currentOrderIndex.coerceAtLeast(0),
             pageCount = { artworkQueue.size.coerceAtLeast(1) },
         )
-    // `PagerState.settledPage` changes to the target before the final snap animation has actually
-    // stopped. Keep a stricter visual commit index that advances only after scrolling is false;
-    // metadata/palette and the player seek must not steal frames from the cover's final approach.
+    // Commit metadata/palette only after the cover movement has stopped.
     var visualOrderIndex by remember { mutableIntStateOf(currentOrderIndex.coerceAtLeast(0)) }
     var isAnimatingFromPlayer by remember { mutableStateOf(false) }
-    var isUserDraggingActive by remember { mutableStateOf(false) }
-    // Whether a real finger-drag is waiting to be turned into a seek. See the latch below.
-    var pendingUserSwipe by remember { mutableStateOf(false) }
-    // Explicit ownership hand-off for gesture navigation. Once the pager settles, it owns the
-    // visual result and sends one seek to the player. The matching player transition consumes this
-    // token as an ACK; it must never issue another pager movement. External transitions (buttons,
-    // auto advance, queue taps) have no token and are the only events allowed to drive the pager.
-    var awaitingPagerSeekVideoId by remember { mutableStateOf<String?>(null) }
-
-    // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
-    // by the outer Modifier.scrollable on the Column) and programmatic
-    // `animateScrollToPage`. We disambiguate via `isAnimatingFromPlayer`, which we
-    // set explicitly around the player → pager animation (try/finally).
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow {
-            artworkPagerState.isScrollInProgress to isAnimatingFromPlayer
-        }.collect { (scrolling, animating) ->
-            isUserDraggingActive = scrolling && !animating
-            // Latched, and cleared only once a seek has been dispatched for it. settledPage can
-            // move for reasons that are NOT a swipe — the pager being composed for the first time,
-            // or re-composed after the Apple Music style spent a while on its Queue/Lyrics tab,
-            // where the pager does not exist at all and its settledPage stays frozen on the track
-            // that was playing when the user left MAIN. Without this latch, coming back from that
-            // tab replays a stale page as though it had just been swiped to.
-            if (isUserDraggingActive) pendingUserSwipe = true
+    var artworkDragInProgress by remember { mutableStateOf(false) }
+    // After release, the artwork is already headed for the requested page. Hold that destination
+    // until Media3 acknowledges the skip; otherwise its old index would animate the Pager backward.
+    var pendingArtworkSeek by remember { mutableStateOf<Pair<Int, String?>?>(null) }
+    LaunchedEffect(currentOrderIndex, nowPlayingVideoId, artworkDragInProgress, pendingArtworkSeek) {
+        if (artworkDragInProgress) return@LaunchedEffect
+        pendingArtworkSeek?.let { (requestedIndex, sourceVideoId) ->
+            when {
+                currentOrderIndex == requestedIndex || nowPlayingVideoId != sourceVideoId -> {
+                    pendingArtworkSeek = null
+                }
+                else -> return@LaunchedEffect
+            }
         }
-    }
-
-    // ① Player → Pager: follow track changes.
-    //
-    // Player → Pager. A gesture-originated transition is only an acknowledgement. Everything else
-    // is an external track change and may move the pager exactly once.
-    LaunchedEffect(currentOrderIndex, nowPlayingVideoId) {
         val target = currentOrderIndex
-        val awaitingVideoId = awaitingPagerSeekVideoId
-        if (awaitingVideoId != null && awaitingVideoId == nowPlayingVideoId) {
-            awaitingPagerSeekVideoId = null
-            return@LaunchedEffect
-        }
-        // The player moved somewhere other than the requested gesture page (failed item, queue
-        // mutation, remote control). Release gesture ownership and follow the actual player.
-        if (awaitingVideoId != null && awaitingVideoId != nowPlayingVideoId) {
-            awaitingPagerSeekVideoId = null
-        }
-        val pagerOnTarget =
-            artworkPagerState.targetPage == target || artworkPagerState.settledPage == target
-        if (pagerOnTarget) return@LaunchedEffect
-        if (!isUserDraggingActive &&
-            artworkQueue.isNotEmpty() &&
-            target in 0 until artworkQueue.size
-        ) {
+        // settledPage may still name the old song while an animation heads elsewhere. Only the
+        // current destination can suppress a new player transition (rapid reverse/next presses).
+        if (artworkPagerState.targetPage == target) return@LaunchedEffect
+        if (artworkQueue.isNotEmpty() && target in 0 until artworkQueue.size) {
             isAnimatingFromPlayer = true
             try {
                 // Animate only a neighbouring page — that is a track change, and the slide IS the
@@ -425,87 +388,27 @@ fun NowPlayingScreenContent(
         }
     }
 
-    // ② Pager → Player: seek when user settles on a different page.
-    // Adjacent (±1) → Next/Previous (preserves crossfade flow on Android).
-    // Far skip → playMediaItemInMediaSource (handles unshuffling internally).
-    //
-    // Keyed on artworkPagerState ALONE — deliberately NOT on currentOrderIndex/queue size, which
-    // are read through rememberUpdatedState instead. This effect exists to catch a user SWIPE, and
-    // the only thing that moves settledPage is the pager. Re-keying it on the track built a NEW
-    // snapshotFlow on every track change, and a new flow's FIRST emission is whatever settledPage
-    // happens to hold — distinctUntilChanged has no previous value to suppress it against — so a
-    // STALE page was dispatched as though the user had just swiped to it.
-    //
-    // That is what broke the Apple Music queue: its pager lives inside MAIN, so while QUEUE is on
-    // screen the pager is not composed at all and settledPage still points at the previous track.
-    // Tapping a row seeked correctly, the track changed, this effect was rebuilt, and it
-    // immediately read the stale page — computeSeekAction(previous, current) == Previous — which
-    // sent the player straight back to the song that had just been playing.
-    // AppleMusicQueueView already uses rememberUpdatedState for exactly this hazard (its offset).
-    val latestOrderIndex by rememberUpdatedState(currentOrderIndex)
-    val latestQueueSize by rememberUpdatedState(artworkQueue.size)
-    val latestArtworkQueue by rememberUpdatedState(artworkQueue)
-    LaunchedEffect(artworkPagerState) {
+    LaunchedEffect(pendingArtworkSeek) {
+        val expected = pendingArtworkSeek ?: return@LaunchedEffect
+        delay(3_000)
+        if (pendingArtworkSeek == expected) pendingArtworkSeek = null
+    }
+
+    // settledPage can update before the final motion frame. Keep the visual index on the old
+    // song until both the page is stationary and the player has reached that song.
+    LaunchedEffect(artworkPagerState, currentOrderIndex, artworkDragInProgress) {
         snapshotFlow {
             artworkPagerState.settledPage to artworkPagerState.isScrollInProgress
         }
             .distinctUntilChanged()
             .collect { (settled, scrolling) ->
-                // Compose publishes settledPage while the last part of the snap is still moving.
-                // Dispatching Media3 there makes its synchronous transition/data work drop those
-                // final frames, which looks exactly like the cover jumping sideways to the target.
-                if (scrolling) return@collect
-                visualOrderIndex = settled
-                if (isAnimatingFromPlayer) return@collect
-                // The seek is a response to a SWIPE, so there must have been one. This is what
-                // stops the Apple Music queue from being overruled: tapping a row seeks correctly,
-                // the track changes, and then this effect would otherwise notice the pager sitting
-                // on the old page and "correct" it right back.
-                if (!pendingUserSwipe) return@collect
-                pendingUserSwipe = false
-                val queueSize = latestQueueSize
-                val orderIndex = latestOrderIndex
-                if (queueSize == 0) return@collect
-                if (settled !in 0 until queueSize) return@collect
-                if (settled == orderIndex) return@collect
-
-                runCatching {
-                    // Set before dispatch: Media3 may publish the transition synchronously.
-                    awaitingPagerSeekVideoId = latestArtworkQueue.getOrNull(settled)?.videoId
-                    when (val action = computeSeekAction(settled, orderIndex)) {
-                        ArtworkSeekAction.Next -> {
-                            sharedViewModel.onUIEvent(UIEvent.Next)
-                        }
-                        // Use SkipToPrevious so a swipe always goes to the previous track —
-                        // UIEvent.Previous would seek to 0 of the current track once the
-                        // playhead has passed the 3-second mark.
-                        ArtworkSeekAction.Previous -> {
-                            sharedViewModel.onUIEvent(UIEvent.SkipToPrevious)
-                        }
-                        is ArtworkSeekAction.Skip -> {
-                            mediaPlayerHandler.playMediaItemInMediaSource(action.index)
-                        }
-                        ArtworkSeekAction.NoOp -> {
-                            awaitingPagerSeekVideoId = null
-                            Unit
-                        }
-                    }
-                }.onFailure { error ->
-                    awaitingPagerSeekVideoId = null
-                    Logger.w(TAG, "ArtworkPager seek failed: ${error.message}")
+                if (!scrolling && !artworkDragInProgress && settled == currentOrderIndex) {
+                    visualOrderIndex = settled
                 }
             }
     }
 
-    // Do not let a failed seek leave ownership latched forever. A normal transition consumes the
-    // token immediately; this path only runs for a player that never acknowledged the request.
-    LaunchedEffect(awaitingPagerSeekVideoId) {
-        val expected = awaitingPagerSeekVideoId ?: return@LaunchedEffect
-        delay(3_000)
-        if (awaitingPagerSeekVideoId == expected) awaitingPagerSeekVideoId = null
-    }
-
-    // ③ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
+    // Queue mutation guard — when queue shrinks below currentPage, scroll to last index
     // to avoid IndexOutOfBoundsException during recomposition.
     LaunchedEffect(artworkQueue.size) {
         if (artworkQueue.isNotEmpty() && artworkPagerState.currentPage >= artworkQueue.size) {
@@ -790,7 +693,10 @@ fun NowPlayingScreenContent(
             currentOrderIndex = currentOrderIndex,
             visualOrderIndex = visualOrderIndex,
             artworkPagerState = artworkPagerState,
-            artworkMotionInProgress = isAnimatingFromPlayer || artworkPagerState.isScrollInProgress,
+            artworkDragInProgress = artworkDragInProgress,
+            artworkMotionInProgress =
+                artworkDragInProgress || pendingArtworkSeek != null ||
+                    isAnimatingFromPlayer || artworkPagerState.isScrollInProgress,
             startColor = startColor,
             endColor = endColor,
             spotShadowColor = spotShadowColor,
@@ -817,6 +723,10 @@ fun NowPlayingScreenContent(
     val actions =
         NowPlayingContentActions(
             onUIEvent = { sharedViewModel.onUIEvent(it) },
+            onArtworkDragChanged = { artworkDragInProgress = it },
+            onArtworkSkipRequested = { target ->
+                pendingArtworkSeek = target to nowPlayingVideoId
+            },
             onSeekToQueueIndex = { index ->
                 mediaPlayerHandler.playMediaItemInMediaSource(index)
             },

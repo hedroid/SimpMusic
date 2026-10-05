@@ -115,7 +115,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.kmpalette.rememberPaletteState
 import com.maxrave.common.Config.MAIN_PLAYER
-import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.MediaPlayerView
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
@@ -219,7 +218,6 @@ fun NowPlayingContentSpotify(
     val localDensity = LocalDensity.current
     val uriHandler = LocalUriHandler.current
 
-    val isRepeatOne = state.controllerState.repeatState is RepeatState.One
 
     var showShareLyricsSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -332,18 +330,16 @@ fun NowPlayingContentSpotify(
                 // === Unified ArtworkPager (Spotify-style swipe) ===
                 // ONE HorizontalPager wraps both the fullscreen canvas backdrop AND the
                 // centered square thumbnail. Both layers slide together as a single page
-                // so when the user swipes during canvas mode, they see the next track's
-                // thumbnail enter and the canvas exit in lockstep.
+                // so a swipe during canvas mode uses the same page movement as the skip buttons.
                 HorizontalPager(
                     state = state.artworkPagerState,
                     modifier =
                         Modifier
                             .height(screenInfo.hDP.dp)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .artworkDragPager(state, actions),
                     beyondViewportPageCount = 1,
-                    userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    // 橡皮筋落位+fling 限一页(见 rememberArtworkPagerFlingBehavior)
-                    flingBehavior = rememberArtworkPagerFlingBehavior(state.artworkPagerState),
+                    userScrollEnabled = false,
                     key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
@@ -388,10 +384,8 @@ fun NowPlayingContentSpotify(
                     val pagerSettledHere by remember {
                         derivedStateOf { state.artworkPagerState.settledPage == page }
                     }
-                    // 只有 Pager 已落位、播放器也确认切到同一首时，才提交“当前页”状态。
-                    // 按钮路径是播放器先变，手势路径是 Pager 先落位；只认任意一侧都会
-                    // 让两条路径中的一条提前切调色板/角标，随后另一侧回调时再切一次。
-                    // AND 让过渡期间没有页做状态提升，只移动完整的静态页面。
+                    // 只有 Pager 落位且播放器确认同一首时才提交当前页状态。
+                    // 过渡期间只移动完整的静态页面。
                     val pageShowsCurrentChrome = pagerSettledHere && isVisualArtworkPage
                     LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
                         if (pageShowsCurrentChrome && pageStartColor.value != Color.Black) {
@@ -530,10 +524,11 @@ fun NowPlayingContentSpotify(
                         // adjacent pages always show the upcoming/previous track artwork.
                         Column(modifier = Modifier.fillMaxSize()) {
                             Spacer(modifier = Modifier.height(topAppBarHeightDp.dp))
+                            // This gap follows the measured info row. Animating its size turns a
+                            // one-pixel text measurement change into a visible spring bounce.
                             Spacer(
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(middleLayoutPaddingDp.dp)
                                         .fillMaxWidth(),
                             )
@@ -868,7 +863,6 @@ fun NowPlayingContentSpotify(
                             Spacer(
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(
                                             middleLayoutPaddingDp.dp,
                                         ).fillMaxWidth(),
@@ -877,7 +871,7 @@ fun NowPlayingContentSpotify(
                             // Artwork is rendered by the unified ArtworkPager above (which lives in the
                             // outer Box). Reserve the same vertical space here so the Info Layout below
                             // stays at its original Y position. Spacer has no pointer input so it does
-                            // not block the pager swipe gesture beneath it.
+                            // not block the artwork swipe detector beneath it.
                             Spacer(
                                 modifier =
                                     Modifier
@@ -902,7 +896,6 @@ fun NowPlayingContentSpotify(
                                 contentAlignment = Alignment.Center,
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(
                                             middleLayoutPaddingDp.dp,
                                         ).fillMaxWidth(),
@@ -1797,8 +1790,8 @@ internal fun NowPlayingTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 550ms crossfade 不同
-            // 步,读作"闪一下"。Spotify 同款上滑淡入淡出,过渡内文字各自带 marquee。
+            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 crossfade 不同
+            // 步,读作"闪一下"。标题在固定槽位内上滑淡入淡出。
             AnimatedContent(
                 targetState = state.displayTitle,
                 transitionSpec = {
@@ -1809,13 +1802,15 @@ internal fun NowPlayingTrackInfoRow(
                         (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
                         SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
+                // lineHeight alone does not fix Text's measured height when Android switches
+                // between Poppins and a CJK fallback. Keep the parent slot independent of text.
+                modifier = Modifier.height(with(LocalDensity.current) { 27.sp.toDp() }),
                 label = "nowPlayingTitle",
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里:Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把标题渲染成空白。
-                // lineHeight 必须钉死:typo 无 lineHeight 时 Text 高度由字体 metrics 决定,
-                // 英文(Poppins)与中文(CJK fallback)行高不同,切歌时标题区高度差会沿
-                // 布局传导成整页上下位移。固定后中英文同高,高度差源头根除。
+                // Keep a consistent line box inside the fixed title slot. Android may still
+                // report different Text bounds for Poppins and the CJK fallback.
                 Text(
                     text = title,
                     style = typo().titleMedium.copy(lineHeight = 27.sp),
@@ -1856,10 +1851,11 @@ internal fun NowPlayingTrackInfoRow(
                                 (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
                                 SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                         },
+                        modifier = Modifier.height(with(LocalDensity.current) { 20.sp.toDp() }),
                         label = "nowPlayingArtist",
                     ) { artist ->
                         // marquee 同样不进 AnimatedContent(见上方标题注释),超长用省略号。
-                        // lineHeight 钉死同理:艺人名中英文测量行高不同,固定后同高。
+                        // lineHeight 保持字行一致,外层固定槽位隔离字体回退的测量差异。
                         Text(
                             text = artist,
                             style = typo().bodyMedium.copy(lineHeight = 20.sp),
