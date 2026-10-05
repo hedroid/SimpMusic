@@ -82,6 +82,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -701,9 +702,10 @@ internal fun ExpressiveTrackInfoRow(
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                // lineHeight 钉死防中英文行高差传导成整页弹跳(同 Classic 主题,见其注释)。
                 Text(
                     text = title,
-                    style = typo().titleMedium,
+                    style = typo().titleMedium.copy(lineHeight = 27.sp),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -742,9 +744,10 @@ internal fun ExpressiveTrackInfoRow(
                     label = "expressiveArtist",
                 ) { artist ->
                     // marquee 同上,超长省略号。
+                    // lineHeight 钉死同理:艺人名中英文测量行高不同,固定后同高。
                     Text(
                         text = artist,
-                        style = typo().bodyMedium,
+                        style = typo().bodyMedium.copy(lineHeight = 20.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier =

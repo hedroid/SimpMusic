@@ -107,6 +107,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -951,18 +952,18 @@ fun NowPlayingContentSpotify(
 
                             // Info Layout
                             Box {
-                                Column(
-                                    Modifier
-                                        .alpha(state.controlLayoutAlpha)
-                                        .onGloballyPositioned {
-                                            infoLayoutHeightDp =
-                                                with(localDensity) {
-                                                    it.size.height
-                                                        .toDp()
-                                                        .value
-                                                        .toInt()
-                                                }
-                                        },
+                                    Column(
+                                        Modifier
+                                            .alpha(state.controlLayoutAlpha)
+                                            .onGloballyPositioned {
+                                                infoLayoutHeightDp =
+                                                    with(localDensity) {
+                                                        it.size.height
+                                                            .toDp()
+                                                            .value
+                                                            .toInt()
+                                                    }
+                                            },
                                 ) {
                                     NowPlayingTrackInfoRow(
                                         state = state,
@@ -1630,7 +1631,8 @@ fun NowPlayingContentSpotify(
                             ) {
                                 Text(
                                     text = state.displayTitle,
-                                    style = typo().bodyMedium,
+                                    // lineHeight 钉死防中英文行高差(见 NowPlayingTrackInfoRow 注释)。
+                                    style = typo().bodyMedium.copy(lineHeight = 20.sp),
                                     color = Color.White,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -1662,7 +1664,7 @@ fun NowPlayingContentSpotify(
                                     ) {
                                         Text(
                                             text = state.displayArtistName,
-                                            style = typo().bodySmall,
+                                            style = typo().bodySmall.copy(lineHeight = 16.sp),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                             modifier =
@@ -1811,9 +1813,12 @@ internal fun NowPlayingTrackInfoRow(
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里:Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把标题渲染成空白。
+                // lineHeight 必须钉死:typo 无 lineHeight 时 Text 高度由字体 metrics 决定,
+                // 英文(Poppins)与中文(CJK fallback)行高不同,切歌时标题区高度差会沿
+                // 布局传导成整页上下位移。固定后中英文同高,高度差源头根除。
                 Text(
                     text = title,
-                    style = typo().titleMedium,
+                    style = typo().titleMedium.copy(lineHeight = 27.sp),
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -1854,9 +1859,10 @@ internal fun NowPlayingTrackInfoRow(
                         label = "nowPlayingArtist",
                     ) { artist ->
                         // marquee 同样不进 AnimatedContent(见上方标题注释),超长用省略号。
+                        // lineHeight 钉死同理:艺人名中英文测量行高不同,固定后同高。
                         Text(
                             text = artist,
-                            style = typo().bodyMedium,
+                            style = typo().bodyMedium.copy(lineHeight = 20.sp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
