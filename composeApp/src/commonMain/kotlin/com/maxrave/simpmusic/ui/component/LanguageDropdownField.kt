@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.ui.icon.Check
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
@@ -93,6 +94,8 @@ fun LanguageDropdownField(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            // 弹出的菜单是独立 popup 窗口,不经弹窗上的触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             // The M3 default menu container sits below the AlertDialog's surface, which the
             // AMOLED dark scheme turns into a near-black slab floating on the dialog. Match
             // the dialog surface (surfaceContainerHigh) so the menu reads as part of it.

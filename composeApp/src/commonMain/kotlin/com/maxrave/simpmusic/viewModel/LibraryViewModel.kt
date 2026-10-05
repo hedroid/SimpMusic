@@ -173,6 +173,14 @@ class LibraryViewModel(
     private val _accountThumbnail: MutableStateFlow<String?> = MutableStateFlow(null)
     val accountThumbnail: StateFlow<String?> get() = _accountThumbnail.asStateFlow()
 
+    /** 当前音源(与 SharedViewModel 同一 DataStore 键的镜像):库页 chip 按源显隐(用户 2026-09-30) */
+    private val _selectedSource = MutableStateFlow("")
+    val selectedSource: StateFlow<String> get() = _selectedSource.asStateFlow()
+
+    /** 顶栏头像=当前音源登录账号的头像:网易源=云村账号,其它(含 YT)=Google 账号;未登录空串=隐藏 */
+    private val _sourceAccountThumbnail = MutableStateFlow("")
+    val sourceAccountThumbnail: StateFlow<String> get() = _sourceAccountThumbnail.asStateFlow()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val youtubeLoggedIn = dataStoreManager.loggedIn.mapLatest { it == DataStoreManager.TRUE }
 
@@ -230,6 +238,19 @@ class LibraryViewModel(
             dataStoreManager.getString("AccountName").collect { name ->
                 accountName = name.orEmpty()
             }
+        }
+        // 音源镜像 + 按源头像:chip 显隐与头像都跟着 selectedSource 走(用户 2026-09-30)
+        viewModelScope.launch {
+            dataStoreManager.selectedSource.collect { _selectedSource.value = it }
+        }
+        viewModelScope.launch {
+            combine(
+                dataStoreManager.selectedSource,
+                dataStoreManager.neteaseAccountThumbUrl,
+                dataStoreManager.getString("AccountThumbUrl"),
+            ) { source, neteaseThumb, ytThumb ->
+                if (source == MusicSource.NETEASE.name) neteaseThumb.trim() else (ytThumb ?: "").trim()
+            }.collect { _sourceAccountThumbnail.value = it }
         }
         // 库页本地回写:子页(艺人/歌单/播放页)写操作成功后原地更新分区,不触发网络刷新
         viewModelScope.launch {
@@ -292,27 +313,31 @@ class LibraryViewModel(
     }
 
     /**
-     * 库页默认落点:网易登录 → "您的网易云";否则 YT 登录 → YT 歌单;再不然 → 排行榜。
-     * ("您的库"chip 页已下线,旧持久化值/登出回落都改道到这里)
+     * 库页默认落点(用户 2026-09-30 定稿=chip 按源显隐后的第一个可见 chip):
+     * 网易源+网易登录 → "您的网易云";YT 源(默认)+YT 登录 → YT 歌单;都不满足 → 下载管理
+     * (唯一无条件可见的 chip)。源读取同样带 500ms 超时兜底(DataStore 首读竞态)。
      */
     private suspend fun defaultLibraryChip(): LibraryChipType {
-        // DataStore 首读偶发拿空(启动竞态):500ms 超时兜底,并把实际读值打进日志,下次
-        // 再落到排行榜就知道是哪个分支判的
         val netease = kotlinx.coroutines.withTimeoutOrNull(500) { dataStoreManager.neteaseCookie.first() } ?: ""
         val yt = kotlinx.coroutines.withTimeoutOrNull(500) { dataStoreManager.cookie.first() } ?: ""
+        val source =
+            kotlinx.coroutines.withTimeoutOrNull(500) { dataStoreManager.selectedSource.first() }
+                ?: MusicSource.YOUTUBE_MUSIC.name
+        val neteaseSide = source == MusicSource.NETEASE.name
         com.maxrave.logger.Logger.w(
             "LibraryVM",
-            "defaultLibraryChip: netease=${netease.length} yt=${yt.length} -> " +
+            "defaultLibraryChip: source=$source netease=${netease.length} yt=${yt.length} -> " +
                 when {
-                    netease.isNotEmpty() -> "NETEASE"
+                    neteaseSide && netease.isNotEmpty() -> "NETEASE"
+                    neteaseSide -> "DOWNLOADED(网易源未登录)"
                     yt.isNotEmpty() -> "YOUTUBE"
-                    else -> "CHART"
+                    else -> "DOWNLOADED"
                 },
         )
         return when {
-            netease.isNotEmpty() -> LibraryChipType.NETEASE_PLAYLIST
-            yt.isNotEmpty() -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
-            else -> LibraryChipType.CHART
+            neteaseSide && netease.isNotEmpty() -> LibraryChipType.NETEASE_PLAYLIST
+            !neteaseSide && yt.isNotEmpty() -> LibraryChipType.YOUTUBE_MUSIC_PLAYLIST
+            else -> LibraryChipType.DOWNLOADED_PLAYLIST
         }
     }
 

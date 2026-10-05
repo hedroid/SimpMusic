@@ -8,9 +8,9 @@ import com.maxrave.common.Config
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADED
+import com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING
 import com.maxrave.domain.data.entities.DownloadState.STATE_DOWNLOADING
 import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
-import com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.playlist.Author
@@ -38,11 +38,15 @@ import com.maxrave.simpmusic.viewModel.PlaylistUIState.Loading
 import com.maxrave.simpmusic.viewModel.PlaylistUIState.Success
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadRequest
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadSong
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -58,6 +62,8 @@ import kotlinx.coroutines.launch
 import org.koin.core.component.inject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.auto_created_by_youtube_music
+import simpmusic.composeapp.generated.resources.download_no_space
+import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.removed_from_playlist
 import simpmusic.composeapp.generated.resources.netease_action_failed
@@ -115,6 +121,34 @@ class PlaylistViewModel(
     val remoteSaved: StateFlow<Boolean?> = _remoteSaved
     private val _remoteSavePending = MutableStateFlow(false)
     val remoteSavePending: StateFlow<Boolean> = _remoteSavePending
+
+    /**
+     * 详情页顶栏收藏心是否该出现:自建歌单(YT=browse 响应可编辑包装+库页"创建的歌单"
+     * 分区导航参数双信号,网易=creatorId==uid)与红心歌单(YT Liked Music/网易"我喜欢的
+     * 音乐")没有"收藏进资料库"的语义,心隐藏。默认 true(fail-open):判定晚到时心迟一点
+     * 消失,不让收藏歌单的心迟迟不出现。
+     */
+    private val _favoriteAvailable = MutableStateFlow(true)
+    val favoriteAvailable: StateFlow<Boolean> = _favoriteAvailable
+
+    /** 从库页"创建的歌单/系统歌单"分区进入时为 true(nav 参数,不依赖网络) */
+    private var ownYouTubeNavHint = false
+
+    private fun refreshFavoriteAvailability(
+        id: String,
+        ownYouTube: Boolean,
+    ) {
+        if (id.toLongOrNull() != null) {
+            viewModelScope.launch {
+                val hidden =
+                    neteaseRepository.isNeteaseLikedPlaylist(id) ||
+                        neteaseRepository.isOwnNeteasePlaylist(id)
+                _favoriteAvailable.value = !hidden
+            }
+        } else {
+            _favoriteAvailable.value = !(ownYouTube || ownYouTubeNavHint)
+        }
+    }
 
     private var _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks
@@ -422,8 +456,26 @@ class PlaylistViewModel(
                                                         updatePlaylistDownloadState(id, STATE_DOWNLOADED)
                                                     }
                                                 }
-                                            }
-                                            downloadUtils.downloads.collectLatest { downloads ->
+                                                    }
+                                                    // 文件式完成口径(2026-10-02):转存成功即从 DownloadIndex
+                                                    // 清条目,downloads 流永远凑不齐"全部 COMPLETED",下方
+                                                    // count 翻转对新代下载不可达(整单下完按钮翻不了"已下载")
+                                                    // ——按 song 行兜底翻转(落地对账保证有文件的行=3):一次
+                                                    // 评估治"误置下载中"的卡死,持续收集让最后一首落地即翻态。
+                                                    // 行数须与队列等长,防缺行歌单误翻
+                                                    launch {
+                                                        songRepository.getSongsByListVideoId(tracks.toListVideoId()).collect { songs ->
+                                                            if (downloadState.value != STATE_DOWNLOADING) return@collect
+                                                            if (
+                                                                songs.size == tracks.size &&
+                                                                songs.all { it.downloadState == STATE_DOWNLOADED } &&
+                                                                tracks.none { downloadUtils.isAudioQueuedOrDownloading(it.videoId) }
+                                                            ) {
+                                                                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+                                                            }
+                                                        }
+                                                    }
+                                                    downloadUtils.downloads.collectLatest { downloads ->
                                                 // Same guard as the callback above: a playlist
                                                 // demoted mid-flight must not be written back.
                                                 val live = downloadState.value
@@ -488,11 +540,16 @@ class PlaylistViewModel(
         _playlistEntity.value = null
         _downloadedList.value = emptyList()
         _listColors.value = emptyList()
+        _favoriteAvailable.value = true
         checkDownloadedPlaylist?.cancel()
         checkDownloadedPlaylist = null
     }
 
-    fun getData(id: String) {
+    fun getData(
+        id: String,
+        ownYouTubeNavHint: Boolean = false,
+    ) {
+        this.ownYouTubeNavHint = ownYouTubeNavHint
         resetData()
         viewModelScope.launch {
             // Check radio
@@ -571,6 +628,7 @@ class PlaylistViewModel(
                                 getPlaylistEntity(id = data.first.id, playlistBrowse = data.first)
                                 maybeAdoptRemoteSaved(data.first.id)
                                 refreshRemoteSavedState(data.first.id)
+                                refreshFavoriteAvailability(data.first.id, data.first.isOwnYouTubePlaylist)
                             }
 
                             else -> {
@@ -673,6 +731,8 @@ class PlaylistViewModel(
                         playlistId = id,
                         inLibrary = now(),
                     )
+                    // 网络解析失败走 Room 兜底渲染(深链/弱网常见路径),门的判定同样要跑
+                    refreshFavoriteAvailability(id, false)
                     _uiState.value =
                         Success(
                             data =
@@ -947,16 +1007,124 @@ class PlaylistViewModel(
     fun downloadFullPlaylist() {
         viewModelScope.launch {
             val id = playlistEntity.value?.id ?: return@launch
-            makeToast(getString(Res.string.downloading))
-            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
             getFullTracks { tracks ->
-                tracks.forEach {
-                    viewModelScope.launch {
-                        downloadUtils.downloadTrack(it.videoId, it.title, it.thumbnails?.lastOrNull()?.url ?: "")
+                viewModelScope.launch {
+                    // 三选分类(2026-09-30 定稿):在途跳过;文件式已下载→弹窗;其余直接入队
+                    val songs =
+                        songRepository.getSongsByListVideoId(tracks.toListVideoId()).firstOrNull()
+                            ?: emptyList()
+                    val byId = songs.associateBy { it.videoId }
+                    val notDownloaded = mutableListOf<BatchDownloadSong>()
+                    val downloaded = mutableListOf<BatchDownloadSong>()
+                    tracks.forEach { track ->
+                        val meta =
+                            BatchDownloadSong(
+                                videoId = track.videoId,
+                                title = track.title,
+                                thumbnail = track.thumbnails?.lastOrNull()?.url ?: "",
+                            )
+                        val row = byId[track.videoId]
+                        val inFlight =
+                            row?.downloadState == STATE_PREPARING ||
+                                row?.downloadState == STATE_DOWNLOADING ||
+                                downloadUtils.isAudioQueuedOrDownloading(track.videoId)
+                        val fileOnDisk = row?.downloadedFilePath?.let { java.io.File(it).exists() } == true
+                        when {
+                            inFlight -> Unit
+                            fileOnDisk -> downloaded += meta
+                            else -> notDownloaded += meta
+                        }
+                    }
+                    if (downloaded.isEmpty()) {
+                        if (notDownloaded.isNotEmpty()) {
+                            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
+                            if (!queueBatchDownload(notDownloaded)) {
+                                updatePlaylistDownloadState(id, STATE_NOT_DOWNLOADED)
+                            }
+                        } else {
+                            makeToast(getString(Res.string.downloaded))
+                        }
+                    } else {
+                        _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
                     }
                 }
             }
         }
+    }
+
+    private val _batchDownloadRequest = MutableStateFlow<BatchDownloadRequest?>(null)
+    val batchDownloadRequest: StateFlow<BatchDownloadRequest?> = _batchDownloadRequest.asStateFlow()
+
+    fun dismissBatchDownload() {
+        _batchDownloadRequest.value = null
+    }
+
+    fun confirmBatchDownload(overwrite: Boolean) {
+        val request = _batchDownloadRequest.value ?: return
+        _batchDownloadRequest.value = null
+        viewModelScope.launch {
+            val id = playlistEntity.value?.id ?: return@launch
+            val target =
+                if (overwrite) {
+                    // 覆盖:降级引用容器防 watcher 重排队,再删旧文件重新入队
+                    request.downloaded.forEach { song ->
+                        demoteDownloadedContainers(
+                            videoId = song.videoId,
+                            playlistRepository = playlistRepository,
+                            albumRepository = albumRepository,
+                            localPlaylistRepository = localPlaylistRepository,
+                        )
+                        downloadUtils.removeAudioDownload(song.videoId)
+                    }
+                    request.notDownloaded + request.downloaded
+                } else {
+                    request.notDownloaded
+                }
+            if (target.isEmpty()) {
+                // 跳过且无可入队项=文件都在:直接落"已下载"。置"下载中"的话,文件式
+                // 条目转存完即从 DownloadIndex 清除,完成事件永远不来,按钮永久卡死
+                // (用户 2026-10-02 实测:整单下完→点下载→跳过→一直"下载中")
+                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+                return@launch
+            }
+            updatePlaylistDownloadState(id, STATE_DOWNLOADING)
+            if (!queueBatchDownload(target)) {
+                // 全部被磁盘预检拒绝=没有任何任务能纠正容器态,回滚(否则永久"下载中",CR P1-3)
+                updatePlaylistDownloadState(id, STATE_DOWNLOADED)
+            }
+        }
+    }
+
+    /** 返回 true=有至少一首成功入队;全部被磁盘预检拒绝时 false(调用点回滚容器态) */
+    private suspend fun queueBatchDownload(songs: List<BatchDownloadSong>): Boolean {
+        var anyRejected = false
+        var anyQueued = false
+        songs.forEach { song ->
+            songRepository.updateDownloadState(
+                videoId = song.videoId,
+                downloadState = STATE_PREPARING,
+            )
+            val queued =
+                downloadUtils.downloadTrack(
+                    videoId = song.videoId,
+                    title = song.title,
+                    thumbnail = song.thumbnail,
+                )
+            if (!queued) {
+                // 磁盘预检拒绝:回滚占位态(CR P1-3——不回滚会永久停在"准备下载")
+                songRepository.updateDownloadState(
+                    videoId = song.videoId,
+                    downloadState = STATE_NOT_DOWNLOADED,
+                )
+                anyRejected = true
+            } else {
+                anyQueued = true
+            }
+        }
+        if (songs.isNotEmpty()) {
+            makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
+        }
+        return anyQueued
     }
 
     /**

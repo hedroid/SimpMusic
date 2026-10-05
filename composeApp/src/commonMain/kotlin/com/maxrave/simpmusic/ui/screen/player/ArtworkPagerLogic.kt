@@ -3,9 +3,9 @@ package com.maxrave.simpmusic.ui.screen.player
 import com.maxrave.domain.data.model.browse.album.Track
 
 /**
- * Pure helpers for the Spotify-style artwork pager on [NowPlayingScreen].
+ * Pure helper for the artwork pager on [NowPlayingScreen].
  *
- * Extracted to keep the sync/dispatch logic unit-testable without Compose runtime.
+ * Extracted to keep queue/player index reconciliation testable without Compose runtime.
  */
 
 /**
@@ -17,8 +17,7 @@ import com.maxrave.domain.data.model.browse.album.Track
  *   queue" on a track already in it, is enough — and searching by id then returns the LAST copy
  *   while the player sits on an earlier one. Everything downstream inherits that: the Apple
  *   Music queue cuts its "up next" list at `index + 1` and swallows every track in between, a
- *   swipe on the artwork pager sends Next from the wrong slot, and a row's ⋯ opens on a
- *   different song than the one touched.
+ *   artwork navigation starts from the wrong slot, and a row's ⋯ opens on a different song.
  * - It is cross-checked against [nowPlayingVideoId] rather than trusted outright: while the
  *   queue is being rebuilt, `listTracks` and the player timeline are briefly out of step, and an
  *   index that points at some other track is worse than the id search. Failing that check falls
@@ -49,33 +48,3 @@ internal fun deriveOrderIndex(
         .indexOfLast { it.videoId == nowPlayingVideoId }
         .coerceAtLeast(0)
 }
-
-/**
- * What the player should do when the pager settles on a new page.
- *
- * - [Next] / [Previous] keep the existing crossfade flow on Android intact
- *   (CrossfadeExoPlayerAdapter relies on `player.next()` / `player.previous()`).
- * - [Skip] jumps to a non-adjacent index via `playMediaItemInMediaSource`, which
- *   internally handles unshuffling.
- */
-internal sealed interface ArtworkSeekAction {
-    data object Next : ArtworkSeekAction
-
-    data object Previous : ArtworkSeekAction
-
-    data class Skip(val index: Int) : ArtworkSeekAction
-
-    /** Same page — caller should ignore (the LaunchedEffect filter normally prevents this). */
-    data object NoOp : ArtworkSeekAction
-}
-
-internal fun computeSeekAction(
-    newPage: Int,
-    currentOrderIndex: Int,
-): ArtworkSeekAction =
-    when (newPage - currentOrderIndex) {
-        0 -> ArtworkSeekAction.NoOp
-        1 -> ArtworkSeekAction.Next
-        -1 -> ArtworkSeekAction.Previous
-        else -> ArtworkSeekAction.Skip(newPage)
-    }

@@ -4,7 +4,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -39,6 +38,7 @@ import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.list.AlbumDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.MoreAlbumsDestination
+import com.maxrave.simpmusic.ui.theme.LibraryGridDefaults
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.MoreAlbumsUIState
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
@@ -84,17 +84,17 @@ fun MoreAlbumsScreen(
             is MoreAlbumsUIState.Success -> {
                 val data = state.albumItems
                 LazyVerticalGrid(
-                    // As many columns as fit, not a fixed two: HomeItemContentPlaylist is a fixed
-                    // 180dp wide, so two columns on a wide window left each tile alone in a huge cell.
-                    // 170dp rather than 180 keeps two columns on a 360dp phone (2 × 170 + the 10dp
-                    // gap fits), where the cells come out exactly as wide as Fixed(2) made them.
-                    columns = GridCells.Adaptive(minSize = 170.dp),
+                    // 统一网格口径(2026-09-28,LibraryGridDefaults):160dp Adaptive tile 铺满槽位、
+                    // 页边 15dp、间距 4/8dp。旧实现 0dp 页边、10dp 间距,170dp 槽里放 180dp 定宽
+                    // tile(wrapContentSize 溢出槽位)。
+                    columns = GridCells.Adaptive(minSize = LibraryGridDefaults.minTileSize),
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .hazeSource(state = hazeState),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = LibraryGridDefaults.verticalArrangement,
+                    horizontalArrangement = LibraryGridDefaults.horizontalArrangement,
+                    contentPadding = PaddingValues(start = LibraryGridDefaults.horizontalPadding, end = LibraryGridDefaults.horizontalPadding),
                 ) {
                     item(
                         span = { GridItemSpan(maxLineSpan) },
@@ -117,6 +117,8 @@ fun MoreAlbumsScreen(
                                     ),
                                 )
                             },
+                            thumbSize = LibraryGridDefaults.minTileSize,
+                            fillMaxWidth = true,
                         )
                     }
                     item(

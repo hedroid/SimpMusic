@@ -78,3 +78,12 @@ suspend fun setLoved(
     track: String,
     loved: Boolean,
 ): LastfmOutcome = LastfmOutcome.Error(0, UNAVAILABLE)
+
+/** Mirrors the real module's track.getInfo toptags read; unavailable in FOSS builds. */
+suspend fun getTopTags(
+    artist: String,
+    track: String,
+): List<String>? {
+    Logger.d(TAG, UNAVAILABLE)
+    return null
+}

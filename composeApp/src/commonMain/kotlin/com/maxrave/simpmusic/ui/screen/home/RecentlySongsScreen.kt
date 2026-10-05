@@ -317,6 +317,8 @@ fun RecentlySongsScreen(
         val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
         val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
         val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+        val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+        val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
         AddToPlaylistModalBottomSheet(
             isBottomSheetVisible = true,
             // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
@@ -324,6 +326,9 @@ fun RecentlySongsScreen(
             listLocalPlaylist = emptyList(),
             listYouTubePlaylist = youTubePlaylists,
             listNeteasePlaylist = neteasePlaylists,
+            youTubeLoadFailed = youTubeLoadFailedState,
+            neteaseLoadFailed = neteaseLoadFailedState,
+            onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
             videoIds = selectedIds,
             onDismiss = { showSelectionAddToPlaylist = false },
             onClick = {},

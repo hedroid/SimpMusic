@@ -60,6 +60,9 @@ import simpmusic.composeapp.generated.resources.login_required_short
 import simpmusic.composeapp.generated.resources.play_next
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
+import com.maxrave.simpmusic.ui.component.BatchDownloadConfirmDialog
+import com.maxrave.simpmusic.viewModel.SongSelectionViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * One row in [SelectedSongsBottomSheet] that only some screens have — "remove from playlist"
@@ -322,6 +325,19 @@ fun SelectedSongsBottomSheet(
                     Text(text = stringResource(Res.string.cancel))
                 }
             },
+        )
+    }
+
+    // 批量下载"跳过/覆盖/取消"三选弹窗(2026-10 二期):VM 与宿主页面 koinViewModel() 同一
+    // nav entry 实例,状态收在 SongSelectionViewModel——7 个调用点零改动。
+    val selectionViewModel: SongSelectionViewModel = koinViewModel()
+    val batchDownloadRequest by selectionViewModel.batchDownloadRequest.collectAsStateWithLifecycle()
+    batchDownloadRequest?.let { request ->
+        BatchDownloadConfirmDialog(
+            downloadedCount = request.downloaded.size,
+            onSkip = { hideThen { selectionViewModel.confirmBatchDownload(false) } },
+            onOverwrite = { hideThen { selectionViewModel.confirmBatchDownload(true) } },
+            onDismiss = { selectionViewModel.dismissBatchDownload() },
         )
     }
 }

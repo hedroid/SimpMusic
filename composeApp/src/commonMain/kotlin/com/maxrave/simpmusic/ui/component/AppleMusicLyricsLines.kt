@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -18,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,7 +48,8 @@ import kotlin.math.abs
 // Expressed against the font size rather than in fixed dp, so changing the type size keeps the
 // depth of field proportional.
 private const val BLUR_PER_LINE_EM = 0.095f
-private const val BLUR_MAX_EM = 0.45f
+// (perf) The distance-scaled radius (per-line × N, capped) is gone: only the neighbour line
+// blurs now, so the cap has nothing left to cap.
 // AMLL's resolveOpacity returns a flat 1 for unsung lines, but the reference screenshots plainly
 // fade with distance — the line under the sung one sits at roughly half, the next at a third, and
 // beyond that they all but vanish. AMLL is reproducing Apple, not defining it, and on this point
@@ -184,10 +183,14 @@ fun Modifier.appleMusicLyricFocus(
         }
     val fontSizeDp = with(LocalDensity.current) { AppleMusicLyricFontSize.toDp() }
     val targetBlur: Dp =
-        if (!blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0) {
-            0.dp
-        } else {
-            fontSizeDp * (distance * BLUR_PER_LINE_EM).coerceAtMost(BLUR_MAX_EM)
+        when {
+            !blurEnabled || allLinesCurrent || !hasActiveLine || distanceFromCurrent == 0 -> 0.dp
+            // (perf) Only the line ONE step away keeps a light blur, ahead or behind; anything
+            // farther dims by alpha alone. The distance-scaled radius put a RenderEffect blur
+            // layer on EVERY visible line and re-animated each on every line change — two light
+            // layers read the same on a page whose far lines already sit at a quarter alpha.
+            abs(distanceFromCurrent) > 1 -> 0.dp
+            else -> fontSizeDp * BLUR_PER_LINE_EM
         }
     val targetAlpha =
         when {
@@ -237,7 +240,7 @@ fun Modifier.appleMusicLyricFocus(
 
 /**
  * One line-synced lyric line, Apple Music style: same size for every line (the Classic renderer
- * swaps headlineLarge/headlineMedium instead), white, hard left, with the translation underneath.
+ * swaps headlineLarge/headlineMedium instead), white, aligned to its text direction, with the translation underneath.
  * Focus is applied by the caller through [appleMusicLyricFocus] so the blur wraps the whole line
  * including its translation.
  */
@@ -254,12 +257,9 @@ fun AppleMusicLyricsLineItem(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Spacer(modifier = Modifier.height(AppleMusicLyricGap))
-        Text(
+        LyricText(
             text = originalWords,
-            // fillMaxWidth + Start, both explicit: a wrapped line must break against the SAME left
-            // edge as every other line, and a short line must not drift toward the middle.
             modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Start,
             color = if (isCurrent) Color.White else AppleMusicInactiveLineColor,
             style =
                 typo().headlineLarge.copy(
@@ -269,10 +269,10 @@ fun AppleMusicLyricsLineItem(
         )
         if (romanizedWords != null) {
             Spacer(modifier = Modifier.height(AppleMusicMainToSubGap))
-            Text(
+            LyricText(
                 text = romanizedWords,
+                alignmentText = originalWords,
                 modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Start,
                 style =
                     typo().bodyMedium.copy(
                         fontSize = AppleMusicSubLineFontSize,
@@ -285,10 +285,10 @@ fun AppleMusicLyricsLineItem(
         }
         if (translatedWords != null) {
             Spacer(modifier = Modifier.height(AppleMusicMainToSubGap))
-            Text(
+            LyricText(
                 text = translatedWords,
+                alignmentText = originalWords,
                 modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Start,
                 style =
                     typo().bodyMedium.copy(
                         fontSize = AppleMusicSubLineFontSize,

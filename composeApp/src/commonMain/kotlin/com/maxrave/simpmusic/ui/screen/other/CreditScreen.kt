@@ -32,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
@@ -43,10 +42,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.maxrave.domain.extension.now
 import com.maxrave.simpmusic.expect.openUrl
+import com.maxrave.simpmusic.extension.copy
+import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.RippleIconButton
-import com.maxrave.simpmusic.ui.component.endOfPageCredit
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.typo
@@ -73,7 +72,7 @@ fun CreditScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues.copy(bottom = 0.dp))
                 .padding(top = 64.dp)
                 .verticalScroll(rememberScrollState())
                 .hazeSource(state = hazeState),
@@ -189,20 +188,7 @@ fun CreditScreen(
             )
         }
 
-        // Copyright text — same credit line and centered alignment as the EndOfPage footers
-        Text(
-            text = endOfPageCredit(),
-            style = typo().bodySmall,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 25.dp, vertical = 5.dp)
-                    .alpha(0.8f),
-            textAlign = TextAlign.Center,
-        )
-
-        // Bottom spacing
-        Spacer(modifier = Modifier.height(200.dp))
+        EndOfPage()
     }
     TopAppBar(
         modifier =

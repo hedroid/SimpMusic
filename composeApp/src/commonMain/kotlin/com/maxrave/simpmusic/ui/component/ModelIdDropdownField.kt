@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.AiModelsState
 import org.jetbrains.compose.resources.stringResource
@@ -92,6 +93,8 @@ fun ModelIdDropdownField(
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
+            // 弹出的菜单是独立 popup 窗口,不经弹窗上的触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             // Same as LanguageDropdownField: keep the menu off the AMOLED near-black default
             // so it doesn't read as a black slab over the dialog.
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

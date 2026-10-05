@@ -24,6 +24,7 @@
     <string name="hide">Hide</string>
     <string name="show">Show</string>
     <string name="na_na">NA:NA</string>
+    <string name="live_badge">LIVE</string>
     <string name="cache_size">%1$s MB</string>
     <string name="favorite">Favorite</string>
     <string name="followed">Followed</string>
@@ -54,6 +55,8 @@
     <string name="removed_download">Removed download</string>
     <string name="remove_download_title">Remove download?</string>
     <string name="remove_download_message">Downloaded songs will be removed. You can download them again anytime.</string>
+    <string name="delete_video_title">Delete video?</string>
+    <string name="delete_video_message">The downloaded video file will be removed. You can download it again anytime.</string>
     <string name="cancel_download_title">Cancel download?</string>
     <string name="cancel_download_message">Stops the download and discards unfinished parts. Completed songs are kept.</string>
     <string name="cancel_download_confirm">Cancel download</string>
@@ -92,7 +95,7 @@
     <string name="prefer_320kbps_stream">Prefer 320kbps stream</string>
     <string name="prefer_320kbps_stream_description">Automatically search for 320kbps audio stream when available on the internet. Falls back to default quality if not found.</string>
     <string name="download_quality">Download quality</string>
-    <string name="video_download_quality">Video download quality</string>
+    <string name="video_download_quality">Video quality</string>
     <string name="clear_downloaded_cache">Clear Downloaded Cache</string>
     <string name="clear_thumbnail_cache">Clear Thumbnail Cache</string>
     <string name="add">Add</string>
@@ -142,6 +145,7 @@
     <string name="version">Version</string>
     <string name="github">Github</string>
     <string name="maxrave_dev">hedroid</string>
+    <string name="follow_me_on_x">Follow me on X</string>
     <string name="buy_me_a_coffee">Buy me a coffee</string>
     <string name="developer_blog">Developer Blog</string>
     <string name="developer_blog_tagline">Read dev notes, tutorials &amp; behind-the-scenes</string>
@@ -160,6 +164,14 @@
     <string name="similar_songs">Similar songs</string>
     <string name="track_count_short">%1$s tracks</string>
     <string name="comments_title">Comments · %1$s</string>
+    <string name="sort_recommend">Recommended</string>
+    <string name="n_replies">%1$s replies</string>
+    <string name="collapse_replies">Collapse replies</string>
+    <string name="no_comments">No comments yet</string>
+    <string name="post_comment_hint">Write a comment...</string>
+    <string name="reply_hint">Reply to @%1$s:</string>
+    <string name="post_comment_success">Comment posted</string>
+    <string name="publish">Post</string>
     <string name="end_of_list">End of the list</string>
     <string name="comments">Comments</string>
     <string name="download_url">Download URL</string>
@@ -334,8 +346,8 @@
     <string name="audio_quality">Audio quality</string>
     <string name="play_video_for_video_track_instead_of_audio_only">Play video for video track instead of audio only</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">Such as Music Video, Lyrics Video, Podcasts, and more</string>
-    <string name="radio_audio_only">Keep radio audio-only</string>
-    <string name="radio_audio_only_description">Skip music videos, remixes and mashups that YouTube mixes into a radio. Playlists and albums are not affected</string>
+    <string name="radio_audio_only">Play audio version instead of MV in radio</string>
+    <string name="radio_audio_only_description">Play the audio version instead of the music video when there is one, and skip remixes and mashups that only exist as videos. Playlists and albums are not affected</string>
     <string name="video_quality">Video Quality</string>
     <plurals name="n_song">
         <item quantity="one">%d song</item>
@@ -649,7 +661,7 @@
     <string name="backup_downloaded">Backup downloaded data</string>
     <string name="backup_downloaded_description">Backup all downloaded songs's data</string>
     <string name="auto_backup">Auto backup</string>
-    <string name="auto_backup_description">Automatically back up your data to %1$s</string>
+    <string name="auto_backup_description">Automatically back up your app data</string>
     <string name="backup_frequency">Backup frequency</string>
     <string name="daily">Daily</string>
     <string name="weekly">Weekly</string>
@@ -788,6 +800,14 @@
     <string name="listen_to_downloaded">Listen to downloaded music</string>
     <string name="playing_on_device">Playing on %1$s</string>
     <string name="not_available_while_casting">Not available while casting</string>
+    <string name="audio_output">Audio output</string>
+    <string name="audio_output_playing_here">Playing here</string>
+    <string name="audio_output_cast">Cast</string>
+    <string name="audio_output_system_default">System default</string>
+    <string name="audio_output_wired">Wired headphones</string>
+    <string name="audio_output_bluetooth">Bluetooth</string>
+    <string name="audio_output_usb">USB audio</string>
+    <string name="audio_output_hdmi">HDMI</string>
     <string name="import_data">Import playlists</string>
     <string name="import_playlists_from_other_apps">Import playlists from another app</string>
     <string name="import_data_intro">Import brings in playlists converted from Spotify or another YT Music client app.\nConverting tool: https://www.simpmusic.org/tools\nIn SimpMusic, only playlist files in our own format can be imported</string>
@@ -994,8 +1014,40 @@
     <string name="all_songs_already_liked">All selected songs are already in favorites</string>
     <string name="cloud_action_failed_youtube">Couldn't update your YouTube Music account</string>
     <string name="library_podcasts">Podcasts</string>
+    <string name="netease_podcast">NetEase Podcasts</string>
+    <string name="podcast_badge_paid">Paid</string>
+    <string name="podcast_badge_bought">Owned</string>
+    <string name="podcast_badge_vip">VIP</string>
+    <string name="podcast_listens">%1$s listens</string>
+    <string name="podcast_my_subscriptions">My subscriptions</string>
+    <string name="podcast_latest_programs">Latest programs</string>
+    <string name="podcast_tap_to_listen">Tap to listen</string>
+    <string name="podcast_guess_you_like">Made for you</string>
+    <string name="podcast_featured_radios">Featured radios</string>
+    <string name="podcast_new_radios">New radios</string>
+    <string name="podcast_program_toplist">Top programs</string>
+    <string name="podcast_toplist_radios">Popular radios</string>
+    <string name="podcast_programs">Programs</string>
+    <string name="podcast_play_all">Play all</string>
+    <string name="podcast_resume">Resume</string>
+    <string name="podcast_pause">Pause</string>
+    <string name="podcast_expand">Show more</string>
+    <string name="podcast_collapse">Show less</string>
+    <string name="comment_label">Comments</string>
+    <string name="podcast_comment_like_unsupported">Liking program comments is not supported yet</string>
+    <string name="podcast_trial_toast">This program requires a separate purchase — playing trial preview</string>
+    <string name="podcast_order_latest">Latest</string>
+    <string name="podcast_order_earliest">Earliest</string>
+    <string name="podcast_programs_unavailable">Couldn't load programs (rate-limited by NetEase or network hiccup). Try again in a moment.</string>
+    <string name="podcast_rising_fastest">Fastest rising</string>
+    <string name="podcast_hottest_radios">Hottest radios</string>
+    <string name="podcast_category_empty">No radios in this category yet</string>
+    <string name="podcast_no_programs">No programs yet</string>
+    <string name="podcast_subscribe">Subscribe</string>
+    <string name="podcast_subscribed">Subscribed</string>
+    <string name="podcast_unsubscribe_toast">Unsubscribed</string>
+    <string name="podcast_subscribe_toast">Subscribed</string>
     <string name="downloaded_songs">Downloaded songs</string>
-    <string name="downloaded_songs_tab">Songs</string>
     <string name="no_downloaded_songs">No downloaded songs</string>
     <string name="downloaded_collections">Downloaded albums and playlists</string>
     <string name="your_youtube_music">Your YouTube Music</string>
@@ -1076,4 +1128,62 @@
     <string name="login_sync_failed">Something went wrong. Please try again.</string>
     <string name="modified_build_title">Unofficial app</string>
     <string name="modified_build_message">You are using an unofficial copy of SimpMusic that was modified or repackaged by someone else. It cannot be used. Download the official version from simpmusic.org.</string>
+
+    <!-- File-based downloads (gen 2) -->
+    <string name="download_section_title">Download</string>
+    <string name="download_audio_quality">Audio quality</string>
+    <string name="download_audio_quality_standard">Standard</string>
+    <string name="download_audio_quality_high">High</string>
+    <string name="download_audio_quality_lossless">Lossless</string>
+    <string name="download_file_name_format">File name format</string>
+    <string name="download_file_name_title_only">Title</string>
+    <string name="download_file_name_artist_title">Artist-Title</string>
+    <string name="download_file_name_title_artist">Title-Artist</string>
+    <string name="simultaneous_downloads">Simultaneous downloads</string>
+    <string name="download_artist_album_folder">Folder by artist/album</string>
+    <string name="download_artist_album_folder_description">Save under Music/SimpMusic/Artist/Album</string>
+    <string name="download_save_lrc">Save lyrics (.lrc)</string>
+    <string name="download_save_lrc_description">Write original timed lyrics next to the audio file</string>
+    <string name="download_ai_tags">Music tag completion</string>
+    <string name="download_ai_tags_description">Fill missing tags with AI when downloading</string>
+    <string name="download_wifi_only">Download over Wi-Fi only</string>
+    <string name="download_wifi_only_description">Downloads wait on mobile networks and resume on Wi-Fi</string>
+
+
+    <string name="overwrite_download_title">Download again?</string>
+    <string name="overwrite_download_message">This song was already downloaded as a file. Redownloading replaces the existing file.</string>
+    <string name="download_video">Download video</string>
+
+
+    <string name="batch_download_confirm_title">%1$d songs already downloaded</string>
+    <string name="batch_download_confirm_message">Redownloading replaces the existing files. Skip them, or download over them?</string>
+    <string name="batch_download_skip">Skip downloaded</string>
+    <string name="batch_download_overwrite">Redownload</string>
+
+    <string name="download_status_queued">Queued</string>
+    <string name="download_status_paused">Paused</string>
+    <string name="download_status_failed">Failed</string>
+    <string name="download_status_saving">Saving file…</string>
+    <string name="download_status_file_missing">File missing</string>
+    <string name="download_action_pause_all">Pause all</string>
+    <string name="download_action_resume_all">Resume all</string>
+    <string name="download_action_retry_failed">Retry</string>
+    <string name="download_action_cancel_download">Cancel download</string>
+    <string name="download_action_redownload">Redownload</string>
+    <string name="download_settings_section">Downloads</string>
+    <string name="download_section_in_progress">Downloading</string>
+    <string name="download_section_completed">Completed</string>
+    <string name="download_no_in_progress">No downloads in progress</string>
+    <string name="download_no_completed">No completed downloads</string>
+    <string name="download_clear_all">Clear all downloads</string>
+    <string name="download_clear_all_description">Delete all downloaded audio and video files</string>
+    <string name="download_artist_album_folder_description_off">Save under Music/SimpMusic</string>
+    <string name="download_no_space">Not enough storage to download</string>
+    <!-- Accessibility labels for icon-only controls (UI-CR-07) -->
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="previous_song">Previous song</string>
+    <string name="next_song">Next song</string>
+    <string name="switch_music_source">Switch music source</string>
+    <string name="back">Back</string>
 </resources>

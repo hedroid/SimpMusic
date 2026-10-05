@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.maxrave.domain.utils.collectResource
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadRequest
+import com.maxrave.simpmusic.viewModel.base.BatchDownloadSong
 import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +36,7 @@ import simpmusic.composeapp.generated.resources.added_to_playlist
 import simpmusic.composeapp.generated.resources.all_songs_already_liked
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
+import simpmusic.composeapp.generated.resources.download_no_space
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.error
 import simpmusic.composeapp.generated.resources.error_occurred
@@ -67,31 +70,89 @@ class SongSelectionViewModel(
     // 云端歌单分区("添加到歌单"弹窗,2026-09-24 多选路径接云端——此前 7 个多选调用点只传
     // 本地歌单,而本地分区被政策开关(SHOW_LOCAL_PLAYLIST_SECTION)隐藏,弹窗实际是空的):
     // YT=库歌单(滤 VLLM),网易=自建。
-    // null=尚未拉取(弹窗加载中,别闪"未找到"空态);拉完(含空列表)=已加载
+    // null=尚未成功拉到过(弹窗加载中,别闪"未找到"空态);非 null=已有结果,刷新保留旧值
     private val _youTubePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
     val youTubePlaylists: StateFlow<List<PlaylistsResult>?> = _youTubePlaylists.asStateFlow()
 
     private val _neteasePlaylists = MutableStateFlow<List<PlaylistsResult>?>(null)
     val neteasePlaylists: StateFlow<List<PlaylistsResult>?> = _neteasePlaylists.asStateFlow()
 
-    /** 弹窗打开时拉云端歌单列表(两路独立,失败留空) */
+    /** 终态失败(重试耗尽):列表为 null/空时弹窗出"重试"行;有旧列表则静默保留 */
+    private val _youTubePlaylistsFailed = MutableStateFlow(false)
+    val youTubePlaylistsFailed: StateFlow<Boolean> = _youTubePlaylistsFailed.asStateFlow()
+
+    private val _neteasePlaylistsFailed = MutableStateFlow(false)
+    val neteasePlaylistsFailed: StateFlow<Boolean> = _neteasePlaylistsFailed.asStateFlow()
+
+    // 单飞 job:弹窗反复打开/双入口并发时取消旧链再起新链,同一时刻每源至多一条
+    // 重试链(旧实现每次调用各起一套,并发时回包乱序互相覆盖)
+    private var ytPlaylistsJob: kotlinx.coroutines.Job? = null
+    private var neteasePlaylistsJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * 弹窗打开时拉云端歌单列表(两路独立单飞;退避重试消化冷网络首拉失败——用户
+     *  2026-09-30 反馈"第一次拉取不到")。终态失败保留旧值并置 failed(旧实现
+     * `?: emptyList()`/getOrDefault 会把失败折叠成空列表,既丢旧值又无重试入口);
+     * 网易不可重试异常(已登出/账号失效)=清空,不耗退避。网易回包写入前按 MUSIC_U
+     * 身份复核(entry 内换号窗口极小,但复核零成本,三轮 CR 补)。
+     */
     fun loadCloudPlaylists() {
-        viewModelScope.launch {
-            runCatching {
-                playlistRepository.getLibraryPlaylist().collect { data ->
-                    _youTubePlaylists.value = data?.filter { it.browseId != "VLLM" } ?: emptyList()
+        ytPlaylistsJob?.cancel()
+        ytPlaylistsJob =
+            viewModelScope.launch {
+                _youTubePlaylistsFailed.value = false
+                val data =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it == null },
+                    ) { playlistRepository.getLibraryPlaylist().firstOrNull() }
+                if (data != null) {
+                    _youTubePlaylists.value = data.filter { it.browseId != "VLLM" }
+                } else {
+                    _youTubePlaylistsFailed.value = true
                 }
-            }.onFailure {
-                _youTubePlaylists.value = emptyList()
             }
-        }
-        viewModelScope.launch {
-            runCatching {
-                _neteasePlaylists.value = neteaseRepository.getOwnNeteasePlaylists()
-            }.onFailure {
-                _neteasePlaylists.value = emptyList()
+        neteasePlaylistsJob?.cancel()
+        neteasePlaylistsJob =
+            viewModelScope.launch {
+                val cookie = dataStoreManager.neteaseCookie.first()
+                if (cookie.isBlank()) {
+                    _neteasePlaylists.value = null
+                    _neteasePlaylistsFailed.value = false
+                    return@launch
+                }
+                val startIdentity = com.maxrave.simpmusic.extension.neteaseAccountIdentity(cookie)
+                _neteasePlaylistsFailed.value = false
+                val result =
+                    com.maxrave.simpmusic.extension.retryIf(
+                        tag = "AddToPlaylist",
+                        retryOn = { it.isFailure && it.exceptionOrNull() !is com.maxrave.netease.NeteaseNotLoggedInException },
+                    ) { neteaseRepository.getOwnNeteasePlaylistsResult() }
+                // 身份复核:拉取期间换号(MUSIC_U 变)则丢弃——整串 cookie 因 Set-Cookie
+                // 合并不稳定,不用于身份
+                val identityStillCurrent =
+                    com.maxrave.simpmusic.extension.neteaseAccountIdentity(
+                        dataStoreManager.neteaseCookie.first(),
+                    ) == startIdentity
+                result
+                    .onSuccess { list ->
+                        if (identityStillCurrent) {
+                            _neteasePlaylists.value = list
+                        } else {
+                            com.maxrave.logger.Logger.w(
+                                "AddToPlaylist",
+                                "discard stale netease playlists: identity changed during flight",
+                            )
+                        }
+                    }.onFailure { e ->
+                        if (e is com.maxrave.netease.NeteaseNotLoggedInException) {
+                            _neteasePlaylists.value = null
+                            _neteasePlaylistsFailed.value = false
+                        } else if (identityStillCurrent) {
+                            _neteasePlaylistsFailed.value = true
+                        }
+                    }
             }
-        }
     }
 
     /** 批量加到 YT 歌单(源互斥:只吃 YT 曲目,网易数字 id 会被服务端拒) */
@@ -189,17 +250,18 @@ class SongSelectionViewModel(
     }
 
     /**
-     * Only starts songs that are not already downloaded or in flight — unlike the single-song
-     * menu, this is not a toggle: a selection of 25 will usually mix downloaded and not, and
-     * toggling would silently delete the ones already on disk.
+     * Batch download entry (multi-select): classify first — in-flight (queued/downloading) is
+     * always skipped; file-based "downloaded" entries raise [batchDownloadRequest] for the
+     * skip/overwrite dialog (2026-09-30 定稿); an all-clean selection queues immediately.
      */
     fun download(videoIds: List<String>) {
         viewModelScope.launch {
             // 防御:涉及源未登录不下载(面板已置灰;2026-09-25 用户定案)
             val neteaseLoggedIn = neteaseRepository.isLoggedIn.first()
             val ytLoggedIn = dataStoreManager.cookie.first().isNotEmpty()
+            val songs = songsOf(videoIds)
             val loggedOut =
-                songsOf(videoIds).any { song ->
+                songs.any { song ->
                     (song.videoId.toLongOrNull() != null && !neteaseLoggedIn) ||
                         (song.videoId.toLongOrNull() == null && !ytLoggedIn)
                 }
@@ -207,25 +269,95 @@ class SongSelectionViewModel(
                 makeToast(getString(Res.string.need_login_toast))
                 return@launch
             }
-            val pending =
-                songsOf(videoIds).filter {
-                    it.downloadState == DownloadState.STATE_NOT_DOWNLOADED
+            val notDownloaded = mutableListOf<BatchDownloadSong>()
+            val downloaded = mutableListOf<BatchDownloadSong>()
+            songs.forEach { song ->
+                val meta =
+                    BatchDownloadSong(
+                        videoId = song.videoId,
+                        title = song.title,
+                        thumbnail = song.thumbnails ?: "",
+                    )
+                val inFlight =
+                    song.downloadState == DownloadState.STATE_PREPARING ||
+                        song.downloadState == DownloadState.STATE_DOWNLOADING ||
+                        downloadUtils.isAudioQueuedOrDownloading(song.videoId)
+                val fileOnDisk = song.downloadedFilePath?.let { java.io.File(it).exists() } == true
+                when {
+                    inFlight -> Unit
+                    fileOnDisk -> downloaded += meta
+                    else -> notDownloaded += meta
                 }
-            if (pending.isEmpty()) return@launch
-            pending.forEach { song ->
-                songRepository.updateDownloadState(
-                    videoId = song.videoId,
-                    downloadState = DownloadState.STATE_PREPARING,
-                )
+            }
+            if (notDownloaded.isEmpty() && downloaded.isEmpty()) return@launch
+            if (downloaded.isEmpty()) {
+                queueBatch(notDownloaded)
+            } else {
+                _batchDownloadRequest.value = BatchDownloadRequest(notDownloaded, downloaded)
+            }
+        }
+    }
+
+    private val _batchDownloadRequest = MutableStateFlow<BatchDownloadRequest?>(null)
+    val batchDownloadRequest: StateFlow<BatchDownloadRequest?> = _batchDownloadRequest.asStateFlow()
+
+    fun dismissBatchDownload() {
+        _batchDownloadRequest.value = null
+    }
+
+    fun confirmBatchDownload(overwrite: Boolean) {
+        val request = _batchDownloadRequest.value ?: return
+        _batchDownloadRequest.value = null
+        viewModelScope.launch {
+            val target =
+                if (overwrite) {
+                    // 覆盖:先降级引用容器(state=3 的 watcher 会把删掉的歌排回队列),再删文件重下
+                    request.downloaded.forEach { song ->
+                        demoteDownloadedContainersOf(song.videoId)
+                        downloadUtils.removeAudioDownload(song.videoId)
+                    }
+                    request.notDownloaded + request.downloaded
+                } else {
+                    request.notDownloaded
+                }
+            queueBatch(target)
+        }
+    }
+
+    private suspend fun queueBatch(songs: List<BatchDownloadSong>) {
+        var anyRejected = false
+        songs.forEach { song ->
+            songRepository.updateDownloadState(
+                videoId = song.videoId,
+                downloadState = DownloadState.STATE_PREPARING,
+            )
+            val queued =
                 downloadUtils.downloadTrack(
                     videoId = song.videoId,
                     title = song.title,
-                    thumbnail = song.thumbnails ?: "",
+                    thumbnail = song.thumbnail,
                 )
+            if (!queued) {
+                // 磁盘预检拒绝:回滚占位态(CR P1-3——不回滚会永久停在"准备下载")
+                songRepository.updateDownloadState(
+                    videoId = song.videoId,
+                    downloadState = DownloadState.STATE_NOT_DOWNLOADED,
+                )
+                anyRejected = true
             }
-            makeToast(getString(Res.string.downloading))
+        }
+        if (songs.isNotEmpty()) {
+            makeToast(getString(if (anyRejected) Res.string.download_no_space else Res.string.downloading))
         }
     }
+
+    private suspend fun demoteDownloadedContainersOf(videoId: String) =
+        demoteDownloadedContainers(
+            videoId = videoId,
+            playlistRepository = playlistRepository,
+            albumRepository = albumRepository,
+            localPlaylistRepository = localPlaylistRepository,
+        )
 
     /**
      * The removal counterpart of [download], offered by the downloaded-songs grid where every

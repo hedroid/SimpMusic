@@ -19,6 +19,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -36,9 +39,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -50,6 +53,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntOffset
@@ -63,14 +69,15 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.kmpalette.rememberPaletteState
+import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.rememberVideoAspectRatio
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
@@ -87,8 +94,10 @@ import com.maxrave.simpmusic.ui.component.QueueBottomSheet
 import com.maxrave.simpmusic.ui.component.VoteLyricsDialog
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.player.FullscreenDestination
+import com.maxrave.simpmusic.ui.screen.player.content.ArtworkPagerSnapAnimation
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentActions
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentAppleMusic
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentM3Expressive
@@ -96,6 +105,7 @@ import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentSpotify
 import com.maxrave.simpmusic.ui.screen.player.content.NowPlayingContentState
 import com.maxrave.simpmusic.ui.screen.player.content.PlayerBackdropColor
 import com.maxrave.simpmusic.ui.screen.player.content.toAudioCodecLabel
+import com.maxrave.simpmusic.ui.screen.player.content.toAudioQualityLabel
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetUIEvent
 import com.maxrave.simpmusic.viewModel.NowPlayingBottomSheetViewModel
@@ -106,7 +116,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.time.TimeSource
+import kotlin.time.Duration.Companion.milliseconds
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
@@ -153,22 +166,96 @@ fun NowPlayingScreen(
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
-        NowPlayingScreenContent(
-            sharedViewModel = sharedViewModel,
-            navController = navController,
-            isExpanded = sheetState.currentValue == SheetValue.Expanded,
-            dismissIcon = SimpIcons.KeyboardArrowDown,
-            onDismiss = {
-                hideSheet()
-            },
-        )
+        // (fix) 打开动画未稳住时的下滑兜底——见 earlySheetDismissFallback 的说明。包在
+        // 内容外层(Main 通道旁观),不影响任何子组件手势。
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .earlySheetDismissFallback(
+                        sheetState = sheetState,
+                        onDismissNow = { onDismiss() },
+                    ),
+        ) {
+            NowPlayingScreenContent(
+                sharedViewModel = sharedViewModel,
+                navController = navController,
+                isExpanded = sheetState.currentValue == SheetValue.Expanded,
+                dismissIcon = SimpIcons.KeyboardArrowDown,
+                onDismiss = {
+                    hideSheet()
+                },
+            )
+        }
     }
 }
+
+/**
+ * (fix) 从迷你条打开播放页后,第一次下滑关闭经常没反应。
+ *
+ * material3(JetBrains 1.12)ModalBottomSheet 的打开动画仍在跑时,AnchoredDraggable 的拖拽
+ * 互斥锁被 animateTo 持有,用户下滑被整体吞掉约 0.6~1s——动画视觉上早已到位,内部却还没
+ * 结束(模拟器实测:窗口内点击/暂停全部正常、竖直拖拽零响应,0.6s 必失效/1.0s 恢复;与
+ * Google issue tracker #481364105"展开后 ~0.5-1s 不识别滑动手势"同族)。库不可改,这里在
+ * 内容层旁观兜底:
+ * - 仅在兜底窗内(动画仍在跑,或打开后未满 800ms——后者盖住动画尚未 START 的那几帧)才
+ *   累计"未被任何子组件消费"
+ *   的向下位移(Main 通道,子组件已先处理;positionChange 对已消费变更为 0,列表滚动/滑条/
+ *   横滑封面 pager 的位移天然不累计);
+ * - 越过阈值即刻直接 onDismiss 关页(与点遮罩同款瞬时语义;不走 sheetState.hide()——它同样
+ *   要排队等动画锁释放,反而拖出半秒延迟);
+ * - 动画一结束(且兜底窗已过)立刻停手退位,正常跟手拖拽(拖一半松手弹回)不受任何影响。
+ *   本观察器不消费任何事件。
+ */
+@Composable
+private fun Modifier.earlySheetDismissFallback(
+    sheetState: SheetState,
+    onDismissNow: () -> Unit,
+): Modifier {
+    val openedAt = remember { TimeSource.Monotonic.markNow() }
+    val currentSheetState by rememberUpdatedState(sheetState)
+    val currentDismiss by rememberUpdatedState(onDismissNow)
+    return this.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val pointerId = down.id
+            var accY = 0f
+            val thresholdPx = EARLY_SHEET_DISMISS_THRESHOLD.toPx()
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Main)
+                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                if (!change.pressed) break
+                // 武装条件二选一:动画仍在跑(=库在吞手势),或打开后还没满兜底窗
+                // (动画可能还没 START——down 落在 animateTo 启动前的那几帧,随后动画照样
+                // 会锁住并吞掉手势;只盯 isAnimationRunning 会在这一小段误退位)。
+                val animating = currentSheetState.isAnimationRunning
+                val inWindow = openedAt.elapsedNow() < EARLY_SHEET_DISMISS_WINDOW
+                if (!animating && !inWindow) break
+                val dy = change.positionChange().y
+                if (dy > 0f) {
+                    accY += dy
+                    if (accY >= thresholdPx) {
+                        Logger.w(TAG, "Early sheet dismiss fallback fired (accY=${accY.toInt()}px)")
+                        currentDismiss()
+                        break
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 一记有意的下滑(非误触)在 56dp(≈147px@2.625x)以上;列表滚动被消费不计入。
+private val EARLY_SHEET_DISMISS_THRESHOLD = 56.dp
+
+// 打开后的兜底窗:盖住"动画未启动"与"动画未结束"两段(实测库吞手势窗口 ~0.6-1s)。
+private val EARLY_SHEET_DISMISS_WINDOW = 800.milliseconds
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NowPlayingScreenContent(
     sharedViewModel: SharedViewModel = koinInject(),
+    neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
     mediaPlayerHandler: MediaPlayerHandler = koinInject(),
     navController: NavController,
     isExpanded: Boolean,
@@ -188,16 +275,19 @@ fun NowPlayingScreenContent(
     // ViewModel State
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
-    val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
+    // (perf) The 50 ms position flow is NOT collected here: a snapshot at shell level re-ran the
+    // whole sheet — state construction included — twenty times a second. It is consumed inside the
+    // two effects below and inside each style's playback controls instead.
     // Audio-delay correction, read here and applied ONLY to the lyric line below. The seek bar and
     // the elapsed-time readout keep the raw position: they report where the player is, while a
     // lyric reports what the ear is hearing, and those two are what the offset separates.
     val lyricsOffsetMs by sharedViewModel.getLyricsOffsetMs().collectAsStateWithLifecycle(0)
     val castState by sharedViewModel.castState.collectAsStateWithLifecycle()
-    val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
+ val remoteLikeState by sharedViewModel.remoteSongLikeState.collectAsStateWithLifecycle()
     val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     // Apple Music style's progress-bar codec badge — see NowPlayingContentState.toAudioCodecLabel.
-    val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
+   // Apple Music style's quality line under the progress bar — see NowPlayingContentState.toAudioQualityLabel.
+ val formatState by sharedViewModel.format.collectAsStateWithLifecycle(initialValue = null)
 
     val shouldShowVideo by sharedViewModel.getVideo.collectAsStateWithLifecycle()
     val translatedVoteState by sharedViewModel.translatedVoteState.collectAsStateWithLifecycle()
@@ -232,7 +322,10 @@ fun NowPlayingScreenContent(
     }
     // ⚠️ Use track.videoId (already prefix-stripped at MediaServiceHandlerImpl.kt:386).
     // Do NOT use mediaItem.mediaId — it carries the "Video" prefix for video items.
-    val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId
+    // track 在装队列清空-回填窗口会短暂为 null 且被 VM 的 distinctUntilChangedBy(videoId)
+    // 拦住不再回发——songEntity 与 track 同指当前曲,回退取它(否则 isNeteaseSong/红心门控
+    // 在冷启恢复队列等场景全部误判成 YT)。
+    val nowPlayingVideoId: String? = nowPlayingState?.track?.videoId ?: nowPlayingState?.songEntity?.videoId
     // currentOrderIndex() is a plain getter over the player, NOT Compose state, so it is read
     // inside this remember block — whose keys (the queue, and the track now playing) are exactly
     // the two things that can move the player's position. nowPlayingState is published FROM the
@@ -247,55 +340,34 @@ fun NowPlayingScreenContent(
             )
         }
     }
-    // Single PagerState — the unified ArtworkPager renders BOTH the fullscreen canvas
-    // background and the centered square thumbnail in each page, so we don't need two
-    // pagers + state mirroring. 橡皮筋落位弹簧在各主题 HorizontalPager 的 flingBehavior
-    // (PagerDefaults.flingBehavior + ArtworkSnapSpring);跟歌的 scrollToPage 直跳不受影响。
+    // One PagerState for artwork. A finger moves it directly; transport actions animate it.
     val artworkPagerState =
         rememberPagerState(
             initialPage = currentOrderIndex.coerceAtLeast(0),
             pageCount = { artworkQueue.size.coerceAtLeast(1) },
         )
+    // Commit metadata/palette only after the cover movement has stopped.
+    var visualOrderIndex by remember { mutableIntStateOf(currentOrderIndex.coerceAtLeast(0)) }
     var isAnimatingFromPlayer by remember { mutableStateOf(false) }
-    var isUserDraggingActive by remember { mutableStateOf(false) }
-    // Whether a real finger-drag is waiting to be turned into a seek. See the latch below.
-    var pendingUserSwipe by remember { mutableStateOf(false) }
-
-    // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
-    // by the outer Modifier.scrollable on the Column) and programmatic
-    // `animateScrollToPage`. We disambiguate via `isAnimatingFromPlayer`, which we
-    // set explicitly around the player → pager animation (try/finally).
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow {
-            artworkPagerState.isScrollInProgress to isAnimatingFromPlayer
-        }.collect { (scrolling, animating) ->
-            isUserDraggingActive = scrolling && !animating
-            // Latched, and cleared only once a seek has been dispatched for it. settledPage can
-            // move for reasons that are NOT a swipe — the pager being composed for the first time,
-            // or re-composed after the Apple Music style spent a while on its Queue/Lyrics tab,
-            // where the pager does not exist at all and its settledPage stays frozen on the track
-            // that was playing when the user left MAIN. Without this latch, coming back from that
-            // tab replays a stale page as though it had just been swiped to.
-            if (isUserDraggingActive) pendingUserSwipe = true
+    var artworkDragInProgress by remember { mutableStateOf(false) }
+    // After release, the artwork is already headed for the requested page. Hold that destination
+    // until Media3 acknowledges the skip; otherwise its old index would animate the Pager backward.
+    var pendingArtworkSeek by remember { mutableStateOf<Pair<Int, String?>?>(null) }
+    LaunchedEffect(currentOrderIndex, nowPlayingVideoId, artworkDragInProgress, pendingArtworkSeek) {
+        if (artworkDragInProgress) return@LaunchedEffect
+        pendingArtworkSeek?.let { (requestedIndex, sourceVideoId) ->
+            when {
+                currentOrderIndex == requestedIndex || nowPlayingVideoId != sourceVideoId -> {
+                    pendingArtworkSeek = null
+                }
+                else -> return@LaunchedEffect
+            }
         }
-    }
-
-    // ① Player → Pager: follow track changes.
-    //
-    // Deliberately a SNAP (scrollToPage), never animateScrollToPage: the rest of the player
-    // (title/artist) switches to the new track the moment the transition fires, so a sliding
-    // pager keeps the OLD artwork visible for the duration of the sweep — and sweeps across
-    // every page in between when the jump is far (radio appends, shuffle). Both read as
-    // "the previous song's cover flashes". The cover must change in the same frame as the
-    // text. User-swipe page turning is untouched — that gesture owns its own animation.
-    // Keyed on the track ALONE for the re-entrancy reasons documented below.
-    LaunchedEffect(currentOrderIndex) {
         val target = currentOrderIndex
-        if (!isUserDraggingActive &&
-            artworkQueue.isNotEmpty() &&
-            target in 0 until artworkQueue.size &&
-            target != artworkPagerState.currentPage
-        ) {
+        // settledPage may still name the old song while an animation heads elsewhere. Only the
+        // current destination can suppress a new player transition (rapid reverse/next presses).
+        if (artworkPagerState.targetPage == target) return@LaunchedEffect
+        if (artworkQueue.isNotEmpty() && target in 0 until artworkQueue.size) {
             isAnimatingFromPlayer = true
             try {
                 // Animate only a neighbouring page — that is a track change, and the slide IS the
@@ -303,7 +375,10 @@ fun NowPlayingScreenContent(
                 // current track's index by dozens without changing the track, and animating that
                 // flings the pager through dozens of covers to land on the same song.
                 if (abs(target - artworkPagerState.currentPage) <= 1) {
-                    artworkPagerState.animateScrollToPage(target)
+                    artworkPagerState.animateScrollToPage(
+                        target,
+                        animationSpec = ArtworkPagerSnapAnimation,
+                    )
                 } else {
                     artworkPagerState.scrollToPage(target)
                 }
@@ -313,83 +388,27 @@ fun NowPlayingScreenContent(
         }
     }
 
-    // ② Pager → Player: seek when user settles on a different page.
-    // Adjacent (±1) → Next/Previous (preserves crossfade flow on Android).
-    // Far skip → playMediaItemInMediaSource (handles unshuffling internally).
-    //
-    // Keyed on artworkPagerState ALONE — deliberately NOT on currentOrderIndex/queue size, which
-    // are read through rememberUpdatedState instead. This effect exists to catch a user SWIPE, and
-    // the only thing that moves settledPage is the pager. Re-keying it on the track built a NEW
-    // snapshotFlow on every track change, and a new flow's FIRST emission is whatever settledPage
-    // happens to hold — distinctUntilChanged has no previous value to suppress it against — so a
-    // STALE page was dispatched as though the user had just swiped to it.
-    //
-    // That is what broke the Apple Music queue: its pager lives inside MAIN, so while QUEUE is on
-    // screen the pager is not composed at all and settledPage still points at the previous track.
-    // Tapping a row seeked correctly, the track changed, this effect was rebuilt, and it
-    // immediately read the stale page — computeSeekAction(previous, current) == Previous — which
-    // sent the player straight back to the song that had just been playing.
-    // AppleMusicQueueView already uses rememberUpdatedState for exactly this hazard (its offset).
-    val latestOrderIndex by rememberUpdatedState(currentOrderIndex)
-    val latestQueueSize by rememberUpdatedState(artworkQueue.size)
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow { artworkPagerState.settledPage }
-            .distinctUntilChanged()
-            .collect { settled ->
-                if (isAnimatingFromPlayer) return@collect
-                // The seek is a response to a SWIPE, so there must have been one. This is what
-                // stops the Apple Music queue from being overruled: tapping a row seeks correctly,
-                // the track changes, and then this effect would otherwise notice the pager sitting
-                // on the old page and "correct" it right back.
-                if (!pendingUserSwipe) return@collect
-                pendingUserSwipe = false
-                val queueSize = latestQueueSize
-                val orderIndex = latestOrderIndex
-                if (queueSize == 0) return@collect
-                if (settled !in 0 until queueSize) return@collect
-                if (settled == orderIndex) return@collect
+    LaunchedEffect(pendingArtworkSeek) {
+        val expected = pendingArtworkSeek ?: return@LaunchedEffect
+        delay(3_000)
+        if (pendingArtworkSeek == expected) pendingArtworkSeek = null
+    }
 
-                runCatching {
-                    when (val action = computeSeekAction(settled, orderIndex)) {
-                        ArtworkSeekAction.Next -> {
-                            sharedViewModel.onUIEvent(UIEvent.Next)
-                        }
-                        // Use SkipToPrevious so a swipe always goes to the previous track —
-                        // UIEvent.Previous would seek to 0 of the current track once the
-                        // playhead has passed the 3-second mark.
-                        ArtworkSeekAction.Previous -> {
-                            sharedViewModel.onUIEvent(UIEvent.SkipToPrevious)
-                        }
-                        is ArtworkSeekAction.Skip -> {
-                            mediaPlayerHandler.playMediaItemInMediaSource(action.index)
-                        }
-                        ArtworkSeekAction.NoOp -> {
-                            Unit
-                        }
-                    }
-                }.onFailure { error ->
-                    Logger.w(TAG, "ArtworkPager seek failed: ${error.message}")
+    // settledPage can update before the final motion frame. Keep the visual index on the old
+    // song until both the page is stationary and the player has reached that song.
+    LaunchedEffect(artworkPagerState, currentOrderIndex, artworkDragInProgress) {
+        snapshotFlow {
+            artworkPagerState.settledPage to artworkPagerState.isScrollInProgress
+        }
+            .distinctUntilChanged()
+            .collect { (settled, scrolling) ->
+                if (!scrolling && !artworkDragInProgress && settled == currentOrderIndex) {
+                    visualOrderIndex = settled
                 }
             }
     }
 
-    // ③ "拉断橡皮筋"震感:用户拖动中页面跨越一半(currentPage 跳变,松手必翻页)的那一刻
-    // 震一次,受触感设置门控。信号选型(实测):currentPageOffsetFraction/targetPage 都不是
-    // snapshot state,拖动中 snapshotFlow 看不见它们变化;currentPage 是 mutableStateOf
-    // 且跨半即时跳变——拖动中与 settledPage(整个拖动期间恒为起点页)比较即可。拖回起点
-    // 不震、再拉再震、多页拖动每跨一页震一次;自动连播/程序化 snap 不经 isUserDraggingActive,
-    // 不会误震;全局点击观察器按位移排除拖动,无双重震动。
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow { if (isUserDraggingActive) artworkPagerState.currentPage else null }
-            .distinctUntilChanged()
-            .collect { page ->
-                if (page != null && page != artworkPagerState.settledPage) {
-                    HapticFeedback.tap()
-                }
-            }
-    }
-
-    // ④ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
+    // Queue mutation guard — when queue shrinks below currentPage, scroll to last index
     // to avoid IndexOutOfBoundsException during recomposition.
     LaunchedEffect(artworkQueue.size) {
         if (artworkQueue.isNotEmpty() && artworkPagerState.currentPage >= artworkQueue.size) {
@@ -486,6 +505,12 @@ fun NowPlayingScreenContent(
 
     LaunchedEffect(Unit) {
         snapshotFlow { paletteState.palette }
+            // kmpalette 在重新 generate(缓存未命中)时先把状态置 Loading——palette 属性随之为
+            // null。null 若照发,getColorFromPalette() 回落 Color.Black,背景会先向黑动画、新
+            // 调色板落地后再弹回:切歌瞬间整页发暗"跳一下"的根源(三主题共用本管线,三主题
+            // 都跳的原因)。过滤掉 null,Loading 期间保持上一首的颜色,新调色板落地后一次
+            // 平滑过渡。
+            .filterNotNull()
             .distinctUntilChanged()
             .collectLatest {
                 spotShadowColor = it.getColorFromPalette()
@@ -500,38 +525,37 @@ fun NowPlayingScreenContent(
         Logger.d(TAG, "spotShadowColor: $spotShadowColor")
     }
 
-    var isSliding by rememberSaveable {
-        mutableStateOf(false)
-    }
-    var sliderValue by rememberSaveable {
-        mutableFloatStateOf(0f)
-    }
-    LaunchedEffect(key1 = timelineState, key2 = isSliding) {
-        if (!isSliding) {
-            sliderValue =
-                if (timelineState.total > 0L) {
-                    timelineState.current.toFloat() * 100 / timelineState.total.toFloat()
-                } else {
-                    0f
-                }
-        }
-    }
+    // (perf) slider drag state moved into each style's playback controls — the shell no longer
+    // tracks the slider, so a 50 ms tick never reaches this file's composition at all.
 
-    // Crossfade: RGB rainbow color cycling when transitioning between tracks
-    val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
-    val rainbowHue by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rainbowHue",
-    )
-    val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
+    // (perf) isCrossfading rides the 50 ms TimeLine object; mapped+distinct it only recomposes
+    // this colour when a crossfade actually starts or ends. More importantly, the infinite hue
+    // loop below only EXISTS while crossfading: keeping it composed while idle read an animation
+    // state on every vsync and invalidated this whole player scope even though the selected target
+    // colour was always white.
+    val isCrossfading by remember {
+        sharedViewModel.timeline.map { it.isCrossfading }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(false)
+    val crossfadeTargetColor =
+        if (isCrossfading) {
+            val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
+            val rainbowHue by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(1000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "rainbowHue",
+            )
+            hsvToColor(rainbowHue, 1f, 1f)
+        } else {
+            Color.White
+        }
     val sliderTrackColor by animateColorAsState(
-        targetValue = if (timelineState.isCrossfading) rainbowColor else Color.White,
+        // Preserve the old 300 ms settle back to white after the active loop leaves composition.
+        targetValue = crossfadeTargetColor,
         animationSpec = tween(300),
         label = "sliderCrossfadeColor",
     )
@@ -601,7 +625,9 @@ fun NowPlayingScreenContent(
     }
 
     // Canvas subtitle sync
-    LaunchedEffect(timelineState, screenDataState.lyricsData?.lyrics, lyricsOffsetMs) {
+    // (perf) The 50 ms position is consumed INSIDE the coroutine — a timelineState key here
+    // cancelled and relaunched this effect, and the shell, twenty times a second.
+    LaunchedEffect(screenDataState.lyricsData?.lyrics, lyricsOffsetMs) {
         val lyrics = screenDataState.lyricsData?.lyrics
         if (lyrics == null || lyrics.syncType == "UNSYNCED" || lyrics.syncType == null) {
             currentLyricLineIndex = -1
@@ -613,29 +639,31 @@ fun NowPlayingScreenContent(
                 ?.translatedLyrics
                 ?.first
                 ?.lines
-        // What the ear is hearing right now, which is what a lyric answers to. Keyed on the offset
-        // as well so dragging the setting while paused still moves the line.
-        val nowMs = timelineState.current - lyricsOffsetMs
-        if (nowMs > 0L) {
-            lines.indices.forEach { i ->
-                val startTimeMs = lines[i].startTimeMs.toLongOrNull() ?: 0L
-                val endTimeMs =
-                    if (i < lines.size - 1) {
-                        lines[i + 1].startTimeMs.toLongOrNull() ?: 0L
-                    } else {
-                        startTimeMs + 60000
+        // What the ear is hearing right now, which is what a lyric answers to. The offset is a
+        // key above, so dragging the setting while paused still moves the line.
+        sharedViewModel.timeline.collect { timeline ->
+            val nowMs = timeline.current - lyricsOffsetMs
+            if (nowMs > 0L) {
+                lines.indices.forEach { i ->
+                    val startTimeMs = lines[i].startTimeMs.toLongOrNull() ?: 0L
+                    val endTimeMs =
+                        if (i < lines.size - 1) {
+                            lines[i + 1].startTimeMs.toLongOrNull() ?: 0L
+                        } else {
+                            startTimeMs + 60000
+                        }
+                    if (nowMs in startTimeMs..endTimeMs) {
+                        currentLyricLineIndex = i
                     }
-                if (nowMs in startTimeMs..endTimeMs) {
-                    currentLyricLineIndex = i
                 }
-            }
-            if (lines.isNotEmpty() &&
-                nowMs in 0..(lines.getOrNull(0)?.startTimeMs?.toLongOrNull() ?: 0L)
-            ) {
+                if (lines.isNotEmpty() &&
+                    nowMs in 0..(lines.getOrNull(0)?.startTimeMs?.toLongOrNull() ?: 0L)
+                ) {
+                    currentLyricLineIndex = -1
+                }
+            } else {
                 currentLyricLineIndex = -1
             }
-        } else {
-            currentLyricLineIndex = -1
         }
     }
 
@@ -646,11 +674,11 @@ fun NowPlayingScreenContent(
         NowPlayingContentState(
             screenData = screenDataState,
             controllerState = controllerState,
-            timelineState = timelineState,
             timelineFlow = sharedViewModel.timeline,
             castState = castState,
             shouldShowVideo = shouldShowVideo,
             isNeteaseSong = nowPlayingVideoId?.toLongOrNull() != null,
+            isPodcastSong = mediaPlayerHandler.queueData.value?.data?.isNeteasePodcastQueue == true,
             remoteLikeState = remoteLikeState,
             // 红心=云端态;未登录源置灰(点击提示登录)
             likeEnabled =
@@ -663,13 +691,17 @@ fun NowPlayingScreenContent(
             artworkQueue = artworkQueue,
             artworkPageKeys = artworkPageKeys,
             currentOrderIndex = currentOrderIndex,
+            visualOrderIndex = visualOrderIndex,
             artworkPagerState = artworkPagerState,
+            artworkDragInProgress = artworkDragInProgress,
+            artworkMotionInProgress =
+                artworkDragInProgress || pendingArtworkSeek != null ||
+                    isAnimatingFromPlayer || artworkPagerState.isScrollInProgress,
             startColor = startColor,
             endColor = endColor,
             spotShadowColor = spotShadowColor,
             gradientOffset = gradientOffset,
             sliderTrackColor = sliderTrackColor,
-            sliderValue = sliderValue,
             currentLyricLineIndex = currentLyricLineIndex,
             showControlLayout = showHideControlLayout,
             controlLayoutAlpha = controlLayoutAlpha,
@@ -679,28 +711,33 @@ fun NowPlayingScreenContent(
             mainScrollState = mainScrollState,
             isExpanded = isExpanded,
             dismissIcon = dismissIcon,
-            // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
+         // codecs, NOT mimeType. StreamRepositoryImpl splits YouTube's
             // `audio/webm; codecs="opus"` with a regex and stores the two halves in SEPARATE
             // columns: mimeType keeps "audio/webm", codecs keeps "opus". Asking mimeType for
             // the codec therefore never matched anything and the badge never rendered, on any track.
             audioCodecLabel = formatState?.codecs.toAudioCodecLabel(),
-        )
+           audioQualityLabel = formatState.toAudioQualityLabel(),
+            lyricsOffsetMs = lyricsOffsetMs.toLong(),
+            videoAspectRatio = rememberVideoAspectRatio(MAIN_PLAYER) ?: 16f / 9,
+     )
     val actions =
         NowPlayingContentActions(
             onUIEvent = { sharedViewModel.onUIEvent(it) },
+            onArtworkDragChanged = { artworkDragInProgress = it },
+            onArtworkSkipRequested = { target ->
+                pendingArtworkSeek = target to nowPlayingVideoId
+            },
             onSeekToQueueIndex = { index ->
                 mediaPlayerHandler.playMediaItemInMediaSource(index)
             },
             onArtworkBitmap = { sharedViewModel.setBitmap(it) },
-            onSliderChange = { newValue ->
-                isSliding = true
-                sliderValue = newValue
-            },
-            onSliderChangeFinished = {
-                isSliding = false
-                sharedViewModel.onUIEvent(
-                    UIEvent.UpdateProgress(sliderValue),
-                )
+            // Spotify 主题翻页瞬间把 startColor 对齐滑入页正在显示的按页色(见 actions 字段注释);
+            // 调色板重新生成落地后,动画从用户正看着的颜色平滑走向新色,不再闪上一首的旧色。
+            onSnapPaletteColor = { color ->
+                coroutineScope.launch {
+                    startColor.animateTo(color, animationSpec = tween(220))
+                    endColor.animateTo(PlayerBackdropColor, animationSpec = tween(220))
+                }
             },
             onToggleControls = {
                 showHideJob = true
@@ -721,7 +758,11 @@ fun NowPlayingScreenContent(
                     )
                 }
             },
-            onShowMoreSheet = { showSheet = true },
+           onOpenListenTogether = {
+                onDismiss()
+                navController.navigate(ListenTogetherDestination)
+            },
+         onShowMoreSheet = { showSheet = true },
             onShowQueue = { showQueueBottomSheet = true },
             onShowInfo = { showInfoBottomSheet = true },
             onShowAddToPlaylist = { showAddToPlaylistDirectly = true },
@@ -869,6 +910,48 @@ fun NowPlayingScreenContent(
     // 网易歌评论列表(详情卡评论数入口);songId 取自当前曲目,面板自身负责分页。
     // 用 songEntity.videoId 而非 track.videoId:后者在部分转场时机为 null,
     // 空串进去分页直接"已经到底了"
+    // 播客节目评论线程与歌曲不同(A_DJ_1_<programId> vs R_SO_4_<songId>):用当前
+    // mainSong id 在电台节目列表里反查 programId。反查只在"明确播客队列+评论面板
+    // 已打开"时进行(CR-23)——旧实现按每首网易歌切歌都拿 album.id 当 radioId 最多
+    // 翻 5 页,普通歌曲纯浪费且挤占 byradio 限流队列;队列判定只认前缀(身份三键
+    // 持久化后恢复路径带前缀,不再有 SAVED_QUEUE 丢前缀的老问题)。
+    // 值语义:null=反查在途(面板等落地才首发,防首载走错线程) / ""=完成但未命中
+    // (回退歌曲线程——空数据总比错线程好) / A_DJ_1_<id>=命中。
+    val podcastProgramThreadId =
+        produceState<String?>(
+            null,
+            nowPlayingVideoId,
+            queueDataState?.data?.isNeteasePodcastQueue,
+            showNeteaseComments,
+        ) {
+            val vid = nowPlayingVideoId ?: return@produceState
+            if (!showNeteaseComments || queueDataState?.data?.isNeteasePodcastQueue != true) {
+                return@produceState
+            }
+            val radioId =
+                mediaPlayerHandler.queueData.value?.data?.listTracks
+                    ?.firstOrNull { it.videoId == vid }?.album?.id?.toLongOrNull()
+                    ?: return@produceState
+            com.maxrave.logger.Logger.w("PodcastComments", "resolving programId for $vid in radio $radioId")
+            var found: Long? = null
+            var offset = 0
+            // 最多翻 5 页×30=150 期,覆盖绝大多数电台
+            for (i in 0 until 5) {
+                val page =
+                    runCatching {
+                        neteaseRepository.getDjRadioProgramsPage(radioId, offset = offset).getOrNull()
+                    }.getOrNull() ?: break
+                val hit = page.first.firstOrNull { it.mainSongId?.toString() == vid }
+                if (hit != null) {
+                    found = hit.id
+                    break
+                }
+                if (!page.second) break
+                offset += page.first.size
+            }
+            com.maxrave.logger.Logger.w("PodcastComments", "resolved programId=$found")
+            value = found?.let { "A_DJ_1_$it" } ?: ""
+        }
     if (showNeteaseComments) {
         NeteaseCommentsSheet(
             onDismiss = { showNeteaseComments = false },
@@ -877,6 +960,8 @@ fun NowPlayingScreenContent(
                     ?: nowPlayingVideoId
                     ?: "",
             totalCount = screenDataState.neteaseSongData?.commentCount ?: 0,
+            threadId = podcastProgramThreadId.value,
+            isPodcast = mediaPlayerHandler.queueData.value?.data?.isNeteasePodcastQueue == true,
         )
     }
 
@@ -895,6 +980,12 @@ fun NowPlayingScreenContent(
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
             listNeteasePlaylist = uiState.listNeteasePlaylist,
+            youTubeLoadFailed = uiState.youTubePlaylistsFailed,
+            neteaseLoadFailed = uiState.neteasePlaylistsFailed,
+            onRetryCloudPlaylists = {
+                viewModel.resetPlaylists()
+                viewModel.setSongEntity(null)
+            },
             onDismiss = { showAddToPlaylistDirectly = false },
             onClick = { playlist ->
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(playlist.id))

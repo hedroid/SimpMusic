@@ -33,6 +33,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.memory.MemoryCache
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -40,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +78,8 @@ import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.ui.component.AppBottomNavigationBar
 import com.maxrave.simpmusic.ui.component.AppNavigationRail
 import com.maxrave.simpmusic.ui.component.LiquidGlassAppBottomNavigationBar
+import com.maxrave.simpmusic.ui.component.LocalAppBottomOverlayPadding
+import com.maxrave.simpmusic.ui.component.LocalAppContentPadding
 import com.maxrave.simpmusic.ui.icon.ArrowForwardIos
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.AnalyticsDestination
@@ -107,6 +114,7 @@ import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.format
@@ -164,6 +172,21 @@ fun App(
     onDismissDesktopNotificationPermissionDialog: (doNotShowAgain: Boolean) -> Unit = {},
     onOpenDesktopNotificationSettings: (doNotShowAgain: Boolean) -> Unit = {},
 ) {
+    // FM 高强度滑切压测的 OOM(2026-10-04,192MB 堆灌满)的位图侧配合修:coil 默认内存缓存
+    // =可用内存 25%(~48MB),播放页 1080 封面 hardware bitmap 不占 Java 堆但占 native,滑过
+    // 的每首歌都进缓存。钉到 ~10% 提前 LRU 驱逐,压住总内存与 GC 压力。Desktop 自带的工厂
+    // 与这里互不冲突:首设生效,两边配置一致性由同一处代码保证。
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader
+            .Builder(context)
+            .memoryCache {
+                MemoryCache
+                    .Builder()
+                    .maxSizePercent(context, 0.10)
+                    .build()
+            }
+            .build()
+    }
     val windowSize = currentWindowAdaptiveInfo().windowSizeClass
     val navController = rememberNavController()
     val isDesktopShell = getPlatform() == Platform.Desktop
@@ -232,6 +255,17 @@ fun App(
         rememberHazeState()
 
     LaunchedEffect(intent) {
+        // NavHost 把 setGraph 推迟到它自己的 effect 里执行,而本 effect 在组合序上先于
+        // NavHost——冷启动 deeplink 的 navigate 会跑在图挂上之前,必崩
+        // "You must call setGraph() before calling getGraph()"。等首屏 back stack 条目
+        // 出现(=图已挂+start 落栈)再导航;5s 超时放弃,防 intent 异常时 activity 空转
+        if (navController.currentBackStackEntry == null) {
+            withTimeoutOrNull(5_000) {
+                while (navController.currentBackStackEntry == null) {
+                    withFrameNanos { }
+                }
+            } ?: return@LaunchedEffect
+        }
         val intent = intent ?: return@LaunchedEffect
         // Launcher shortcuts (long-press the app icon): action-only intents with no data URI.
         // Navigate exactly like tapping the tab itself: pop to start, save/restore sibling tab state.
@@ -658,22 +692,42 @@ fun App(
                                         },
                                     ).hazeSource(hazeState),
                             ) {
-                                AppNavigationGraph(
-                                    innerPadding = innerPadding,
-                                    navController = navController,
-                                    hideNavBar = {
-                                        isNavBarVisible = false
-                                    },
-                                    showNavBar = {
-                                        isNavBarVisible = true
-                                    },
-                                    showNowPlayingSheet = {
-                                        isShowNowPlaylistScreen = true
-                                    },
-                                    onScrolling = {
-                                        isScrolledToTop = it
-                                    },
-                                )
+                                val bottomOverlayPadding =
+                                    if (isTablet && !isInFullscreen) {
+                                        if (getPlatform() == Platform.Android) {
+                                            if (isLiquidGlassEnabled == TRUE) 56.dp else 60.dp
+                                        } else {
+                                            80.dp
+                                        }
+                                    } else if (!isTablet && isNavBarVisible && !isShowMiniPlayer) {
+                                        // Keep the footer stable when playback stops. Scaffold removes
+                                        // the mini player from innerPadding, so reserve its expanded
+                                        // height here instead of letting the end of the list jump.
+                                        if (isLiquidGlassEnabled == TRUE) 68.dp else 60.dp
+                                    } else {
+                                        0.dp
+                                    }
+                                CompositionLocalProvider(
+                                    LocalAppContentPadding provides innerPadding,
+                                    LocalAppBottomOverlayPadding provides bottomOverlayPadding,
+                                ) {
+                                    AppNavigationGraph(
+                                        innerPadding = innerPadding,
+                                        navController = navController,
+                                        hideNavBar = {
+                                            isNavBarVisible = false
+                                        },
+                                        showNavBar = {
+                                            isNavBarVisible = true
+                                        },
+                                        showNowPlayingSheet = {
+                                            isShowNowPlaylistScreen = true
+                                        },
+                                        onScrolling = {
+                                            isScrolledToTop = it
+                                        },
+                                    )
+                                }
                             }
                             this@Row.AnimatedVisibility(
                                 modifier =
@@ -767,7 +821,9 @@ fun App(
                                                 },
                                             ),
                                     ) {
-                                        ForceDarkContent {
+                                        // Side panel only: the status bar is shared with the page
+                                        // behind, so this dark subtree must not claim it.
+                                        ForceDarkContent(affectSystemBars = false) {
                                             NowPlayingScreenContent(
                                                 navController = navController,
                                                 sharedViewModel = viewModel,
@@ -910,6 +966,9 @@ fun App(
                                             Res.string.update_message,
                                             response.tagName,
                                             formatted,
+                                            // values-iw/values-in still carry an old %3$s; Compose Resources indexes
+                                            // args without a bounds check, so omitting it crashes the dialog
+                                            "",
                                         )
                                     } else {
                                         getString(

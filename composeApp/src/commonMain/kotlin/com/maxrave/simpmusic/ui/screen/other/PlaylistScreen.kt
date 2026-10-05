@@ -87,6 +87,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kmpalette.rememberPaletteState
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
+import com.maxrave.simpmusic.ui.component.BatchDownloadConfirmDialog
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
@@ -184,6 +185,8 @@ fun PlaylistScreen(
     val listColors by viewModel.listColors.collectAsStateWithLifecycle()
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val liked by viewModel.liked.collectAsStateWithLifecycle()
+    // 自建歌单/网易红心歌单没有收藏语义,顶栏心隐藏(PlaylistViewModel.favoriteAvailable)
+    val favoriteAvailable by viewModel.favoriteAvailable.collectAsStateWithLifecycle()
     val tracks by viewModel.tracks.collectAsStateWithLifecycle()
     val tracksListState by viewModel.tracksListState.collectAsStateWithLifecycle()
 
@@ -297,7 +300,7 @@ fun PlaylistScreen(
     LaunchedEffect(key1 = id) {
         if (id != uiState.data?.id) {
             Logger.w(tag, "new id: $id")
-            viewModel.getData(id)
+            viewModel.getData(id, isYourYouTubePlaylist)
         }
     }
     LaunchedEffect(key1 = firstItemVisible) {
@@ -526,7 +529,7 @@ fun PlaylistScreen(
                                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                                         verticalAlignment = Alignment.CenterVertically,
                                                     ) {
-                                                        if (!data.isRadio) {
+                                                        if (!data.isRadio && favoriteAvailable) {
                                                             Box(
                                                                 modifier = Modifier.size(48.dp),
                                                                 contentAlignment = Alignment.Center,
@@ -825,7 +828,7 @@ fun PlaylistScreen(
                                                             .liquidGlass(headerBackdrop, RoundedCornerShape(24.dp)),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                 ) {
-                                                    if (!data.isRadio) {
+                                                    if (!data.isRadio && favoriteAvailable) {
                                                         Box(
                                                             modifier = Modifier.size(48.dp),
                                                             contentAlignment = Alignment.Center,
@@ -1264,6 +1267,7 @@ fun PlaylistScreen(
                     val selectedIds = selectionState.selected.toList()
                     SelectedSongsBottomSheet(
                         count = selectedIds.size,
+                        selectionIds = selectedIds,
                         onDismiss = { showSelectionSheet = false },
                         onPlayNext = {
                             selectionViewModel.playNext(selectedIds)
@@ -1273,7 +1277,10 @@ fun PlaylistScreen(
                             selectionViewModel.addToQueue(selectedIds)
                             selectionState.exit()
                         },
-                        onAddToPlaylist = { showSelectionAddToPlaylist = true },
+                        onAddToPlaylist = {
+                            selectionViewModel.loadCloudPlaylists()
+                            showSelectionAddToPlaylist = true
+                        },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
                             selectionState.exit()
@@ -1287,16 +1294,32 @@ fun PlaylistScreen(
                 if (showSelectionAddToPlaylist) {
                     val selectedIds = selectionState.selected.toList()
                     val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+                    val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+                    val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+                    val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+                    val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
                     AddToPlaylistModalBottomSheet(
                         isBottomSheetVisible = true,
                         listLocalPlaylist = localPlaylists,
-                        listYouTubePlaylist = emptyList(),
+                        listYouTubePlaylist = youTubePlaylists,
+                        listNeteasePlaylist = neteasePlaylists,
+                        youTubeLoadFailed = youTubeLoadFailedState,
+                        neteaseLoadFailed = neteaseLoadFailedState,
+                        onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
+                        videoIds = selectedIds,
                         onDismiss = { showSelectionAddToPlaylist = false },
                         onClick = { playlist ->
-                            selectionViewModel.addToPlaylist(playlist.id, selectedIds)
-                            selectionState.exit()
+                        selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+                        selectionState.exit()
                         },
-                        onYTPlaylistClick = {},
+                        onYTPlaylistClick = { playlist ->
+                        selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
+                        onNeteasePlaylistClick = { playlist ->
+                        selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
                     )
                 }
                 if (itemBottomSheetShow && currentItem != null) {
@@ -1402,6 +1425,17 @@ fun PlaylistScreen(
                 viewModel.makeToast("Error: ${state.message}")
                 navController.navigateUp()
             }
+        }
+
+        // 整歌单下载"跳过/覆盖/取消"三选弹窗(2026-10 二期)
+        val batchDownloadRequest by viewModel.batchDownloadRequest.collectAsStateWithLifecycle()
+        batchDownloadRequest?.let { request ->
+            BatchDownloadConfirmDialog(
+                downloadedCount = request.downloaded.size,
+                onSkip = { viewModel.confirmBatchDownload(false) },
+                onOverwrite = { viewModel.confirmBatchDownload(true) },
+                onDismiss = { viewModel.dismissBatchDownload() },
+            )
         }
     }
 }

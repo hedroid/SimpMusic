@@ -16,7 +16,12 @@ import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
+import com.maxrave.simpmusic.viewModel.base.demoteDownloadedContainers
+import org.koin.core.component.inject
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
@@ -38,6 +43,10 @@ class LibraryDynamicPlaylistViewModel(
     private val artistRepository: ArtistRepository,
     private val analyticsRepository: AnalyticsRepository,
 ) : BaseViewModel() {
+    private val downloadUtils: com.maxrave.domain.mediaservice.handler.DownloadHandler by inject()
+    private val playlistRepository: com.maxrave.domain.repository.PlaylistRepository by inject()
+    private val albumRepository: com.maxrave.domain.repository.AlbumRepository by inject()
+    private val localPlaylistRepository: com.maxrave.domain.repository.LocalPlaylistRepository by inject()
     private val _listFavoriteSong: MutableStateFlow<List<SongEntity>> = MutableStateFlow(emptyList())
     val listFavoriteSong: StateFlow<List<SongEntity>> get() = _listFavoriteSong
 
@@ -85,6 +94,105 @@ class LibraryDynamicPlaylistViewModel(
         getFollowedArtist()
         getMostPlayedSong()
         getDownloadedSong()
+        observeDownloadManagement()
+    }
+
+    // ===== 下载管理页(2026-10 二期):Room 下载活动行 × DownloadManager 实时态合并 =====
+
+    private val _downloadManagementRows = MutableStateFlow<List<DownloadManagementRow>>(emptyList())
+    val downloadManagementRows: StateFlow<List<DownloadManagementRow>> get() = _downloadManagementRows
+
+    private fun observeDownloadManagement() {
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(
+                songRepository.getDownloadActivitySongs(),
+                downloadUtils.downloads,
+            ) { songs, live ->
+                songs.mapNotNull { song ->
+                    val pair = live[song.videoId]
+                    val audioStatus = resolveDownloadEntryStatus(pair?.first, song.downloadedFilePath, song.downloadState)
+                    val videoStatus =
+                        if (pair?.second != null || song.downloadedVideoFilePath != null) {
+                            resolveDownloadEntryStatus(pair?.second, song.downloadedVideoFilePath, song.downloadState)
+                        } else {
+                            null
+                        }
+                    DownloadManagementRow(
+                        song = song,
+                        audioStatus = audioStatus,
+                        audioLive = pair?.first,
+                        videoStatus = videoStatus,
+                        videoLive = pair?.second,
+                        audioFileBytes = song.downloadedFilePath?.let { java.io.File(it).takeIf(File::exists)?.length() },
+                        videoFileBytes = song.downloadedVideoFilePath?.let { java.io.File(it).takeIf(File::exists)?.length() },
+                    )
+                }.sortedWith(
+                    compareBy<DownloadManagementRow> {
+                        minOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: Int.MAX_VALUE)
+                    }.thenComparator { a, b ->
+                        (b.song.downloadedAt ?: REMOVED_SONG_DATE_TIME).compareTo(
+                            a.song.downloadedAt ?: REMOVED_SONG_DATE_TIME,
+                        )
+                    },
+                )
+            }
+                .flowOn(kotlinx.coroutines.Dispatchers.IO)
+                .collect { _downloadManagementRows.value = it }
+        }
+    }
+
+    fun pauseDownload(videoId: String) = downloadUtils.pauseDownload(videoId)
+
+    fun resumeDownload(videoId: String) = downloadUtils.resumeDownload(videoId)
+
+    fun retryDownload(videoId: String) {
+        viewModelScope.launch { downloadUtils.retryDownload(videoId) }
+    }
+
+    /** 重新下载已完成的(覆盖语义:删旧文件+重新入队,同三点菜单) */
+    fun redownload(videoId: String) {
+        viewModelScope.launch {
+            val song = songRepository.getSongById(videoId).firstOrNull() ?: return@launch
+            demoteDownloadedContainers(
+                videoId = videoId,
+                playlistRepository = playlistRepository,
+                albumRepository = albumRepository,
+                localPlaylistRepository = localPlaylistRepository,
+            )
+            downloadUtils.removeDownload(videoId)
+            songRepository.updateDownloadState(videoId, com.maxrave.domain.data.entities.DownloadState.STATE_PREPARING)
+            downloadUtils.downloadTrack(videoId, song.title, song.thumbnails ?: "")
+        }
+    }
+
+    /** 视频视角重下(2026-10 CR P1-2):只删视频重新下视频,音频不动 */
+    fun redownloadVideo(videoId: String) {
+        viewModelScope.launch {
+            val song = songRepository.getSongById(videoId).firstOrNull() ?: return@launch
+            downloadUtils.removeVideoDownload(videoId)
+            downloadUtils.downloadVideo(videoId, song.title, song.thumbnails ?: "")
+        }
+    }
+
+    /** 删除:文件式=删文件+Room;旧缓存条目引擎内分流走原 removeDownload */
+    fun deleteDownload(videoId: String) {
+        viewModelScope.launch {
+            demoteDownloadedContainers(
+                videoId = videoId,
+                playlistRepository = playlistRepository,
+                albumRepository = albumRepository,
+                localPlaylistRepository = localPlaylistRepository,
+            )
+            downloadUtils.removeDownload(videoId)
+        }
+    }
+
+    fun pauseAllDownloads() = downloadUtils.pauseAllActiveDownloads()
+
+    fun resumeAllDownloads() = downloadUtils.resumeAllPausedDownloads()
+
+    fun retryFailedDownloads() {
+        viewModelScope.launch { downloadUtils.retryAllFailedDownloads() }
     }
 
     private fun getFavoriteSong() {
@@ -119,11 +227,14 @@ class LibraryDynamicPlaylistViewModel(
 
     private fun getDownloadedSong() {
         viewModelScope.launch {
-            songRepository.getDownloadedSongs().collectLatest { downloadedSong ->
+            // 实时流(2026-10-01 用户反馈"刚下载完成的歌点击没反应"):旧 getDownloadedSongs 是
+            // flow{} 单发快照,VM init 后新完成的歌永远不进列表,点击时 find 落空静默 return。
+            // 完成口径=文件路径在或 state=3(旧缓存),与 resolveDownloadEntryStatus 的 DONE 对齐
+            songRepository.getDownloadActivitySongs().collectLatest { songs ->
                 _listDownloadedSong.value =
-                    (downloadedSong ?: emptyList()).sortedByDescending {
-                        it.downloadedAt ?: REMOVED_SONG_DATE_TIME
-                    }
+                    songs
+                        .filter { it.downloadedFilePath != null || it.downloadState == 3 }
+                        .sortedByDescending { it.downloadedAt ?: REMOVED_SONG_DATE_TIME }
             }
         }
     }
@@ -215,10 +326,17 @@ class LibraryDynamicPlaylistViewModel(
         videoId: String,
         type: LibraryDynamicPlaylistType,
     ) {
+        // 下载页队列隔离(2026-10-01 用户反馈):点播客下载项组纯播客队列,点歌曲组纯歌曲
+        // 队列——两类不混排;播客队列挂 NETEASE_PODCAST_ 前缀哨兵,无尽钩子按播客早退
         val (targetList, playTrack) =
             when (type) {
                 LibraryDynamicPlaylistType.Favorite -> listFavoriteSong.value to listFavoriteSong.value.find { it.videoId == videoId }
-                LibraryDynamicPlaylistType.Downloaded -> listDownloadedSong.value to listDownloadedSong.value.find { it.videoId == videoId }
+                LibraryDynamicPlaylistType.Downloaded -> {
+                    val all = listDownloadedSong.value
+                    val isPodcast = all.find { it.videoId == videoId }?.neteaseProgramId != null
+                    val scoped = if (isPodcast) all.filter { it.neteaseProgramId != null } else all.filter { it.neteaseProgramId == null }
+                    scoped to scoped.find { it.videoId == videoId }
+                }
                 LibraryDynamicPlaylistType.Followed -> return
                 LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value to listMostPlayedSong.value.find { it.videoId == videoId }
                 is LibraryDynamicPlaylistType.MonthlyRecap ->
@@ -228,11 +346,12 @@ class LibraryDynamicPlaylistViewModel(
                 else -> return
             }
         if (playTrack == null) return
+        val isPodcastQueue = playTrack.neteaseProgramId != null
         setQueueData(
             QueueData.Data(
                 listTracks = targetList.toArrayListTrack(),
                 firstPlayedTrack = playTrack.toTrack(),
-                playlistId = null,
+                playlistId = if (isPodcastQueue) "NETEASE_PODCAST_DOWNLOADED" else null,
                 playlistName = playlistName(type),
                 playlistType = PlaylistType.RADIO,
                 continuation = null,

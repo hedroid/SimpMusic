@@ -8,11 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -69,6 +68,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -141,6 +141,14 @@ private val ExpressiveCardShape = RoundedCornerShape(20.dp)
 private val ArtworkCardShape = RoundedCornerShape(28.dp)
 
 /**
+ * Width / height of the slot the artwork card takes in the column: the video's own shape while
+ * one plays, capped at square so a tall video is never taller than a song's card. The one
+ * expression both the drawn card and the measuring spacer in `NowPlayingContentM3Expressive` use.
+ */
+internal fun NowPlayingContentState.expressiveCardSlotRatio(): Float =
+    if (screenData.isVideo && shouldShowVideo) maxOf(videoAspectRatio, 1f) else 1f
+
+/**
  * One pager page: a rounded square card (width = screen − 40dp, 1:1, 28dp corners).
  *
  * Current page: live artwork (feeds the palette via [NowPlayingContentActions.onArtworkBitmap])
@@ -165,11 +173,26 @@ internal fun ExpressiveArtworkCardPage(
     val colorScheme = MaterialTheme.colorScheme
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentArtworkPage = page == state.currentOrderIndex
-    val pageHasCanvas = isCurrentArtworkPage && state.screenData.canvasData != null
-    // While a video plays, the card frame itself shrinks to the video's 16:9 — no letterbox
-    // bands inside a square card. Every page shares the ratio so the pager height matches the
-    // measuring spacer in the content column (which uses the same condition).
-    val cardAspectRatio = if (state.screenData.isVideo && state.shouldShowVideo) 16f / 9 else 1f
+    val isVisualArtworkPage = page == state.visualOrderIndex
+    val pageHasCanvas =
+        !state.artworkMotionInProgress &&
+            isCurrentArtworkPage &&
+            state.screenData.canvasData != null
+    // While a video plays, the card itself takes the video's shape — no letterbox bands inside a
+    // square card — fitted into a slot no taller than the square card a song gets, so a tall video
+    // narrows the card instead of pushing the page past the fold. Every page shares the slot so the
+    // pager height matches the measuring spacer in the content column (expressiveCardSlotRatio).
+    val pageArtworkRatio = if (pageTrack.playerArtworkIsVideo()) 16f / 9f else 1f
+    val cardAspectRatio =
+        if (!state.artworkMotionInProgress &&
+            isCurrentArtworkPage &&
+            state.screenData.isVideo &&
+            state.shouldShowVideo
+        ) {
+            state.videoAspectRatio
+        } else {
+            pageArtworkRatio
+        }
 
     Box(
         contentAlignment = Alignment.Center,
@@ -180,19 +203,26 @@ internal fun ExpressiveArtworkCardPage(
                 // page) and any other content from bleeding into adjacent pages.
                 .clipToBounds()
                 // Tap toggles controls only when the canvas is covering this page;
-                // otherwise no-op — Classic verbatim.
-                .clickable(
-                    enabled = pageHasCanvas,
-                    onClick = {
-                        if (state.mainScrollState.value == 0) {
-                            actions.onToggleControls()
-                        }
+                // otherwise no-op — Classic verbatim. Mounted CONDITIONALLY for the same
+                // reason as Classic: a disabled clickable still consumes UP, which reads
+                // as "hit a control" to the global haptic observer.
+                .then(
+                    if (pageHasCanvas) {
+                        Modifier.clickable(
+                            onClick = {
+                                if (state.mainScrollState.value == 0) {
+                                    actions.onToggleControls()
+                                }
+                            },
+                            indication = null,
+                            interactionSource =
+                                remember {
+                                    MutableInteractionSource()
+                                },
+                        )
+                    } else {
+                        Modifier
                     },
-                    indication = null,
-                    interactionSource =
-                        remember {
-                            MutableInteractionSource()
-                        },
                 ),
     ) {
         // ── Fullscreen canvas backdrop (current track + canvas data) — Classic verbatim ──
@@ -292,6 +322,8 @@ internal fun ExpressiveArtworkCardPage(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
                         .alpha(if (pageHasCanvas) 0f else 1f)
+                        .aspectRatio(state.expressiveCardSlotRatio())
+                        .wrapContentSize()
                         .aspectRatio(cardAspectRatio)
                         .clip(ArtworkCardShape)
                         .background(colorScheme.surfaceContainer),
@@ -300,9 +332,16 @@ internal fun ExpressiveArtworkCardPage(
                 // current/adjacent 翻转只是参数变化,不再销毁重建图片节点 — 切歌封面不再
                 // "灰占位→crossfade 重绘"。卡片在 canvas/视频下保持组合(alpha 0),调色板
                 // 照常馈送(翻转时用已解码位图补发),与旧 live 分支同一契约。
+                // 背景/角标/调色板的视觉当前页只认 Pager 的 settledPage。
+                val pagerSettledHere by remember {
+                    derivedStateOf { state.artworkPagerState.settledPage == page }
+                }
+                val pageShowsCurrentChrome = pagerSettledHere && isVisualArtworkPage
                 PlayerPageArtwork(
                     pageTrack = pageTrack,
-                    isCurrentPage = isCurrentArtworkPage,
+                    isCurrentPage = pageShowsCurrentChrome,
+                    isSettledPage = pagerSettledHere,
+                    isPagerMoving = state.artworkMotionInProgress,
                     onCurrentArtworkLoaded = { actions.onArtworkBitmap(it) },
                     modifier =
                         Modifier
@@ -318,7 +357,8 @@ internal fun ExpressiveArtworkCardPage(
                             ).alpha(
                                 if (pageHasCanvas ||
                                     (
-                                        isCurrentArtworkPage &&
+                                        !state.artworkMotionInProgress &&
+                                            isCurrentArtworkPage &&
                                             state.screenData.isVideo &&
                                             state.shouldShowVideo
                                         )
@@ -341,11 +381,11 @@ internal fun ExpressiveArtworkCardPage(
                         var internalShowSubtitle by rememberSaveable {
                             mutableStateOf(true)
                         }
+                        // The card already has the video's shape, so this simply fills it.
                         Box(
                             modifier =
                                 Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(16f / 9)
+                                    .fillMaxSize()
                                     .background(Color.Black),
                         ) {
                             Box(Modifier.fillMaxSize()) {
@@ -355,7 +395,7 @@ internal fun ExpressiveArtworkCardPage(
                                     shouldShowSubtitle = internalShowSubtitle,
                                     shouldPip = false,
                                     shouldScaleDownSubtitle = true,
-                                    timelineState = state.timelineState,
+                                    timelineFlow = state.timelineFlow,
                                     lyricsData = state.screenData.lyricsData?.lyrics,
                                     translatedLyricsData = state.screenData.lyricsData?.translatedLyrics?.first,
                                     isInPipMode = state.isInPipMode,
@@ -490,7 +530,7 @@ internal fun ExpressiveArtworkCardPage(
                 // 当前页播视频时与封面图同条件隐藏(相邻页静态卡恒显)
                 artworkBadgeSource(
                     pageTrackVideoId = pageTrack?.videoId,
-                    isCurrentPage = isCurrentArtworkPage,
+                    isCurrentPage = pageShowsCurrentChrome,
                     isNeteaseSong = state.isNeteaseSong,
                 )?.let { badgeSource ->
                     SourceBadge(
@@ -501,7 +541,7 @@ internal fun ExpressiveArtworkCardPage(
                                 .align(Alignment.TopEnd)
                                 .padding(12.dp)
                                 .alpha(
-                                    if (!isCurrentArtworkPage || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
+                                    if (!pageShowsCurrentChrome || (!state.screenData.isVideo || !state.shouldShowVideo)) 1f else 0f,
                                 ),
                     )
                 }
@@ -527,7 +567,8 @@ internal fun ExpressiveBelowTheFold(
     Column(Modifier.padding(horizontal = 20.dp)) {
         // Lyrics card
         AnimatedVisibility(
-            visible = state.screenData.lyricsData != null,
+            // 播客节目拿不到歌词(stale 词也会残留窗口)——整卡不展示
+            visible = state.screenData.lyricsData != null && !state.isPodcastSong,
             modifier = Modifier.padding(top = 10.dp),
         ) {
             Surface(
@@ -673,7 +714,8 @@ internal fun ExpressiveBelowTheFold(
         Spacer(modifier = Modifier.height(10.dp))
         val neteaseMeta = state.screenData.neteaseSongData
         // Artist card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+        // 播客节目无艺人数据(详情卡端点对 mainSong 只回部分字段,卡会空壳)——不展示
+        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
             Surface(
                 onClick = {
                     actions.onNavigateToArtist()
@@ -756,7 +798,8 @@ internal fun ExpressiveBelowTheFold(
         }
         Spacer(modifier = Modifier.height(10.dp))
         // Description card
-        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+        // 说明卡同艺人卡:播客节目端点字段全空/零值,展示只会剩空壳——不展示
+        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
             Surface(
                 shape = ExpressiveCardShape,
                 color = colorScheme.surfaceContainer,
@@ -787,13 +830,6 @@ internal fun ExpressiveBelowTheFold(
                                 color = Color.White,
                             )
                             Spacer(modifier = Modifier.height(10.dp))
-                        }
-                        if (neteaseMeta.commentCount > 0) {
-                            Text(
-                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
-                                style = typo().bodyMedium,
-                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
-                            )
                         }
                         val bio = neteaseMeta.artistBriefDesc ?: neteaseMeta.albumDescription
                         if (!bio.isNullOrBlank()) {
@@ -835,13 +871,15 @@ internal fun ExpressiveBelowTheFold(
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(text = stringResource(Res.string.description), style = typo().labelSmall, color = Color.White)
                         Spacer(modifier = Modifier.height(10.dp))
+                        // (perf) 点击才需要时长:只收 total(每歌一变),不收 50ms 的 position 流。
+                        val infoTotalMs by state.timelineFlow.collectTotalMs()
                         DescriptionView(
                             text = state.screenData.songInfoData?.description ?: "",
                             onTimeClicked = { raw ->
                                 val timestamp = parseTimestampToMilliseconds(raw)
-                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                if (timestamp != 0.0 && infoTotalMs > 0L && timestamp < infoTotalMs) {
                                     actions.onUIEvent(
-                                        UIEvent.UpdateProgress(((timestamp * 100) / state.timelineState.total).toFloat()),
+                                        UIEvent.UpdateProgress(((timestamp * 100) / infoTotalMs).toFloat()),
                                     )
                                 }
                             },
@@ -864,8 +902,8 @@ internal fun ExpressiveBelowTheFold(
         if (showShareLyricsSheet) {
             ShareLyricsSheet(
                 lines = lyricsData.toShareLyricsLines(),
-                songTitle = state.screenData.nowPlayingTitle,
-                artistName = state.screenData.artistName,
+                songTitle = state.displayTitle,
+                artistName = state.displayArtistName,
                 artwork = state.screenData.bitmap,
                 seedColor = state.startColor.value,
                 initialLineIndex = state.currentLyricLineIndex,
@@ -894,6 +932,9 @@ internal fun ExpressiveCollapsedToolbar(
         enter = fadeIn() + slideInVertically(),
         exit = fadeOut() + slideOutVertically(),
     ) {
+        // (perf) The 50 ms flow is collected only while the toolbar is shown, so its ticks
+        // recompose this one row and never the body behind it.
+        val timeline by state.timelineFlow.collectAsStateWithLifecycle()
         ElevatedCard(
             elevation = CardDefaults.elevatedCardElevation(10.dp),
             shape = RectangleShape,
@@ -929,23 +970,21 @@ internal fun ExpressiveCollapsedToolbar(
                                 .wrapContentHeight(),
                         ) {
                             Text(
-                                text = state.screenData.nowPlayingTitle,
+                                text = state.displayTitle,
                                 style = typo().bodyMedium,
                                 color = Color.White,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .wrapContentHeight(
                                             align = Alignment.CenterVertically,
-                                        ).basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                            animationMode = MarqueeAnimationMode.Immediately,
-                                        ).focusable(),
+                                        ),
                             )
                             LazyRow(verticalAlignment = Alignment.CenterVertically) {
                                 item {
-                                    AnimatedVisibility(visible = state.screenData.isExplicit) {
+                                    AnimatedVisibility(visible = state.displayIsExplicit) {
                                         ExplicitBadge(
                                             modifier =
                                                 Modifier
@@ -955,21 +994,19 @@ internal fun ExpressiveCollapsedToolbar(
                                     }
                                 }
                                 item(
-                                    key = state.screenData.artistName,
+                                    key = state.displayArtistName,
                                 ) {
                                     Text(
-                                        text = state.screenData.artistName,
+                                        text = state.displayArtistName,
                                         style = typo().bodySmall,
                                         maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
                                                 .wrapContentHeight(
                                                     align = Alignment.CenterVertically,
-                                                ).basicMarquee(
-                                                    iterations = Int.MAX_VALUE,
-                                                    animationMode = MarqueeAnimationMode.Immediately,
-                                                ).focusable(),
+                                                ),
                                     )
                                 }
                             }
@@ -980,7 +1017,7 @@ internal fun ExpressiveCollapsedToolbar(
                         actions.onUIEvent(UIEvent.ToggleLike)
                     }
                     Spacer(modifier = Modifier.width(15.dp))
-                    Crossfade(targetState = state.timelineState.loading, label = "") {
+                    Crossfade(targetState = timeline.loading, label = "") {
                         if (it) {
                             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
@@ -1007,7 +1044,7 @@ internal fun ExpressiveCollapsedToolbar(
                             .align(Alignment.BottomCenter),
                 ) {
                     LinearProgressIndicator(
-                        progress = { state.timelineState.current.toFloat() / state.timelineState.total },
+                        progress = { timeline.current.toFloat() / timeline.total },
                         modifier =
                             Modifier
                                 .fillMaxWidth()

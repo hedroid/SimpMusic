@@ -65,6 +65,8 @@ android {
                     "ca",
                     "fa",
                     "bg",
+                    "sv",
+                    "hr",
                 )
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

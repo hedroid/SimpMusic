@@ -406,7 +406,7 @@ private fun ColumnScope.WorkArea(
     }
 
     CreditFooter()
-    EndOfPage(withoutCredit = true)
+    EndOfPage(withoutCredit = true, includeBottomBarPadding = false)
 }
 
 /**

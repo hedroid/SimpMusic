@@ -34,6 +34,16 @@ import com.maxrave.simpmusic.ui.icon.SkipNext
 import com.maxrave.simpmusic.ui.icon.SkipPrevious
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.viewModel.UIEvent
+import org.jetbrains.compose.resources.stringResource
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.next_song
+import simpmusic.composeapp.generated.resources.pause
+import simpmusic.composeapp.generated.resources.play
+import simpmusic.composeapp.generated.resources.previous_song
+import simpmusic.composeapp.generated.resources.repeat_all
+import simpmusic.composeapp.generated.resources.repeat_off
+import simpmusic.composeapp.generated.resources.repeat_one
+import simpmusic.composeapp.generated.resources.shuffle
 
 @Composable
 fun PlayerControlLayout(
@@ -52,6 +62,21 @@ fun PlayerControlLayout(
     contentColor: Color = Color.White,
     onUIEvent: (UIEvent) -> Unit,
 ) {
+    // TalkBack labels (UI-CR-07): the icons are the only content of their clickable boxes, so the
+    // description belongs on the icon and merges up into the click target.
+    val shuffleLabel = stringResource(Res.string.shuffle)
+    val previousLabel = stringResource(Res.string.previous_song)
+    val playPauseLabel =
+        stringResource(if (controllerState.isPlaying) Res.string.pause else Res.string.play)
+    val nextLabel = stringResource(Res.string.next_song)
+    val repeatLabel =
+        stringResource(
+            when (controllerState.repeatState) {
+                RepeatState.All -> Res.string.repeat_all
+                RepeatState.One -> Res.string.repeat_one
+                is RepeatState.None -> Res.string.repeat_off
+            },
+        )
     val height = if (isSmallSize) 48.dp else 96.dp
     val smallIcon = if (isSmallSize) 20.dp to 28.dp else 32.dp to 42.dp
     val mediumIcon = if (isSmallSize) 28.dp to 38.dp else 42.dp to 52.dp
@@ -85,14 +110,14 @@ fun PlayerControlLayout(
                         Icon(
                             imageVector = SimpIcons.Shuffle,
                             tint = contentColor,
-                            contentDescription = "",
+                            contentDescription = shuffleLabel,
                             modifier = Modifier.size(smallIcon.first),
                         )
                     } else {
                         Icon(
                             imageVector = SimpIcons.Shuffle,
                             tint = activeColor,
-                            contentDescription = "",
+                            contentDescription = shuffleLabel,
                             modifier = Modifier.size(smallIcon.first),
                         )
                     }
@@ -119,7 +144,7 @@ fun PlayerControlLayout(
                 Icon(
                     imageVector = SimpIcons.SkipPrevious,
                     tint = if (controllerState.isPreviousAvailable) contentColor else contentColor.copy(alpha = 0.4f),
-                    contentDescription = "",
+                    contentDescription = previousLabel,
                     modifier = Modifier.size(mediumIcon.first),
                 )
             }
@@ -144,14 +169,14 @@ fun PlayerControlLayout(
                         Icon(
                             imageVector = if (plainPlayPause) SimpIcons.PlayArrow else SimpIcons.PlayCircle,
                             tint = contentColor,
-                            contentDescription = "",
+                            contentDescription = playPauseLabel,
                             modifier = Modifier.size(bigIcon.first),
                         )
                     } else {
                         Icon(
                             imageVector = if (plainPlayPause) SimpIcons.Pause else SimpIcons.PauseCircle,
                             tint = contentColor,
-                            contentDescription = "",
+                            contentDescription = playPauseLabel,
                             modifier = Modifier.size(bigIcon.first),
                         )
                     }
@@ -178,7 +203,7 @@ fun PlayerControlLayout(
                 Icon(
                     imageVector = SimpIcons.SkipNext,
                     tint = if (controllerState.isNextAvailable) contentColor else contentColor.copy(alpha = 0.4f),
-                    contentDescription = "",
+                    contentDescription = nextLabel,
                     modifier = Modifier.size(mediumIcon.first),
                 )
             }
@@ -203,7 +228,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = SimpIcons.Repeat,
                                 tint = contentColor,
-                                contentDescription = "",
+                                contentDescription = repeatLabel,
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }
@@ -212,7 +237,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = SimpIcons.Repeat,
                                 tint = activeColor,
-                                contentDescription = "",
+                                contentDescription = repeatLabel,
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }
@@ -221,7 +246,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = SimpIcons.RepeatOne,
                                 tint = activeColor,
-                                contentDescription = "",
+                                contentDescription = repeatLabel,
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }

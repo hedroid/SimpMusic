@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
+import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 expect fun MediaPlayerView(
@@ -24,9 +25,19 @@ expect fun MediaPlayerViewWithSubtitle(
     shouldShowSubtitle: Boolean,
     shouldScaleDownSubtitle: Boolean = false,
     isInPipMode: Boolean,
-    timelineState: TimeLine,
+    // (perf) The 50 ms position flow, collected inside the actual — a TimeLine snapshot here
+    // used to recompose the caller's whole video branch twenty times a second.
+    timelineFlow: StateFlow<TimeLine>,
     lyricsData: Lyrics? = null,
     translatedLyricsData: Lyrics? = null,
     mainTextStyle: TextStyle,
     translatedTextStyle: TextStyle,
 )
+
+/**
+ * Aspect ratio (width / height) of the video [playerName] is showing, or null until the player
+ * knows it. For laying out the frame around the video, so the frame takes the video's own shape
+ * instead of assuming 16:9.
+ */
+@Composable
+expect fun rememberVideoAspectRatio(playerName: String): Float?

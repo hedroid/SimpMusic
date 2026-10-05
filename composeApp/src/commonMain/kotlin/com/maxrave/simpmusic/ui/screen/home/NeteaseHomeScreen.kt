@@ -78,7 +78,7 @@ import com.maxrave.simpmusic.ui.component.HomeItemContentPlaylist
 import com.maxrave.simpmusic.ui.component.HomeItemSong
 import com.maxrave.simpmusic.ui.component.MoodMomentAndGenreHomeItem
 import com.maxrave.simpmusic.ui.component.HomeShimmer
-import com.maxrave.simpmusic.ui.icon.Delete
+import com.maxrave.simpmusic.ui.icon.PlaylistRemove
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.NeteaseTagDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
@@ -113,6 +113,10 @@ fun NeteaseHomeScreen(
     val pullToRefreshState = rememberPullToRefreshState()
     val chipRowState = rememberScrollState()
     var topAppBarHeightPx by remember { mutableIntStateOf(0) }
+
+    // VM 是进程级 single,数据驻留整进程;每次本页重组(含 tab 切回)交给 VM 检测跨天,
+    // 跨天则静默刷新一轮(行保持内容原位替换),同一天内零重拉
+    LaunchedEffect(Unit) { viewModel.onScreenShown() }
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex }
@@ -406,8 +410,10 @@ internal fun NeteaseSongCard(
                             .clickable(onClick = onTrash),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // 三横线+右下减号(与歌曲三点 sheet"删除下载?"行同款,2026-10-02 用户定):
+                    // trashFm 语义=从 FM 批次移除并补新曲,PlaylistRemove 比垃圾桶贴切
                     Icon(
-                        imageVector = SimpIcons.Delete,
+                        imageVector = SimpIcons.PlaylistRemove,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(13.dp),

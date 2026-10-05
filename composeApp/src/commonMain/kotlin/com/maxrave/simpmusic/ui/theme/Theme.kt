@@ -12,7 +12,11 @@ import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.RippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import com.materialkolor.PaletteStyle
@@ -71,6 +75,17 @@ val LocalLiquidGlassEnabled = staticCompositionLocalOf { true }
  * Provided by [AppTheme], consumed by [ForceDarkContent]; null only outside of [AppTheme].
  */
 val LocalForcedDarkColorScheme = staticCompositionLocalOf<ColorScheme?> { null }
+
+/**
+ * How many screen-owning [ForceDarkContent] subtrees are currently composed.
+ *
+ * The system bar appearance is decided once in [AppTheme], above every page, so a page that forces
+ * itself dark while the app theme is light cannot recolor the status bar from inside its subtree.
+ * [ForceDarkContent] bumps this count for as long as it is composed, and [AppTheme] folds it into
+ * the appearance decision — otherwise immersive pages get dark status bar icons over their dark
+ * backgrounds. Null outside [AppTheme] (previews, tests), where the count is simply skipped.
+ */
+val LocalForceDarkSystemBarDepth = staticCompositionLocalOf<MutableIntState?> { null }
 
 /** Parses "RRGGBB" or "AARRGGBB" (optionally "#"-prefixed) into a [Color]; null if malformed. */
 fun parseThemeColorHex(hex: String): Color? {
@@ -163,7 +178,8 @@ fun AppTheme(
                 style = PaletteStyle.TonalSpot,
             )
         }
-    SystemBarAppearanceEffect(isDark)
+    val forceDarkSystemBarDepth = remember { mutableIntStateOf(0) }
+    ForceDarkAwareSystemBarEffect(isDark, forceDarkSystemBarDepth)
     MaterialExpressiveTheme(
         colorScheme = colorScheme,
         content = {
@@ -173,12 +189,25 @@ fun AppTheme(
                 LocalAppColors provides if (isDark) DarkAppColors else LightAppColors,
                 LocalIsDarkTheme provides isDark,
                 LocalForcedDarkColorScheme provides forcedDarkScheme,
+                LocalForceDarkSystemBarDepth provides forceDarkSystemBarDepth,
                 LocalLiquidGlassEnabled provides liquidGlassEnabled,
                 content = content,
             )
         },
         typography = typo(colorScheme),
     )
+}
+
+/**
+ * Reads the immersive-page count during composition so only this node recomposes when a
+ * [ForceDarkContent] screen comes or goes — not the whole [AppTheme] body.
+ */
+@Composable
+private fun ForceDarkAwareSystemBarEffect(
+    isDark: Boolean,
+    immersiveDepth: MutableIntState,
+) {
+    SystemBarAppearanceEffect(isDark || immersiveDepth.intValue > 0)
 }
 
 /**
@@ -230,7 +259,22 @@ private val SoftRippleConfiguration =
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ForceDarkContent(content: @Composable () -> Unit) {
+fun ForceDarkContent(
+    affectSystemBars: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    // Only content that owns the whole screen may claim the status bar. A partial-screen dark
+    // surface (the tablet-landscape player panel) shares the bar with the page behind it, whose
+    // half follows the global theme — flipping the icons for it would just move the unreadable
+    // half from the panel to the clock.
+    if (affectSystemBars) {
+        LocalForceDarkSystemBarDepth.current?.let { depth ->
+            DisposableEffect(depth) {
+                depth.intValue++
+                onDispose { depth.intValue-- }
+            }
+        }
+    }
     val darkScheme = LocalForcedDarkColorScheme.current ?: MaterialTheme.colorScheme
     MaterialExpressiveTheme(
         colorScheme = darkScheme,

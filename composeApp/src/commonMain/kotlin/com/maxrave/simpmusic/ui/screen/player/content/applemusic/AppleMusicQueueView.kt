@@ -108,6 +108,8 @@ internal fun AppleMusicQueueView(
     activePillContainer: Color,
     activePillContent: Color,
     deviceVolumeController: DeviceVolumeController?,
+    outputName: String?,
+    onOpenOutput: () -> Unit,
     modifier: Modifier = Modifier,
     isCompact: Boolean = false,
     dataStoreManager: DataStoreManager = koinInject(),
@@ -127,7 +129,7 @@ internal fun AppleMusicQueueView(
     // read/write that list (and the player timeline) at the SAME position — confirmed by reading
     // MediaServiceHandlerImpl.removeMediaItem/swap and ExoPlayerAdapter.moveMediaItem/
     // removeMediaItem/getUnshuffledIndex, which all treat their index argument as "current
-    // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
+   // shuffle/display order", i.e. exactly artworkQueue's own order. With the whole list shown,
     // local index == absolute index — no offset arithmetic to get wrong anywhere.
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -167,6 +169,10 @@ internal fun AppleMusicQueueView(
                 activePillContent = activePillContent,
                 // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
                 isFmQueue = queueDataState?.data?.playlistId == NETEASE_FM_PLAYLIST_ID,
+                // 播客队列不显示无尽开关(与 QueueBottomSheet 同款门控,判定只认前缀 CR-22):
+                // 播客队列播完即止,无尽语义不适用。2026-10-02 上游合并重做 AM 播放器时
+                // 该门控丢失(用户复报"播客播放页无尽队列又回来了")
+                isPodcastQueue = queueDataState?.data?.isNeteasePodcastQueue == true,
                 onEndlessDisabled = { musicServiceHandler.restoreOriginalQueueAfterEndless() },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
@@ -253,10 +259,12 @@ internal fun AppleMusicQueueView(
 
         // Same per-item sheet the old queue sheet opens from a row's ⋯ (move up/down/delete).
         var queueItemSheetIndex by remember { mutableStateOf(-1) }
+        var queueItemSheetVideoId by remember { mutableStateOf<String?>(null) }
         if (queueItemSheetIndex >= 0) {
             QueueItemBottomSheet(
                 onDismiss = { queueItemSheetIndex = -1 },
                 index = queueItemSheetIndex,
+                videoId = queueItemSheetVideoId,
             )
         }
 
@@ -266,6 +274,20 @@ internal fun AppleMusicQueueView(
                     .weight(1f)
                     .appleMusicVerticalFadeEdges(topFade = QUEUE_TOP_FADE, bottomFade = QUEUE_BOTTOM_FADE),
         ) {
+            // Keyed by the track, NOT by its position: a radio queue drops played tracks off
+            // the front (RadioQueueTrim), and a position-based key changes for every row when
+            // that happens, so the list loses its scroll anchor and jumps. The occurrence number
+            // keeps the key unique when a radio repeats a song — same shape QueueBottomSheet and
+            // upstream use. (fork 完整队列模型不变,只换 key。)
+            val queueRowKeys =
+                remember(state.artworkQueue) {
+                    val seen = HashMap<String, Int>(state.artworkQueue.size)
+                    state.artworkQueue.map { track ->
+                        val occurrence = seen.getOrElse(track.videoId) { 0 }
+                        seen[track.videoId] = occurrence + 1
+                        "${track.videoId}#$occurrence"
+                    }
+                }
             LazyColumn(
                 state = lazyListState,
                 // Space at BOTH ends equal to the fade at that end, so each fade lands on blank
@@ -310,8 +332,7 @@ internal fun AppleMusicQueueView(
             ) {
                 itemsIndexed(
                     state.artworkQueue,
-                    // Same key shape QueueBottomSheet uses over the full list.
-                    key = { i, t -> i.toString() + t.videoId },
+                    key = { i, t -> queueRowKeys.getOrElse(i) { t.videoId } },
                 ) { index, track ->
                     // Local index == absolute queue index (whole list is shown), so everything the
                     // PLAYER is told — click seeks, ⋯ sheet, drag reorder — takes this directly.
@@ -332,7 +353,10 @@ internal fun AppleMusicQueueView(
                             onClickListener = { videoId ->
                                 if (videoId == track.videoId) actions.onSeekToQueueIndex(queueIndex)
                             },
-                            onMoreClickListener = { queueItemSheetIndex = queueIndex },
+                            onMoreClickListener = {
+                                queueItemSheetVideoId = track.videoId
+                                queueItemSheetIndex = queueIndex
+                            },
                         )
                     }
                 }
@@ -367,11 +391,13 @@ internal fun AppleMusicQueueView(
             activePillContainer = activePillContainer,
             activePillContent = activePillContent,
             deviceVolumeController = deviceVolumeController,
-            compact = isCompact,
+           compact = isCompact,
             // Compact queue keeps transport + dock only: this list has no tap-to-toggle surface
             // the way the lyrics page does, so the cluster is always in-flow — the full block
             // (slider/times/volume) left the list under ~90dp in the side panel.
             transportOnly = isCompact,
+           outputName = outputName,
+            onOpenOutput = onOpenOutput,
         )
     }
 }
@@ -403,6 +429,8 @@ private fun AppleMusicQueuePillsRow(
             active = false,
             activeContainer = activePillContainer,
             activeContent = activePillContent,
+            // 播客节目进不了歌曲歌单——置灰禁用(药丸保留,行布局不破)
+            enabled = !state.isPodcastSong,
             onClick = { actions.onShowAddToPlaylist() },
             modifier = Modifier.weight(1f),
         )
@@ -433,6 +461,7 @@ private fun AppleMusicQueuePill(
     activeContent: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier =
@@ -443,13 +472,13 @@ private fun AppleMusicQueuePill(
                 .height(40.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(if (active) activeContainer else AppleMusicPillInactive)
-                .clickable(onClick = onClick),
+                .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = "",
-            tint = if (active) activeContent else Color.White,
+            tint = if (active) activeContent else Color.White.copy(alpha = if (enabled) 1f else 0.38f),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -463,6 +492,8 @@ private fun AppleMusicContinuePlayingHeader(
     activePillContainer: Color,
     activePillContent: Color,
     isFmQueue: Boolean,
+    // 播客队列隐藏无尽开关(整个 label+Switch,与 QueueBottomSheet 同款门控)
+    isPodcastQueue: Boolean = false,
     onEndlessDisabled: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -505,26 +536,28 @@ private fun AppleMusicContinuePlayingHeader(
                 }
             }
             // The switch needs its own label, exactly like the queue sheet's — unlabelled it
-            // reads as a mystery toggle.
-            Text(
-                text = stringResource(Res.string.endless_queue),
-                style = typography.queueSectionSubtitle,
-                modifier = Modifier.padding(end = 8.dp),
-            )
-            Switch(
-                checked = isFmQueue || endlessQueueEnabled,
-                onCheckedChange = { checked ->
-                    if (isFmQueue) {
-                        showToast(
-                            runBlocking { getString(Res.string.endless_queue_fm_locked) },
-                            ToastGravity.Bottom,
-                        )
-                    } else {
-                        // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
-                        if (!checked) onEndlessDisabled()
-                        coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
-                    }
-                },
+            // reads as a mystery toggle. Podcast queues hide the whole pair (播完即止,无尽
+            // 语义不适用).
+            if (!isPodcastQueue) {
+                Text(
+                    text = stringResource(Res.string.endless_queue),
+                    style = typography.queueSectionSubtitle,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                Switch(
+                    checked = isFmQueue || endlessQueueEnabled,
+                    onCheckedChange = { checked ->
+                        if (isFmQueue) {
+                            showToast(
+                                runBlocking { getString(Res.string.endless_queue_fm_locked) },
+                                ToastGravity.Bottom,
+                            )
+                        } else {
+                            // 关开关=裁掉电台追加的歌、恢复原队列(对齐 YTM autoplay)
+                            if (!checked) onEndlessDisabled()
+                            coroutineScope.launch { dataStoreManager.setEndlessQueue(checked) }
+                        }
+                    },
                 colors =
                     SwitchDefaults.colors(
                         // On state takes the artwork-derived pair this style already uses for its
@@ -542,7 +575,8 @@ private fun AppleMusicContinuePlayingHeader(
                         uncheckedThumbColor = Color.White.copy(alpha = 0.75f),
                     ),
                 modifier = Modifier.appleMusicPressInflate(pressedScale = 1.08f),
-            )
+                )
+            }
         }
     }
 }

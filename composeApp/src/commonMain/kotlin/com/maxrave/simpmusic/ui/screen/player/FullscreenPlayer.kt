@@ -1,10 +1,7 @@
 package com.maxrave.simpmusic.ui.screen.player
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.MarqueeAnimationMode
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -64,7 +62,9 @@ import androidx.navigation.NavController
 import com.maxrave.common.Config.MAIN_PLAYER
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
 import com.maxrave.simpmusic.extension.artworkScrimBrush
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.rememberIsInPipMode
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
@@ -93,7 +93,6 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.five_seconds
-import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,7 +188,7 @@ fun FullscreenPlayer(
                     .fillMaxSize(),
             shouldPip = true,
             shouldShowSubtitle = shouldShowSubtitle,
-            timelineState = timelineState,
+            timelineFlow = sharedViewModel.timeline,
             lyricsData = nowPlayingState.lyricsData?.lyrics,
             translatedLyricsData = nowPlayingState.lyricsData?.translatedLyrics?.first,
             isInPipMode = isInPipMode,
@@ -340,14 +339,11 @@ fun FullscreenPlayer(
                                     text = nowPlayingState.nowPlayingTitle,
                                     style = typo().titleMedium,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
-                                            .wrapContentHeight(align = Alignment.CenterVertically)
-                                            .basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            .wrapContentHeight(align = Alignment.CenterVertically),
                                 )
                             },
                             navigationIcon = {
@@ -662,12 +658,13 @@ fun FullscreenPlayer(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
-                                        text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
+                                        text = timelineState.elapsedLabel(sliderValue / 100f),
                                         style = typo().labelSmall,
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
-                                        text = " / ${formatDuration(timelineState.total)}",
+                                        // LIVE stands on its own: there is no elapsed time in front of it to divide from.
+                                        text = if (timelineState.isLive) timelineState.lengthLabel() else " / ${timelineState.lengthLabel()}",
                                         style = typo().bodySmall,
                                     )
                                 }

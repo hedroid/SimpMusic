@@ -1,10 +1,13 @@
 package com.maxrave.simpmusic.ui.screen.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +34,7 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,13 +48,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,18 +66,24 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.maxrave.domain.data.model.home.Content
 import com.maxrave.simpmusic.extension.isScrollingUp
 import com.maxrave.simpmusic.ui.component.Chip
 import com.maxrave.simpmusic.ui.component.EndOfPage
 import com.maxrave.simpmusic.ui.component.HomeShimmer
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import com.maxrave.simpmusic.ui.icon.SimpIcons
+import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Pause
 import com.maxrave.simpmusic.ui.icon.PlayArrow
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.ui.utils.toHiResArtworkUrl
 import com.maxrave.simpmusic.viewModel.NeteaseMixViewModel
+import com.maxrave.simpmusic.viewModel.SharedViewModel
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import simpmusic.composeapp.generated.resources.Res
@@ -101,6 +110,9 @@ fun NeteaseMixScreen(
     onScrolling: (onTop: Boolean) -> Unit = {},
     viewModel: NeteaseMixViewModel = koinInject(),
 ) {
+    // 头像=当前音源登录账号(SharedViewModel 共享流,与库页同一套口径)
+    val sharedViewModel: SharedViewModel = koinInject()
+    val accountThumbnail by sharedViewModel.sourceAccountThumbnail.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val heartLoading by viewModel.heartLoading.collectAsStateWithLifecycle()
@@ -328,12 +340,41 @@ fun NeteaseMixScreen(
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.statusBars),
                 )
-                Text(
-                    text = stringResource(Res.string.personal_fm),
-                    style = typo().headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                // 标题左侧头像=当前音源登录账号(用户 2026-09-30,与库页同款设计:
+                // 26dp 圆形+crossfade,空串隐藏;标题 titleMedium 与库页顶栏同字号;
+                // 本页无 TopAppBar,手排 Row)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
-                )
+                ) {
+                    AnimatedVisibility(
+                        !accountThumbnail.isNullOrEmpty(),
+                        modifier = Modifier.padding(end = 12.dp),
+                        enter = fadeIn() + expandHorizontally(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(LocalPlatformContext.current)
+                                    .data(accountThumbnail)
+                                    .crossfade(550)
+                                    .build(),
+                            placeholder = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            error = rememberVectorPainter(SimpIcons.PeopleAlt),
+                            contentDescription = null,
+                            modifier =
+                                Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape),
+                        )
+                    }
+                    Text(
+                        text = stringResource(Res.string.personal_fm),
+                        style = typo().titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
             }
         }
     }
@@ -374,26 +415,31 @@ private fun FmSongRow(
     onPlay: (index: Int) -> Unit,
 ) {
     val rowState = rememberLazyListState()
-    // 只在滚动(手势+fling 惯性)完全停止时判定一次是否在尾部:滚动过程中追加会连环
-    // 触发多次请求(fling 追不上 append);且手势→fling 交接处 isScrollInProgress 有
-    // 瞬间 false,静止需延时复核——一次手势最多拉一批。初始无滚动事件,天然不触发。
+    // 无感预取(2026-09-30 五轮修,用户反馈"到尾要回划再划"):**预取区深度必须大于
+    // 每批增量**——personalRadio 服务端固定每批 3 首,旧区=最后 3 张与批量等深,批落地
+    // 后必须把整批滑完才再触发=零跑道,快划必撞墙。现区=最后 6 张(约 3 屏,含一批余量),
+    // 并在每批落地时(contents.size 变化)重评估:仍在区内立即链发下一批,跑道自动维持;
+    // VM 在飞守卫(fmLoadingMore)防风暴。垃圾桶删歌后 contents 收缩也会重评估自然补拉。
     if (onLoadMore != null) {
-        LaunchedEffect(rowState) {
-            snapshotFlow { rowState.isScrollInProgress }
-                .distinctUntilChanged()
-            .collectLatest { scrolling ->
-                if (!scrolling) {
-                    delay(250)
-                    if (rowState.isScrollInProgress) return@collectLatest
-                    val info = rowState.layoutInfo
-                    val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-                    val hasScrolled =
-                        rowState.firstVisibleItemIndex > 0 || rowState.firstVisibleItemScrollOffset > 0
-                    if (hasScrolled && info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 1) {
-                        onLoadMore?.invoke()
-                    }
-                }
+        val nearEnd by remember {
+            derivedStateOf {
+                val info = rowState.layoutInfo
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 6
             }
+        }
+        // 滚动驱动:进入近尾区触发(布尔边沿,一次进区只打一发;离开再进才重武装)
+        LaunchedEffect(rowState) {
+            snapshotFlow { nearEnd }
+                .distinctUntilChanged()
+                .collect { near ->
+                    if (near) onLoadMore?.invoke()
+                }
+        }
+        // 落地链发:新批到达时若仍处近尾区立即续拉——区深 6>批 3 保证批落地瞬间
+        // nearEnd 仍为 true(用户在旧末尾,新 total-6 通常仍覆盖),跑道逐批+1 直到脱离
+        LaunchedEffect(contents.size, nearEnd) {
+            if (nearEnd && !loadingMore) onLoadMore?.invoke()
         }
     }
     LazyRow(
@@ -485,10 +531,8 @@ private fun HeartRadioCard(
             )
         } else {
             IconButton(onClick = if (isHeartActive) onToggle else onClick) {
-                Icon(
-                    imageVector = if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = null,
-                    tint = if (isHeartActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                com.maxrave.simpmusic.ui.component.PlayBadgeIcon(
+                    if (isHeartActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                 )
             }
         }
@@ -550,11 +594,10 @@ private fun FmHeroCard(
             )
             Spacer(Modifier.height(16.dp))
             Button(onClick = cardAction) {
-                Icon(
-                    imageVector = if (isFmActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
-                    contentDescription = null,
+                com.maxrave.simpmusic.ui.component.PlayBadgeIcon(
+                    if (isFmActive && isPlaying) SimpIcons.Pause else SimpIcons.PlayArrow,
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
                     when {
                         isFmActive && isPlaying -> stringResource(Res.string.personal_fm_pause)

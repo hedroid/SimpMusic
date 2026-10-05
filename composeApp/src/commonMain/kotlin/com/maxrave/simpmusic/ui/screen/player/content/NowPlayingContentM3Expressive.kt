@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.ui.screen.player.content
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -47,7 +48,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -62,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +82,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -92,17 +94,22 @@ import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.isPlatformCastAvailable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricText
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
 import com.maxrave.simpmusic.ui.component.heartBurst
 import com.maxrave.simpmusic.ui.component.rememberHeartBurstState
 import com.maxrave.simpmusic.ui.component.rememberHolderPainter
 import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Comment
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.Info
@@ -118,7 +125,6 @@ import com.maxrave.simpmusic.ui.screen.player.content.expressive.WavySeekBar
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.UIEvent
-import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -197,7 +203,6 @@ private fun NowPlayingM3ExpressiveLayout(
     val localDensity = LocalDensity.current
     val colorScheme = MaterialTheme.colorScheme
 
-    val isRepeatOne = state.controllerState.repeatState is RepeatState.One
 
     // Canvas mode fades the info block in and out. The shell's shared 500ms linear alpha exposes
     // a long half-blended phase in which container-backed buttons pick up the bright canvas
@@ -236,8 +241,8 @@ private fun NowPlayingM3ExpressiveLayout(
     }
     LaunchedEffect(
         topAppBarHeightDp,
-        // Unlike Classic, the M3E artwork frame CHANGES height (square ↔ 16:9 while a video
-        // plays), so the fold math must re-run when the measured middle height moves too —
+        // Unlike Classic, the M3E artwork frame CHANGES height (square ↔ the video's shape while
+        // a video plays), so the fold math must re-run when the measured middle height moves too —
         // without this key the gap keeps the previous track's numbers and the layout drifts.
         middleLayoutHeightDp,
         screenInfo,
@@ -285,15 +290,10 @@ private fun NowPlayingM3ExpressiveLayout(
                     modifier =
                         Modifier
                             .height(screenInfo.hDP.dp)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .artworkDragPager(state, actions),
                     beyondViewportPageCount = 1,
-                    userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
-                    flingBehavior =
-                        PagerDefaults.flingBehavior(
-                            state = state.artworkPagerState,
-                            snapAnimationSpec = ArtworkSnapSpring,
-                        ),
+                    userScrollEnabled = false,
                     key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     ExpressiveArtworkCardPage(
@@ -362,14 +362,11 @@ private fun NowPlayingM3ExpressiveLayout(
                             color = Color.White,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .wrapContentHeight(align = Alignment.CenterVertically)
-                                    .basicMarquee(
-                                        iterations = Int.MAX_VALUE,
-                                        animationMode = MarqueeAnimationMode.Immediately,
-                                    ).focusable(),
+                                    .wrapContentHeight(align = Alignment.CenterVertically),
                         )
                     }
                     IconButton(
@@ -411,9 +408,10 @@ private fun NowPlayingM3ExpressiveLayout(
 
                         // The artwork card is rendered by the pager above; reserve the same
                         // vertical space so the info layout keeps its Y position. Spacer has
-                        // no pointer input so pager swipes fall through. Its ratio MUST match
-                        // the card's (16:9 while a video plays, else square) or the fold math
-                        // drifts from what the pager actually draws.
+                        // no pointer input so artwork swipes fall through. Its ratio MUST match
+                        // the card's slot (the video's shape capped at square while a video
+                        // plays, else square) or the fold math drifts from what the pager
+                        // actually draws — hence the one shared expressiveCardSlotRatio().
                         Spacer(
                             modifier =
                                 Modifier
@@ -427,9 +425,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                     .value
                                                     .toInt()
                                             }
-                                    }.aspectRatio(
-                                        if (state.screenData.isVideo && state.shouldShowVideo) 16f / 9 else 1f,
-                                    ),
+                                    }.aspectRatio(state.expressiveCardSlotRatio()),
                         )
 
                         // === 5. Inline current-lyric line, centered in the lower gap ===
@@ -467,7 +463,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                 animationSpec = tween(durationMillis = 300),
                                 label = "inlineLyricLineExpressive",
                             ) { lineText ->
-                                Text(
+                                LyricText(
                                     text = lineText,
                                     style = typo().labelSmall,
                                     color = Color.White,
@@ -475,11 +471,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 20.dp)
-                                            .basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            .padding(horizontal = 20.dp),
                                 )
                             }
                         }
@@ -582,7 +574,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                 Column(
                                                     modifier = Modifier.fillMaxWidth(),
                                                 ) {
-                                                    Text(
+                                                    LyricText(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
@@ -606,7 +598,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                             ?.words
                                                             ?.stripRichSyncTimestamps()
                                                     if (!translatedLineText.isNullOrBlank()) {
-                                                        Text(
+                                                        LyricText(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
@@ -617,6 +609,7 @@ private fun NowPlayingM3ExpressiveLayout(
                                                                         animationMode = MarqueeAnimationMode.Immediately,
                                                                     ).focusable(),
                                                             text = translatedLineText,
+                                                            alignmentText = lineText,
                                                             style = typo().bodyMedium,
                                                             color = Color.Yellow,
                                                             maxLines = 1,
@@ -662,7 +655,12 @@ internal fun ExpressiveTrackInfoRow(
         // While a canvas hides the big artwork, a small thumbnail joins the row — Classic
         // verbatim (its shared NowPlayingTrackInfoRow does exactly this). Switched off by the
         // fullscreen lyrics landscape layout, which shows the full artwork right above the row.
-        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
+        // 55dp 高于文字行,出现/消失会改行高:显式 tween 防默认 spring 过冲推挤下方布局。
+        AnimatedVisibility(
+            visible = showCanvasThumbnail && state.screenData.canvasData != null,
+            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -690,18 +688,23 @@ internal fun ExpressiveTrackInfoRow(
         Column(Modifier.weight(1f)) {
             // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
             AnimatedContent(
-                targetState = state.screenData.nowPlayingTitle,
+                targetState = state.displayTitle,
                 transitionSpec = {
+                    // 默认 SizeTransform 是 spring:中英文歌名 1px 的测量行高差会被放大成
+                    // 5-6px 过冲,整页下方内容跟着弹跳。tween 与 fade 同步,无反向修正。
                     (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                        SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
+                modifier = Modifier.height(with(LocalDensity.current) { 27.sp.toDp() }),
                 label = "expressiveTitle",
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里(Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把文本渲染成空白),超长省略号。
+                // 固定槽位隔离中英文 Text 测量差异,lineHeight 保持字行一致。
                 Text(
                     text = title,
-                    style = typo().titleMedium,
+                    style = typo().titleMedium.copy(lineHeight = 27.sp),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -716,7 +719,11 @@ internal fun ExpressiveTrackInfoRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AnimatedVisibility(visible = state.screenData.isExplicit) {
+                AnimatedVisibility(
+                    visible = state.displayIsExplicit,
+                    enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                    exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                ) {
                     ExplicitBadge(
                         modifier =
                             Modifier
@@ -725,18 +732,21 @@ internal fun ExpressiveTrackInfoRow(
                     )
                 }
                 AnimatedContent(
-                    targetState = state.screenData.artistName,
+                    targetState = state.displayArtistName,
                     transitionSpec = {
+                        // 同标题:尺寸跟随 tween,不吃默认 spring 过冲。
                         (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                            SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(with(LocalDensity.current) { 20.sp.toDp() }),
                     label = "expressiveArtist",
                 ) { artist ->
                     // marquee 同上,超长省略号。
+                    // 固定槽位隔离艺人名的字体回退测量差异。
                     Text(
                         text = artist,
-                        style = typo().bodyMedium,
+                        style = typo().bodyMedium.copy(lineHeight = 20.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier =
@@ -751,8 +761,8 @@ internal fun ExpressiveTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
-        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
-        run {
+        // 红心=云端账号喜欢态;未登录源置灰;播客节目隐藏(歌曲红心对节目 524)
+        if (!state.isPodcastSong) run {
         val likeBurst = rememberHeartBurstState()
         Box(modifier = Modifier.size(48.dp).heartBurst(likeBurst).alpha(if (state.likeEnabled) 1f else 0.38f)) {
             FilledIconToggleButton(
@@ -781,6 +791,26 @@ internal fun ExpressiveTrackInfoRow(
             }
         }
         }
+        // 评论=网易歌专属常驻入口,放红心右侧与互动区同行(详情卡里的旧入口已删);
+        // 视觉语言与左侧红心圆钮同款(tonal 圆面+暗图标)
+        if (state.isNeteaseSong) {
+            Spacer(modifier = Modifier.size(8.dp))
+            Surface(
+                onClick = { actions.onShowNeteaseComments() },
+                shape = CircleShape,
+                color = colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = SimpIcons.Comment,
+                        contentDescription = "Comments",
+                        tint = colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -798,6 +828,10 @@ internal fun ColumnScope.ExpressivePlaybackControls(
     showShuffleAndRepeat: Boolean = false,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    // (perf) 高频层:50ms 的进度流只进这根波形条与时间行,壳层与其余控件不再逐帧重建。
+    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    var isScrubbing by remember { mutableStateOf(false) }
     Box(
         Modifier
             .padding(
@@ -806,21 +840,34 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .then(sliderModifier),
     ) {
         WavySeekBar(
-            progressFraction = state.sliderValue / 100f,
+            progressFraction =
+                if (isScrubbing) {
+                    scrubValue / 100f
+                } else if (timeline.total > 0L) {
+                    timeline.current.toFloat() / timeline.total
+                } else {
+                    0f
+                },
             isPlaying = state.controllerState.isPlaying,
             // Classic swaps the slider color to the rainbow while
             // crossfading (state.sliderTrackColor); tonal primary
             // otherwise.
             activeColor =
-                if (state.timelineState.isCrossfading) {
+                if (timeline.isCrossfading) {
                     state.sliderTrackColor
                 } else {
                     colorScheme.primary
                 },
             trackColor = colorScheme.secondaryContainer,
             thumbColor = colorScheme.primary,
-            onSliderChange = actions.onSliderChange,
-            onSliderChangeFinished = actions.onSliderChangeFinished,
+            onSliderChange = {
+                isScrubbing = true
+                scrubValue = it
+            },
+            onSliderChangeFinished = {
+                actions.onUIEvent(UIEvent.UpdateProgress(scrubValue))
+                isScrubbing = false
+            },
         )
     }
     // Time row — same math and negative guard as Classic
@@ -837,7 +884,11 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            text =
+                timeline.elapsedLabel(
+                    if (isScrubbing) scrubValue / 100f
+                    else if (timeline.total > 0L) timeline.current.toFloat() / timeline.total else 0f,
+                ),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -860,7 +911,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = timeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
@@ -888,7 +939,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
             )
         }
         Text(
-            text = formatDuration(state.timelineState.total),
+            text = timeline.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,
@@ -902,7 +953,7 @@ internal fun ColumnScope.ExpressivePlaybackControls(
     )
     ExpressiveTransportRow(
         controllerState = state.controllerState,
-        loading = state.timelineState.loading,
+        loading = timeline.loading,
         onUIEvent = actions.onUIEvent,
         modifier = Modifier.padding(horizontal = 20.dp),
         showShuffleAndRepeat = showShuffleAndRepeat,
@@ -1008,13 +1059,14 @@ private fun ExpressiveConnectedGroup(
         }
         ExpressiveConnectedSlot(
             shape = middle,
-            enabled = state.likeEnabled,
+            // 播客节目进不了歌曲歌单(/song/like 同源链路分离)——置灰禁用(槽位保留,连体胶囊形状不破)
+            enabled = state.likeEnabled && !state.isPodcastSong,
             onClick = { actions.onShowAddToPlaylist() },
         ) {
             Icon(
                 imageVector = SimpIcons.PlaylistAdd,
                 contentDescription = "Add to Playlist",
-                tint = if (state.likeEnabled) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                tint = if (state.likeEnabled && !state.isPodcastSong) colorScheme.onSurfaceVariant else colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
                 modifier = Modifier.size(22.dp),
             )
         }

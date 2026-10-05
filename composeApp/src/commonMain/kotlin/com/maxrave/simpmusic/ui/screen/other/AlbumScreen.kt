@@ -70,6 +70,7 @@ import com.kmpalette.rememberPaletteState
 import com.kyant.backdrop.highlight.Highlight
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.ui.component.DownloadingIndicator
+import com.maxrave.simpmusic.ui.component.BatchDownloadConfirmDialog
 import com.maxrave.domain.data.entities.DownloadState
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.utils.toSongEntity
@@ -902,12 +903,15 @@ fun AlbumScreen(
                                     style = typo().labelMedium,
                                     modifier =
                                         Modifier.padding(
-                                            horizontal = 24.dp,
+                                            // 与下方首张封面左缘对齐(横行 12dp),原 24dp 与封面错位
+                                            horizontal = 12.dp,
                                             vertical = 8.dp,
                                         ),
                                 )
                                 LazyRow(
                                     verticalAlignment = Alignment.CenterVertically,
+                                    // 统一封面间距 4dp(原 0dp 贴合)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     modifier = Modifier.padding(horizontal = 12.dp),
                                 ) {
                                     items(uiState.otherVersion) { album ->
@@ -993,6 +997,7 @@ fun AlbumScreen(
                     val selectedIds = selectionState.selected.toList()
                     SelectedSongsBottomSheet(
                         count = selectedIds.size,
+                        selectionIds = selectedIds,
                         onDismiss = { showSelectionSheet = false },
                         onPlayNext = {
                             selectionViewModel.playNext(selectedIds)
@@ -1004,7 +1009,10 @@ fun AlbumScreen(
                         },
                         // Deliberately does not exit yet: the playlist picker opens next and
                         // still needs the selection alive.
-                        onAddToPlaylist = { showSelectionAddToPlaylist = true },
+                        onAddToPlaylist = {
+                            selectionViewModel.loadCloudPlaylists()
+                            showSelectionAddToPlaylist = true
+                        },
                         onDownload = {
                             selectionViewModel.download(selectedIds)
                             selectionState.exit()
@@ -1018,16 +1026,32 @@ fun AlbumScreen(
                 if (showSelectionAddToPlaylist) {
                     val selectedIds = selectionState.selected.toList()
                     val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
+                    val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
+                    val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+                    val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+                    val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
                     AddToPlaylistModalBottomSheet(
                         isBottomSheetVisible = true,
                         listLocalPlaylist = localPlaylists,
-                        listYouTubePlaylist = emptyList(),
+                        listYouTubePlaylist = youTubePlaylists,
+                        listNeteasePlaylist = neteasePlaylists,
+                        youTubeLoadFailed = youTubeLoadFailedState,
+                        neteaseLoadFailed = neteaseLoadFailedState,
+                        onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
+                        videoIds = selectedIds,
                         onDismiss = { showSelectionAddToPlaylist = false },
                         onClick = { playlist ->
-                            selectionViewModel.addToPlaylist(playlist.id, selectedIds)
-                            selectionState.exit()
+                        selectionViewModel.addToPlaylist(playlist.id, selectedIds)
+                        selectionState.exit()
                         },
-                        onYTPlaylistClick = {},
+                        onYTPlaylistClick = { playlist ->
+                        selectionViewModel.addToYouTubePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
+                        onNeteasePlaylistClick = { playlist ->
+                        selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
+                        selectionState.exit()
+                        },
                     )
                 }
                 if (showBottomSheet) {
@@ -1064,6 +1088,17 @@ fun AlbumScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+        }
+
+        // 整专辑下载"跳过/覆盖/取消"三选弹窗(2026-10 二期)
+        val batchDownloadRequest by viewModel.batchDownloadRequest.collectAsStateWithLifecycle()
+        batchDownloadRequest?.let { request ->
+            BatchDownloadConfirmDialog(
+                downloadedCount = request.downloaded.size,
+                onSkip = { viewModel.confirmBatchDownload(false) },
+                onOverwrite = { viewModel.confirmBatchDownload(true) },
+                onDismiss = { viewModel.dismissBatchDownload() },
+            )
         }
     }
 }

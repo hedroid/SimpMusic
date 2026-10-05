@@ -338,7 +338,10 @@ internal inline fun <reified T> GridLibraryPlaylist(
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        EndOfPage()
+                        // 网格 contentPadding 已含调用方 scaffold 底栏让位(bottom=+8dp),
+                        // 页尾不能再叠一次(2026-09-28 审计:双叠=混合页/Wrapped/排行榜等
+                        // 底部空白过大的根因)
+                        EndOfPage(includeBottomBarPadding = false)
                     }
                 }
             } else if (data is LocalResource.Loading) {

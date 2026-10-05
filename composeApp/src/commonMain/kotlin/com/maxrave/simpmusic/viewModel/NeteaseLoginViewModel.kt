@@ -218,6 +218,9 @@ class NeteaseLoginViewModel(
 
     override fun onCleared() {
         pollJob?.cancel()
+        // 先取消轮询再关 client:qrSession 的 HttpClient 是独立引擎,
+        // 不关会随每次进出登录页积累连接池/线程
+        qrSession.close()
         super.onCleared()
     }
 }

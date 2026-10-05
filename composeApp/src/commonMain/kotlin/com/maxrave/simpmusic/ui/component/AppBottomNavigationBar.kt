@@ -1,8 +1,13 @@
 package com.maxrave.simpmusic.ui.component
 
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,15 +17,20 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import com.maxrave.domain.source.MusicSource
 import com.maxrave.simpmusic.expect.HapticFeedback
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -36,6 +46,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.search.SearchDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.*
+import kotlin.math.roundToInt
 import kotlin.reflect.KClass
 
 /**
@@ -59,15 +70,15 @@ fun AppBottomNavigationBar(
     // ------------------------------------------------ 音源切换:长按搜索钮弹出标准上下文菜单(feat/netease-source)
     var showSourceMenu by remember { mutableStateOf(false) }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    // `ordinal` identifies a tab, it is NOT the position — Mix for you and Analytics sit before
-    // Library here while keeping the ordinal they were declared with, so that the numbering stays
-    // stable whether or not those tabs are present.
+    // `ordinal` identifies a tab, it is NOT the position — Library sits before Analytics and Mix
+    // for you here (用户 2026-09-30 定序) while keeping the ordinal each was declared with, so
+    // that the numbering stays stable whether or not those tabs are present.
     val bottomNavScreens =
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Search,
         )
     var selectedIndex by rememberSaveable {
@@ -129,9 +140,7 @@ fun AppBottomNavigationBar(
     // Search rides in its own circular button, so the capsule holds everything else.
     val barTabs = bottomNavScreens.filter { it != BottomNavScreen.Search }
 
-    // 85%: the page shows faintly through the floating cluster (the capsule and the search button);
-    // the indicator stays opaque so the selection survives busy artwork.
-    val capsuleColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+    val capsuleColor = MaterialTheme.colorScheme.surfaceContainer
     val indicatorColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
     Box {
@@ -153,19 +162,49 @@ fun AppBottomNavigationBar(
             // slabs — the same budget rule as the glass tab bar.
             val tabWidth = ((maxWidth - CapsuleInset * 2) / barTabs.size).coerceAtMost(FlatTabWidth)
             val selectedPosition = barTabs.indexOfFirst { it.ordinal == selectedIndex }
-            val indicatorOffset by animateDpAsState(tabWidth * selectedPosition.coerceAtLeast(0), label = "flatBarIndicator")
+            // Where a finger is holding the indicator, in tabs (0f = first); null when nobody is.
+            var dragPosition by remember { mutableStateOf<Float?>(null) }
+            val indicatorOffset by animateDpAsState(
+                tabWidth * (dragPosition ?: selectedPosition.coerceAtLeast(0).toFloat()),
+                // Under the finger while dragging; on release it springs to the tab it was let go on.
+                animationSpec = if (dragPosition != null) snap() else spring(visibilityThreshold = Dp.VisibilityThreshold),
+                label = "flatBarIndicator",
+            )
+            // The tab under the indicator lights up as it is dragged across.
+            val activePosition = dragPosition?.roundToInt() ?: selectedPosition
+            val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
             Box(
                 modifier =
                     Modifier
                         .height(FlatBarHeight)
                         .clip(RoundedCornerShape(FlatBarHeight / 2))
                         .background(capsuleColor)
-                        .padding(horizontal = CapsuleInset),
+                        .padding(horizontal = CapsuleInset)
+                        // Press and drag along the tabs to slide the indicator; letting go selects the
+                        // tab it rests on. Once the drag starts it cancels the tab's own click.
+                        .pointerInput(barTabs, tabWidth, isLtr) {
+                            fun positionAt(x: Float): Float {
+                                val fromStart = if (isLtr) x else size.width - x
+                                return (fromStart / tabWidth.toPx() - 0.5f).coerceIn(0f, barTabs.lastIndex.toFloat())
+                            }
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragPosition = positionAt(it.x) },
+                                onDragEnd = {
+                                    val target = dragPosition?.roundToInt()?.let(barTabs::get)
+                                    dragPosition = null
+                                    if (target != null && target.ordinal != selectedIndex) selectTab(target)
+                                },
+                                onDragCancel = { dragPosition = null },
+                            ) { change, _ ->
+                                change.consume()
+                                dragPosition = positionAt(change.position.x)
+                            }
+                        },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 // The sliding indicator — the flat stand-in for the glass bar's frosted blob. Hidden
                 // while Search (a non-capsule tab) is the selection, so nothing sits half-lit.
-                if (selectedPosition >= 0) {
+                if (activePosition >= 0) {
                     Box(
                         modifier =
                             Modifier
@@ -176,8 +215,8 @@ fun AppBottomNavigationBar(
                     )
                 }
                 Row {
-                    barTabs.forEach { screen ->
-                        val selected = selectedIndex == screen.ordinal
+                    barTabs.forEachIndexed { position, screen ->
+                        val selected = position == activePosition
                         val contentColor =
                             if (selected) {
                                 MaterialTheme.colorScheme.primary
@@ -216,7 +255,12 @@ fun AppBottomNavigationBar(
                     .size(FlatIndicatorHeight)
                     .clip(CircleShape)
                     .background(if (searchSelected) indicatorColor else capsuleColor)
-                    .sourceSwitchGesture(
+                    .searchButtonSemantics(
+                        description = stringResource(Res.string.search),
+                        switchSourceLabel = stringResource(Res.string.switch_music_source),
+                        onTap = { selectTab(BottomNavScreen.Search) },
+                        onLongPress = { showSourceMenu = true },
+                    ).sourceSwitchGesture(
                         onLongPress = { showSourceMenu = true },
                         onTap = { selectTab(BottomNavScreen.Search) },
                     ),
@@ -272,8 +316,8 @@ fun AppNavigationRail(
         listOfNotNull(
             BottomNavScreen.Home,
             BottomNavScreen.MixForYou.takeIf { showMixForYouTab },
-            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Library,
+            BottomNavScreen.Analytics.takeIf { showAnalyticsTab },
             BottomNavScreen.Search,
         )
     var selectedIndex by rememberSaveable {
@@ -345,7 +389,12 @@ fun AppNavigationRail(
                     modifier =
                         Modifier
                             .width(80.dp)
-                            .sourceSwitchGesture(
+                            .searchButtonSemantics(
+                                description = stringResource(Res.string.search),
+                                switchSourceLabel = stringResource(Res.string.switch_music_source),
+                                onTap = { selectTab(screen) },
+                                onLongPress = { showSourceMenu = true },
+                            ).sourceSwitchGesture(
                                 onLongPress = { showSourceMenu = true },
                                 onTap = { selectTab(screen) },
                             ),

@@ -48,6 +48,8 @@
     <string name="removed_download">删除下载</string>
     <string name="remove_download_title">删除下载？</string>
     <string name="remove_download_message">已下载的歌曲将被删除，可随时重新下载。</string>
+    <string name="delete_video_title">删除视频？</string>
+    <string name="delete_video_message">将删除已下载的视频文件，你可以随时重新下载。</string>
     <string name="cancel_download_title">取消下载？</string>
     <string name="cancel_download_message">将停止下载并删除未完成的部分，已完成的歌曲保持不变。</string>
     <string name="cancel_download_confirm">取消下载</string>
@@ -86,7 +88,7 @@
     <string name="prefer_320kbps_stream">优先使用 320kbps 串流</string>
     <string name="prefer_320kbps_stream_description">网络可用时，自动搜索320kbps 音频流。如果找不到的话，则跳回默认质量。</string>
     <string name="download_quality">下载音质</string>
-    <string name="video_download_quality">视频下载质量</string>
+    <string name="video_download_quality">视频质量</string>
     <string name="clear_downloaded_cache">清除已下载缓存</string>
     <string name="clear_thumbnail_cache">清除缩略图缓存</string>
     <string name="add">添加</string>
@@ -154,6 +156,14 @@
     <string name="similar_songs">相似歌曲</string>
     <string name="track_count_short">%1$s 首</string>
     <string name="comments_title">评论 · %1$s</string>
+    <string name="sort_recommend">推荐</string>
+    <string name="n_replies">%1$s 条回复</string>
+    <string name="collapse_replies">收起回复</string>
+    <string name="no_comments">还没有评论</string>
+    <string name="post_comment_hint">说点什么吧...</string>
+    <string name="reply_hint">回复 @%1$s：</string>
+    <string name="post_comment_success">评论已发布</string>
+    <string name="publish">发布</string>
     <string name="end_of_list">已经到底了</string>
     <string name="comments">评论</string>
     <string name="download_url">下载链接</string>
@@ -186,9 +196,6 @@
     <string name="balance_media_loudness">平衡媒体响度</string>
     <string name="normalize_volume">标准化音量</string>
     <string name="audio">音频</string>
-    <string name="no_equalizer">您的设备没有均衡器</string>
-    <string name="open_system_equalizer">打开系统均衡器</string>
-    <string name="use_your_system_equalizer">使用系统均衡器</string>
     <string name="streaming_data_provider_piped">数据流提供者 (已接入)</string>
     <string name="itag">标签</string>
     <string name="mime_type">Mime 类型</string>
@@ -516,7 +523,7 @@
     <string name="backup_downloaded">备份已下载数据</string>
     <string name="backup_downloaded_description">备份所有已下载的歌曲数据</string>
     <string name="auto_backup">自动备份</string>
-    <string name="auto_backup_description">自动备份您的数据到 %1$s</string>
+    <string name="auto_backup_description">自动备份您的应用数据</string>
     <string name="backup_frequency">备份频率</string>
     <string name="daily">每天</string>
     <string name="weekly">每周</string>
@@ -947,6 +954,39 @@
     <string name="cloud_action_failed_youtube">YouTube Music 账号操作失败</string>
     <string name="liked_songs">喜欢的歌曲</string>
     <string name="library_podcasts">播客</string>
+    <string name="netease_podcast">网易播客</string>
+    <string name="podcast_badge_paid">付费</string>
+    <string name="podcast_badge_bought">已购</string>
+    <string name="podcast_badge_vip">VIP</string>
+    <string name="podcast_listens">%1$s次收听</string>
+    <string name="podcast_my_subscriptions">我的订阅</string>
+    <string name="podcast_latest_programs">最新节目</string>
+    <string name="podcast_tap_to_listen">点击即听</string>
+    <string name="podcast_guess_you_like">猜你喜欢</string>
+    <string name="podcast_featured_radios">精选电台</string>
+    <string name="podcast_new_radios">新晋电台榜</string>
+    <string name="podcast_program_toplist">热门节目榜</string>
+    <string name="podcast_toplist_radios">热门电台榜</string>
+    <string name="podcast_programs">节目</string>
+    <string name="podcast_play_all">播放全部</string>
+    <string name="podcast_resume">继续播放</string>
+    <string name="podcast_pause">暂停</string>
+    <string name="podcast_expand">展开</string>
+    <string name="podcast_collapse">收起</string>
+    <string name="comment_label">评论</string>
+    <string name="podcast_comment_like_unsupported">节目评论暂不支持点赞</string>
+    <string name="podcast_trial_toast">该节目需单独购买，正在播放试听</string>
+    <string name="podcast_order_latest">最新</string>
+    <string name="podcast_order_earliest">最早</string>
+    <string name="podcast_programs_unavailable">节目拉取失败（操作频繁被限流或网络波动），稍后重试</string>
+    <string name="podcast_rising_fastest">上升最快</string>
+    <string name="podcast_hottest_radios">最热电台</string>
+    <string name="podcast_category_empty">该分类暂无电台</string>
+    <string name="podcast_no_programs">暂无节目</string>
+    <string name="podcast_subscribe">订阅</string>
+    <string name="podcast_subscribed">已订阅</string>
+    <string name="podcast_unsubscribe_toast">已取消订阅</string>
+    <string name="podcast_subscribe_toast">已订阅</string>
     <string name="downloaded_songs">已下载歌曲</string>
     <string name="downloaded_collections">已下载的专辑与歌单</string>
     <string name="your_youtube_music">您的 YouTube Music</string>
@@ -987,7 +1027,6 @@
     <string name="netease_quality_sky">沉浸环绕声（VIP）</string>
     <string name="netease_quality_jymaster">超清母带（VIP）</string>
 
-    <string name="downloaded_songs_tab">歌曲</string>
     <string name="no_downloaded_songs">暂无已下载歌曲</string>
     <string name="haptic_feedback">触感反馈</string>
     <string name="haptic_feedback_description">点击时的振动反馈</string>
@@ -1029,4 +1068,62 @@
     <string name="login_sync_code_expired">电脑上的二维码已过期。请重新出示后再扫。</string>
     <string name="login_sync_failed">出错了，请重试。</string>
     <string name="login_sync_new_code">换一个码</string>
+
+    <!-- File-based downloads (gen 2) -->
+    <string name="download_section_title">下载</string>
+    <string name="download_audio_quality">音质</string>
+    <string name="download_audio_quality_standard">标准</string>
+    <string name="download_audio_quality_high">高</string>
+    <string name="download_audio_quality_lossless">无损</string>
+    <string name="download_file_name_format">文件名格式</string>
+    <string name="download_file_name_title_only">仅标题</string>
+    <string name="download_file_name_artist_title">艺人-标题</string>
+    <string name="download_file_name_title_artist">标题-艺人</string>
+    <string name="simultaneous_downloads">同时下载数量</string>
+    <string name="download_artist_album_folder">保存目录按艺人/专辑</string>
+    <string name="download_artist_album_folder_description">保存到 Music/SimpMusic/艺人/专辑</string>
+    <string name="download_save_lrc">同时保存歌词文件</string>
+    <string name="download_save_lrc_description">在音频旁写入原文时间轴 .lrc</string>
+    <string name="download_ai_tags">补全音乐标签</string>
+    <string name="download_ai_tags_description">启用AI补全下载时缺失的标签</string>
+    <string name="download_wifi_only">仅 Wi-Fi 下载</string>
+    <string name="download_wifi_only_description">移动网络下任务排队等待，连接 Wi-Fi 后自动继续</string>
+
+
+    <string name="overwrite_download_title">重新下载？</string>
+    <string name="overwrite_download_message">这首歌已下载为文件，重新下载将覆盖现有文件。</string>
+    <string name="download_video">下载视频</string>
+
+
+    <string name="batch_download_confirm_title">已下载 %1$d 首歌曲</string>
+    <string name="batch_download_confirm_message">重新下载会替换现有文件。要跳过还是覆盖这些歌曲？</string>
+    <string name="batch_download_skip">跳过已下载</string>
+    <string name="batch_download_overwrite">重新下载</string>
+
+    <string name="download_status_queued">排队中</string>
+    <string name="download_status_paused">已暂停</string>
+    <string name="download_status_failed">下载失败</string>
+    <string name="download_status_saving">正在保存文件…</string>
+    <string name="download_status_file_missing">文件已丢失</string>
+    <string name="download_action_pause_all">暂停全部</string>
+    <string name="download_action_resume_all">全部继续</string>
+    <string name="download_action_retry_failed">重试</string>
+    <string name="download_action_cancel_download">取消下载</string>
+    <string name="download_action_redownload">重新下载</string>
+    <string name="download_settings_section">下载</string>
+    <string name="download_section_in_progress">下载中</string>
+    <string name="download_section_completed">已完成</string>
+    <string name="download_no_in_progress">暂无下载中的内容</string>
+    <string name="download_no_completed">暂无已完成的下载</string>
+    <string name="download_clear_all">清除全部下载</string>
+    <string name="download_clear_all_description">删除所有已下载的音频与视频文件</string>
+    <string name="download_artist_album_folder_description_off">保存到 Music/SimpMusic</string>
+    <string name="download_no_space">存储空间不足，无法下载</string>
+    <!-- 无障碍：纯图标控件语义 (UI-CR-07) -->
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="previous_song">上一首</string>
+    <string name="next_song">下一首</string>
+    <string name="switch_music_source">切换音源</string>
+    <string name="back">返回</string>
 </resources>

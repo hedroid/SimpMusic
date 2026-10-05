@@ -31,6 +31,7 @@ import com.maxrave.domain.data.model.metadata.Lyrics
 import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.model.update.UpdateData
 import com.maxrave.domain.data.player.GenericCastState
+import com.maxrave.domain.data.player.LiveStreamRegistry
 import com.maxrave.domain.extension.decodeHtmlEntities
 import com.maxrave.domain.extension.isSong
 import com.maxrave.domain.extension.isVideo
@@ -72,6 +73,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
 import com.maxrave.simpmusic.expect.ui.toByteArray
 import com.maxrave.simpmusic.getPlatform
@@ -79,6 +81,7 @@ import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -107,6 +110,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
 import org.koin.core.component.inject
 import org.simpmusic.lastfm.completeLogin
+import simpmusic.composeapp.generated.resources.podcast_trial_toast
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.added_to_queue
 import simpmusic.composeapp.generated.resources.login_netease_first
@@ -129,6 +133,7 @@ import simpmusic.composeapp.generated.resources.updated
 import simpmusic.composeapp.generated.resources.vote_submitted
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.reflect.KClass
 
@@ -146,6 +151,24 @@ class SharedViewModel(
     private val neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl,
 ) : BaseViewModel() {
 
+    init {
+        // 付费播客节目试听 toast:repo 取流层检测到 26KB 占位时发事件。
+        // 放这里(进程级 single 常驻)而非播客页 VM——播客页没进过时该 VM 不存在,
+        // SharedFlow 无订阅者 tryEmit 直接丢弃,toast 永远不弹(2026-09-29 实测踩过)
+        viewModelScope.launch {
+            var lastSongId = ""
+            var lastAtMs = 0L
+            neteaseRepository.trialToastFlow.collect { songId ->
+                val now = System.currentTimeMillis()
+                if (songId != lastSongId || now - lastAtMs > 3000) {
+                    makeToast(getString(Res.string.podcast_trial_toast))
+                    lastSongId = songId
+                    lastAtMs = now
+                }
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- 音源切换(feat/netease-source)
 
     /** 当前激活音源,扇形菜单与各页面 TODO 分支共用这一份状态 */
@@ -158,6 +181,17 @@ class SharedViewModel(
         dataStoreManager.neteaseCookie
             .map { it.isNotEmpty() }
             .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** 顶栏头像=当前音源登录账号(用户 2026-09-30):网易源=云村账号,其它(含 YT)=Google
+     *  账号;未登录空串=隐藏。库页(LibraryViewModel 同款实现)与两个混合页共用这套口径。 */
+    val sourceAccountThumbnail: StateFlow<String> =
+        combine(
+            dataStoreManager.selectedSource,
+            dataStoreManager.neteaseAccountThumbUrl,
+            dataStoreManager.getString("AccountThumbUrl"),
+        ) { source, neteaseThumb, ytThumb ->
+            if (source == com.maxrave.domain.source.MusicSource.NETEASE.name) neteaseThumb.trim() else (ytThumb ?: "").trim()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     fun setSelectedSource(source: com.maxrave.domain.source.MusicSource) {
         viewModelScope.launch { dataStoreManager.setSelectedSource(source.name) }
@@ -336,12 +370,19 @@ class SharedViewModel(
                                 Pair(timeLine, nowPlayingState)
                             }
                         }.distinctUntilChanged { old, new ->
+                            // A live stream's "total" is the seek window mpv reports, and it grows with
+                            // every new segment — not a new length, so it must not re-run what a new
+                            // length triggers (this fired every few seconds for as long as one played).
+                            val sameLiveStream = old.first.isLive && new.first.isLive
                             (old.first.total.toString() + old.second.songEntity?.videoId).hashCode() ==
-                                (new.first.total.toString() + new.second.songEntity?.videoId).hashCode()
+                                (new.first.total.toString() + new.second.songEntity?.videoId).hashCode() ||
+                                (sameLiveStream && old.second.songEntity?.videoId == new.second.songEntity?.videoId)
                         }.collectLatest {
-                            log("Timeline job ${(it.first.total.toString() + it.second.songEntity?.videoId).hashCode()}")
                             val nowPlaying = it.second
                             val timeline = it.first
+                            // Lyrics and canvas both key off the track's length, which a live stream has none of.
+                            if (timeline.isLive) return@collectLatest
+                            log("Timeline job ${(it.first.total.toString() + it.second.songEntity?.videoId).hashCode()}")
                             if (timeline.total > 0 && nowPlaying.songEntity != null) {
                                 if (nowPlaying.mediaItem.isSong() && nowPlayingScreenData.value.canvasData == null) {
                                     Logger.w(tag, "Duration is ${timeline.total}")
@@ -486,6 +527,12 @@ class SharedViewModel(
                                 canvasData = null,
                                 lyricsData = previousData.lyricsData,
                                 lyricsVideoId = previousData.lyricsVideoId,
+                                // bitmap 同歌词的 stale-while-revalidate:Apple Music 主题的
+                                // 磨砂背景直接画它,整包重建丢回 null 会让背景层塌成纯渐变,
+                                // 新位图到位前是"背景闪一下"。旧值最多存活到下一次
+                                // onArtworkBitmap 喂入(滑动 settle/翻页补发,内存缓存命中
+                                // 几乎立即),远好于塌灰。
+                                bitmap = previousData.bitmap,
                                 songInfoData = null,
                                 playlistName =
                                     mediaPlayerHandler.queueData.value
@@ -586,7 +633,9 @@ class SharedViewModel(
 
                             is SimpleMediaState.Progress -> {
                                 if (mediaState.progress >= 0L && mediaState.progress != _timeline.value.current) {
-                                    if (_timeline.value.total > 0L) {
+                                    // A live stream never reports a length (ExoPlayer: C.TIME_UNSET), so
+                                    // a missing one means "loading" for everything except a live stream.
+                                    if (_timeline.value.total > 0L || _timeline.value.isLive) {
                                         _timeline.update {
                                             it.copy(
                                                 total = mediaPlayerHandler.getPlayerDuration().takeIf { d -> d > 0L } ?: it.total,
@@ -669,10 +718,20 @@ class SharedViewModel(
                         }
                     }
                 }
+            val liveStreamJob =
+                launch {
+                    // A track is only known to be live once its stream has been resolved, so this
+                    // follows the registry as well as the track itself.
+                    combine(mediaPlayerHandler.nowPlayingState, LiveStreamRegistry.liveVideoIds) { state, liveVideoIds ->
+                        state.mediaItem.mediaId in liveVideoIds
+                    }.distinctUntilChanged()
+                        .collect { isLive -> _timeline.update { it.copy(isLive = isLive) } }
+                }
             job1.join()
             controllerJob.join()
             sleepTimerJob.join()
             playlistNameJob.join()
+            liveStreamJob.join()
         }
         // Reset downloading songs & playlists to not downloaded
         checkAllDownloadingSongs()
@@ -843,6 +902,7 @@ class SharedViewModel(
                                     NowPlayingScreenData.CanvasData(
                                         isVideo = data.isVideo,
                                         url = data.canvasUrl,
+                                        thumbUrl = data.canvasThumbUrl,
                                     ),
                             )
                         }
@@ -864,6 +924,7 @@ class SharedViewModel(
                                 NowPlayingScreenData.CanvasData(
                                     isVideo = url.isCanvasVideoUrl(),
                                     url = url,
+                                    thumbUrl = nowPlayingState.value?.songEntity?.canvasThumbUrl,
                                 ),
                         )
                     }
@@ -897,7 +958,13 @@ class SharedViewModel(
             val downloadedCacheKeys = cacheRepository.getAllCacheKeys(DOWNLOAD_CACHE)
             songRepository.getDownloadedSongs().first().let { songs ->
                 songs?.forEach { song ->
-                    if (!downloadedCacheKeys.contains(song.videoId)) {
+                    // 文件式(2026-10 二期)以文件为准:转存成功后 SimpleCache 已清,按缓存
+                    // key 对账会把"文件在+state3"全数误杀成 0(实测 75 行全灭,点击无反应+
+                    // 菜单显示未下载)。缓存 key 对账只管旧 SimpleCache 代;文件丢失态由
+                    // 下载管理页的 FILE_MISSING 展示与播放 resolver 自愈负责。
+                    val fileBased =
+                        song.downloadedFilePath != null || song.downloadedVideoFilePath != null
+                    if (!fileBased && !downloadedCacheKeys.contains(song.videoId)) {
                         songRepository.updateDownloadState(
                             song.videoId,
                             DownloadState.STATE_NOT_DOWNLOADED,
@@ -1231,20 +1298,27 @@ class SharedViewModel(
 
     private fun checkAllDownloadingSongs() {
         viewModelScope.launch {
+            // 只清理"不在 DownloadManager 队列"的 1/2 态遗留(进程被杀后的孤儿态)——
+            // 文件式的"转存中"(state2,条目 COMPLETED 等 exporter)在队列里,误杀会被
+            // collect 重放反复打 0(2026-10 实测与启动对账竞态后 state 全灭)
             songRepository.getDownloadingSongs().collect { songs ->
                 songs?.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
+                    if (downloadUtils.downloads.value[song.videoId] == null) {
+                        songRepository.updateDownloadState(
+                            song.videoId,
+                            DownloadState.STATE_NOT_DOWNLOADED,
+                        )
+                    }
                 }
             }
             songRepository.getPreparingSongs().collect { songs ->
                 songs.forEach { song ->
-                    songRepository.updateDownloadState(
-                        song.videoId,
-                        DownloadState.STATE_NOT_DOWNLOADED,
-                    )
+                    if (downloadUtils.downloads.value[song.videoId] == null) {
+                        songRepository.updateDownloadState(
+                            song.videoId,
+                            DownloadState.STATE_NOT_DOWNLOADED,
+                        )
+                    }
                 }
             }
         }
@@ -1339,42 +1413,53 @@ class SharedViewModel(
     fun checkForUpdate() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
-            // Keep this read ahead of the first DataStore write: on a fresh install
-            // MainActivity performs runBlocking DataStore writes on the main thread,
-            // and enqueuing our write before theirs can wedge the DataStore actor
-            // behind the blocked main looper, leaving the app stuck on the splash.
-            dataStoreManager.updateChannel.first()
-            dataStoreManager.putString(
-                "CheckForUpdateAt",
-                System.currentTimeMillis().toString(),
-            )
-            updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
-                val data = response.data
-                when (response) {
-                    is Resource.Success if (data != null) -> {
-                        _updateResponse.value = data
-                        showedUpdateDialog = true
-                    }
-
-                    else -> {
-                        // API 路径失败(最常见=api.github.com 匿名 60 次/小时限流,共享出口 IP
-                        // 极易撞上):改走 HTML 重定向兜底——releases/latest 302 目标含最新 tag,
-                        // 网页路径限额宽松。双路都失败才提示(此前失败静默吞掉,用户读作"没反应")。
-                        log("Check for update via API failed (${response.message}), falling back to redirect probe", LogLevel.WARN)
-                        updateRepository.checkForGithubReleaseUpdateViaRedirect().collectLatest { fb ->
-                            val fbData = fb.data
-                            if (fb is Resource.Success && fbData != null) {
-                                _updateResponse.value = fbData
-                                showedUpdateDialog = true
-                            } else {
-                                log("Check for update via redirect also failed: ${fb.message}", LogLevel.WARN)
-                                makeToast(getString(Res.string.update_check_failed))
-                            }
-                            _isCheckingUpdate.value = false
+            // 更新检查是纯增益功能,任何残余异常都不许把 app 带崩(2026-09-30 真机崩溃:
+            // 无代理环境两段 GitHub 请求先后超时,兜底路径曾把 SocketTimeoutException 裸抛
+            // 出 collectLatest)。scraper/repo 层已捕获,这里是第二道防线;finally 同时
+            // 保证失败路径不会把 _isCheckingUpdate 永远留在 true。
+            try {
+                // Keep this read ahead of the first DataStore write: on a fresh install
+                // MainActivity performs runBlocking DataStore writes on the main thread,
+                // and enqueuing our write before theirs can wedge the DataStore actor
+                // behind the blocked main looper, leaving the app stuck on the splash.
+                dataStoreManager.updateChannel.first()
+                dataStoreManager.putString(
+                    "CheckForUpdateAt",
+                    System.currentTimeMillis().toString(),
+                )
+                updateRepository.checkForGithubReleaseUpdate().collectLatest { response ->
+                    val data = response.data
+                    when (response) {
+                        is Resource.Success if (data != null) -> {
+                            _updateResponse.value = data
+                            showedUpdateDialog = true
                         }
-                        return@collectLatest
+
+                        else -> {
+                            // API 路径失败(最常见=api.github.com 匿名 60 次/小时限流,共享出口 IP
+                            // 极易撞上):改走 HTML 重定向兜底——releases/latest 302 目标含最新 tag,
+                            // 网页路径限额宽松。双路都失败才提示(此前失败静默吞掉,用户读作"没反应")。
+                            log("Check for update via API failed (${response.message}), falling back to redirect probe", LogLevel.WARN)
+                            updateRepository.checkForGithubReleaseUpdateViaRedirect().collectLatest { fb ->
+                                val fbData = fb.data
+                                if (fb is Resource.Success && fbData != null) {
+                                    _updateResponse.value = fbData
+                                    showedUpdateDialog = true
+                                } else {
+                                    log("Check for update via redirect also failed: ${fb.message}", LogLevel.WARN)
+                                    makeToast(getString(Res.string.update_check_failed))
+                                }
+                            }
+                            return@collectLatest
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                log("Check for update threw outside repo layer: ${e.message}", LogLevel.WARN)
+                makeToast(getString(Res.string.update_check_failed))
+            } finally {
                 _isCheckingUpdate.value = false
             }
         }
@@ -1655,6 +1740,9 @@ class SharedViewModel(
         song: SongEntity,
         duration: Int,
     ) {
+        // A live broadcast has nothing to sync lyrics to — the "duration" mpv reports for it is only
+        // its seek window — so no provider is asked. Every caller comes through here.
+        if (LiveStreamRegistry.isLive(song.videoId)) return
         viewModelScope.launch {
             val videoId = song.videoId
             log("Get Lyrics From Format for $videoId", LogLevel.WARN)
@@ -1753,13 +1841,20 @@ class SharedViewModel(
                         )
                         insertLyrics(lyrics.toLyricsEntity(videoId))
                         if (officialRomanization != null) {
-                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂
+                            // 官方罗马音不落库(本地歌词表无该槽),切回同歌重拉时重新喂。
+                            // 竞态守卫:请求在途时切歌,这里照写会把旧歌罗马音挂到新歌整首——
+                            // 本写不经过 updateLyrics、不触碰 lyricsVideoId,吃不到
+                            // "lyricsVideoId != song.videoId 触发重拉"的自愈,必须显式校验归属。
                             _nowPlayingScreenData.update {
-                                it.copy(
-                                    lyricsData = it.lyricsData?.copy(
-                                        romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
-                                    ),
-                                )
+                                if (it.lyricsVideoId == videoId) {
+                                    it.copy(
+                                        lyricsData = it.lyricsData?.copy(
+                                            romanizedLyrics = officialRomanization to LyricsProvider.NETEASE,
+                                        ),
+                                    )
+                                } else {
+                                    it
+                                }
                             }
                         }
                         if (officialTranslation != null) {
@@ -2280,12 +2375,6 @@ class SharedViewModel(
     val downloadFileProgress: StateFlow<DownloadProgress> get() = _downloadFileProgress
 
     fun downloadFile(bitmap: ImageBitmap) {
-        val fileName =
-            "${nowPlayingScreenData.value.nowPlayingTitle} - ${nowPlayingScreenData.value.artistName}"
-                .replace(Regex("""[|\\?*<":>]"""), "")
-                .replace(" ", "_")
-        val path =
-            "${getDownloadFolderPath()}/$fileName"
         viewModelScope.launch {
             // track 在队列重建窗口(冷启恢复队列/重进后点当前曲)会查空且永不回填,
             // 之前整段 ?.let 静默跳过就是"点了没反应"的病根;songEntity 恒有值,回落它
@@ -2293,17 +2382,21 @@ class SharedViewModel(
                 nowPlayingState.value?.track
                     ?: nowPlayingState.value?.songEntity?.toTrack()
                     ?: return@launch
+            val fileName = sanitizeDownloadFileName(
+                "${nowPlayingScreenData.value.nowPlayingTitle} - ${nowPlayingScreenData.value.artistName}",
+                track.videoId,
+            )
+            val path =
+                "${getDownloadFolderPath()}/$fileName"
             withContext(Dispatchers.IO) {
                 val bytesArray = bitmap.toByteArray()
-                // 公共 Download 走 FUSE:同名目标再建可能 EEXIST(重复下载/外部删过文件
-                // 但 MediaStore 残行的场景)。先删旧目标;仍失败落到错误弹窗,不再裸
-                // throw——那会把整个 app 带崩(实测崩溃栈就在这)
-                val jpgFile = File("$path.jpg")
-                if (jpgFile.exists()) jpgFile.delete()
                 try {
-                    FileOutputStream(jpgFile).use { it.write(bytesArray) }
+                    val jpgPart = File("$path.jpg.part")
+                    FileOutputStream(jpgPart).use { it.write(bytesArray) }
+                    commitDownloadFile(jpgPart, File("$path.jpg"))
                     Logger.d(tag, "Thumbnail saved to $path.jpg")
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     Logger.e(tag, "thumbnail write failed: ${e.message}")
                     _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "thumbnail write failed")
                     return@withContext
@@ -2327,7 +2420,38 @@ class SharedViewModel(
         }
     }
 
-    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载 → 覆盖写 + 进度 */
+    /** 下载文件名清理:路径分隔符与非法字符(含 /,否则 AC/DC 这类名字被解释成子目录致写入必失败)、
+     *  控制字符全部滤掉,尾部点号修剪;清理后为空兜底 videoId,截 100 字符防超长文件名 */
+    private fun sanitizeDownloadFileName(
+        raw: String,
+        fallback: String,
+    ): String =
+        raw
+            .replace(Regex("[/|\\\\?*<\":>\\x00-\\x1f]"), "")
+            .replace(" ", "_")
+            .trimEnd('.')
+            .take(100)
+            .ifBlank { "download_$fallback" }
+
+    /** staged write 提交:同目录 .part 已写满并 close,这里 rename 到正式路径——中途断网/
+     *  超时/磁盘满只留下被清理的 .part,旧文件原样保留;同目录 rename 对已存在目标是原子
+     *  覆盖,顺带绕开 FUSE 上"新建同名文件"的 EEXIST(原先删旧文件再直写的病根) */
+    private fun commitDownloadFile(
+        part: File,
+        target: File,
+    ) {
+        try {
+            if (!part.renameTo(target)) {
+                // 个别 FUSE 实现不接受覆盖 rename:此时新文件已完整,删旧目标后重试提交
+                target.delete()
+                check(part.renameTo(target)) { "commit failed: ${target.name}" }
+            }
+        } finally {
+            part.delete()
+        }
+    }
+
+    /** 网易歌导出到设备目录:取流(带格式定扩展名)→ 分块下载到 .part → 校验后 rename 提交 + 进度 */
     private suspend fun downloadNeteaseFile(
         videoId: String,
         path: String,
@@ -2340,6 +2464,7 @@ class SharedViewModel(
             return
         }
         val ext = if (stream.mimeType?.contains("flac", ignoreCase = true) == true) "flac" else "mp3"
+        val part = File("$path.$ext.part")
         try {
             // prepareGet+execute 才是真流式:ktor3 的 client.get() 会把整个响应体先
             // save 进内存(SavedCall),无损 flac 动辄几十 MB,曾在 ~192MB 堆上直接 OOM
@@ -2353,12 +2478,14 @@ class SharedViewModel(
                 }
             }.use { client ->
                 client.prepareGet(stream.url).execute { response ->
+                    // ktor 默认不按状态码判失败;audioUrl 有 10 分钟有效期,过期/区域拒绝
+                    // 返回的 4xx/5xx 正文是 HTML/JSON,不拦会存成 .mp3 还报下载完成
+                    if (!response.status.isSuccess()) {
+                        throw IOException("HTTP ${response.status.value}")
+                    }
                     val total = response.headers[io.ktor.http.HttpHeaders.ContentLength]?.toLongOrNull() ?: 0L
                     val channel = response.bodyAsChannel()
-                    // 同 jpg:先删同名旧音频目标,防 FUSE EEXIST(重复下载场景)
-                    val audioFile = File("$path.$ext")
-                    if (audioFile.exists()) audioFile.delete()
-                    FileOutputStream(audioFile).use { output ->
+                    FileOutputStream(part).use { output ->
                         val buffer = ByteArray(64 * 1024)
                         var read = 0L
                         val startedAt = System.currentTimeMillis()
@@ -2376,14 +2503,23 @@ class SharedViewModel(
                                     )
                             }
                         }
+                        // 声明了长度却没读满=半截文件(连接中断但 EOF 提前到达),按失败处理
+                        if (total > 0 && read != total) {
+                            throw IOException("incomplete download: $read/$total")
+                        }
                     }
                 }
             }
+            commitDownloadFile(part, File("$path.$ext"))
             _downloadFileProgress.value = DownloadProgress.AUDIO_DONE
             Logger.d(tag, "Netease file saved to $path.$ext")
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Logger.e(tag, "netease download failed: ${e.message}")
             _downloadFileProgress.value = DownloadProgress.failed(e.message ?: "download failed")
+        } finally {
+            // 成功路径 part 已被 rename 走,这里只兜异常/取消路径的残留清理
+            part.delete()
         }
     }
 
@@ -2615,6 +2751,10 @@ data class NowPlayingScreenData(
     data class CanvasData(
         val isVideo: Boolean,
         val url: String,
+        // A still of the clip at the clip's own size — Apple Music's animated artwork sends one.
+        // The Apple Music player shows it under the clip while that loads, and reads the clip's
+        // proportions off it, so the frame is the right shape before the first video frame arrives.
+        val thumbUrl: String? = null,
     )
 
     data class LyricsData(

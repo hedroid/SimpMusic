@@ -478,6 +478,78 @@ fun LazyGridState.isScrollingUp(): State<Boolean> {
     }
 }
 
+/**
+ * 库页各 chip 页的滚动上报效果(驱动顶栏标题行显隐 + App 底栏 isScrolledToTop)。
+ *
+ * 信号粒度=每次滚动位移(index+offset),方向内联计算,不用 index-only 流:贴底微调
+ * 常落在同一 item 内(拿不到 index 变化=零上报,底栏/标题卡死在上一个方向),且
+ * snapshotFlow 对 index 跳变做 conflated 后方向推导会读到陈旧 previous(2026-10-03
+ * 实测"下滚后迷你条不再沉到导航行"两案)。防振荡不靠吞报告,靠切断几何燃料:各
+ * chip 列表底部 padding 锁定展开态高度(见 LibraryScreen lockedBottomPadding),底栏
+ * 形变不再改列表几何;下载页标题收展的残余反馈由 500ms 静默窗吞掉。index<=1 视作
+ * 在顶(各页原口径)。深处保存态恢复时首帧 index==previous、offset 相等→上报 false
+ * (收起),与 CR-30"深处首帧上报即 false=正确语义"一致。
+ *
+ * 边界防误判:fling 撞到列表末端被拦截时,最后一项的 offset 会被钳制值回吸
+ * (数字逐帧递减,实测 105→96),逐帧比较把它读成"上滑"→上报 true→底栏刚收起又
+ * 跳回展开(用户实测"快速滑到底部,迷你条先合并到导航栏然后自己又跳回去")。修:
+ * canScrollForward=false(已到底)时 offset 回吸不判上滑——只在离底至少一行时才认
+ * 同向边界的方向翻转;顶部对称处理(canScrollBackward=false 时 index<=1 分支已兜住)。
+ */
+@Composable
+fun LazyListState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
+    LaunchedEffect(this) {
+        var previousIndex = firstVisibleItemIndex
+        var previousOffset = firstVisibleItemScrollOffset
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val up =
+                    if (index != previousIndex) {
+                        index < previousIndex
+                    } else if (!canScrollForward) {
+                        // 已到底:同项 offset 递减=末端钳制回吸,不是上滑
+                        false
+                    } else {
+                        offset < previousOffset
+                    }
+                previousIndex = index
+                previousOffset = offset
+                if (index <= 1) {
+                    onScrolling(true)
+                } else {
+                    onScrolling(up)
+                }
+            }
+    }
+}
+
+@Composable
+fun LazyGridState.scrollReportingEffect(onScrolling: (onTop: Boolean) -> Unit) {
+    LaunchedEffect(this) {
+        var previousIndex = firstVisibleItemIndex
+        var previousOffset = firstVisibleItemScrollOffset
+        snapshotFlow { firstVisibleItemIndex to firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val up =
+                    if (index != previousIndex) {
+                        index < previousIndex
+                    } else if (!canScrollForward) {
+                        // 已到底:同项 offset 递减=末端钳制回吸,不是上滑(见 List 版注释)
+                        false
+                    } else {
+                        offset < previousOffset
+                    }
+                previousIndex = index
+                previousOffset = offset
+                if (index <= 1) {
+                    onScrolling(true)
+                } else {
+                    onScrolling(up)
+                }
+            }
+    }
+}
+
 fun Palette?.getColorFromPalette(): Color {
     val p = this ?: return Color.Black
     val defaultColor = 0x000000

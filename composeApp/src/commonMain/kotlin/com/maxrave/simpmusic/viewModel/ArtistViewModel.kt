@@ -3,11 +3,14 @@ package com.maxrave.simpmusic.viewModel
 import androidx.lifecycle.viewModelScope
 import com.maxrave.common.Config
 import com.maxrave.domain.data.entities.ArtistEntity
-import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.browse.artist.Albums
 import com.maxrave.domain.data.model.browse.artist.ArtistBrowse
 import com.maxrave.domain.data.model.browse.artist.ArtistLogo
+import com.maxrave.domain.data.model.browse.artist.ArtistMotion
+import com.maxrave.domain.data.model.browse.artist.isFresh
+import com.maxrave.domain.data.model.browse.artist.toArtistMotion
+import com.maxrave.domain.data.model.browse.artist.toEntity
 import com.maxrave.domain.data.model.browse.artist.Related
 import com.maxrave.domain.data.model.browse.artist.ResultPlaylist
 import com.maxrave.domain.data.model.browse.artist.Singles
@@ -19,10 +22,12 @@ import com.maxrave.domain.mediaservice.handler.PlaylistType
 import com.maxrave.domain.mediaservice.handler.QueueData
 import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.repository.ArtistRepository
+import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.repository.LyricsCanvasRepository
 import com.maxrave.domain.repository.SongRepository
 import com.maxrave.domain.utils.Resource
 import com.maxrave.simpmusic.extension.toArtistScreenData
+import com.maxrave.simpmusic.viewModel.LibraryMutationBus
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Error
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Loading
 import com.maxrave.simpmusic.viewModel.ArtistScreenState.Success
@@ -36,20 +41,20 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import simpmusic.composeapp.generated.resources.Res
-import simpmusic.composeapp.generated.resources.radio
-import simpmusic.composeapp.generated.resources.shuffle
-import simpmusic.composeapp.generated.resources.sync_follow_failed
-import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import org.jetbrains.compose.resources.getString
 import simpmusic.composeapp.generated.resources.cloud_action_failed_netease
 import simpmusic.composeapp.generated.resources.cloud_action_failed_youtube
 import simpmusic.composeapp.generated.resources.followed_toast
+import simpmusic.composeapp.generated.resources.radio
+import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.shuffle
 import simpmusic.composeapp.generated.resources.subscribed_on_netease
-import simpmusic.composeapp.generated.resources.unfollowed_toast
-import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
-import simpmusic.composeapp.generated.resources.unsubscribed_on_netease
+import simpmusic.composeapp.generated.resources.subscribed_on_youtube
+import simpmusic.composeapp.generated.resources.sync_follow_failed
 import simpmusic.composeapp.generated.resources.sync_follow_failed_netease
-import org.jetbrains.compose.resources.getString
+import simpmusic.composeapp.generated.resources.unfollowed_toast
+import simpmusic.composeapp.generated.resources.unsubscribed_on_netease
+import simpmusic.composeapp.generated.resources.unsubscribed_on_youtube
 
 class ArtistViewModel(
     private val artistRepository: ArtistRepository,
@@ -66,6 +71,12 @@ class ArtistViewModel(
     // Artist name-logo image + accent color from the hidden catalog (immersive header).
     private val _artistLogo: MutableStateFlow<ArtistLogo?> = MutableStateFlow(null)
     val artistLogo: StateFlow<ArtistLogo?> = _artistLogo
+
+    // Apple Music's animated artist artwork, which plays as the header. It replaced the Spotify
+    // canvas of the artist's most-popular song: that was a video OF A TRACK standing in for a
+    // page about the artist, and it changed whenever their top song did.
+    private val _artistMotion: MutableStateFlow<ArtistMotion?> = MutableStateFlow(null)
+    val artistMotion: StateFlow<ArtistMotion?> = _artistMotion
 
     // How many liked songs credit this artist — the "Liked songs" row above Popular (issue #2524)
     // shows only while this is above zero. Observed, so liking a song from the page updates it.
@@ -87,8 +98,8 @@ class ArtistViewModel(
 
     fun browseArtist(channelId: String) {
         _artistScreenState.value = Loading
-        _canvasUrl.value = null
         _artistLogo.value = null
+        _artistMotion.value = null
         _followed.value = false
         _remoteFollowed.value = null
         _remoteFollowPending.value = false
@@ -127,17 +138,6 @@ class ArtistViewModel(
                         }
                         _artistScreenState.value =
                             Success(data.toArtistScreenData())
-                        // Canvas comes ONLY from the single most-popular song: take the first
-                        // popular result and use its canvas if it has one. If it doesn't,
-                        // leave canvas null (already reset above) — no fallback to other songs.
-                        data.songs?.results?.firstOrNull()?.let { topSong ->
-                            val entity = songRepository.getSongById(topSong.videoId).firstOrNull()
-                            val canvasUrl = entity?.canvasUrl
-                            if (entity != null && canvasUrl != null) {
-                                _canvasUrl.value = Pair(canvasUrl, entity)
-                                log("CanvasUrl: $canvasUrl")
-                            }
-                        }
                     }
 
                     is Resource.Error ->
@@ -151,16 +151,29 @@ class ArtistViewModel(
         }
     }
 
-    private suspend fun fetchAndCacheArtistLogo(
+    /**
+     * One lookup fills both halves of the header, because Apple Music answers with both in the
+     * same response.
+     *
+     * The motion row is written on EVERY success, including the empty one — that negative answer
+     * is what stops the two requests from running again on the page of an artist who has no
+     * animated artwork, which is two artists in five. An [Resource.Error] writes nothing: it
+     * cannot be told apart from a dead connection, and caching that would blank the header for a
+     * week over one offline visit.
+     */
+    private suspend fun fetchAndCacheArtistEditorial(
         channelId: String,
         artistName: String,
     ) {
-        lyricsCanvasRepository.getArtistLogo(artistName).collectLatest { res ->
-            if (res is Resource.Success) {
-                val logo = res.data ?: return@collectLatest
+        lyricsCanvasRepository.getArtistEditorial(artistName).collectLatest { res ->
+            if (res !is Resource.Success) return@collectLatest
+            val editorial = res.data ?: return@collectLatest
+            editorial.logo?.let { logo ->
                 _artistLogo.value = logo
                 artistRepository.updateArtistNameLogo(channelId, logo.logoUrl, logo.bgColorHex)
             }
+            _artistMotion.value = editorial.motion
+            artistRepository.upsertArtistMotion(editorial.motion.toEntity(channelId))
         }
     }
 
@@ -176,9 +189,9 @@ class ArtistViewModel(
                     }
                     _followed.value = artistEntity.followed
                     log("insertArtist: ${artistEntity.followed}")
-                    // Name-logo: reuse the cached one if present, else fetch + persist it.
-                    val cachedLogoUrl = artistEntity.nameLogoUrl
-                    if (cachedLogoUrl != null) {
+                    // Paint whatever is already cached first, so the header does not start empty
+                    // and then pop.
+                    artistEntity.nameLogoUrl?.let { cachedLogoUrl ->
                         _artistLogo.value =
                             ArtistLogo(
                                 logoUrl = cachedLogoUrl,
@@ -186,8 +199,15 @@ class ArtistViewModel(
                                 width = 0,
                                 height = 0,
                             )
-                    } else {
-                        launch { fetchAndCacheArtistLogo(artist.channelId, artist.name) }
+                    }
+                    val cachedMotion = artistRepository.getArtistMotion(artistEntity.channelId)
+                    _artistMotion.value = cachedMotion?.toArtistMotion()
+                    // The motion row alone decides whether to go to the network, because it is the
+                    // only one of the two that records a negative answer. A cached name-logo cannot
+                    // stand in for it: every artist already in the library has one of those and no
+                    // motion row at all, so keying off the logo would mean they never get a video.
+                    if (cachedMotion?.isFresh() != true) {
+                        launch { fetchAndCacheArtistEditorial(artist.channelId, artist.name) }
                     }
                 }
             }

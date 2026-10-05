@@ -33,12 +33,14 @@ import com.maxrave.domain.manager.DataStoreManager
 import com.maxrave.domain.mediaservice.handler.MediaPlayerHandler
 import com.maxrave.domain.mediaservice.handler.ToastType
 import com.maxrave.domain.notification.DesktopNotificationManager
+import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.di.viewModelModule
 import com.maxrave.simpmusic.extension.DesktopWindowChrome
 import com.maxrave.simpmusic.ui.component.CustomTitleBar
 import com.maxrave.simpmusic.ui.mini_player.MiniPlayerManager
 import com.maxrave.simpmusic.ui.mini_player.MiniPlayerWindow
 import com.maxrave.simpmusic.ui.theme.isDarkTheme
+import com.maxrave.simpmusic.utils.ComposeResUtils
 import com.maxrave.simpmusic.utils.VersionManager
 import com.maxrave.simpmusic.viewModel.SharedViewModel
 import com.maxrave.simpmusic.viewModel.changeLanguageNative
@@ -265,6 +267,10 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                 ToastType.UnavailableQueueExhausted -> {
                     runBlocking { getString(Res.string.unavailable_song_queue_exhausted) }
                 }
+
+                is ToastType.SponsorBlockSkip -> {
+                    runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.SPONSOR_BLOCK_SKIP, type.category) }
+                }
             },
         )
     }
@@ -489,7 +495,21 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
             // application-level collector, but toFront needs the AWT window.
             LaunchedEffect(Unit) {
                 DesktopRestoreSignal.requests.collect {
-                    window.toFront()
+                    if (isMacOS && java.awt.Desktop.isDesktopSupported()) {
+                        Logger.d("DesktopApp", "Restore: visible=${window.isVisible} active=${window.isActive} focused=${window.isFocused}")
+                        // toFront() alone calls orderFront while the window is still key, which only
+                        // reorders it inside its own Space. requestFocus() always calls
+                        // makeKeyAndOrderFront, and making a window key is what makes macOS switch to
+                        // the Space holding it, the way a Dock click does for other apps.
+                        val desktop = java.awt.Desktop.getDesktop()
+                        if (desktop.isSupported(java.awt.Desktop.Action.APP_REQUEST_FOREGROUND)) {
+                            desktop.requestForeground(true)
+                        }
+                        window.toFront()
+                        window.requestFocus()
+                    } else {
+                        window.toFront()
+                    }
                 }
             }
             Column(

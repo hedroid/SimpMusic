@@ -12,26 +12,22 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.mediarouter.R as MediaRouterR
 import androidx.mediarouter.app.MediaRouteButton
 import com.google.android.gms.cast.framework.CastButtonFactory
+import com.maxrave.logger.Logger
 
 /**
- * Cast icon button. No-op (renders nothing) when Cast isn't available.
+ * Cast icon button backed by the original MediaRouter UI.
  *
- * MediaRouteButton requires an AppCompat-derived theme to inflate correctly;
- * the host Activity/Application theme in this Compose-first app isn't
- * guaranteed to be one, so the factory context is wrapped with mediarouter's
- * own `Theme.MediaRouter` to avoid a "You need to use a Theme.AppCompat theme"
- * crash.
- *
- * [tint] recolours the icon so callers can signal an active session.
+ * DLNA renderers are published into MediaRouter by [DlnaMediaRouteProvider], so the existing
+ * chooser/controller dialogs keep their original layout and behaviour while showing both Google
+ * Cast and DLNA routes.
  */
 @Composable
 fun CastIconButton(
     modifier: Modifier = Modifier,
     tint: Color = Color.White,
 ) {
-    if (!isCastAvailable()) return
-
     val context = LocalContext.current
+    val combinedRouteSelector = remember(context) { ensureDlnaMediaRouteProvider(context) }
     val tintArgb = tint.toArgb()
 
     // Keyed on the tint so the drawable is rebuilt only when the colour actually changes. The host
@@ -51,27 +47,30 @@ fun CastIconButton(
 
     AndroidView(
         modifier = modifier,
-        factory = { context ->
-            val themedContext = ContextThemeWrapper(context, MediaRouterR.style.Theme_MediaRouter)
+        factory = { viewContext ->
+            val themedContext = ContextThemeWrapper(viewContext, MediaRouterR.style.Theme_MediaRouter)
             MediaRouteButton(themedContext).apply {
-                CastButtonFactory.setUpMediaRouteButton(context.applicationContext, this)
+                // Cast 工厂内部会重新进入 CastContext 初始化——无 GMS/Cast 配置异常的设备
+                // 上直接抛(initCast 已捕获降级的同一失败路径,这里没有兜底=进播放页就崩,
+                // 五轮 CR)。只在 Cast 可用时才接 Google Cast 路由;不可用=纯 MediaRouteButton
+                // 只吃 DLNA selector,路由选择器照常可用。initCast 幂等且从不抛,就地补一次
+                // 防依赖 service 侧初始化时序;工厂调用再叠 runCatching 兜异常配置残余路径。
+                if (initCast(viewContext.applicationContext)) {
+                    runCatching {
+                        CastButtonFactory.setUpMediaRouteButton(viewContext.applicationContext, this)
+                    }.onFailure {
+                        Logger.w("CastButton", "setUpMediaRouteButton failed: ${it.message}")
+                    }
+                }
+                routeSelector = combinedRouteSelector
                 // MediaRouteButton inherits Widget.AppCompat.ActionButton, which bakes in 12dp of
-                // horizontal padding and scaleType=center (the drawable is never scaled, only
-                // centred and clipped). Callers size this to match the 24dp icon buttons it sits
-                // next to, and 24dp - 12dp - 12dp leaves a 0dp content rect: the glyph would
-                // vanish completely. Dropping the padding lets the 24dp drawable fill the box.
+                // horizontal padding and scaleType=center. Removing it keeps the glyph visible in
+                // the 24dp slot used by the player controls.
                 setPadding(0, 0, 0, 0)
             }
         },
         update = { button ->
-            // Set here rather than in factory() so a tint change actually reaches the view, and
-            // after setUpMediaRouteButton, which installs its own indicator. [indicator] is
-            // remembered per-tint, so this is a no-op assignment on ordinary recompositions.
-            //
-            // This swaps MediaRouteButton's state-list AVD for one static glyph, trading away the
-            // "connecting" animation and the built-in connected/disconnected distinction — the
-            // caller conveys session state through [tint] instead. Tapping still opens the route
-            // chooser when idle and the controller dialog (with "Stop casting") when connected.
+            button.routeSelector = combinedRouteSelector
             button.setRemoteIndicatorDrawable(indicator)
         },
     )

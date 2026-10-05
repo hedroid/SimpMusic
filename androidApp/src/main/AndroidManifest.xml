@@ -4,8 +4,16 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- DLNA/UPnP device discovery uses SSDP multicast while the route picker is open. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- 已下载视频文件(mp4)的文件路径直读。app 自建的文件凭 MediaStore 归属即可读,
+         但归属判定失效的场景(OEM FUSE 怪癖/外部恢复的文件)会以 EACCES 拒绝
+         (FileDataSource 实测,装载错误落 legacy"网络错误"toast 极具误导性),
+         声明视频读权限兜底;MainActivity 首启随通知权限一并申请一次。 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

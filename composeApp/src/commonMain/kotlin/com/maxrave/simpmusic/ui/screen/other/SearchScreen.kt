@@ -108,6 +108,7 @@ import com.maxrave.domain.utils.connectArtists
 import com.maxrave.domain.utils.toSongEntity
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.Platform
+import com.maxrave.simpmusic.expect.ui.PlatformBackHandler
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.getPlatform
 import com.maxrave.simpmusic.ui.component.AddToPlaylistModalBottomSheet
@@ -126,6 +127,7 @@ import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
+import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.ArrowOutward
 import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.History
@@ -182,6 +184,7 @@ fun SearchScreen(
     navController: NavController,
 ) {
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val searchScreenState by searchViewModel.searchScreenState.collectAsStateWithLifecycle()
     val uiState by searchViewModel.searchScreenUIState.collectAsStateWithLifecycle()
     val searchHistory by searchViewModel.searchHistory.collectAsStateWithLifecycle()
@@ -203,7 +206,7 @@ fun SearchScreen(
 
     var isFocused by rememberSaveable { mutableStateOf(false) }
 
-    // 切源原地刷新(2026-09-26 修复):tab 回落 + 已在结果页时按新源重跑当前 tab 的搜索。
+ // 切源原地刷新(2026-09-26 修复):tab 回落 + 已在结果页时按新源重跑当前 tab 的搜索。
     // 原实现只回落 tab 从不重搜——切源后结果页永远停留旧源内容(SEARCHPROBE 实测:
     // effect 正常触发但无任何 searchXxx 调用,网易结果在 YTM 源下停留 5s+ 不动)。
     LaunchedEffect(isNeteaseSource) {
@@ -233,7 +236,15 @@ fun SearchScreen(
         }
     }
 
-    // The bar floats OVER the content (a Box, not a Column) so there is something behind it to
+   val isSearchPanelVisible =
+        searchUIType == SearchUIType.SEARCH_HISTORY || searchUIType == SearchUIType.SEARCH_SUGGESTIONS
+    val dismissSearchPanel: () -> Unit = {
+        isExpanded = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+    PlatformBackHandler(enabled = isSearchPanelVisible, onBack = dismissSearchPanel)
+  // The bar floats OVER the content (a Box, not a Column) so there is something behind it to
     // blur — same arrangement HomeScreen uses. Each branch owns a scroll state, hoisted here so
     // the bar can tell whether the branch currently on screen is scrolled away from the top.
     // Two columns only on a phone held upright. Anywhere wider — tablet, landscape, desktop — two
@@ -381,7 +392,6 @@ fun SearchScreen(
     //On search icon click while on search screen, open keyboard. Android only feature
     if (getPlatform() == Platform.Android) {
         val reloadDestination by sharedViewModel.reloadDestination.collectAsStateWithLifecycle()
-        val keyboardController = LocalSoftwareKeyboardController.current
         LaunchedEffect(reloadDestination) {
             if (reloadDestination == SearchDestination::class) {
                 if (!selectionState.isActive && searchUIType == SearchUIType.EMPTY) {
@@ -432,6 +442,8 @@ fun SearchScreen(
         val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
         val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
         val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+        val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+        val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
         AddToPlaylistModalBottomSheet(
             isBottomSheetVisible = true,
             // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
@@ -439,6 +451,9 @@ fun SearchScreen(
             listLocalPlaylist = emptyList(),
             listYouTubePlaylist = youTubePlaylists,
             listNeteasePlaylist = neteasePlaylists,
+            youTubeLoadFailed = youTubeLoadFailedState,
+            neteaseLoadFailed = neteaseLoadFailedState,
+            onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
             videoIds = selectedIds,
             onDismiss = { showSelectionAddToPlaylist = false },
             onClick = {},
@@ -1119,28 +1134,32 @@ fun SearchScreen(
                 }
             }
         }
-        AnimatedContent(
-            targetState = isContentAtTop,
-            transitionSpec = {
-                fadeIn(tween(300)).togetherWith(fadeOut(tween(300)))
-            },
+        Box(
             modifier =
                 Modifier
                     .align(Alignment.TopCenter)
                     .onGloballyPositioned { searchBarHeightPx = it.size.height },
-            label = "search_bar_scrim",
-        ) { atTop ->
+        ) {
+            // Animate only the background so scrolling keeps the search input and its focus.
+            AnimatedVisibility(
+                visible = !isContentAtTop,
+                modifier = Modifier.matchParentSize(),
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(300)),
+                label = "search_bar_scrim",
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) }),
+                )
+            }
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .then(
-                            if (atTop) {
-                                Modifier.background(Color.Transparent)
-                            } else {
-                                Modifier.hazeBlur(HazeInput.Sources(hazeState), HazeMaterials.ultraThin().then { blurEnabled(true) })
-                            },
-                        ).windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.statusBars)
                         .padding(vertical = 10.dp),
             ) {
         AnimatedVisibility(visible = selectionState.isActive) {
@@ -1226,10 +1245,34 @@ fun SearchScreen(
                         }
                     },
                     leadingIcon = {
-                        Icon(
-                            imageVector = SimpIcons.Search,
-                            contentDescription = "Search",
-                        )
+                        Crossfade(
+                            targetState = isSearchPanelVisible,
+                            modifier = Modifier.size(48.dp),
+                            animationSpec = tween(200),
+                            label = "search_back_icon",
+                        ) { showBack ->
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (showBack) {
+                                    IconButton(
+                                        onClick = dismissSearchPanel,
+                                        enabled = isSearchPanelVisible,
+                                    ) {
+                                        Icon(
+                                            imageVector = SimpIcons.ArrowBackIosNew,
+                                            contentDescription = "Back",
+                                        )
+                                    }
+                                } else {
+                                    Icon(
+                                        imageVector = SimpIcons.Search,
+                                        contentDescription = "Search",
+                                    )
+                                }
+                            }
+                        }
                     },
                     trailingIcon = {
                         // X button only shows when there's text

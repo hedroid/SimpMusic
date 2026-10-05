@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,7 +47,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Slider
@@ -57,7 +55,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -72,7 +69,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -114,6 +110,7 @@ import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.HapticFeedbackLevel
+import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.expect.ui.directoryPickerResult
 import com.maxrave.simpmusic.expect.ui.LoginSyncDialog
 import com.maxrave.simpmusic.expect.ui.fileSaverResult
@@ -122,6 +119,7 @@ import com.maxrave.simpmusic.expect.ui.isWallpaperDynamicColorSupported
 import com.maxrave.simpmusic.expect.ui.openEqResult
 import com.maxrave.simpmusic.extension.barBlurStyle
 import com.maxrave.simpmusic.extension.bytesToMB
+import com.maxrave.simpmusic.extension.copy
 import com.maxrave.simpmusic.extension.displayString
 import com.maxrave.simpmusic.extension.isLanguageCode
 import com.maxrave.simpmusic.extension.isTwoLetterCode
@@ -145,6 +143,7 @@ import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.CreditDestination
+import com.maxrave.simpmusic.ui.navigation.destination.home.ThirdPartyLibrariesDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.DiscordLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.NeteaseLoginDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LastfmLoginDestination
@@ -159,13 +158,8 @@ import com.maxrave.simpmusic.viewModel.AiModelsState
 import com.maxrave.simpmusic.viewModel.SettingAlertState
 import com.maxrave.simpmusic.viewModel.SettingBasicAlertState
 import com.maxrave.simpmusic.viewModel.SettingsViewModel
+import com.maxrave.simpmusic.viewModel.formatDownloadBytes
 import com.maxrave.simpmusic.viewModel.SharedViewModel
-import com.mikepenz.aboutlibraries.entity.Library
-import com.mikepenz.aboutlibraries.ui.compose.ChipColors
-import com.mikepenz.aboutlibraries.ui.compose.LibraryDefaults
-import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
-import com.mikepenz.aboutlibraries.ui.compose.m3.libraryColors
-import com.mikepenz.aboutlibraries.ui.compose.produceLibraries
 import com.mohamedrejeb.calf.core.ExperimentalCalfApi
 import com.mohamedrejeb.calf.io.getPath
 import com.mohamedrejeb.calf.picker.FilePickerFileType
@@ -176,7 +170,6 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.roundToInt
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -196,6 +189,7 @@ import simpmusic.composeapp.generated.resources.add_an_account
 import simpmusic.composeapp.generated.resources.ai
 import simpmusic.composeapp.generated.resources.ai_api_key
 import simpmusic.composeapp.generated.resources.ai_api_key_message
+import simpmusic.composeapp.generated.resources.back
 import simpmusic.composeapp.generated.resources.ai_provider
 import simpmusic.composeapp.generated.resources.anonymous
 import simpmusic.composeapp.generated.resources.app_name
@@ -260,6 +254,24 @@ import simpmusic.composeapp.generated.resources.discord_integration
 import simpmusic.composeapp.generated.resources.donation
 import simpmusic.composeapp.generated.resources.download_quality
 import simpmusic.composeapp.generated.resources.downloaded_cache
+import simpmusic.composeapp.generated.resources.download_ai_tags
+import simpmusic.composeapp.generated.resources.download_ai_tags_description
+import simpmusic.composeapp.generated.resources.download_clear_all
+import simpmusic.composeapp.generated.resources.download_clear_all_description
+import simpmusic.composeapp.generated.resources.download_artist_album_folder
+import simpmusic.composeapp.generated.resources.download_artist_album_folder_description
+import simpmusic.composeapp.generated.resources.download_artist_album_folder_description_off
+import simpmusic.composeapp.generated.resources.download_audio_quality
+import simpmusic.composeapp.generated.resources.download_file_name_artist_title
+import simpmusic.composeapp.generated.resources.download_file_name_format
+import simpmusic.composeapp.generated.resources.download_file_name_title_artist
+import simpmusic.composeapp.generated.resources.download_file_name_title_only
+import simpmusic.composeapp.generated.resources.download_save_lrc
+import simpmusic.composeapp.generated.resources.download_save_lrc_description
+import simpmusic.composeapp.generated.resources.download_settings_section
+import simpmusic.composeapp.generated.resources.download_wifi_only
+import simpmusic.composeapp.generated.resources.download_wifi_only_description
+import simpmusic.composeapp.generated.resources.simultaneous_downloads
 import simpmusic.composeapp.generated.resources.enable_animated_artwork
 import simpmusic.composeapp.generated.resources.enable_canvas
 import simpmusic.composeapp.generated.resources.enable_liquid_glass_effect
@@ -586,9 +598,18 @@ fun SettingScreen(
         SUPPORTED_LANGUAGE.getLanguageFromLanguageTag(language?.takeIf { it.isNotEmpty() } ?: systemLanguageTag)
     val location by viewModel.location.collectAsStateWithLifecycle()
     val quality by viewModel.quality.collectAsStateWithLifecycle()
-    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
     val autoDownloadLikedSongs by viewModel.autoDownloadLikedSongs.collectAsStateWithLifecycle()
     val videoDownloadQuality by viewModel.videoDownloadQuality.collectAsStateWithLifecycle()
+    // 文件式下载(第二代)分区
+    val audioDownloadQuality by viewModel.audioDownloadQuality.collectAsStateWithLifecycle()
+    val downloadFileNameFormat by viewModel.downloadFileNameFormat.collectAsStateWithLifecycle()
+    val simultaneousDownloads by viewModel.simultaneousDownloads.collectAsStateWithLifecycle()
+    val downloadArtistAlbumFolder by viewModel.downloadArtistAlbumFolder.collectAsStateWithLifecycle()
+    val downloadSaveLrc by viewModel.downloadSaveLrc.collectAsStateWithLifecycle()
+    val downloadAiTags by viewModel.downloadAiTags.collectAsStateWithLifecycle()
+    val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsStateWithLifecycle()
+    // "清除全部下载"描述的实时总容量(文件字节和,null=未量到)
+    val downloadedFilesBytes by viewModel.downloadedFilesBytes.collectAsStateWithLifecycle()
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val playVideo by remember { viewModel.playVideoInsteadOfAudio.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
@@ -620,7 +641,6 @@ fun SettingScreen(
     val enableSponsorBlock by remember { viewModel.sponsorBlockEnabled.map { it == TRUE } }.collectAsStateWithLifecycle(initialValue = false)
     val skipSegments by viewModel.sponsorBlockCategories.collectAsStateWithLifecycle()
     val playerCache by viewModel.cacheSize.collectAsStateWithLifecycle()
-    val downloadedCache by viewModel.downloadedCacheSize.collectAsStateWithLifecycle()
     val thumbnailCache by viewModel.thumbCacheSize.collectAsStateWithLifecycle()
     val canvasCache by viewModel.canvasCacheSize.collectAsStateWithLifecycle()
     val limitPlayerCache by viewModel.playerCacheLimit.collectAsStateWithLifecycle()
@@ -703,10 +723,6 @@ fun SettingScreen(
     var showLoginSyncDialog by rememberSaveable {
         mutableStateOf(false)
     }
-    var showThirdPartyLibraries by rememberSaveable {
-        mutableStateOf(false)
-    }
-
     LaunchedEffect(true) {
         viewModel.getAllGoogleAccount()
     }
@@ -728,7 +744,7 @@ fun SettingScreen(
     // haze frost below stays: it is what keeps the title readable while rows scroll under it.
     LazyColumn(
         state = settingListState,
-        contentPadding = innerPadding,
+        contentPadding = innerPadding.copy(bottom = 0.dp),
         modifier =
             Modifier
                 .padding(horizontal = 16.dp)
@@ -1240,30 +1256,6 @@ fun SettingScreen(
                     },
                 )
                 SettingItem(
-                    title = stringResource(Res.string.download_quality),
-                    subtitle = downloadQuality ?: "",
-                    smallSubtitle = true,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.download_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            QUALITY.items.map { item ->
-                                                (item.toString() == downloadQuality) to item.toString()
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        state.selectOne?.getSelected()?.let { viewModel.setDownloadQuality(it) }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
                     title = stringResource(Res.string.video_quality),
                     subtitle = videoQuality ?: "",
                     onClick = {
@@ -1285,35 +1277,6 @@ fun SettingScreen(
                             ),
                         )
                     },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.video_download_quality),
-                    subtitle = videoDownloadQuality ?: "",
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.video_download_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            VIDEO_QUALITY.items.map { item ->
-                                                (item.toString() == videoDownloadQuality) to item.toString()
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        viewModel.setVideoDownloadQuality(state.selectOne?.getSelected() ?: "")
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
-                SettingItem(
-                    title = stringResource(Res.string.auto_download_liked_songs),
-                    subtitle = stringResource(Res.string.auto_download_liked_songs_description),
-                    smallSubtitle = true,
-                    switch = (autoDownloadLikedSongs to { viewModel.setAutoDownloadLikedSongs(it) }),
                 )
                 SettingItem(
                     title = stringResource(Res.string.play_video_for_video_track_instead_of_audio_only),
@@ -1533,25 +1496,14 @@ fun SettingScreen(
                     onClick = { showNeteaseAccountDialog = true },
                 )
                 // 与 YTM 音质同款 SettingAlertState 单选弹框
-                val neteaseQualityOptions =
-                    mapOf(
-                        "JYMASTER" to Res.string.netease_quality_jymaster,
-                        "SKY" to Res.string.netease_quality_sky,
-                        "JYEFFECT" to Res.string.netease_quality_jyeffect,
-                        "HIRES" to Res.string.netease_quality_hires,
-                        "LOSSLESS" to Res.string.netease_quality_lossless,
-                        "EXHIGH" to Res.string.netease_quality_exhigh,
-                        "HIGHER" to Res.string.netease_quality_higher,
-                        "STANDARD" to Res.string.netease_quality_standard,
-                    )
                 val qualityLabelToKey =
-                    neteaseQualityOptions.entries.associate { (key, res) ->
+                    NETEASE_QUALITY_OPTIONS.entries.associate { (key, res) ->
                         runBlocking { getString(res) } to key
                     }
                 SettingItem(
                     title = stringResource(Res.string.quality),
                     subtitle =
-                        neteaseQualityOptions[neteaseQuality]?.let { stringResource(it) }
+                        NETEASE_QUALITY_OPTIONS[neteaseQuality]?.let { stringResource(it) }
                             ?: stringResource(Res.string.netease_quality_exhigh),
                     smallSubtitle = true,
                     isEnable = neteaseLoggedIn,
@@ -1562,7 +1514,7 @@ fun SettingScreen(
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
-                                            neteaseQualityOptions.entries.map { (key, res) ->
+                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
                                                 (key == neteaseQuality) to runBlocking { getString(res) }
                                             },
                                     ),
@@ -1577,35 +1529,8 @@ fun SettingScreen(
                         )
                     },
                 )
-                SettingItem(
-                    title = stringResource(Res.string.download_quality),
-                    subtitle =
-                        neteaseQualityOptions[neteaseDownloadQuality]?.let { stringResource(it) }
-                            ?: stringResource(Res.string.netease_quality_lossless),
-                    smallSubtitle = true,
-                    isEnable = neteaseLoggedIn,
-                    onClick = {
-                        viewModel.setAlertData(
-                            SettingAlertState(
-                                title = runBlocking { getString(Res.string.netease_download_quality) },
-                                selectOne =
-                                    SettingAlertState.SelectData(
-                                        listSelect =
-                                            neteaseQualityOptions.entries.map { (key, res) ->
-                                                (key == neteaseDownloadQuality) to runBlocking { getString(res) }
-                                            },
-                                    ),
-                                confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
-                                        qualityLabelToKey[state.selectOne?.getSelected()]?.let {
-                                            viewModel.setNeteaseDownloadQuality(it)
-                                        }
-                                    },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
-                            ),
-                        )
-                    },
-                )
+                // 网易下载音质项已删(2026-10 文件式下载统一到"下载音质"三档,
+                // 旧值经 DataStore 读时惰性迁移)
                 SettingItem(
                     title = stringResource(Res.string.netease_play_report),
                     subtitle = stringResource(Res.string.netease_play_report_description),
@@ -2297,6 +2222,13 @@ fun SettingScreen(
                     switch = (useAITranslation to { viewModel.setAITranslation(it) }),
                     isEnable = isHasApiKey,
                 )
+                SettingItem(
+                    title = stringResource(Res.string.download_ai_tags),
+                    subtitle = stringResource(Res.string.download_ai_tags_description),
+                    smallSubtitle = true,
+                    switch = (downloadAiTags to { viewModel.setDownloadAiTags(it) }),
+                    isEnable = isHasApiKey,
+                )
             }
         }
         item(key = "spotify") {
@@ -2518,6 +2450,192 @@ fun SettingScreen(
             }
         }
         if (getPlatform() == Platform.Android) {
+        item(key = "downloads") {
+            Column {
+                Text(
+                    text = stringResource(Res.string.download_settings_section),
+                    style = typo().labelMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                // 文件式下载(2026-10):统一三档音质(旧 downloadQuality/neteaseDownloadQuality
+                // 两项已删,值经 audioDownloadQuality 读时惰性迁移)
+                SettingItem(
+                    // 2026-10-01 对齐网易在线音质:8 档同款(含 VIP 档),网易直传降级链兜底,
+                    // YT 折 itag;旧 HIGH 值读时归一 EXHIGH
+                    title = stringResource(Res.string.download_audio_quality),
+                    subtitle =
+                        NETEASE_QUALITY_OPTIONS[audioDownloadQuality]?.let { stringResource(it) }
+                            ?: stringResource(Res.string.netease_quality_exhigh),
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.download_audio_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            NETEASE_QUALITY_OPTIONS.entries.map { (key, res) ->
+                                                (key == audioDownloadQuality) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val label = state.selectOne?.getSelected()
+                                        NETEASE_QUALITY_OPTIONS.entries
+                                            .firstOrNull { runBlocking { getString(it.value) } == label }
+                                            ?.key
+                                            ?.let { viewModel.setAudioDownloadQuality(it) }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.video_download_quality),
+                    subtitle = videoDownloadQuality ?: "",
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.video_download_quality) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            VIDEO_QUALITY.items.map { item ->
+                                                (item.toString() == videoDownloadQuality) to item.toString()
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        viewModel.setVideoDownloadQuality(state.selectOne?.getSelected() ?: "")
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_file_name_format),
+                    subtitle =
+                        when (downloadFileNameFormat) {
+                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY -> stringResource(Res.string.download_file_name_title_only)
+                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE -> stringResource(Res.string.download_file_name_artist_title)
+                            else -> stringResource(Res.string.download_file_name_title_artist)
+                        },
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.download_file_name_format) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect =
+                                            listOf(
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
+                                                DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
+                                            ).map { (key, res) ->
+                                                (key == downloadFileNameFormat) to runBlocking { getString(res) }
+                                            },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        val label = state.selectOne?.getSelected()
+                                        listOf(
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ONLY to Res.string.download_file_name_title_only,
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_ARTIST_TITLE to Res.string.download_file_name_artist_title,
+                                            DataStoreManager.Values.DOWNLOAD_FILE_NAME_TITLE_ARTIST to Res.string.download_file_name_title_artist,
+                                        ).firstOrNull { runBlocking { getString(it.second) } == label }?.first
+                                            ?.let { viewModel.setDownloadFileNameFormat(it) }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.simultaneous_downloads),
+                    subtitle = simultaneousDownloads.toString(),
+                    onClick = {
+                        viewModel.setAlertData(
+                            SettingAlertState(
+                                title = runBlocking { getString(Res.string.simultaneous_downloads) },
+                                selectOne =
+                                    SettingAlertState.SelectData(
+                                        listSelect = (1..10).map { (it == simultaneousDownloads) to it.toString() },
+                                    ),
+                                confirm =
+                                    runBlocking { getString(Res.string.change) } to { state ->
+                                        state.selectOne?.getSelected()?.toIntOrNull()?.let {
+                                            viewModel.setSimultaneousDownloads(it)
+                                        }
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_artist_album_folder),
+                    // 描述随开关态展示实际落点(用户 2026-10-01):未选中=根目录,选中=艺人/专辑子目录
+                    subtitle =
+                        stringResource(
+                            if (downloadArtistAlbumFolder) {
+                                Res.string.download_artist_album_folder_description
+                            } else {
+                                Res.string.download_artist_album_folder_description_off
+                            },
+                        ),
+                    smallSubtitle = true,
+                    switch = (downloadArtistAlbumFolder to { viewModel.setDownloadArtistAlbumFolder(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_save_lrc),
+                    subtitle = stringResource(Res.string.download_save_lrc_description),
+                    smallSubtitle = true,
+                    switch = (downloadSaveLrc to { viewModel.setDownloadSaveLrc(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_wifi_only),
+                    subtitle = stringResource(Res.string.download_wifi_only_description),
+                    smallSubtitle = true,
+                    switch = (downloadWifiOnly to { viewModel.setDownloadWifiOnly(it) }),
+                )
+                SettingItem(
+                    title = stringResource(Res.string.auto_download_liked_songs),
+                    subtitle = stringResource(Res.string.auto_download_liked_songs_description),
+                    smallSubtitle = true,
+                    switch = (autoDownloadLikedSongs to { viewModel.setAutoDownloadLikedSongs(it) }),
+                )
+                SettingItem(
+                    // 原"已下载缓存"(存储分区):文件式后 SimpleCache 只是转存前的临时
+                    // 落点,大小恒近 0,缓存语义已死——改造为一键全删(动作本就是
+                    // removeAllDownloads 一站式:文件+MediaStore+Room+条目+空文件夹)
+                    // 描述带实时总容量(2026-10-02 用户定)
+                    title = stringResource(Res.string.download_clear_all),
+                    subtitle =
+                        stringResource(Res.string.download_clear_all_description) +
+                            (downloadedFilesBytes?.takeIf { it > 0 }
+                                ?.let { " · " + formatDownloadBytes(it) } ?: ""),
+                    smallSubtitle = true,
+                    onClick = {
+                        viewModel.setBasicAlertData(
+                            SettingBasicAlertState(
+                                title = runBlocking { getString(Res.string.download_clear_all) },
+                                message = null,
+                                confirm =
+                                    runBlocking { getString(Res.string.clear) } to {
+                                        viewModel.clearDownloadedCache()
+                                    },
+                                dismiss = runBlocking { getString(Res.string.cancel) },
+                            ),
+                        )
+                    },
+                )
+
+            }
+        }
             item(key = "storage") {
                 Column {
                     Text(
@@ -2537,23 +2655,6 @@ fun SettingScreen(
                                     confirm =
                                         runBlocking { getString(Res.string.clear) } to {
                                             viewModel.clearPlayerCache()
-                                        },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
-                                ),
-                            )
-                        },
-                    )
-                    SettingItem(
-                        title = stringResource(Res.string.downloaded_cache),
-                        subtitle = "${downloadedCache.bytesToMB()} MB",
-                        onClick = {
-                            viewModel.setBasicAlertData(
-                                SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_downloaded_cache) },
-                                    message = null,
-                                    confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
-                                            viewModel.clearDownloadedCache()
                                         },
                                     dismiss = runBlocking { getString(Res.string.cancel) },
                                 ),
@@ -2855,11 +2956,10 @@ fun SettingScreen(
                 if (getPlatform() == Platform.Android) {
                     SettingItem(
                         title = stringResource(Res.string.auto_backup),
-                        subtitle =
-                            stringResource(
-                                Res.string.auto_backup_description,
-                                backupFolderName ?: stringResource(Res.string.backup_default_folder_name),
-                            ),
+                        // 简版描述:不含备份位置(下一行"备份位置"已展示,重复信息)。
+                        // 不能整个删掉——无副标题时行高被 Switch(~30dp)撑起、标题垂直居中,
+                        // 与邻行文字间距 73px(带副标题行 42px),视觉上空出一行(用户 2026-10-01 反馈)。
+                        subtitle = stringResource(Res.string.auto_backup_description),
                         switch = (autoBackupEnabled to { viewModel.setAutoBackupEnabled(it) }),
                     )
                     AnimatedVisibility(visible = autoBackupEnabled) {
@@ -3074,7 +3174,7 @@ fun SettingScreen(
                     title = stringResource(Res.string.third_party_libraries),
                     subtitle = stringResource(Res.string.description_and_licenses),
                     onClick = {
-                        showThirdPartyLibraries = true
+                        navController.navigate(ThirdPartyLibrariesDestination)
                     },
                 )
             }
@@ -3101,6 +3201,8 @@ fun SettingScreen(
         val alertBasicState = basisAlertData ?: return
         AlertDialog(
             onDismissRequest = { viewModel.setBasicAlertData(null) },
+            // 弹窗是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             title = {
                 Text(
                     text = alertBasicState.title,
@@ -3151,6 +3253,7 @@ fun SettingScreen(
         val parsedColor = parseThemeColorHex(pendingHex)
         AlertDialog(
             onDismissRequest = { showColorPickerDialog = false },
+            modifier = Modifier.hapticTapFeedback(),
             title = { Text(text = stringResource(Res.string.custom_color), style = typo().titleSmall) },
             text = {
                 Column {
@@ -3210,7 +3313,10 @@ fun SettingScreen(
     if (showNeteaseAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
-            modifier = Modifier.wrapContentSize(),
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .hapticTapFeedback(),
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3366,7 +3472,10 @@ fun SettingScreen(
     if (showYouTubeAccountDialog) {
         BasicAlertDialog(
             onDismissRequest = { },
-            modifier = Modifier.wrapContentSize(),
+            modifier =
+                Modifier
+                    .wrapContentSize()
+                    .hapticTapFeedback(),
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -3535,6 +3644,8 @@ fun SettingScreen(
         // AlertDialog
         AlertDialog(
             onDismissRequest = { viewModel.setAlertData(null) },
+            // 弹窗是独立 Android 窗口,不经主窗口 Scaffold 的全局触感观察器,自己挂一个
+            modifier = Modifier.hapticTapFeedback(),
             title = {
                 Text(
                     text = alertState.title,
@@ -3822,99 +3933,6 @@ fun SettingScreen(
         )
     }
 
-    if (showThirdPartyLibraries) {
-        val libraries by produceLibraries {
-            Res.readBytes("files/aboutlibraries.json").decodeToString()
-        }
-        val lazyListState = rememberLazyListState()
-        val canScrollBackward by remember {
-            derivedStateOf {
-                lazyListState.canScrollBackward
-            }
-        }
-        val sheetState =
-            rememberModalBottomSheetState(
-                skipPartiallyExpanded = true,
-                confirmValueChange = {
-                    !canScrollBackward
-                },
-            )
-        val coroutineScope = rememberCoroutineScope()
-        ModalBottomSheet(
-            modifier =
-                Modifier
-                    .fillMaxHeight(),
-            onDismissRequest = {
-                showThirdPartyLibraries = false
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = {},
-            scrimColor = Color.Black.copy(alpha = .5f),
-            sheetState = sheetState,
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-            shape = RectangleShape,
-        ) {
-            // Capture theme colors here: the ChipColors getters below run outside composition.
-            val surfaceContainerHighestColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            val onSurfaceColor = MaterialTheme.colorScheme.onSurface
-            LibrariesContainer(
-                libraries?.copy(
-                    libraries =
-                        libraries
-                            ?.libraries
-                            ?.distinctBy {
-                                it.name
-                            }?.toImmutableList() ?: emptyList<Library>().toImmutableList(),
-                ),
-                Modifier.fillMaxSize(),
-                lazyListState = lazyListState,
-                contentPadding = innerPadding,
-                colors =
-                    LibraryDefaults.libraryColors(
-                        licenseChipColors =
-                            object : ChipColors {
-                                override val containerColor: Color
-                                    get() = surfaceContainerHighestColor
-                                override val contentColor: Color
-                                    get() = onSurfaceColor
-                            },
-                    ),
-                header = {
-                    item {
-                        TopAppBar(
-                            windowInsets = WindowInsets(0, 0, 0, 0),
-                            title = {
-                                Text(
-                                    text =
-                                        stringResource(
-                                            Res.string.third_party_libraries,
-                                        ),
-                                    style = typo().titleMedium,
-                                )
-                            },
-                            navigationIcon = {
-                                Box(Modifier.padding(horizontal = 5.dp)) {
-                                    RippleIconButton(
-                                        SimpIcons.ArrowBackIosNew,
-                                        Modifier
-                                            .size(32.dp),
-                                        true,
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    ) {
-                                        coroutineScope.launch {
-                                            sheetState.hide()
-                                            showThirdPartyLibraries = false
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                    }
-                },
-            )
-        }
-    }
-
     // Transparent while the list sits at the top — an always-on frost dimmed the glow behind the
     // bar into a black band, which is exactly where the glow carries its colour. Same crossfade
     // Home, Search and Mix run on their bars.
@@ -3945,6 +3963,7 @@ fun SettingScreen(
                             .size(32.dp),
                         true,
                         tint = MaterialTheme.colorScheme.onSurface,
+                        contentDescription = stringResource(Res.string.back),
                     ) {
                         navController.navigateUp()
                     }
@@ -3979,6 +3998,19 @@ fun SettingScreen(
  * Only dismissible once the import has finished — cancelling mid-write would leave the database
  * half-populated with no way to tell the user which half.
  */
+/** 网易音质 8 档(在线"音质"与"下载音质"共用,降序;值=NeteaseQuality name,直传取流) */
+private val NETEASE_QUALITY_OPTIONS =
+    linkedMapOf(
+        "JYMASTER" to Res.string.netease_quality_jymaster,
+        "SKY" to Res.string.netease_quality_sky,
+        "JYEFFECT" to Res.string.netease_quality_jyeffect,
+        "HIRES" to Res.string.netease_quality_hires,
+        "LOSSLESS" to Res.string.netease_quality_lossless,
+        "EXHIGH" to Res.string.netease_quality_exhigh,
+        "HIGHER" to Res.string.netease_quality_higher,
+        "STANDARD" to Res.string.netease_quality_standard,
+    )
+
 @Composable
 private fun ImportProgressDialog(
     progress: ImportProgress,
@@ -3987,6 +4019,7 @@ private fun ImportProgressDialog(
     val finished = progress is ImportProgress.Success || progress is ImportProgress.Error
     AlertDialog(
         onDismissRequest = { if (finished) onDismiss() },
+        modifier = Modifier.hapticTapFeedback(),
         properties =
             DialogProperties(
                 dismissOnBackPress = finished,

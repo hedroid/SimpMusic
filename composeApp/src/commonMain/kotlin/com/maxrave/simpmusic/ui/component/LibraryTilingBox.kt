@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.maxrave.simpmusic.extension.NonLazyGrid
 import com.maxrave.simpmusic.ui.icon.Album
+import com.maxrave.simpmusic.ui.icon.DownloadForOffline
 import com.maxrave.simpmusic.ui.icon.Downloading
 import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.Insights
@@ -35,8 +37,9 @@ import com.maxrave.simpmusic.ui.theme.typo
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.download_section_completed
+import simpmusic.composeapp.generated.resources.download_section_in_progress
 import simpmusic.composeapp.generated.resources.downloaded
-import simpmusic.composeapp.generated.resources.downloaded_songs_tab
 import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.followed
 import simpmusic.composeapp.generated.resources.library_podcasts
@@ -121,9 +124,14 @@ fun LibraryTilingBox(
 fun LibraryTilingItem(
     state: LibraryTilingState,
     selected: Boolean = false,
+    // 磁贴副标题(可选):"已完成"磁贴用它带出"N首·总大小"统计(2026-10-01 用户定)
+    subtitle: String? = null,
+    // 标题覆盖(可选):"下载中"磁贴用"下载中 (N)"动态计数(2026-10-02 用户定);
+    // null=用 state.title 资源
+    titleString: String? = null,
     onClick: () -> Unit = {},
 ) {
-    val title = stringResource(state.title)
+    val title = titleString ?: stringResource(state.title)
     ElevatedCard(
         modifier =
             Modifier
@@ -157,11 +165,25 @@ fun LibraryTilingItem(
                         .padding(10.dp),
                 tint = state.iconColor,
             )
-            Text(
-                title,
-                style = typo().titleSmall,
-                color = Color.Black,
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = typo().titleSmall,
+                    color = Color.Black,
+                    maxLines = 1,
+                    // "已完成 (N首·大小)"内联统计较长,窄屏溢出时省略号截断
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        // bodySmall:用户 2026-10-02 反馈 labelSmall 的"N首·总大小"偏大
+                        style = typo().bodySmall,
+                        color = Color.Black.copy(alpha = 0.75f),
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
@@ -222,19 +244,22 @@ data class LibraryTilingState(
                 icon = SimpIcons.RssFeed,
                 iconColor = Color(0xff01579B),
             )
-        val DownloadedSongs =
+        /** 下载管理页"下载中"磁贴(2026-10-01 用户定:tab 不再分歌曲/视频/播客,改为状态视角) */
+        val DownloadInProgress =
             LibraryTilingState(
-                title = Res.string.downloaded_songs_tab,
-                containerColor = Color(0xffC8E6C9),
+                title = Res.string.download_section_in_progress,
+                containerColor = Color(0xffFFE0B2),
                 icon = SimpIcons.Downloading,
-                iconColor = Color(0xff1B5E20),
+                iconColor = Color.Black,
             )
-        val DownloadedPlaylists =
+
+        /** 下载管理页"已完成"磁贴(subtitle 带"N首·总大小"统计) */
+        val DownloadCompleted =
             LibraryTilingState(
-                title = Res.string.playlists,
-                containerColor = Color(0xffD5B8FF),
-                icon = SimpIcons.LibraryMusic,
-                iconColor = Color(0xff4A148C),
+                title = Res.string.download_section_completed,
+                containerColor = Color(0xffC8E6C9),
+                icon = SimpIcons.DownloadForOffline,
+                iconColor = Color(0xff1B5E20),
             )
     }
 }

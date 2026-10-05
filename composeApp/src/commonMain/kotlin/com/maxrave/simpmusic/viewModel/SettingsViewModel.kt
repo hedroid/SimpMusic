@@ -301,7 +301,7 @@ class SettingsViewModel(
         getLanguage()
         getQuality()
         getPlayerCacheSize()
-        getDownloadedCacheSize()
+        observeDownloadedFilesBytes()
         getPlayerCacheLimit()
         getLoggedIn()
         getNormalizeVolume()
@@ -357,6 +357,7 @@ class SettingsViewModel(
         getKeepYouTubePlaylistOffline()
         getDownloadQuality()
         getVideoDownloadQuality()
+        getFileDownloadSettings()
         getLocalTrackingEnabled()
         getBlogNotificationEnabled()
         getAutoBackupEnabled()
@@ -421,10 +422,9 @@ class SettingsViewModel(
     private fun getVideoDownloadQuality() {
         viewModelScope.launch {
             dataStoreManager.videoDownloadQuality.collect { videoQuality ->
-                when (videoQuality) {
-                    VIDEO_QUALITY.items[0].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[0].toString())
-                    VIDEO_QUALITY.items[1].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[1].toString())
-                    VIDEO_QUALITY.items[2].toString() -> _videoDownloadQuality.emit(VIDEO_QUALITY.items[2].toString())
+                // 4 档全收(2026-10-02 加 480p 后原 when 只列了 3 档:选 360p 回显不生效)
+                VIDEO_QUALITY.items.firstOrNull { it.toString() == videoQuality }?.let {
+                    _videoDownloadQuality.emit(it.toString())
                 }
             }
         }
@@ -436,6 +436,104 @@ class SettingsViewModel(
                 dataStoreManager.setVideoDownloadQuality(quality)
             }
             getVideoDownloadQuality()
+        }
+    }
+
+    // ===== 文件式下载(第二代)分区 =====
+
+    private val _audioDownloadQuality = MutableStateFlow<String?>(null)
+    val audioDownloadQuality: StateFlow<String?> = _audioDownloadQuality
+
+    private val _downloadFileNameFormat = MutableStateFlow<String?>(null)
+    val downloadFileNameFormat: StateFlow<String?> = _downloadFileNameFormat
+
+    private val _simultaneousDownloads = MutableStateFlow(3)
+    val simultaneousDownloads: StateFlow<Int> = _simultaneousDownloads
+
+    private val _downloadArtistAlbumFolder = MutableStateFlow(false)
+    val downloadArtistAlbumFolder: StateFlow<Boolean> = _downloadArtistAlbumFolder
+
+    private val _downloadSaveLrc = MutableStateFlow(true)
+    val downloadSaveLrc: StateFlow<Boolean> = _downloadSaveLrc
+
+    private val _downloadAiTags = MutableStateFlow(false)
+    val downloadAiTags: StateFlow<Boolean> = _downloadAiTags
+
+    private val _downloadWifiOnly = MutableStateFlow(true)
+    val downloadWifiOnly: StateFlow<Boolean> = _downloadWifiOnly
+
+    private fun getFileDownloadSettings() {
+        viewModelScope.launch {
+            dataStoreManager.audioDownloadQuality.collect { _audioDownloadQuality.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadFileNameFormat.collect { _downloadFileNameFormat.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.simultaneousDownloads.collect { _simultaneousDownloads.emit(it) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadArtistAlbumFolder.collect {
+                _downloadArtistAlbumFolder.emit(it == DataStoreManager.TRUE)
+            }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadSaveLrc.collect { _downloadSaveLrc.emit(it == DataStoreManager.TRUE) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadAiTags.collect { _downloadAiTags.emit(it == DataStoreManager.TRUE) }
+        }
+        viewModelScope.launch {
+            dataStoreManager.downloadWifiOnly.collect { _downloadWifiOnly.emit(it == DataStoreManager.TRUE) }
+        }
+    }
+
+    fun setAudioDownloadQuality(quality: String) {
+        viewModelScope.launch {
+            dataStoreManager.setAudioDownloadQuality(quality)
+            _audioDownloadQuality.emit(quality)
+        }
+    }
+
+    fun setDownloadFileNameFormat(format: String) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadFileNameFormat(format)
+            _downloadFileNameFormat.emit(format)
+        }
+    }
+
+    fun setSimultaneousDownloads(count: Int) {
+        viewModelScope.launch {
+            dataStoreManager.setSimultaneousDownloads(count)
+            _simultaneousDownloads.emit(count.coerceIn(1, 10))
+        }
+    }
+
+    fun setDownloadArtistAlbumFolder(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadArtistAlbumFolder(enabled)
+            _downloadArtistAlbumFolder.emit(enabled)
+        }
+    }
+
+    fun setDownloadSaveLrc(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadSaveLrc(enabled)
+            _downloadSaveLrc.emit(enabled)
+        }
+    }
+
+    fun setDownloadAiTags(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadAiTags(enabled)
+            _downloadAiTags.emit(enabled)
+        }
+    }
+
+    fun setDownloadWifiOnly(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadWifiOnly(enabled)
+            _downloadWifiOnly.emit(enabled)
         }
     }
 
@@ -1297,8 +1395,34 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * 已下载文件总大小(实时流,"清除全部下载"描述用,2026-10-02 用户定):SimpleCache 的
+     * [downloadedCacheSize] 转存后恒近 0,真容量=磁盘上音频+视频文件字节和。
+     * 走 getDownloadActivitySongs 实时流,下载/删除自动刷新;IO 线程量文件。
+     */
+    private val _downloadedFilesBytes: MutableStateFlow<Long?> = MutableStateFlow(null)
+    val downloadedFilesBytes: StateFlow<Long?> = _downloadedFilesBytes
+
+    private fun observeDownloadedFilesBytes() {
+        viewModelScope.launch {
+            songRepository.getDownloadActivitySongs().collect { songs ->
+                _downloadedFilesBytes.value =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        songs.sumOf { song ->
+                            (song.downloadedFilePath?.let { java.io.File(it).takeIf(java.io.File::exists)?.length() } ?: 0L) +
+                                (song.downloadedVideoFilePath?.let { java.io.File(it).takeIf(java.io.File::exists)?.length() } ?: 0L)
+                        }
+                    }
+            }
+        }
+    }
+
     fun clearDownloadedCache() {
         viewModelScope.launch {
+            // 二期改走一站式清理:删文件+MediaStore 行+Room 双列清零+DownloadIndex 条目
+            // 全清(旧实现只清 SimpleCache 目录+写 state,DownloadIndex 僵尸条目留在表里,
+            // 下次启动被启动扫描重新写成"已下载"——缓存已无、显示已下载的僵尸行)
+            downloadUtils.removeAllDownloads()
             cacheRepository.clearCache(Config.DOWNLOAD_CACHE)
             songRepository.getDownloadedSongs().singleOrNull()?.let { songs ->
                 songs.forEach { song ->
@@ -1318,8 +1442,7 @@ class SettingsViewModel(
                 localPlaylistRepository.updateLocalPlaylistDownloadState(DownloadState.STATE_NOT_DOWNLOADED, playlist.id)
             }
             makeToast(getString(Res.string.clear_downloaded_cache))
-            getDownloadedCacheSize()
-            downloadUtils.removeAllDownloads()
+            // 顺修:尾部曾有第二个 removeAllDownloads(与开头重复,把刚清完的状态再写一遍)
         }
     }
 

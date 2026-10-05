@@ -23,7 +23,8 @@ import com.maxrave.simpmusic.ui.theme.typo
 @Composable
 fun SettingItem(
     title: String = "Title",
-    subtitle: String = "Subtitle",
+    // null = 该行只有标题(不渲染副标题区块);所有现有调用点都显式传值,不受默认值影响
+    subtitle: String? = null,
     smallSubtitle: Boolean = false,
     isEnable: Boolean = true,
     onClick: (() -> Unit)? = null,
@@ -78,26 +79,28 @@ fun SettingItem(
                         },
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = subtitle,
-                    style =
-                        if (smallSubtitle) {
-                            typo().bodySmall.let {
-                                if (!isEnable) it.greyScale() else it
-                            }
-                        } else {
-                            typo().bodyMedium.let {
-                                if (!isEnable) it.greyScale() else it
-                            }
-                        },
-                    // No maxLines: with a cap and no overflow set, Compose defaults to Clip and cut
-                    // the second line through the middle of the glyphs, with no ellipsis to show
-                    // anything was missing. A settings list scrolls vertically anyway, and these
-                    // descriptions are translated — German and Vietnamese run longer than the
-                    // English they were sized against, so any fixed cap just moves the problem to
-                    // another language.
-                )
+                if (subtitle != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = subtitle,
+                        style =
+                            if (smallSubtitle) {
+                                typo().bodySmall.let {
+                                    if (!isEnable) it.greyScale() else it
+                                }
+                            } else {
+                                typo().bodyMedium.let {
+                                    if (!isEnable) it.greyScale() else it
+                                }
+                            },
+                        // No maxLines: with a cap and no overflow set, Compose defaults to Clip and cut
+                        // the second line through the middle of the glyphs, with no ellipsis to show
+                        // anything was missing. A settings list scrolls vertically anyway, and these
+                        // descriptions are translated — German and Vietnamese run longer than the
+                        // English they were sized against, so any fixed cap just moves the problem to
+                        // another language.
+                    )
+                }
 
                 otherView?.let {
                     Spacer(Modifier.height(16.dp))

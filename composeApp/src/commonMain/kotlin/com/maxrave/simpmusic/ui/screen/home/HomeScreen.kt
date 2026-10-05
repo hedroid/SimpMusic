@@ -136,6 +136,7 @@ import com.maxrave.simpmusic.ui.navigation.destination.home.RecentlySongsDestina
 import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
@@ -173,6 +174,10 @@ import simpmusic.composeapp.generated.resources.app_name
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.commute
+import simpmusic.composeapp.generated.resources.listen_together
+import simpmusic.composeapp.generated.resources.notification
+import simpmusic.composeapp.generated.resources.recently_added
+import simpmusic.composeapp.generated.resources.settings
 import simpmusic.composeapp.generated.resources.do_not_show_again
 import simpmusic.composeapp.generated.resources.energize
 import simpmusic.composeapp.generated.resources.feel_good
@@ -871,15 +876,31 @@ fun HomeTopAppBar(navController: NavController) {
             }
         },
         actions = {
-            RippleIconButton(imageVector = SimpIcons.Notifications, tint = MaterialTheme.colorScheme.onBackground) {
+            // 顶栏图标钮必须带描述:无描述的 IconButton 在 TalkBack 下是 NAF、被完全跳过
+            // (UI-CR-07 走查实证:设置/通知/历史/一起听入口曾整体不可达)
+            RippleIconButton(
+                imageVector = SimpIcons.Notifications,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.notification),
+            ) {
                 navController.navigate(NotificationDestination)
             }
-            RippleIconButton(imageVector = SimpIcons.History, tint = MaterialTheme.colorScheme.onBackground) {
+            RippleIconButton(
+                imageVector = SimpIcons.History,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.recently_added),
+            ) {
                 navController.navigate(RecentlySongsDestination)
             }
             // Fourth button, immediately before Settings — the position the design canvas fixes.
-            ListenTogetherIconButton { navController.navigate(ListenTogetherDestination) }
-            RippleIconButton(imageVector = SimpIcons.Settings, tint = MaterialTheme.colorScheme.onBackground) {
+            ListenTogetherIconButton(
+                contentDescription = stringResource(Res.string.listen_together),
+            ) { navController.navigate(ListenTogetherDestination) }
+            RippleIconButton(
+                imageVector = SimpIcons.Settings,
+                tint = MaterialTheme.colorScheme.onBackground,
+                contentDescription = stringResource(Res.string.settings),
+            ) {
                 navController.navigate(SettingsDestination)
             }
         },
@@ -1195,5 +1216,42 @@ fun ChartData(
             scrollState = lazyListState2,
             flingBehavior = snapperFlingBehavior2,
         )
+        // Ranked podcast shows, laid out exactly like the artist chart above.
+        chart.podcasts?.let { podcasts ->
+            Text(
+                text = podcasts.title,
+                style = typo().headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+            )
+            val podcastGridState = rememberLazyGridState()
+            val podcastFlingBehavior = rememberSnapFlingBehavior(SnapLayoutInfoProvider(lazyGridState = podcastGridState))
+            LazyHorizontalGrid(
+                rows = GridCells.Fixed(3),
+                modifier = Modifier.height(240.dp),
+                state = podcastGridState,
+                flingBehavior = podcastFlingBehavior,
+            ) {
+                items(podcasts.shows.size, key = { index -> podcasts.shows[index].browseId + index }) {
+                    val data = podcasts.shows[it]
+                    ItemArtistChart(
+                        onClick = { navController.navigate(PodcastDestination(podcastId = data.browseId)) },
+                        data = data,
+                        widthDp = if (isPortrait) gridWidthDp else minOf(gridWidthDp, LandscapeGridItemMaxWidth),
+                        thumbnailShape = RoundedCornerShape(8.dp),
+                        subtitle = data.subscribers,
+                    )
+                }
+            }
+            HorizontalScrollBar(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                scrollState = podcastGridState,
+                flingBehavior = podcastFlingBehavior,
+            )
+        }
     }
 }

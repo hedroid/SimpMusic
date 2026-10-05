@@ -60,6 +60,7 @@ dependencies {
     // Google Cast (Play Services) — CastContext, CastOptionsProvider, MediaRouteButton wiring.
     implementation(libs.play.services.cast.framework)
     implementation(libs.androidx.mediarouter)
+    implementation(libs.coroutines.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

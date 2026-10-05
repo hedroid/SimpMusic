@@ -12,7 +12,6 @@ import com.maxrave.domain.repository.AlbumRepository
 import com.maxrave.domain.repository.ArtistRepository
 import com.maxrave.domain.repository.CommonRepository
 import com.maxrave.logger.Logger
-import com.maxrave.simpmusic.extension.symmetricDifference
 import com.maxrave.simpmusic.viewModel.MoreAlbumsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -73,16 +72,16 @@ class NotifyWork(
                             .getNotificationsByChannelId(art.channelId)
                             .flatMap { row -> (row.single + row.album).mapNotNull { it["browseId"] } }
                             .toHashSet()
-                    if (!savedAlbum.isNullOrEmpty() && !albumItem.isNullOrEmpty()) {
-                        val differentAlbum =
-                            albumItem
-                                .filter { ytItem ->
-                                    (
-                                        albumItem.map { item ->
-                                            item.browseId
-                                        } symmetricDifference (savedAlbum.map { it["browseId"] })
-                                    ).contains(ytItem.browseId) && ytItem.browseId !in notifiedBrowseIds
-                                }
+                    // 差集预计算(旧实现对每个候选重复 map+对称差+contains,发行大户 O(n²) 纯浪费;
+                    // 对称差再滤当前侧 ≡ current-saved,语义等价)。
+                    val savedAlbumIds = savedAlbum.orEmpty().mapNotNull { it["browseId"] }.toHashSet()
+                    val savedSingleIds = savedSingle.orEmpty().mapNotNull { it["browseId"] }.toHashSet()
+                    // 基线判据=快照行存在(而非列表非空):"合法空快照"(建基线时真没发行)与
+                    // "从未建基线"不再混谈,否则从未有发行的艺人第一张专辑会漏通知。
+                    // 行存在 ⟹ 双侧都成功落过快照(见下方写入的 && 门)。
+                    if (saved != null && !albumItem.isNullOrEmpty()) {
+                        val newAlbumIds = albumItem.map { it.browseId }.toHashSet() - savedAlbumIds - notifiedBrowseIds
+                        val differentAlbum = albumItem.filter { it.browseId in newAlbumIds }
                         if (differentAlbum.isNotEmpty()) {
                             mapOfNotification.add(
                                 NotificationModel(
@@ -94,16 +93,9 @@ class NotifyWork(
                             )
                         }
                     }
-                    if (!savedSingle.isNullOrEmpty() && !singleItem.isNullOrEmpty()) {
-                        val differentSingle =
-                            singleItem
-                                .filter { ytItem ->
-                                    (
-                                        singleItem.map { item ->
-                                            item.browseId
-                                        } symmetricDifference (savedSingle.map { it["browseId"] })
-                                    ).contains(ytItem.browseId) && ytItem.browseId !in notifiedBrowseIds
-                                }
+                    if (saved != null && !singleItem.isNullOrEmpty()) {
+                        val newSingleIds = singleItem.map { it.browseId }.toHashSet() - savedSingleIds - notifiedBrowseIds
+                        val differentSingle = singleItem.filter { it.browseId in newSingleIds }
                         if (differentSingle.isNotEmpty()) {
                             mapOfNotification.add(
                                 NotificationModel(
@@ -115,16 +107,17 @@ class NotifyWork(
                             )
                         }
                     }
-                    // 快照写入:拉取失败(null)的一侧保留旧值,两侧都失败整行跳过。
-                    // 曾经无条件覆盖——失败一次快照清空,下次拉全量时"回来"的专辑全算新,
-                    // 整批重复通知(网易风控降级窗口最易触发)。
-                    if (albumItem != null || singleItem != null) {
+                    // 快照写入:任一侧拉取失败(null)整行跳过,旧行原样保留——
+                    // 既防"失败清空→下次全量回放"(曾经的无条件覆盖病),也保证
+                    // "行存在 ⟺ 双侧基线有效":若一侧失败也写行,没拉到的那侧会以
+                    // 空列表落库,被上面的空快照判据当成"真没有",下次全量当新发行通知。
+                    if (albumItem != null && singleItem != null) {
                         albumRepository.insertFollowedArtistSingleAndAlbum(
                             FollowedArtistSingleAndAlbum(
                                 channelId = art.channelId,
                                 name = art.name,
-                                single = singleItem?.toMap() ?: savedSingle ?: emptyList(),
-                                album = albumItem?.toMap() ?: savedAlbum ?: emptyList(),
+                                single = singleItem.toMap(),
+                                album = albumItem.toMap(),
                             ),
                         )
                     }

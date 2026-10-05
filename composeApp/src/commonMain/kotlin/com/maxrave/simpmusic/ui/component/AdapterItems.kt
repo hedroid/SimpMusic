@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -47,10 +48,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
@@ -104,6 +107,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
 import simpmusic.composeapp.generated.resources.album
 import simpmusic.composeapp.generated.resources.app_name
+import simpmusic.composeapp.generated.resources.live_badge
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.more
 import simpmusic.composeapp.generated.resources.playlist
@@ -1091,31 +1095,61 @@ fun HomeItemVideo(
                         .wrapContentHeight(align = Alignment.CenterVertically)
                         .padding(start = 10.dp, top = 8.dp),
             )
-            Text(
-                text =
-                    listOfNotNull(
-                        data.artists
-                            .toListName()
-                            .connectArtists()
-                            .takeIf { it.isNotBlank() },
-                        data.views?.takeIf { it.isNotBlank() },
-                    ).joinToString(" • "),
-                style = typo().bodySmall,
-                minLines = 1,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    textWidth
-                        .wrapContentHeight(align = Alignment.CenterVertically)
-                        .basicMarquee(
-                            initialDelayMillis = 2000,
-                            repeatDelayMillis = 2000,
-                            velocity = 25.dp,
-                        ).padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
-            )
+            Row(
+                modifier = textWidth.padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Ahead of the channel name, where YouTube Music puts it.
+                if (data.isLive) LiveBadge(modifier = Modifier.padding(end = 6.dp))
+                Text(
+                    text =
+                        listOfNotNull(
+                            data.artists
+                                .toListName()
+                                .connectArtists()
+                                .takeIf { it.isNotBlank() },
+                            data.views?.takeIf { it.isNotBlank() },
+                        ).joinToString(" • "),
+                    style = typo().bodySmall,
+                    minLines = 1,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .wrapContentHeight(align = Alignment.CenterVertically)
+                            .basicMarquee(
+                                initialDelayMillis = 2000,
+                                repeatDelayMillis = 2000,
+                                velocity = 25.dp,
+                            ),
+                )
+            }
         }
     }
 }
+
+/**
+ * The red LIVE chip on a broadcast that is on air right now. Sized off the subtitle beside it
+ * (bodySmall, 11sp) and kept a step smaller, as on the web — this app's labelSmall is 14sp
+ * SemiBold, which made the chip taller than the line it sits on.
+ */
+@Composable
+private fun LiveBadge(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(Res.string.live_badge),
+        style = typo().bodySmall.copy(fontSize = 9.sp, lineHeight = 11.sp, fontWeight = FontWeight.Bold),
+        color = Color.White,
+        maxLines = 1,
+        modifier =
+            modifier
+                // YouTube's own live red, so the chip reads the same as on the web.
+                .background(LiveBadgeRed, RoundedCornerShape(2.dp))
+                .padding(horizontal = 3.dp),
+    )
+}
+
+private val LiveBadgeRed = Color(0xFFCC0000)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1346,6 +1380,9 @@ fun ItemArtistChart(
     onClick: () -> Unit,
     data: ItemArtist,
     widthDp: Dp,
+    // The chart's podcast rows reuse this row: a square cover, and the author shown as-is.
+    thumbnailShape: Shape = CircleShape,
+    subtitle: String? = null,
 ) {
     Box(
         Modifier
@@ -1396,9 +1433,7 @@ fun ItemArtistChart(
                     Modifier
                         .align(Alignment.CenterVertically)
                         .size(60.dp)
-                        .clip(
-                            CircleShape,
-                        ),
+                        .clip(thumbnailShape),
             )
             Column(
                 Modifier
@@ -1415,11 +1450,11 @@ fun ItemArtistChart(
                         Modifier
                             .wrapContentHeight(align = Alignment.CenterVertically),
                 )
-                // 无订阅数数据(网易行)时隐藏副标题,YT 恒有值不受影响
-                if (data.subscribers.isNotEmpty()) {
+                // 无订阅数数据(网易行)时隐藏副标题,YT 恒有值不受影响;subtitle 覆写(播客榜等)不受该门控
+                if (subtitle != null || data.subscribers.isNotEmpty()) {
                     Text(
                         text =
-                            if (data.subscribers.contains(
+                            subtitle ?: if (data.subscribers.contains(
                                     stringResource(Res.string.subscribers).replace("%1\$s ", ""),
                                 )
                             ) {
@@ -1430,6 +1465,7 @@ fun ItemArtistChart(
                                     data.subscribers,
                                 )
                             },
+
                     style = typo().bodySmall,
                     minLines = 1,
                     maxLines = 1,
@@ -1563,39 +1599,24 @@ fun MoodAndGenresContentItem(
     navController: NavController,
     homeViewModel: HomeViewModel = koinViewModel(),
 ) {
-    Column(
-        modifier = Modifier.wrapContentHeight(align = Alignment.CenterVertically, unbounded = true),
-    ) {
-        Text(
-            text =
-                when (data) {
-                    is ItemsPlaylist -> (data).header
-                    is Item -> (data).header
-                    else -> ""
-                },
-            style = typo().titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier =
-                Modifier
-                    .padding(top = 8.dp)
-                    .padding(
-                        horizontal = 15.dp,
-                    ).fillMaxWidth(),
-        )
-        LazyRow(
-            modifier =
-                Modifier.padding(
-                    10.dp,
-                ),
-        ) {
-            val itemList =
-                when (data) {
-                    is ItemsPlaylist -> (data).contents
-                    is Item -> (data).contents
-                    else -> listOf()
-                }
-            items(itemList) { item ->
-                HomeItemContentPlaylist(onClick = {
+    // 统一横行口径(2026-09-28):MediaRow——页边 15dp、封面间 4dp、snap 滑动、节头与首卡对齐。
+    // 旧实现是手写 LazyRow:封面 0dp 贴合、行边距 10dp 与节头 15dp 错位,不在统一口径内。
+    val header =
+        when (data) {
+            is ItemsPlaylist -> (data).header
+            is Item -> (data).header
+            else -> ""
+        }
+    val itemList =
+        when (data) {
+            is ItemsPlaylist -> (data).contents
+            is Item -> (data).contents
+            else -> listOf()
+        }
+    MediaRow(title = header) {
+        items(itemList) { item ->
+            HomeItemContentPlaylist(
+                onClick = {
                     // The "Songs" shelf mixes tracks into a list that is otherwise all playlists,
                     // so route by videoId: a track starts its radio, everything else opens a page.
                     val moodSong = item as? com.maxrave.domain.data.model.mood.moodmoments.Content
@@ -1641,8 +1662,9 @@ fun MoodAndGenresContentItem(
                             ),
                         )
                     }
-                }, data = item)
-            }
+                },
+                data = item,
+            )
         }
     }
 }

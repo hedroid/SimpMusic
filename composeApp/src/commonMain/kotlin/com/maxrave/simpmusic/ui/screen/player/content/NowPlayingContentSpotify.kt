@@ -17,6 +17,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -51,7 +52,6 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -74,7 +74,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +84,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -104,6 +107,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -111,19 +115,21 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.kmpalette.rememberPaletteState
 import com.maxrave.common.Config.MAIN_PLAYER
-import com.maxrave.domain.mediaservice.handler.RepeatState
 import com.maxrave.simpmusic.Platform
 import com.maxrave.simpmusic.expect.ui.MediaPlayerView
 import com.maxrave.simpmusic.expect.ui.MediaPlayerViewWithSubtitle
 import com.maxrave.simpmusic.expect.ui.PlatformCastButton
 import com.maxrave.simpmusic.expect.ui.toImageBitmap
+import com.maxrave.simpmusic.extension.elapsedLabel
 import com.maxrave.simpmusic.extension.formatDuration
+import com.maxrave.simpmusic.extension.lengthLabel
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
 import com.maxrave.simpmusic.extension.isElementVisible
 import com.maxrave.simpmusic.extension.parseTimestampToMilliseconds
 import com.maxrave.simpmusic.extension.smoothScrimBrush
 import com.maxrave.simpmusic.getPlatform
+import com.maxrave.simpmusic.ui.component.LyricText
 import com.maxrave.simpmusic.ui.component.AIBadge
 import com.maxrave.simpmusic.ui.component.DescriptionView
 import com.maxrave.simpmusic.ui.component.ExplicitBadge
@@ -145,6 +151,7 @@ import com.maxrave.simpmusic.ui.icon.Fullscreen
 import com.maxrave.simpmusic.ui.icon.Info
 import com.maxrave.simpmusic.ui.icon.MoreVert
 import com.maxrave.simpmusic.ui.icon.PlaylistAdd
+import com.maxrave.simpmusic.ui.icon.Comment
 import com.maxrave.simpmusic.ui.icon.QueueMusic
 import com.maxrave.simpmusic.ui.icon.Replay5
 import com.maxrave.simpmusic.ui.icon.Share
@@ -158,10 +165,10 @@ import com.maxrave.simpmusic.ui.theme.overlay
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.UIEvent
-import kotlin.math.roundToLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import simpmusic.composeapp.generated.resources.Res
@@ -169,6 +176,7 @@ import simpmusic.composeapp.generated.resources.artists
 import simpmusic.composeapp.generated.resources.crossfading
 import simpmusic.composeapp.generated.resources.description
 import simpmusic.composeapp.generated.resources.like_and_dislike
+import simpmusic.composeapp.generated.resources.comments
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.fans_count
 import simpmusic.composeapp.generated.resources.likes_count
@@ -210,7 +218,6 @@ fun NowPlayingContentSpotify(
     val localDensity = LocalDensity.current
     val uriHandler = LocalUriHandler.current
 
-    val isRepeatOne = state.controllerState.repeatState is RepeatState.One
 
     var showShareLyricsSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -323,45 +330,67 @@ fun NowPlayingContentSpotify(
                 // === Unified ArtworkPager (Spotify-style swipe) ===
                 // ONE HorizontalPager wraps both the fullscreen canvas backdrop AND the
                 // centered square thumbnail. Both layers slide together as a single page
-                // so when the user swipes during canvas mode, they see the next track's
-                // thumbnail enter and the canvas exit in lockstep.
+                // so a swipe during canvas mode uses the same page movement as the skip buttons.
                 HorizontalPager(
                     state = state.artworkPagerState,
                     modifier =
                         Modifier
                             .height(screenInfo.hDP.dp)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .artworkDragPager(state, actions),
                     beyondViewportPageCount = 1,
-                    userScrollEnabled = !isRepeatOne && state.artworkQueue.isNotEmpty(),
-                    // 橡皮筋落位:甩动后的对齐段用回弹弹簧(见 ArtworkSnapSpring)
-                    flingBehavior =
-                        PagerDefaults.flingBehavior(
-                            state = state.artworkPagerState,
-                            snapAnimationSpec = ArtworkSnapSpring,
-                        ),
+                    userScrollEnabled = false,
                     key = { idx -> state.artworkPageKeys.getOrElse(idx) { "artwork$idx" } },
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex
-                    val pageHasCanvas = isCurrentArtworkPage && state.screenData.canvasData != null
+                    val isVisualArtworkPage = page == state.visualOrderIndex
+                    val pageHasCanvas =
+                        !state.artworkMotionInProgress &&
+                            isCurrentArtworkPage &&
+                            state.screenData.canvasData != null
 
-                    // Per-page palette state for the gradient backdrop.
-                    // The bitmap is fed in by Layer 2's adjacent-thumbnail AsyncImage
-                    // (onSuccess), so we use the SAME bitmap that's painted on screen —
-                    // matches the outer Column's palette extraction characteristics.
+                    // Per-page palette state. Adjacent artwork is decoded before it becomes
+                    // current, so the shell can glide to its palette after the pager settles.
+                    // The colour itself is deliberately NOT painted as a fullscreen pager page:
+                    // two opaque page backgrounds create a moving, full-height colour seam that
+                    // reads as a flash even when the artwork movement is perfectly continuous.
                     val pagePaletteState = rememberPaletteState()
+                    // (fix) 起步色=壳层当前 startColor,不是 Black:滑入页若为新组合(如打开
+                    // 播放页后的首次滑动、远跳),它的按页调色板要 ~100-300ms 才落地,期间
+                    // Layer 0 一直是纯黑渐变——滑动安定后背景先黑一段再变绿,正是"跳一下"。
+                    // 播种成当前背景色后,新页背景与页面浑然一体,调色板落地后再动画到自己的
+                    // 颜色;翻成当前页时的 snap 也因此永远拿到真实色(不再被 Black 守卫拦掉)。
                     val pageStartColor =
                         remember(pageTrack?.videoId) {
-                            Animatable(Color.Black)
+                            Animatable(state.startColor.value)
                         }
                     LaunchedEffect(pagePaletteState, pageTrack?.videoId) {
                         snapshotFlow { pagePaletteState.palette }
+                            // 同壳层管线:Loading 期 null 不过发(否则 animateTo(Black) 把邻页
+                            // 自己的背景瞬间压黑再弹回)
+                            .filterNotNull()
                             .distinctUntilChanged()
                             .collectLatest { palette ->
                                 pageStartColor.animateTo(
                                     palette.getColorFromPalette(),
                                 )
                             }
+                    }
+
+                    // Commit the prepared colour only after the page is visually settled. The
+                    // outer shell animates to it while remaining spatially fixed, matching the
+                    // standard music-player behaviour: artwork moves, ambient colour dissolves.
+                    val pagerSettledHere by remember {
+                        derivedStateOf { state.artworkPagerState.settledPage == page }
+                    }
+                    // 只有 Pager 落位且播放器确认同一首时才提交当前页状态。
+                    // 过渡期间只移动完整的静态页面。
+                    val pageShowsCurrentChrome = pagerSettledHere && isVisualArtworkPage
+                    LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
+                        if (pageShowsCurrentChrome && pageStartColor.value != Color.Black) {
+                            actions.onSnapPaletteColor(pageStartColor.value)
+                        }
                     }
 
                     Box(
@@ -374,48 +403,30 @@ fun NowPlayingContentSpotify(
                                 .clipToBounds()
                                 // Tap toggles controls only when the canvas is covering this page;
                                 // otherwise no-op (matches the legacy behaviour where the touch
-                                // overlay only appeared in canvas mode).
-                                .clickable(
-                                    enabled = pageHasCanvas,
-                                    onClick = {
-                                        if (state.mainScrollState.value == 0) {
-                                            actions.onToggleControls()
-                                        }
+                                // overlay only appeared in canvas mode). The modifier is mounted
+                                // CONDITIONALLY, not passed enabled=false: a disabled clickable
+                                // still consumes UP on the Final pass, which the global haptic
+                                // observer reads as "hit a control" — every tap on the artwork
+                                // buzzed even though the tap did nothing.
+                                .then(
+                                    if (pageHasCanvas) {
+                                        Modifier.clickable(
+                                            onClick = {
+                                                if (state.mainScrollState.value == 0) {
+                                                    actions.onToggleControls()
+                                                }
+                                            },
+                                            indication = null,
+                                            interactionSource =
+                                                remember {
+                                                    MutableInteractionSource()
+                                                },
+                                        )
+                                    } else {
+                                        Modifier
                                     },
-                                    indication = null,
-                                    interactionSource =
-                                        remember {
-                                            MutableInteractionSource()
-                                        },
                                 ),
                     ) {
-                        // ── Layer 0: per-page backdrop (adjacent pages only) ──
-                        // Palette gradient (startColor → endColor) so the adjacent page never
-                        // falls back to a flat dark void during a swipe.
-                        // The CURRENT page deliberately skips this layer so the existing
-                        // gradient / canvas on the Column stays visible.
-                        if (!isCurrentArtworkPage && pageTrack != null) {
-                            // Palette is fed by Layer 2's adjacent-thumbnail AsyncImage
-                            // (see below) so the gradient color stays consistent with
-                            // the bitmap actually painted for that page.
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors =
-                                                    listOf(
-                                                        pageStartColor.value,
-                                                        Color.Black,
-                                                    ),
-                                                start = state.gradientOffset.start,
-                                                end = state.gradientOffset.end,
-                                            ),
-                                        ),
-                            )
-                        }
-
                         // ── Layer 1: fullscreen canvas backdrop (current track + canvas data) ──
                         if (pageHasCanvas) {
                             Crossfade(targetState = state.screenData.canvasData?.isVideo) { isVideo ->
@@ -513,10 +524,11 @@ fun NowPlayingContentSpotify(
                         // adjacent pages always show the upcoming/previous track artwork.
                         Column(modifier = Modifier.fillMaxSize()) {
                             Spacer(modifier = Modifier.height(topAppBarHeightDp.dp))
+                            // This gap follows the measured info row. Animating its size turns a
+                            // one-pixel text measurement change into a visible spring bounce.
                             Spacer(
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(middleLayoutPaddingDp.dp)
                                         .fillMaxWidth(),
                             )
@@ -539,7 +551,8 @@ fun NowPlayingContentSpotify(
                                 val palettePageScope = rememberCoroutineScope()
                                 val pageIsVideoTrack = pageTrack.playerArtworkIsVideo()
                                 val pageHidesArtwork =
-                                    isCurrentArtworkPage &&
+                                    !state.artworkMotionInProgress &&
+                                        isCurrentArtworkPage &&
                                         state.screenData.isVideo &&
                                         state.shouldShowVideo
                                 Box(
@@ -552,7 +565,7 @@ fun NowPlayingContentSpotify(
                                                 elevation = 3.dp,
                                                 shape = RoundedCornerShape(8.dp),
                                                 spotColor =
-                                                    if (isCurrentArtworkPage) {
+                                                    if (pageShowsCurrentChrome) {
                                                         state.spotShadowColor.copy(alpha = 0.6f)
                                                     } else {
                                                         Color.Black.copy(alpha = 0.4f)
@@ -560,9 +573,12 @@ fun NowPlayingContentSpotify(
                                                 ambientColor = Color.Transparent,
                                             ),
                                 ) {
+                                    // 只在 Pager 唯一落位页向壳层喂色，不跟播放器索引竞速。
                                     PlayerPageArtwork(
                                         pageTrack = pageTrack,
-                                        isCurrentPage = isCurrentArtworkPage,
+                                        isCurrentPage = pageShowsCurrentChrome,
+                                        isSettledPage = pagerSettledHere,
+                                        isPagerMoving = state.artworkMotionInProgress,
                                         onArtworkLoaded = { bitmap ->
                                             palettePageScope.launch {
                                                 pagePaletteState.generate(bitmap)
@@ -582,7 +598,7 @@ fun NowPlayingContentSpotify(
                                     // 封面右上角的源品牌角标(网易/YTM);canvas/视频模式随封面一起隐去
                                     artworkBadgeSource(
                                         pageTrackVideoId = pageTrack?.videoId,
-                                        isCurrentPage = isCurrentArtworkPage,
+                                        isCurrentPage = pageShowsCurrentChrome,
                                         isNeteaseSong = state.isNeteaseSong,
                                     )?.let { badgeSource ->
                                         SourceBadge(
@@ -590,7 +606,7 @@ fun NowPlayingContentSpotify(
                                             size = 24.dp,
                                             modifier =
                                                 Modifier
-                                                    .align(Alignment.TopEnd)
+                                                   .align(Alignment.TopEnd)
                                                     .padding(10.dp)
                                                     .alpha(if (pageHidesArtwork) 0f else 1f),
                                         )
@@ -606,11 +622,14 @@ fun NowPlayingContentSpotify(
                                         var internalShowSubtitle by rememberSaveable {
                                             mutableStateOf(true)
                                         }
+                                        // The frame takes the video's own shape, fitted into the
+                                        // square slot: a wide video spans its width, a tall one
+                                        // its height. The slot itself never changes, so nothing
+                                        // below the artwork moves.
                                         Box(
                                             modifier =
                                                 Modifier
-                                                    .fillMaxWidth()
-                                                    .aspectRatio(16f / 9)
+                                                    .aspectRatio(state.videoAspectRatio)
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .background(Color.Black),
                                         ) {
@@ -621,7 +640,7 @@ fun NowPlayingContentSpotify(
                                                     shouldShowSubtitle = internalShowSubtitle,
                                                     shouldPip = false,
                                                     shouldScaleDownSubtitle = true,
-                                                    timelineState = state.timelineState,
+                                                    timelineFlow = state.timelineFlow,
                                                     lyricsData = state.screenData.lyricsData?.lyrics,
                                                     translatedLyricsData = state.screenData.lyricsData?.translatedLyrics?.first,
                                                     isInPipMode = state.isInPipMode,
@@ -798,14 +817,11 @@ fun NowPlayingContentSpotify(
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .wrapContentHeight(align = Alignment.CenterVertically)
-                                        .basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                            animationMode = MarqueeAnimationMode.Immediately,
-                                        ).focusable(),
+                                        .wrapContentHeight(align = Alignment.CenterVertically),
                             )
                         }
                     },
@@ -847,7 +863,6 @@ fun NowPlayingContentSpotify(
                             Spacer(
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(
                                             middleLayoutPaddingDp.dp,
                                         ).fillMaxWidth(),
@@ -856,7 +871,7 @@ fun NowPlayingContentSpotify(
                             // Artwork is rendered by the unified ArtworkPager above (which lives in the
                             // outer Box). Reserve the same vertical space here so the Info Layout below
                             // stays at its original Y position. Spacer has no pointer input so it does
-                            // not block the pager swipe gesture beneath it.
+                            // not block the artwork swipe detector beneath it.
                             Spacer(
                                 modifier =
                                     Modifier
@@ -881,7 +896,6 @@ fun NowPlayingContentSpotify(
                                 contentAlignment = Alignment.Center,
                                 modifier =
                                     Modifier
-                                        .animateContentSize()
                                         .height(
                                             middleLayoutPaddingDp.dp,
                                         ).fillMaxWidth(),
@@ -912,7 +926,7 @@ fun NowPlayingContentSpotify(
                                     animationSpec = tween(durationMillis = 300),
                                     label = "inlineLyricLine",
                                 ) { lineText ->
-                                    Text(
+                                   LyricText(
                                         text = lineText,
                                         style = typo().labelSmall,
                                         color = Color.White,
@@ -931,18 +945,18 @@ fun NowPlayingContentSpotify(
 
                             // Info Layout
                             Box {
-                                Column(
-                                    Modifier
-                                        .alpha(state.controlLayoutAlpha)
-                                        .onGloballyPositioned {
-                                            infoLayoutHeightDp =
-                                                with(localDensity) {
-                                                    it.size.height
-                                                        .toDp()
-                                                        .value
-                                                        .toInt()
-                                                }
-                                        },
+                                    Column(
+                                        Modifier
+                                            .alpha(state.controlLayoutAlpha)
+                                            .onGloballyPositioned {
+                                                infoLayoutHeightDp =
+                                                    with(localDensity) {
+                                                        it.size.height
+                                                            .toDp()
+                                                            .value
+                                                            .toInt()
+                                                    }
+                                            },
                                 ) {
                                     NowPlayingTrackInfoRow(
                                         state = state,
@@ -960,97 +974,101 @@ fun NowPlayingContentSpotify(
                                     } else {
                                         Spacer(Modifier.height(16.dp))
                                     }
-                                    // List Bottom Buttons - MODIFIED TO ADD PLAYLIST BUTTON
+                                    // List Bottom Buttons: Info+Cast 左 · 加歌+队列 右。评论已移到
+                                    // NowPlayingTrackInfoRow 的收藏心右侧,和歌曲互动操作归为一组。
                                     Row(
                                         modifier =
                                             Modifier
                                                 .height(32.dp)
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 20.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         // Info + Cast Buttons (Left)
-                                        // weight(fill = false) keeps a long device name from shoving the
-                                        // playlist/queue buttons off the end of this SpaceBetween row.
-                                        Row(
-                                            modifier = Modifier.weight(1f, fill = false),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                onClick = {
-                                                    actions.onShowInfo()
-                                                },
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                modifier = Modifier.align(Alignment.CenterStart),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
-                                            }
-                                            // Cyan rather than colorScheme.primary: this screen is force-dark whatever
-                                            // the app theme is, so a light-theme primary would sink into the black
-                                            // backdrop. Mirrors the `if (forceDark) Color.Cyan` rule in FullWidthItems.
-                                            PlatformCastButton(
-                                                modifier = Modifier.size(24.dp),
-                                                tint = if (state.castState.isRemote) Color.Cyan else Color.White,
-                                            )
-                                            AnimatedVisibility(visible = state.castState.isRemote) {
-                                                Text(
-                                                    text =
-                                                        stringResource(
-                                                            Res.string.playing_on_device,
-                                                            state.castState.deviceName ?: "Cast",
-                                                        ),
-                                                    style = typo().bodySmall,
-                                                    color = Color.Cyan,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    onClick = {
+                                                        actions.onShowInfo()
+                                                    },
+                                                ) {
+                                                    Icon(imageVector = SimpIcons.Info, tint = Color.White, contentDescription = "")
+                                                }
+                                                // Cyan rather than colorScheme.primary: this screen is force-dark whatever
+                                                // the app theme is, so a light-theme primary would sink into the black
+                                                // backdrop. Mirrors the `if (forceDark) Color.Cyan` rule in FullWidthItems.
+                                                PlatformCastButton(
+                                                    modifier = Modifier.size(24.dp),
+                                                    tint = if (state.castState.isRemote) Color.Cyan else Color.White,
                                                 )
+                                                AnimatedVisibility(visible = state.castState.isRemote) {
+                                                    Text(
+                                                        text =
+                                                            stringResource(
+                                                                Res.string.playing_on_device,
+                                                                state.castState.deviceName ?: "Cast",
+                                                            ),
+                                                        style = typo().bodySmall,
+                                                        color = Color.Cyan,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
                                             }
                                         }
 
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            // NEW: Add to Playlist Button (Center-Right)
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                enabled = state.likeEnabled,
-                                                onClick = {
-                                                    actions.onShowAddToPlaylist()
-                                                },
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                modifier = Modifier.align(Alignment.CenterEnd),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                Icon(
-                                                    imageVector = SimpIcons.PlaylistAdd,
-                                                    tint = if (state.likeEnabled) Color.White else Color.White.copy(alpha = 0.38f),
-                                                    contentDescription = "Add to Playlist",
-                                                )
-                                            }
+                                                // Add to Playlist Button (Right)
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    // 播客节目进不了歌曲歌单(/song/like 同源链路分离)——置灰禁用(槽位保留,UI 协调)
+                                                    enabled = state.likeEnabled && !state.isPodcastSong,
+                                                    onClick = {
+                                                        actions.onShowAddToPlaylist()
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = SimpIcons.PlaylistAdd,
+                                                        tint = if (state.likeEnabled && !state.isPodcastSong) Color.White else Color.White.copy(alpha = 0.38f),
+                                                        contentDescription = "Add to Playlist",
+                                                    )
+                                                }
 
-                                            // Queue Button (Right)
-                                            IconButton(
-                                                modifier =
-                                                    Modifier
-                                                        .size(24.dp)
-                                                        .aspectRatio(1f)
-                                                        .clip(CircleShape),
-                                                onClick = {
-                                                    actions.onShowQueue()
-                                                },
-                                            ) {
-                                                Icon(
-                                                    imageVector = SimpIcons.QueueMusic,
-                                                    tint = Color.White,
-                                                    contentDescription = "",
-                                                )
+                                                // Queue Button (Right)
+                                                IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape),
+                                                    onClick = {
+                                                        actions.onShowQueue()
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        imageVector = SimpIcons.QueueMusic,
+                                                        tint = Color.White,
+                                                        contentDescription = "",
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1118,7 +1136,7 @@ fun NowPlayingContentSpotify(
                                                     Column(
                                                         modifier = Modifier.fillMaxWidth(),
                                                     ) {
-                                                        Text(
+                                                        LyricText(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
@@ -1142,7 +1160,7 @@ fun NowPlayingContentSpotify(
                                                                 ?.words
                                                                 ?.stripRichSyncTimestamps()
                                                         if (!translatedLineText.isNullOrBlank()) {
-                                                            Text(
+                                                            LyricText(
                                                                 modifier =
                                                                     Modifier
                                                                         .fillMaxWidth()
@@ -1153,6 +1171,7 @@ fun NowPlayingContentSpotify(
                                                                             animationMode = MarqueeAnimationMode.Immediately,
                                                                         ).focusable(),
                                                                 text = translatedLineText,
+                                                                alignmentText = lineText,
                                                                 style = typo().bodyMedium,
                                                                 color = Color.Yellow,
                                                                 maxLines = 1,
@@ -1178,7 +1197,8 @@ fun NowPlayingContentSpotify(
                     Column(Modifier.padding(horizontal = 20.dp)) {
                         // Lyrics Layout
                         AnimatedVisibility(
-                            visible = state.screenData.lyricsData != null,
+                            // 播客节目拿不到歌词(stale 词也会残留窗口)——整卡不展示
+                            visible = state.screenData.lyricsData != null && !state.isPodcastSong,
                             modifier = Modifier.padding(top = 10.dp),
                         ) {
                             ElevatedCard(
@@ -1329,7 +1349,8 @@ fun NowPlayingContentSpotify(
                         Spacer(modifier = Modifier.height(10.dp))
                         // 艺人卡按源取数:网易歌来自 neteaseSongData(头像/粉丝数),YT 歌来自 songInfoData
                         val neteaseMeta = state.screenData.neteaseSongData
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+                        // 播客节目无艺人数据(详情卡端点对 mainSong 只回部分字段,卡会空壳)——不展示
+                        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
                             ElevatedCard(
                                 onClick = {
                                     actions.onNavigateToArtist()
@@ -1421,7 +1442,8 @@ fun NowPlayingContentSpotify(
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
-                        AnimatedVisibility(visible = state.screenData.songInfoData != null || neteaseMeta != null) {
+                        // 说明卡同艺人卡:播客节目端点字段全空/零值,展示只会剩空壳——不展示
+                        AnimatedVisibility(visible = (state.screenData.songInfoData != null || neteaseMeta != null) && !state.isPodcastSong) {
                             ElevatedCard(
                                 onClick = {},
                                 shape = RoundedCornerShape(8.dp),
@@ -1438,7 +1460,7 @@ fun NowPlayingContentSpotify(
                                     Spacer(modifier = Modifier.height(5.dp))
                                     if (neteaseMeta != null) {
                                         // 网易版说明卡三层:发行信息(日期·曲目数·唱片公司) →
-                                        // 数据行(评论数可点开列表 · 相似歌曲入口) → 简介(艺人优先,专辑兜底)
+                                        // 数据行(红心总数;评论入口已上移到底部行中间,评论数在评论弹窗标题) → 简介(艺人优先,专辑兜底)
                                         val releaseInfo =
                                             listOfNotNull(
                                                 neteaseMeta.albumPublishDate?.let { stringResource(Res.string.published_at, it) },
@@ -1462,13 +1484,6 @@ fun NowPlayingContentSpotify(
                                                 color = Color.White,
                                             )
                                             Spacer(modifier = Modifier.height(10.dp))
-                                        }
-                                        if (neteaseMeta.commentCount > 0) {
-                                            Text(
-                                                text = stringResource(Res.string.comments_count, formatCompactCount(neteaseMeta.commentCount)),
-                                                style = typo().bodyMedium,
-                                                modifier = Modifier.clickable { actions.onShowNeteaseComments() },
-                                            )
                                         }
                                         val bio =
                                             neteaseMeta.artistBriefDesc
@@ -1523,14 +1538,16 @@ fun NowPlayingContentSpotify(
                                             color = Color.White,
                                         )
                                         Spacer(modifier = Modifier.height(10.dp))
+                                        // (perf) 点击才需要时长:只收 total(每歌一变),不收 50ms 流。
+                                        val infoTotalMs by state.timelineFlow.collectTotalMs()
                                         DescriptionView(
                                             text = state.screenData.songInfoData?.description ?: "",
                                             onTimeClicked = { raw ->
                                                 val timestamp = parseTimestampToMilliseconds(raw)
-                                                if (timestamp != 0.0 && timestamp < state.timelineState.total) {
+                                                if (timestamp != 0.0 && infoTotalMs > 0L && timestamp < infoTotalMs) {
                                                     actions.onUIEvent(
                                                         UIEvent.UpdateProgress(
-                                                            ((timestamp * 100) / state.timelineState.total).toFloat(),
+                                                            ((timestamp * 100) / infoTotalMs).toFloat(),
                                                         ),
                                                     )
                                                 }
@@ -1587,6 +1604,9 @@ fun NowPlayingContentSpotify(
                             top = with(localDensity) { WindowInsets.statusBars.getTop(localDensity).toDp() },
                         ),
                 ) {
+                    // (perf) The 50 ms flow is collected only while this collapsed toolbar exists,
+                    // so its ticks recompose this row and never the page behind it.
+                    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier =
@@ -1603,23 +1623,26 @@ fun NowPlayingContentSpotify(
                                     .wrapContentHeight(),
                             ) {
                                 Text(
-                                    text = state.screenData.nowPlayingTitle,
-                                    style = typo().bodyMedium,
+                                    text = state.displayTitle,
+                                    // lineHeight 钉死防中英文行高差(见 NowPlayingTrackInfoRow 注释)。
+                                    style = typo().bodyMedium.copy(lineHeight = 20.sp),
                                     color = Color.White,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier =
                                         Modifier
                                             .fillMaxWidth()
                                             .wrapContentHeight(
                                                 align = Alignment.CenterVertically,
-                                            ).basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                animationMode = MarqueeAnimationMode.Immediately,
-                                            ).focusable(),
+                                            ),
                                 )
                                 LazyRow(verticalAlignment = Alignment.CenterVertically) {
                                     item {
-                                        AnimatedVisibility(visible = state.screenData.isExplicit) {
+                                        AnimatedVisibility(
+                                            visible = state.displayIsExplicit,
+                                            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                                        ) {
                                             ExplicitBadge(
                                                 modifier =
                                                     Modifier
@@ -1630,28 +1653,26 @@ fun NowPlayingContentSpotify(
                                         }
                                     }
                                     item(
-                                        key = state.screenData.artistName,
+                                        key = state.displayArtistName,
                                     ) {
                                         Text(
-                                            text = state.screenData.artistName,
-                                            style = typo().bodySmall,
+                                            text = state.displayArtistName,
+                                            style = typo().bodySmall.copy(lineHeight = 16.sp),
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier =
                                                 Modifier
                                                     .fillMaxWidth()
                                                     .wrapContentHeight(
                                                         align = Alignment.CenterVertically,
-                                                    ).basicMarquee(
-                                                        iterations = Int.MAX_VALUE,
-                                                        animationMode = MarqueeAnimationMode.Immediately,
-                                                    ).focusable(),
+                                                    ),
                                         )
                                     }
                                 }
                             }
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        HeartCheckBox(
+                        if (!state.isPodcastSong) HeartCheckBox(
                             checked = state.controllerState.isLiked,
                             size = 30,
                             enabled = state.likeEnabled,
@@ -1660,7 +1681,7 @@ fun NowPlayingContentSpotify(
                             actions.onUIEvent(UIEvent.ToggleLike)
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        Crossfade(targetState = state.timelineState.loading, label = "") {
+                        Crossfade(targetState = timeline.loading, label = "") {
                             if (it) {
                                 Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(
@@ -1683,7 +1704,7 @@ fun NowPlayingContentSpotify(
                                 .align(Alignment.BottomCenter),
                     ) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.current.toFloat() / state.timelineState.total },
+                            progress = { timeline.current.toFloat() / timeline.total },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1707,8 +1728,8 @@ fun NowPlayingContentSpotify(
         if (showShareLyricsSheet) {
             ShareLyricsSheet(
                 lines = lyricsData.toShareLyricsLines(),
-                songTitle = state.screenData.nowPlayingTitle,
-                artistName = state.screenData.artistName,
+                songTitle = state.displayTitle,
+                artistName = state.displayArtistName,
                 artwork = state.screenData.bitmap,
                 seedColor = state.startColor.value,
                 initialLineIndex = state.currentLyricLineIndex,
@@ -1737,7 +1758,13 @@ internal fun NowPlayingTrackInfoRow(
                 .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
+        // canvas 缩略图 55dp 高于文字行:出现/消失会改行高,默认 spring 过冲会把下方
+        // 布局弹一下,与标题区同一类病,换成无过冲 tween。
+        AnimatedVisibility(
+            visible = showCanvasThumbnail && state.screenData.canvasData != null,
+            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -1763,21 +1790,30 @@ internal fun NowPlayingTrackInfoRow(
         }
 
         Column(Modifier.weight(1f)) {
-            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 550ms crossfade 不同
-            // 步,读作"闪一下"。Spotify 同款上滑淡入淡出,过渡内文字各自带 marquee。
+            // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 crossfade 不同
+            // 步,读作"闪一下"。标题在固定槽位内上滑淡入淡出。
             AnimatedContent(
-                targetState = state.screenData.nowPlayingTitle,
+                targetState = state.displayTitle,
                 transitionSpec = {
+                    // 默认 SizeTransform 是 spring:中英文歌名 1px 的测量行高差会被放大成
+                    // 5-6px 过冲,把进度条以下的整页内容推得上下弹跳。跟 fade 同步的
+                    // tween 让尺寸平滑走完,不做反向修正。
                     (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                        SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
+                // lineHeight alone does not fix Text's measured height when Android switches
+                // between Poppins and a CJK fallback. Keep the parent slot independent of text.
+                modifier = Modifier.height(with(LocalDensity.current) { 27.sp.toDp() }),
                 label = "nowPlayingTitle",
             ) { title ->
                 // marquee 不放进 AnimatedContent 内容里:Immediately 模式在过渡期旧/新两份
                 // 内容同时组合会互相抢焦点/重启滚动,实测直接把标题渲染成空白。
+                // Keep a consistent line box inside the fixed title slot. Android may still
+                // report different Text bounds for Poppins and the CJK fallback.
                 Text(
                     text = title,
-                    style = typo().titleMedium,
+                    style = typo().titleMedium.copy(lineHeight = 27.sp),
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -1791,8 +1827,12 @@ internal fun NowPlayingTrackInfoRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                item(state.screenData.isExplicit) {
-                    AnimatedVisibility(visible = state.screenData.isExplicit) {
+                item(state.displayIsExplicit) {
+                    AnimatedVisibility(
+                        visible = state.displayIsExplicit,
+                        enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                        exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                    ) {
                         ExplicitBadge(
                             modifier =
                                 Modifier
@@ -1802,19 +1842,23 @@ internal fun NowPlayingTrackInfoRow(
                         )
                     }
                 }
-                item(state.screenData.artistName) {
+                item(state.displayArtistName) {
                     AnimatedContent(
-                        targetState = state.screenData.artistName,
+                        targetState = state.displayArtistName,
                         transitionSpec = {
+                            // 同标题:尺寸跟随 tween,不吃默认 spring 过冲(艺人名中英文行高差同理)。
                             (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                                SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                         },
+                        modifier = Modifier.height(with(LocalDensity.current) { 20.sp.toDp() }),
                         label = "nowPlayingArtist",
                     ) { artist ->
                         // marquee 同样不进 AnimatedContent(见上方标题注释),超长用省略号。
+                        // lineHeight 保持字行一致,外层固定槽位隔离字体回退的测量差异。
                         Text(
                             text = artist,
-                            style = typo().bodyMedium,
+                            style = typo().bodyMedium.copy(lineHeight = 20.sp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier =
@@ -1830,15 +1874,37 @@ internal fun NowPlayingTrackInfoRow(
             }
         }
         Spacer(modifier = Modifier.size(12.dp))
-        // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
-        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            HeartCheckBox(
-                checked = state.controllerState.isLiked,
-                size = 32,
-                enabled = state.likeEnabled,
-                modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
-            ) {
-                actions.onUIEvent(UIEvent.ToggleLike)
+        // 歌曲互动区:收藏在左、网易评论在右。播客没有收藏语义,但保留原有评论入口,
+        // 此时评论按钮单独占据行尾,避免移动位置时把播客评论功能一起删掉。
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 红心=云端账号喜欢态;未登录源置灰,点击提示登录
+            if (!state.isPodcastSong) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    HeartCheckBox(
+                        checked = state.controllerState.isLiked,
+                        size = 32,
+                        enabled = state.likeEnabled,
+                        modifier = Modifier.alpha(if (state.likeEnabled) 1f else 0.38f),
+                    ) {
+                        actions.onUIEvent(UIEvent.ToggleLike)
+                    }
+                }
+            }
+            if (state.isNeteaseSong) {
+                IconButton(
+                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                    onClick = { actions.onShowNeteaseComments() },
+                ) {
+                    Icon(
+                        imageVector = SimpIcons.Comment,
+                        tint = Color.White,
+                        contentDescription = stringResource(Res.string.comments),
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
     }
@@ -1854,6 +1920,10 @@ internal fun ColumnScope.SpotifyPlaybackControls(
     actions: NowPlayingContentActions,
     sliderModifier: Modifier = Modifier,
 ) {
+    // (perf) 高频层:50ms 的进度流只进这根滑条与时间行,壳层与其余控件不再逐帧重建。
+    val timeline by state.timelineFlow.collectAsStateWithLifecycle()
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    var isScrubbing by remember { mutableStateOf(false) }
     // Real Slider
     Box(
         Modifier
@@ -1869,7 +1939,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                     .height(24.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(state.timelineState.loading) {
+            Crossfade(timeline.loading) {
                 if (it) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
@@ -1890,7 +1960,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 } else {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         LinearProgressIndicator(
-                            progress = { state.timelineState.bufferedPercent.toFloat() / 100 },
+                            progress = { timeline.bufferedPercent.toFloat() / 100 },
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -1923,12 +1993,21 @@ internal fun ColumnScope.SpotifyPlaybackControls(
                 // sliderValue stays on the 0..100 scale that
                 // UIEvent.UpdateProgress and the time labels
                 // are built around.
-                value = state.sliderValue / 100f,
+                value =
+                    if (isScrubbing) {
+                        scrubValue / 100f
+                    } else if (timeline.total > 0L) {
+                        timeline.current.toFloat() / timeline.total
+                    } else {
+                        0f
+                    },
                 onValueChangeFinished = {
-                    actions.onSliderChangeFinished()
+                    actions.onUIEvent(UIEvent.UpdateProgress(scrubValue))
+                    isScrubbing = false
                 },
                 onValueChange = {
-                    actions.onSliderChange(it * 100f)
+                    isScrubbing = true
+                    scrubValue = it * 100f
                 },
                 modifier =
                     Modifier
@@ -1988,7 +2067,11 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             .padding(horizontal = 20.dp),
     ) {
         Text(
-            text = formatDuration((state.timelineState.total * (state.sliderValue / 100f)).roundToLong()),
+            text =
+                timeline.elapsedLabel(
+                    if (isScrubbing) scrubValue / 100f
+                    else if (timeline.total > 0L) timeline.current.toFloat() / timeline.total else 0f,
+                ),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Left,
@@ -2011,7 +2094,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
         AnimatedVisibility(
             enter = fadeIn(),
             exit = fadeOut(),
-            visible = state.timelineState.isCrossfading,
+            visible = timeline.isCrossfading,
         ) {
             // Same effect as the desktop MiniPlayer label: a
             // highlight sweeping through the glyphs via a text
@@ -2040,7 +2123,7 @@ internal fun ColumnScope.SpotifyPlaybackControls(
             )
         }
         Text(
-            text = formatDuration(state.timelineState.total),
+            text = timeline.lengthLabel(),
             style = typo().bodyMedium,
             modifier = Modifier.weight(1f),
             textAlign = TextAlign.Right,
@@ -2060,3 +2143,6 @@ internal fun ColumnScope.SpotifyPlaybackControls(
         actions.onUIEvent(it)
     }
 }
+
+// 邻页渐变层在翻成当前页时的淡出时长:盖住壳层 startColor snap/动画追上来的 1-3 帧
+// (硬跳过会露出还停在上一首歌颜色的壳层渐变,即滑停瞬间"背景闪旧色")。

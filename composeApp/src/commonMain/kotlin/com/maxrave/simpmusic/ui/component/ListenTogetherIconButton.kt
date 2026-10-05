@@ -28,7 +28,11 @@ import org.koin.compose.koinInject
  * screen that shows the icon, and the only thing needed is one boolean off a StateFlow.
  */
 @Composable
-fun ListenTogetherIconButton(onClick: () -> Unit) {
+fun ListenTogetherIconButton(
+    // TalkBack label (UI-CR-07): without it the button is NAF and skipped entirely.
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
     val repository = koinInject<ListenTogetherRepository>()
     val room by repository.room.collectAsStateWithLifecycle()
 
@@ -36,6 +40,7 @@ fun ListenTogetherIconButton(onClick: () -> Unit) {
         RippleIconButton(
             imageVector = SimpIcons.Groups,
             tint = MaterialTheme.colorScheme.onBackground,
+            contentDescription = contentDescription,
             onClick = onClick,
         )
         if (room.inRoom) {

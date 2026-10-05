@@ -118,9 +118,9 @@ fun PodcastScreen(
     }
     var shouldHideTopBar by rememberSaveable { mutableStateOf(false) }
 
-    var currentTrack by rememberSaveable {
-        mutableStateOf<Track?>(null)
-    }
+    // Track is not Bundle-storable (kotlinx @Serializable only); rememberSaveable crashes the
+    // registry on the next save once this is set (episode "more" menu target, transient anyway).
+    var currentTrack by remember { mutableStateOf<Track?>(null) }
     var shouldShowMoreBottomSheet by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(key1 = firstItemVisible) {

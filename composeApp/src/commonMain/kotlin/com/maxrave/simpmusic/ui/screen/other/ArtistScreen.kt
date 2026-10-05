@@ -190,16 +190,16 @@ fun ArtistScreen(
     val neteaseLoggedIn by sharedViewModel.neteaseLoggedIn.collectAsStateWithLifecycle()
     val followEnabled = if (artistIsNetease) neteaseLoggedIn else ytLoggedIn
     val remoteFollowPending by viewModel.remoteFollowPending.collectAsStateWithLifecycle()
-    val canvasUrl by viewModel.canvasUrl.collectAsStateWithLifecycle()
-    // Header shows the canvas video by default; the top-right toggle swaps it for the artist's
-    // picture. Keyed on the canvas so a different artist's canvas starts as video again.
-    var showCanvasVideo by rememberSaveable(canvasUrl?.first) { mutableStateOf(true) }
-    val headerCanvas = canvasUrl?.takeIf { showCanvasVideo }
+    val artistMotion by viewModel.artistMotion.collectAsStateWithLifecycle()
+    // Header plays the artist's animated artwork by default; the top-right toggle swaps it for
+    // their picture. Keyed on the channel, so opening a different artist starts as video again —
+    // keyed on a url it would not reset between two artists whose videos are both absent.
+    var showHeaderVideo by rememberSaveable(channelId) { mutableStateOf(true) }
     val shareTitle = stringResource(Res.string.share)
     val artistLogo by viewModel.artistLogo.collectAsStateWithLifecycle()
 
     val playingTrack by remember {
-        sharedViewModel.nowPlayingState.map { it?.track?.videoId }
+        sharedViewModel.nowPlayingState.map { it?.songEntity?.videoId ?: it?.track?.videoId }
     }.collectAsState(null)
 
     // Choosing song to show Bottom sheet
@@ -230,6 +230,18 @@ fun ArtistScreen(
     // one (including every desktop window) uses a half-viewport-tall frame instead.
     val screenInfo = getScreenSizeInfo()
     val isPortrait = screenInfo.wDP < screenInfo.hDP
+    // Apple Music publishes no tall cut for an artist, so the square rendition fills the square
+    // portrait frame and the wide one the banner-shaped landscape frame. Each stands in for the
+    // other when it is missing on its own: a rendition of the wrong shape still beats no video.
+    val headerVideoUrl =
+        artistMotion
+            ?.let {
+                if (isPortrait) {
+                    it.squareVideoUrl ?: it.wideVideoUrl
+                } else {
+                    it.wideVideoUrl ?: it.squareVideoUrl
+                }
+            }?.takeIf { showHeaderVideo }
 
     // Palette extraction from the artist artwork (portrait Apple-style only).
     val paletteState = com.kmpalette.rememberPaletteState()
@@ -293,7 +305,7 @@ fun ArtistScreen(
                                 // (unlike Modifier.offset, which only moves pixels, not layout).
                                 verticalArrangement = Arrangement.spacedBy((-36).dp),
                             ) {
-                                // Edge-to-edge artwork (canvas plays on top of it when available).
+                                // Edge-to-edge artwork (the artist's video plays on top of it when available).
                                 // Glass back button MUST be a sibling of the backdrop source
                                 // (not a child) to avoid render feedback loop / RuntimeShader crash.
                                 val artworkBackdrop = rememberBackdrop(Color.Black)
@@ -323,10 +335,10 @@ fun ArtistScreen(
                                                 },
                                             ),
                                 ) {
-                                    // Inner Box — backdrop SOURCE (artwork + canvas + overlays, NO glass)
+                                    // Inner Box — backdrop SOURCE (artwork + video + overlays, NO glass)
                                     Box(modifier = Modifier.fillMaxSize().clipToBounds().layerBackdrop(artworkBackdrop)) {
-                                        // Media layer (artwork + canvas) — Haze SOURCE for the bottom blur.
-                                        Box(modifier = Modifier.fillMaxSize().hazeSource(hazeState)) {
+                                        // Media layer (artwork + video).
+                                        Box(modifier = Modifier.fillMaxSize()) {
                                             // 头图槽位 ~1080px:网易 500/YT 方形 617 请求侧升 1080;
                                             // YT 横屏宽 banner(w2880-h1200 档)本就够大,helper 不动它。
                                             val hiResHeaderUrl = headerImageUrl.toHiResArtworkUrl()
@@ -350,16 +362,16 @@ fun ArtistScreen(
                                                 contentScale =
                                                     if (isPortrait) ContentScale.FillWidth else ContentScale.Crop,
                                                 // Always decoded so the page background color can be extracted
-                                                // from the artwork palette, even when a canvas is playing.
+                                                // from the artwork palette, even when the video is playing.
                                                 onSuccess = {
                                                     bitmap = it.result.image.toImageBitmap()
                                                 },
-                                                // Hidden (but still decoded above) while a canvas is present —
-                                                // the canvas is shown instead. No canvas -> artwork is shown.
+                                                // Hidden (but still decoded above) while a video is present —
+                                                // the video is shown instead. No video -> artwork is shown.
                                                 modifier =
                                                     Modifier
                                                         .fillMaxSize()
-                                                        .alpha(if (headerCanvas != null) 0f else 1f),
+                                                        .alpha(if (headerVideoUrl != null) 0f else 1f),
                                             )
                                             // The artwork's bottom 200dp melts into the page through a
                                             // Modifier.blur copy of it, faded in by a DstIn gradient. At
@@ -368,8 +380,8 @@ fun ArtistScreen(
                                             // there on Android (and crashes on skiko). Below Android 12
                                             // blur is a no-op and the copy is pixel-identical to the
                                             // artwork, leaving just the colour scrim. Skipped under a
-                                            // canvas, where the artwork itself is hidden.
-                                            if (headerCanvas == null) {
+                                            // video, where the artwork itself is hidden.
+                                            if (headerVideoUrl == null) {
                                                 AsyncImage(
                                                     model = headerImageUrl,
                                                     contentDescription = null,
@@ -393,20 +405,21 @@ fun ArtistScreen(
                                                             }.blur(32.dp),
                                                 )
                                             }
-                                            // Canvas (Spotify) plays AS the background when present;
-                                            // otherwise the static artwork above is the fallback.
-                                            headerCanvas?.let { canvas ->
-                                                // Canvas is a tall/portrait video. cropToBounds center
-                                                // scale-to-covers it into the header frame (ContentScale.Crop):
-                                                // true video aspect ratio, no stretch, overflow clipped.
+                                            // The artist's animated artwork plays AS the background when
+                                            // there is one; otherwise the static artwork above shows.
+                                            headerVideoUrl?.let { videoUrl ->
+                                                // cropToBounds center scale-to-covers it into the header
+                                                // frame (ContentScale.Crop): true video aspect ratio, no
+                                                // stretch, overflow clipped — which is what absorbs the
+                                                // difference between the rendition and the frame.
                                                 MediaPlayerView(
-                                                    url = canvas.first,
+                                                    url = videoUrl,
                                                     modifier = Modifier.fillMaxSize(),
                                                     cropToBounds = true,
                                                 )
                                             }
                                         } // end media layer
-                                        // 5% black over the artwork/canvas, under the fade and scrim, so
+                                        // 5% black over the artwork/video, under the fade and scrim, so
                                         // a bright photo sits back a little behind the title.
                                         Box(
                                             modifier =
@@ -496,8 +509,8 @@ fun ArtistScreen(
                                         navController.navigateUp()
                                     }
                                     // Top-right pill mirroring the back button, shaped like the
-                                    // Playlist header's: [canvas ⇄ picture] when a canvas exists, then
-                                    // share. A sibling of the backdrop source, like the back button.
+                                    // Playlist header's: [video ⇄ picture] when the artist has an animated
+                                    // artwork, then share. A sibling of the backdrop source, like the back button.
                                     Row(
                                         modifier =
                                             Modifier
@@ -508,10 +521,10 @@ fun ArtistScreen(
                                                 .liquidGlass(artworkBackdrop, RoundedCornerShape(24.dp)),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        if (canvasUrl != null) {
-                                            IconButton(onClick = { showCanvasVideo = !showCanvasVideo }) {
+                                        if (artistMotion != null) {
+                                            IconButton(onClick = { showHeaderVideo = !showHeaderVideo }) {
                                                 Icon(
-                                                    imageVector = if (showCanvasVideo) SimpIcons.MovieOff else SimpIcons.Movie,
+                                                    imageVector = if (showHeaderVideo) SimpIcons.MovieOff else SimpIcons.Movie,
                                                     contentDescription = null,
                                                     tint = Color.White,
                                                 )
@@ -762,6 +775,8 @@ fun ArtistScreen(
                     val localPlaylists by selectionViewModel.listLocalPlaylist.collectAsStateWithLifecycle()
                     val youTubePlaylists by selectionViewModel.youTubePlaylists.collectAsStateWithLifecycle()
                     val neteasePlaylists by selectionViewModel.neteasePlaylists.collectAsStateWithLifecycle()
+                    val youTubeLoadFailedState by selectionViewModel.youTubePlaylistsFailed.collectAsStateWithLifecycle()
+                    val neteaseLoadFailedState by selectionViewModel.neteasePlaylistsFailed.collectAsStateWithLifecycle()
                     AddToPlaylistModalBottomSheet(
                         isBottomSheetVisible = true,
                         // 本地分区按政策隐藏(此前传 localPlaylists 但组件不渲染,弹窗实际为空);
@@ -769,6 +784,9 @@ fun ArtistScreen(
                         listLocalPlaylist = emptyList(),
                         listYouTubePlaylist = youTubePlaylists,
                         listNeteasePlaylist = neteasePlaylists,
+                        youTubeLoadFailed = youTubeLoadFailedState,
+                        neteaseLoadFailed = neteaseLoadFailedState,
+                        onRetryCloudPlaylists = { selectionViewModel.loadCloudPlaylists() },
                         videoIds = selectedIds,
                         onDismiss = { showSelectionAddToPlaylist = false },
                         onClick = {},

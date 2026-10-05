@@ -44,6 +44,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -91,11 +92,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
@@ -104,6 +113,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -151,13 +161,17 @@ import com.maxrave.simpmusic.ui.icon.AddCircleOutline
 import com.maxrave.simpmusic.ui.icon.AddPhotoAlternate
 import com.maxrave.simpmusic.ui.icon.Album
 import com.maxrave.simpmusic.ui.icon.CheckCircle
+import com.maxrave.simpmusic.ui.icon.Close
 import com.maxrave.simpmusic.ui.icon.ContentCopy
 import com.maxrave.simpmusic.ui.icon.Delete
 import com.maxrave.simpmusic.ui.icon.Done
 import com.maxrave.simpmusic.ui.icon.DownloadForOffline
+import com.maxrave.simpmusic.ui.icon.PlaylistRemove
 import com.maxrave.simpmusic.ui.icon.DownloadForOfflineOutlined
 import com.maxrave.simpmusic.ui.icon.Downloading
+import com.maxrave.simpmusic.ui.icon.Movie
 import com.maxrave.simpmusic.ui.icon.Edit
+import com.maxrave.simpmusic.ui.icon.Favorite
 import com.maxrave.simpmusic.ui.icon.FavoriteBorder
 import com.maxrave.simpmusic.ui.icon.KeyboardArrowDown
 import com.maxrave.simpmusic.ui.icon.KeyboardDoubleArrowDown
@@ -197,9 +211,10 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import multiplatform.network.cmptoast.ToastDuration
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
@@ -207,6 +222,8 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.podcast_comment_like_unsupported
+import simpmusic.composeapp.generated.resources.comment_label
 import simpmusic.composeapp.generated.resources.create
 import simpmusic.composeapp.generated.resources.added_to_netease_playlist
 import simpmusic.composeapp.generated.resources.added_to_youtube_playlist
@@ -235,9 +252,18 @@ import simpmusic.composeapp.generated.resources.crop_cover
 import simpmusic.composeapp.generated.resources.codec
 import simpmusic.composeapp.generated.resources.comments
 import simpmusic.composeapp.generated.resources.comments_title
+import simpmusic.composeapp.generated.resources.collapse_replies
 import simpmusic.composeapp.generated.resources.end_of_list
 import simpmusic.composeapp.generated.resources.comments_count
 import simpmusic.composeapp.generated.resources.copied_to_clipboard
+import simpmusic.composeapp.generated.resources.n_replies
+import simpmusic.composeapp.generated.resources.no_comments
+import simpmusic.composeapp.generated.resources.post_comment_hint
+import simpmusic.composeapp.generated.resources.post_comment_success
+import simpmusic.composeapp.generated.resources.publish
+import simpmusic.composeapp.generated.resources.reply_hint
+import simpmusic.composeapp.generated.resources.retry
+import simpmusic.composeapp.generated.resources.send
 import simpmusic.composeapp.generated.resources.delete
 import simpmusic.composeapp.generated.resources.delete_playlist
 import simpmusic.composeapp.generated.resources.delete_song_from_playlist
@@ -247,6 +273,11 @@ import simpmusic.composeapp.generated.resources.download_speed
 import simpmusic.composeapp.generated.resources.download_this_song_video_file_to_your_device
 import simpmusic.composeapp.generated.resources.download_this_song_file_to_your_device
 import simpmusic.composeapp.generated.resources.downloaded
+import simpmusic.composeapp.generated.resources.delete_video_message
+import simpmusic.composeapp.generated.resources.delete_video_title
+import simpmusic.composeapp.generated.resources.download_video
+import simpmusic.composeapp.generated.resources.overwrite_download_message
+import simpmusic.composeapp.generated.resources.overwrite_download_title
 import simpmusic.composeapp.generated.resources.downloading
 import simpmusic.composeapp.generated.resources.downloading_audio
 import simpmusic.composeapp.generated.resources.downloading_video
@@ -304,6 +335,9 @@ import simpmusic.composeapp.generated.resources.sleep_timer_off
 import simpmusic.composeapp.generated.resources.sleep_timer_set_error
 import simpmusic.composeapp.generated.resources.sleep_timer_warning
 import simpmusic.composeapp.generated.resources.sort_by
+import simpmusic.composeapp.generated.resources.sort_by_newest
+import simpmusic.composeapp.generated.resources.sort_hot
+import simpmusic.composeapp.generated.resources.sort_recommend
 import simpmusic.composeapp.generated.resources.start_radio
 import simpmusic.composeapp.generated.resources.similar_songs
 import simpmusic.composeapp.generated.resources.sync
@@ -351,6 +385,10 @@ fun InfoPlayerBottomSheet(
     val format by sharedViewModel.format.collectAsState(null)
     val extractSource by sharedViewModel.extractSource.collectAsState()
     val downloadProgress by sharedViewModel.downloadFileProgress.collectAsStateWithLifecycle()
+    // 播客队列判定(统一走 QueueData.isNeteasePodcastQueue,CR-22):mainSong 的点赞数端点恒 0,点赞行不展示
+    val isPodcastQueue =
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
+            .queueData.value?.data?.isNeteasePodcastQueue == true
 
     ModalBottomSheet(
         onDismissRequest = {
@@ -853,7 +891,8 @@ fun InfoPlayerBottomSheet(
 
                 val neteaseMeta = screenDataState.neteaseSongData
                 if (isNeteaseSong && neteaseMeta != null) {
-                    neteaseMeta.likeCount?.let { likeCount ->
+                    // 播客节目点赞数拿不到(端点对 mainSong 恒 0)——不展示,别挂一个"点赞 0"
+                    if (!isPodcastQueue) neteaseMeta.likeCount?.let { likeCount ->
                         Text(
                             text = stringResource(Res.string.like),
                             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -1035,32 +1074,10 @@ fun InfoPlayerBottomSheet(
                     style = typo().bodyMedium,
                     textAlign = TextAlign.Center,
                 )
-                // 底部"下载到设备"按钮:与 YT 同款位置同款样式;YT 歌下视频,网易歌下
-                // 音频文件(downloadFile 内部按源分流),封面 jpg 两侧共用
-                OutlinedButton(
-                    enabled = screenDataState.bitmap != null,
-                    onClick = {
-                        sharedViewModel.downloadFile(
-                            bitmap = screenDataState.bitmap ?: return@OutlinedButton,
-                        )
-                    },
-                    modifier =
-                        Modifier
-                            .wrapContentSize()
-                            .align(Alignment.CenterHorizontally)
-                            .padding(vertical = 10.dp),
-                ) {
-                    Text(
-                        text =
-                            stringResource(
-                                if (isNeteaseSong) {
-                                    Res.string.download_this_song_file_to_your_device
-                                } else {
-                                    Res.string.download_this_song_video_file_to_your_device
-                                },
-                            ),
-                    )
-                }
+                // "下载到设备"按钮已移除(2026-10 定稿):音频侧由三点菜单"下载"(文件式,落
+                // Music/SimpMusic 带 tag)承接,视频侧由三点菜单"下载视频"(merge mp4 落
+                // Movies/SimpMusic)承接;旧 downloadFile 导出管线保留在 VM 不删,回滚只需
+                // 恢复此按钮。
                 Spacer(modifier = Modifier.height(10.dp))
 
                 EndOfModalBottomSheet()
@@ -1094,6 +1111,7 @@ fun QueueBottomSheet(
     var overscrollJob by remember { mutableStateOf<Job?>(null) }
     var shouldShowQueueItemBottomSheet by rememberSaveable { mutableStateOf(false) }
     var clickMoreIndex by rememberSaveable { mutableIntStateOf(0) }
+    var clickMoreVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val songEntity by sharedViewModel.nowPlayingState.map { it?.songEntity }.collectAsState(null)
     val queueData by musicServiceHandler.queueData.collectAsStateWithLifecycle()
@@ -1110,6 +1128,11 @@ fun QueueBottomSheet(
     val endlessQueueEnable by dataStoreManager.endlessQueue.map { it == DataStoreManager.TRUE }.collectAsState(false)
     // 网易私人FM队列：语义即无限电台（loadMore 凭哨兵放行，与开关无关），开关锁定为开。
     val isFmQueue = queueData?.data?.playlistId == NETEASE_FM_PLAYLIST_ID
+
+    // 播客队列(剧集播完即止):无尽开关整行隐藏。
+    // 判定只认前缀(QueueData.isNeteasePodcastQueue,CR-22)——队列身份三键持久化后
+    // 恢复路径同样带前缀;旧"全数字+单一 album.id"指纹与普通网易专辑整队同形,会误伤歌曲队列
+    val isPodcastQueue = queueData?.data?.isNeteasePodcastQueue == true
 
     // Where the playing track sits in `queue` — same derivation the NowPlaying artwork pager
     // uses (deriveOrderIndex): trust the player's own index when it points at the track
@@ -1212,6 +1235,7 @@ fun QueueBottomSheet(
 
     val showQueueItemBottomSheet: (Int) -> Unit = { index ->
         clickMoreIndex = index
+        clickMoreVideoId = queue.getOrNull(index)?.videoId
         shouldShowQueueItemBottomSheet = true
     }
 
@@ -1219,6 +1243,7 @@ fun QueueBottomSheet(
         QueueItemBottomSheet(
             onDismiss = { shouldShowQueueItemBottomSheet = false },
             index = clickMoreIndex,
+            videoId = clickMoreVideoId,
             musicServiceHandler = musicServiceHandler,
         )
     }
@@ -1344,7 +1369,7 @@ fun QueueBottomSheet(
                             )
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!isPodcastQueue) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(Res.string.endless_queue),
                             style = typo().bodySmall,
@@ -1381,6 +1406,20 @@ fun QueueBottomSheet(
                             .fillMaxWidth()
                             .weight(1f),
                 ) {
+                    // Keyed by the track, NOT by its position: a radio queue drops played
+                    // tracks off the front, and a position-based key changes for every row
+                    // when that happens, so the list loses its scroll anchor and jumps under
+                    // the user. The occurrence number keeps the key unique when a radio
+                    // repeats a song. (upstream 11f76c07; replaces our i.toString()+videoId)
+                    val queueRowKeys =
+                        remember(queue) {
+                            val seen = HashMap<String, Int>(queue.size)
+                            queue.map { track ->
+                                val occurrence = seen.getOrElse(track.videoId) { 0 }
+                                seen[track.videoId] = occurrence + 1
+                                "${track.videoId}#$occurrence"
+                            }
+                        }
                     LazyColumn(
                         horizontalAlignment = Alignment.Start,
                         state = lazyListState,
@@ -1430,7 +1469,7 @@ fun QueueBottomSheet(
                     ) {
                         itemsIndexed(
                             queue,
-                            key = { i, t -> i.toString() + t.videoId },
+                            key = { i, t -> queueRowKeys.getOrElse(i) { t.videoId } },
                         ) { index, track ->
                             if (index != -1) {
                                 DraggableItem(
@@ -1472,7 +1511,9 @@ fun QueueBottomSheet(
                             }
                         }
                         item {
-                            EndOfPage()
+                            // sheet 已自行处理 insets 且下方另有浮动按钮区预留,
+                            // scaffold 底栏高度不该在 sheet 内再垫一次(页尾审计 2026-09-28)
+                            EndOfPage(includeBottomBarPadding = false)
                         }
                     }
                     if (queue.isNotEmpty()) {
@@ -1518,6 +1559,8 @@ private enum class QueueItemAction {
 fun QueueItemBottomSheet(
     onDismiss: () -> Unit,
     index: Int,
+    /** The track that was at [index] when this sheet opened; its actions only run if it still is. */
+    videoId: String?,
     musicServiceHandler: MediaPlayerHandler = koinInject<MediaPlayerHandler>(),
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -1604,6 +1647,17 @@ fun QueueItemBottomSheet(
                                     .fillMaxWidth()
                                     .clickable {
                                         hideModalBottomSheet()
+                                        // These act by POSITION, and a radio trims its played history
+                                        // off the front while this sheet can be open, which moves every
+                                        // row. If the track is no longer at [index], do nothing rather
+                                        // than move or delete whatever slid into its place.
+                                        val stillThere =
+                                            musicServiceHandler.queueData.value
+                                                ?.data
+                                                ?.listTracks
+                                                ?.getOrNull(index)
+                                                ?.videoId == videoId
+                                        if (!stillThere) return@clickable
                                         when (action) {
                                             QueueItemAction.UP -> {
                                                 coroutineScope.launch {
@@ -1698,8 +1752,17 @@ fun NowPlayingBottomSheet(
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 播客队列(节目是"剧集"):艺人/专辑/电台/相似等歌曲向条目整组隐藏。
+    // 判定只认前缀(QueueData.isNeteasePodcastQueue,CR-22)——队列身份三键持久化后
+    // 恢复路径同样带前缀;旧"全数字+单一 album.id"指纹与普通网易专辑整队同形,
+    // 会让专辑队列的歌曲菜单条目整组消失,故弃用形状猜测
+    val isPodcastQueue =
+        koinInject<com.maxrave.domain.mediaservice.handler.MediaPlayerHandler>()
+            .queueData.value?.data?.isNeteasePodcastQueue == true
     // 点赞/添加到歌单按源登录置灰:cloudLiked 为 null = 未登录(或云端态未知)
     val cloudLikedForGate by viewModel.cloudLiked.collectAsStateWithLifecycle()
+    // "下载视频"行的下载中态(DownloadManager 视频条目在途实时流)
+    val videoDownloading by viewModel.videoDownloading.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(
@@ -1722,6 +1785,11 @@ fun NowPlayingBottomSheet(
     var changePlaybackSpeedPitch by remember { mutableStateOf(false) }
     var showCancelDownloadDialog by remember { mutableStateOf(false) }
     var showRemoveDownloadDialog by remember { mutableStateOf(false) }
+    var showDeleteDownloadDialog by remember { mutableStateOf(false) }
+    // 视频行专属:在途取消(只撤视频条目)/已下载重下(覆盖)/已落文件删除,与音频行的弹窗同文案不同事件
+    var showCancelVideoDownloadDialog by remember { mutableStateOf(false) }
+    var showRedownloadVideoDialog by remember { mutableStateOf(false) }
+    var showDeleteVideoDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by dataStoreManager.crossfadeEnabled.collectAsState(DataStoreManager.FALSE)
 
     LaunchedEffect(uiState) {
@@ -1757,6 +1825,12 @@ fun NowPlayingBottomSheet(
             listLocalPlaylist = uiState.listLocalPlaylist,
             listYouTubePlaylist = uiState.listYouTubePlaylist,
             listNeteasePlaylist = uiState.listNeteasePlaylist,
+            youTubeLoadFailed = uiState.youTubePlaylistsFailed,
+            neteaseLoadFailed = uiState.neteasePlaylistsFailed,
+            onRetryCloudPlaylists = {
+                viewModel.resetPlaylists()
+                viewModel.setSongEntity(song)
+            },
             onDismiss = { addToAPlaylist = false },
             onClick = {
                 viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToPlaylist(it.id))
@@ -1824,6 +1898,8 @@ fun NowPlayingBottomSheet(
     }
 
     if (showRemoveDownloadDialog) {
+        // 2026-10 文件式下载:确认后的语义从"删除"改为"覆盖重新下载"(删旧文件+重新入队;
+        // 旧缓存下载的歌无文件,确认后自然落"直接文件下载"路径)
         AlertDialog(
             containerColor = rememberSurfaceDarkColors().container,
             onDismissRequest = { showRemoveDownloadDialog = false },
@@ -1832,7 +1908,7 @@ fun NowPlayingBottomSheet(
                     showRemoveDownloadDialog = false
                     viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                 }) {
-                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
                 }
             },
             dismissButton = {
@@ -1841,11 +1917,34 @@ fun NowPlayingBottomSheet(
                 }
             },
             title = {
-                Text(text = stringResource(Res.string.remove_download_title), style = typo().labelSmall)
+                Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
             },
             text = {
-                Text(text = stringResource(Res.string.remove_download_message), style = typo().bodyMedium)
+                Text(text = stringResource(Res.string.overwrite_download_message), style = typo().bodyMedium)
             },
+        )
+    }
+
+    if (showDeleteDownloadDialog) {
+        // 删除下载确认(独立于"重新下载?"弹窗):真删除——文件+缓存条目全清
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showDeleteDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteDownload)
+                }) {
+                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(text = stringResource(Res.string.remove_download_title), style = typo().labelSmall) },
+            text = { Text(text = stringResource(Res.string.remove_download_message), style = typo().bodyMedium) },
         )
     }
 
@@ -1856,7 +1955,11 @@ fun NowPlayingBottomSheet(
             confirmButton = {
                 TextButton(onClick = {
                     showCancelDownloadDialog = false
-                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
+                    // DeleteDownload 而非 Download:两者对在途态的清理代码完全相同
+                    // (demote+removeDownload+落 0),但 Download 是三态事件——若用户盯着
+                    // 确认框时下载恰好完成,它会落进"已下载→重新下载"分支变成覆盖重下,
+                    // 与用户刚确认的"取消/删除"意图相反;DeleteDownload 恒为移除,免竞态。
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteDownload)
                 }) {
                     Text(text = stringResource(Res.string.cancel_download_confirm), style = typo().labelSmall)
                 }
@@ -1872,6 +1975,84 @@ fun NowPlayingBottomSheet(
             text = {
                 Text(text = stringResource(Res.string.cancel_download_message), style = typo().bodyMedium)
             },
+        )
+    }
+
+    if (showRedownloadVideoDialog) {
+        // 视频重新下载确认(文案与音频覆盖弹窗同源;确认走 DownloadVideo——
+        // 事件内先删旧视频文件+条目再入队)
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showRedownloadVideoDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRedownloadVideoDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
+                }) {
+                    Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRedownloadVideoDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.overwrite_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.overwrite_download_message), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showCancelVideoDownloadDialog) {
+        // 视频下载取消确认:只撤视频条目(CancelVideoDownload),音频任务/已落文件不动
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showCancelVideoDownloadDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelVideoDownloadDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.CancelVideoDownload)
+                }) {
+                    Text(text = stringResource(Res.string.cancel_download_confirm), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelVideoDownloadDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = {
+                Text(text = stringResource(Res.string.cancel_download_title), style = typo().labelSmall)
+            },
+            text = {
+                Text(text = stringResource(Res.string.cancel_download_message), style = typo().bodyMedium)
+            },
+        )
+    }
+
+    if (showDeleteVideoDialog) {
+        // 删除已下载视频:只删视频文件/条目,音频不受影响(视频歌本就不产音频)
+        AlertDialog(
+            containerColor = rememberSurfaceDarkColors().container,
+            onDismissRequest = { showDeleteVideoDialog = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteVideoDialog = false
+                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DeleteVideoDownload)
+                }) {
+                    Text(text = stringResource(Res.string.delete), style = typo().labelSmall)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteVideoDialog = false }) {
+                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                }
+            },
+            title = { Text(text = stringResource(Res.string.delete_video_title), style = typo().labelSmall) },
+            text = { Text(text = stringResource(Res.string.delete_video_message), style = typo().bodyMedium) },
         )
     }
 
@@ -2114,7 +2295,9 @@ fun NowPlayingBottomSheet(
                             }
                         }
                     }
-                    CheckBoxActionButton(
+                    // 播客节目红心走 /song/like 报 524"歌单不支持添加播客声音"(歌曲/声音链路
+                    // 分离,声音喜欢端点多形状穷举全 400)——隐藏防假失败(2026-09-29)
+                    if (!isPodcastQueue) CheckBoxActionButton(
                         // 云端态优先(登录时拉取,~几百 ms 到):本地 Room 的 liked 可能过期
                         // (YT 红心歌单里本地未赞、云端已赞,读作"状态不对");云端未到/未登录
                         // 退回本地值。checkbox 以 defaultChecked 为 key,云端晚到会重置显示
@@ -2127,7 +2310,16 @@ fun NowPlayingBottomSheet(
                         },
                     )
 
-                    ActionButton(
+                    // 播客节目不提供下载(2026-10-01 用户定):"下载/删除下载"两行隐藏。
+                    // 只按行自身 neteaseProgramId 判定——不能用队列哨兵:播客队列播放期间
+                    // 打开普通歌曲的 sheet 会把歌曲的下载行一起误隐(实测踩坑)
+                    val isPodcastEpisode = uiState.songUIState.neteaseProgramId != null
+                    // 视频歌=真实视频类型(OMV/UGC;ATV=纯音频曲目):mv 不需要音频下载,
+                    // 整组只留"下载视频/删除视频"(2026-10-03 用户定)
+                    val isRealVideoSong =
+                        uiState.songUIState.videoType.isNotBlank() &&
+                            uiState.songUIState.videoType != "MUSIC_VIDEO_TYPE_ATV"
+                    if (!isPodcastEpisode && !isRealVideoSong) ActionButton(
                         icon =
                             when (uiState.songUIState.downloadState) {
                                 DownloadState.STATE_NOT_DOWNLOADED -> SimpIcons.DownloadForOfflineOutlined
@@ -2161,7 +2353,87 @@ fun NowPlayingBottomSheet(
                             else -> viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.Download)
                         }
                     }
-                    ActionButton(
+                    // 视频文件下载(2026-10 文件式,仅 YT 歌且真有视频流):merge mp4 落
+                    // Music/SimpMusic[/主艺人/专辑](与音频同树,回落 Movies)。ATV=纯音频
+                    // 曲目(player 响应无视频 format),下了也只能 merge 出"只有声音的
+                    // mp4"——不显示入口(2026-10-01 用户反馈)。
+                    // 三态与音频下载行同构(2026-10-03 用户问"状态会随已下载更新吗"):
+                    // 在途=下载中(点击只撤视频条目),文件在=已下载(点击"重新下载?"覆盖),
+                    // 否则=下载视频;视频态独立于音频态,Room 路径列+内存条目流双源
+                    if (uiState.songUIState.videoId.toLongOrNull() == null &&
+                        uiState.songUIState.videoType != "MUSIC_VIDEO_TYPE_ATV"
+                    ) {
+                        when {
+                            videoDownloading ->
+                                ActionButton(
+                                    icon = SimpIcons.Downloading,
+                                    text = Res.string.downloading,
+                                ) {
+                                    showCancelVideoDownloadDialog = true
+                                }
+
+                            uiState.songUIState.downloadedVideoFilePath != null ->
+                                ActionButton(
+                                    icon = SimpIcons.Movie,
+                                    // 同音频"已下载"行:共享 symbol 是中性色,完成态明说颜色
+                                    iconColor = Color(0xFF00A0CB),
+                                    text = Res.string.downloaded,
+                                ) {
+                                    showRedownloadVideoDialog = true
+                                }
+
+                            else ->
+                                ActionButton(
+                                    icon = SimpIcons.Movie,
+                                    text = Res.string.download_video,
+                                ) {
+                                    viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.DownloadVideo)
+                                }
+                        }
+                    }
+                    // 删除下载(2026-10 用户反馈):独立成行——"下载"行对已下载歌是"重新
+                    // 下载?"覆盖语义,真删除放这里(图标用 playlist_remove,不用垃圾桶)。
+                    // 下载中/准备中也显示(用户 2026-10-01:下载中的歌也要能从三点里删,
+                    // 原"下载"行的取消语义藏在状态文案里不可发现),确认走"取消下载?"弹窗
+                    // (文案准确:停止并清掉未完成部分)。播客行不显示(入口随"下载"一并移除)。
+                    // 播放页入口(song=null)不显示(2026-10-03 用户定:播放页三点隐藏删除
+                    // 下载,删除走下载管理页);列表歌曲菜单保留。
+                    // 位置在"下载视频"按钮之下(2026-10-03 用户定);视频歌=删除视频
+                    // (音频不下载,在途取消在视频行,这里只管已落文件)
+                    if (!isPodcastEpisode && song != null) {
+                        if (isRealVideoSong) {
+                            if (uiState.songUIState.downloadedVideoFilePath != null) {
+                                ActionButton(
+                                    icon = SimpIcons.PlaylistRemove,
+                                    text = Res.string.delete_video_title,
+                                ) {
+                                    showDeleteVideoDialog = true
+                                }
+                            }
+                        } else {
+                            when (uiState.songUIState.downloadState) {
+                                DownloadState.STATE_DOWNLOADED,
+                                DownloadState.STATE_PREPARING,
+                                DownloadState.STATE_DOWNLOADING,
+                                -> {
+                                    ActionButton(
+                                        icon = SimpIcons.PlaylistRemove,
+                                        text = Res.string.remove_download_title,
+                                    ) {
+                                        if (uiState.songUIState.downloadState == DownloadState.STATE_DOWNLOADED) {
+                                            showDeleteDownloadDialog = true
+                                        } else {
+                                            showCancelDownloadDialog = true
+                                        }
+                                    }
+                                }
+
+                                else -> Unit
+                            }
+                        }
+                    }
+                    // 播客节目不进歌单(剧集不是歌)——隐藏(2026-09-29 用户定)
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.PlaylistAdd,
                         text = Res.string.add_to_a_playlist,
                         enable = cloudLikedForGate != null,
@@ -2169,19 +2441,24 @@ fun NowPlayingBottomSheet(
                         viewModel.resetPlaylists()
                         addToAPlaylist = true
                     }
-                    ActionButton(
-                        icon = SimpIcons.PlayCircle,
-                        text = Res.string.play_next,
-                    ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
+                    // 播放页打开(song=null=自动指向当前播放曲)时这两行只剩"自我复制"效果:
+                    // 当前曲本就在队列里,"下一首播放"=复制一份插到自己后面,"添加到队列"=
+                    // 原样追加到队尾。列表页 song 恒非空,不受影响
+                    if (song != null) {
+                        ActionButton(
+                            icon = SimpIcons.PlayCircle,
+                            text = Res.string.play_next,
+                        ) {
+                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.PlayNext)
+                        }
+                        ActionButton(
+                            icon = SimpIcons.QueueMusic,
+                            text = Res.string.add_to_queue,
+                        ) {
+                            viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
+                        }
                     }
-                    ActionButton(
-                        icon = SimpIcons.QueueMusic,
-                        text = Res.string.add_to_queue,
-                    ) {
-                        viewModel.onUIEvent(NowPlayingBottomSheetUIEvent.AddToQueue)
-                    }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.PeopleAlt,
                         text = Res.string.artists,
                     ) {
@@ -2196,7 +2473,7 @@ fun NowPlayingBottomSheet(
                             artist = true
                         }
                     }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.Album,
                         // Three states, not two. A track can carry an album ID with no title: the
                         // row it was parsed from links an album but never spells its name out.
@@ -2224,7 +2501,7 @@ fun NowPlayingBottomSheet(
                             navController.navigate(AlbumDestination(browseId = id))
                         }
                     }
-                    ActionButton(
+                    if (!isPodcastQueue) ActionButton(
                         icon = SimpIcons.Sensors,
                         text = Res.string.start_radio,
                     ) {
@@ -2238,7 +2515,7 @@ fun NowPlayingBottomSheet(
                     }
                     // 网易歌独有:simiSong 相似歌曲列表页(2026-09-25 落地,2026-09-15 曾从
                     // 详情卡摘除的入口以独立页形态回归);YT 歌的相似=电台,无列表形态
-                    if (uiState.songUIState.videoId.toLongOrNull() != null) {
+                    if (uiState.songUIState.videoId.toLongOrNull() != null && !isPodcastQueue) {
                         ActionButton(
                             icon = SimpIcons.LibraryMusic,
                             text = Res.string.similar_songs,
@@ -2993,6 +3270,11 @@ fun AddToPlaylistModalBottomSheet(
     // null=尚未拉取(多选弹窗加载中):不闪"未找到"空态;拉完空列表=真没有,才显示空态
     listYouTubePlaylist: List<PlaylistsResult>?,
     listNeteasePlaylist: List<PlaylistsResult>? = null,
+    /** 终态失败(重试耗尽,VM 侧标志):所选分区无列表时出"重试"行,有旧列表静默保留 */
+    youTubeLoadFailed: Boolean = false,
+    neteaseLoadFailed: Boolean = false,
+    /** "重试"行回调=整链重拉(两源都重拉,与弹窗打开同款入口) */
+    onRetryCloudPlaylists: () -> Unit = {},
     videoId: String? = null,
     // 多选批量建单:非空优先于 videoId(单曲路径不传,行为不变)
     videoIds: List<String> = emptyList(),
@@ -3246,6 +3528,38 @@ fun AddToPlaylistModalBottomSheet(
                                 )
                             }
                         }
+                    }
+
+                    // 所选云端分区的加载/失败态(2026-09-30 二轮 CR:此前加载慢、重试中、
+                    // 终态失败与真空列表全长得一样,用户只看到"新建歌单+空列表"):
+                    // - 本会话还没成功拉到过(list==null)且已登录 → spinner 行;
+                    // - 终态失败且无列表可展示 → "出错了+重试"行;有旧列表则静默用旧值。
+                    val selectedCloudLoading =
+                        (selectedLibrary == 1 && listYouTubePlaylist == null && youtubeLoggedIn == DataStoreManager.TRUE) ||
+                            (selectedLibrary == 2 && listNeteasePlaylist == null && neteaseCookie.isNotBlank())
+                    val selectedCloudFailed =
+                        (selectedLibrary == 1 && youTubeLoadFailed && visibleYouTubePlaylists.isEmpty()) ||
+                            (selectedLibrary == 2 && neteaseLoadFailed && visibleNeteasePlaylists.isEmpty())
+                    if (selectedCloudFailed) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.error_occurred),
+                                style = typo().labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            TextButton(onClick = onRetryCloudPlaylists) {
+                                Text(text = stringResource(Res.string.retry))
+                            }
+                        }
+                    } else if (selectedCloudLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(vertical = 18.dp).size(24.dp),
+                            strokeWidth = 2.dp,
+                        )
                     }
 
                     // 所选分区的云端账号已登录时,即使歌单列表为空也进入列表分支——
@@ -4097,41 +4411,252 @@ sealed class DevLogInType {
             is NetEase -> getString(Res.string.netease_dev_login_title)
         }
 }
+/**
+ * 评论弹窗排序档(官方 app 三标签):wire=v2 sortType(99=推荐/2=最热/3=最新),
+ * firstCursor=首页游标(服务端算下一页,直接透传)。楼层数(replyCount)只有 v2 响应有。
+ */
+private enum class NeteaseCommentSort(val wire: Int, val firstCursor: String) {
+    RECOMMEND(99, "0"),
+    HOT(2, "normalHot#0"),
+    LATEST(3, "0"),
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeteaseCommentsSheet(
     onDismiss: () -> Unit,
     songId: String,
     totalCount: Int,
+    /** 评论线程 id;null=歌曲默认(R_SO_4)。播客节目传 A_DJ_1_<programId>;""=反查完成未命中(同样回退歌曲线程) */
+    threadId: String? = null,
+    /** 播客节目(不依赖 threadId 反查时序):标题不带数字+点赞禁用。threadId 为按需反查,
+     *  null 且 isPodcast=true 表示反查在途——首载等它落地,否则会拿 R_SO_4 歌曲线程加载错评论 */
+    isPodcast: Boolean = false,
     neteaseRepository: com.maxrave.data.repository.NeteaseRepositoryImpl = koinInject(),
 ) {
     val coroutineScope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dark = rememberSurfaceDarkColors()
+    var sort by remember { mutableStateOf(NeteaseCommentSort.RECOMMEND) }
     var comments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
-    // 初始必须 false:loadMore 的重入守卫读它,初始 true 会把首载拦死成永久转圈
+    // 首载/切档=loading,追加=loadingMore(重入守卫读两者);失败置 failed 出重试行——
+    // 旧版失败直接 hasMore=false 假装到底,网络抖一下评论列表就"没了"
     var loading by remember { mutableStateOf(false) }
+    var loadingMore by remember { mutableStateOf(false) }
     var hasMore by remember { mutableStateOf(true) }
+    var failed by remember { mutableStateOf(false) }
+    // v2 cursor 分页:服务端算好下一页游标,透传即可(null=没有更多);
+    // pageNo 必须随页递增(恒 1 时服务端无视 cursor 原样返回第一页,探针实证)
+    var cursor by remember { mutableStateOf<String?>(null) }
+    var pageNo by remember { mutableStateOf(1) }
+    // 楼中楼:同时只展开一条,收起即清
+    var expandedCommentId by remember { mutableStateOf<Long?>(null) }
+    var floorComments by remember { mutableStateOf<List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>>(emptyList()) }
+    var floorCursor by remember { mutableStateOf<Long?>(null) }
+    var floorLoading by remember { mutableStateOf(false) }
+    var floorFailed by remember { mutableStateOf(false) }
 
-    fun loadMore() {
-        if (loading || !hasMore) return
+    fun loadFirst(target: NeteaseCommentSort) {
+        if (loading) return
         loading = true
+        failed = false
+        cursor = null
+        pageNo = 1
         coroutineScope.launch {
-            val page = neteaseRepository.getSongCommentsPage(songId, limit = 20, offset = comments.size)
+            val page =
+                neteaseRepository.getSongCommentsPage(
+                    songId,
+                    sortType = target.wire,
+                    cursor = target.firstCursor,
+                    pageNo = 1,
+                    // ""=反查未命中的哨兵,按无 threadId 处理回退歌曲线程
+                    threadId = threadId?.takeIf { it.isNotEmpty() },
+                )
             if (page == null) {
-                hasMore = false
+                failed = true
             } else {
-                // 热评与最新评可能重叠(同一条既在热评也在最新),按内容去重
-                comments = (comments + page.first).distinctBy { it.content + (it.nickname ?: "") }
-                hasMore = page.second
+                comments = page.items
+                hasMore = page.hasMore
+                cursor = page.nextCursor
             }
             loading = false
         }
     }
 
-    LaunchedEffect(songId) {
-        comments = emptyList()
-        hasMore = true
-        loadMore()
+    fun loadMore() {
+        com.maxrave.logger.Logger.w("NeteaseComments", "loadMore called: loading=$loading loadingMore=$loadingMore hasMore=$hasMore cursor=$cursor size=${comments.size}")
+        if (loading || loadingMore || !hasMore) return
+        val next = cursor ?: return
+        loadingMore = true
+        pageNo += 1
+        coroutineScope.launch {
+            val page =
+                neteaseRepository.getSongCommentsPage(
+                    songId,
+                    sortType = sort.wire,
+                    cursor = next,
+                    pageNo = pageNo,
+                    threadId = threadId,
+                )
+            if (page == null) {
+                failed = true
+                pageNo -= 1
+            } else {
+                // 同一条评论跨页/跨档可能重复,按评论 id 去重
+                val oldSize = comments.size
+                val deduped = (comments + page.items).distinctBy { it.commentId }
+                comments = deduped
+                hasMore = page.hasMore
+                cursor = page.nextCursor
+                failed = false
+                // 停滞防护:服务端返回了一页但没有任何新评论(游标不推进/重叠页),
+                // 继续拉只会原地打转,直接按到底处理
+                if (page.items.isNotEmpty() && deduped.size == oldSize) {
+                    hasMore = false
+                }
+            }
+            loadingMore = false
+        }
+    }
+
+    fun collapseFloor() {
+        expandedCommentId = null
+        floorComments = emptyList()
+        floorCursor = null
+        floorLoading = false
+        floorFailed = false
+    }
+
+    fun loadFloorPage(
+        parentId: Long,
+        time: Long,
+        isFirstPage: Boolean,
+    ) {
+        if (floorLoading) return
+        floorLoading = true
+        floorFailed = false
+        coroutineScope.launch {
+            val page =
+                neteaseRepository.getSongCommentFloorPage(
+                    songId,
+                    parentCommentId = parentId,
+                    limit = 20,
+                    time = time,
+                )
+            if (page == null) {
+                floorFailed = true
+            } else {
+                floorComments =
+                    if (isFirstPage) page.first else (floorComments + page.first).distinctBy { it.commentId }
+                floorCursor = page.second
+            }
+            floorLoading = false
+        }
+    }
+
+    // 点赞乐观更新+失败回退:服务端按账号/设备可能风控拒绝(250"存在安全风险"等)
+    var likePending by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
+    fun toggleLike(
+        comment: com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment,
+        isFloor: Boolean,
+    ) {
+        val id = comment.commentId ?: return
+        if (id in likePending) return
+        // 节目线程(A_DJ_1)的 like 写通道未验证支持——禁用防"显示成功实则失败"。
+        // (runBlocking 取串:本函数非 Composable,stringResource 不可用)
+        if (isPodcast || threadId != null) {
+            showToast(
+                message = runBlocking { getString(Res.string.podcast_comment_like_unsupported) },
+                duration = ToastDuration.Short,
+                gravity = ToastGravity.Bottom,
+            )
+            return
+        }
+        val oldLiked = comment.liked
+        val oldCount = comment.likedCount ?: 0
+        fun patch(list: List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>): List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment> =
+            list.map {
+                if (it.commentId == id) {
+                    it.copy(
+                        liked = !oldLiked,
+                        likedCount = if (oldLiked) maxOf(oldCount - 1, 0) else oldCount + 1,
+                    )
+                } else {
+                    it
+                }
+            }
+        if (isFloor) floorComments = patch(floorComments) else comments = patch(comments)
+        likePending = likePending + id
+        coroutineScope.launch {
+            neteaseRepository.setCommentLiked(songId, id, like = !oldLiked).onFailure { e ->
+                fun revert(list: List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment>): List<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment> =
+                    list.map {
+                        if (it.commentId == id) {
+                            it.copy(liked = oldLiked, likedCount = oldCount)
+                        } else {
+                            it
+                        }
+                    }
+                if (isFloor) floorComments = revert(floorComments) else comments = revert(comments)
+                showToast(
+                    message = e.message ?: "failed",
+                    duration = ToastDuration.Short,
+                    gravity = ToastGravity.Bottom,
+                )
+            }
+            likePending = likePending - id
+        }
+    }
+
+    LaunchedEffect(songId, threadId) {
+        // 播客 threadId 是面板打开后才反查的:在途(null)不首发,落地(含 "" 未命中)再载
+        if (isPodcast && threadId == null) return@LaunchedEffect
+        loadFirst(sort)
+    }
+
+    // 发表/回复评论:官方交互=点评论弹回复框;对话框形态(居中 AlertDialog)避开
+    // ModalBottomSheet 内 IME inset 不可用的已知问题
+    var showPostDialog by remember { mutableStateOf(false) }
+    var replyTarget by remember { mutableStateOf<com.maxrave.domain.data.entities.NeteaseSongInfoEntity.HotComment?>(null) }
+    var postText by remember { mutableStateOf("") }
+    var posting by remember { mutableStateOf(false) }
+    val postSuccessText = stringResource(Res.string.post_comment_success)
+
+    fun submitPost() {
+        val text = postText.trim()
+        if (text.isEmpty() || posting) return
+        val target = replyTarget
+        posting = true
+        coroutineScope.launch {
+            neteaseRepository
+                .postSongComment(songId, text, replyTo = target?.commentId)
+                .onSuccess {
+                    posting = false
+                    showPostDialog = false
+                    postText = ""
+                    replyTarget = null
+                    showToast(message = postSuccessText, duration = ToastDuration.Short, gravity = ToastGravity.Bottom)
+                    // 新评论在"最新"档最前,发布后切到最新并重载首屏让它立即可见
+                    if (sort != NeteaseCommentSort.LATEST) {
+                        sort = NeteaseCommentSort.LATEST
+                    }
+                    collapseFloor()
+                    comments = emptyList()
+                    hasMore = true
+                    failed = false
+                    cursor = null
+                    loadFirst(NeteaseCommentSort.LATEST)
+                }
+                .onFailure { e ->
+                    posting = false
+                    showToast(
+                        message = e.message ?: "failed",
+                        duration = ToastDuration.Short,
+                        gravity = ToastGravity.Bottom,
+                    )
+                }
+        }
     }
 
     ModalBottomSheet(
@@ -4145,13 +4670,14 @@ fun NeteaseCommentsSheet(
         modifier = Modifier.hapticTapFeedback(),
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
+        // 用户定案:评论区无条件全屏(0.95,顶部留状态栏呼吸位)
         Card(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.8f),
+                    .fillMaxHeight(0.95f),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().container),
+            colors = CardDefaults.cardColors().copy(containerColor = dark.container),
         ) {
             Column(Modifier.fillMaxSize()) {
                 Spacer(modifier = Modifier.height(14.dp))
@@ -4162,65 +4688,301 @@ fun NeteaseCommentsSheet(
                             .align(Alignment.CenterHorizontally)
                             .width(60.dp)
                             .height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = rememberSurfaceDarkColors().handle),
+                    colors = CardDefaults.cardColors().copy(containerColor = dark.handle),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Text(
                     text =
-                        stringResource(
-                            Res.string.comments_title,
-                            formatCompactCount(totalCount),
-                        ),
+                        // 节目评论计数与歌曲不同源,入参(歌曲详情卡)对节目恒不可信(实测 0)——
+                        // 节目态不带数字
+                        if (isPodcast) {
+                            stringResource(Res.string.comment_label)
+                        } else {
+                            stringResource(
+                                Res.string.comments_title,
+                                formatCompactCount(totalCount),
+                            )
+                        },
                     style = typo().titleMedium,
-                    color = rememberSurfaceDarkColors().content,
+                    color = dark.content,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 )
-                HorizontalDivider(color = rememberSurfaceDarkColors().handle, thickness = 0.5.dp)
+                // 热门/最新排序切换:热门=服务端精华热评一次拉全,最新=offset 翻页
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    NeteaseCommentSort.entries.forEach { candidate ->
+                        Surface(
+                            onClick = {
+                                if (sort != candidate && !loading) {
+                                    sort = candidate
+                                    collapseFloor()
+                                    comments = emptyList()
+                                    hasMore = true
+                                    failed = false
+                                    loadFirst(candidate)
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            color = if (sort == candidate) dark.handle.copy(alpha = 0.45f) else Color.Transparent,
+                        ) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        when (candidate) {
+                                            NeteaseCommentSort.RECOMMEND -> Res.string.sort_recommend
+                                            NeteaseCommentSort.HOT -> Res.string.sort_hot
+                                            NeteaseCommentSort.LATEST -> Res.string.sort_by_newest
+                                        },
+                                    ),
+                                style = typo().labelMedium,
+                                color = if (sort == candidate) dark.content else dark.subtitle,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(color = dark.handle, thickness = 0.5.dp)
+                // 手势隔离:吃掉列表滚动/惯性的一切剩余量,使下滑关闭手势不作用于评论
+                // 内容(0.95 全屏下列表顶部下拉极易误触 sheet 拖拽);关闭手势保留在
+                // 标题/拖拽条区域(无列表消费,剩余量仍归 sheet)
+                val listGestureSink =
+                    remember {
+                        object : NestedScrollConnection {
+                            override fun onPostScroll(
+                                consumed: Offset,
+                                available: Offset,
+                                source: NestedScrollSource,
+                            ): Offset =
+                                // 只拦下拉(available.y>0=内容滚到顶后继续下拉);上滑剩余不拦,
+                                // 否则影响 sheet 自身展开语义
+                                if (available.y > 0) Offset(0f, available.y) else Offset.Zero
+
+                            override suspend fun onPostFling(
+                                consumed: Velocity,
+                                available: Velocity,
+                            ): Velocity =
+                                if (available.y > 0) available else Velocity.Zero
+                        }
+                    }
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).nestedScroll(listGestureSink),
                     contentPadding = PaddingValues(vertical = 6.dp),
                 ) {
                     items(comments) { comment ->
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                        ) {
-                            AsyncImage(
-                                model = comment.avatarUrl,
-                                contentDescription = null,
+                        Column(Modifier.fillMaxWidth()) {
+                            Row(
                                 modifier =
                                     Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(50)),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text =
-                                        listOfNotNull(comment.nickname, comment.location).joinToString(" · "),
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
-                                )
-                                Text(
-                                    text = comment.content,
-                                    style = typo().bodyMedium,
-                                    color = rememberSurfaceDarkColors().content,
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Icon(
-                                    imageVector = SimpIcons.FavoriteBorder,
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                            ) {
+                                AsyncImage(
+                                    model = comment.avatarUrl,
                                     contentDescription = null,
-                                    tint = rememberSurfaceDarkColors().subtitle,
-                                    modifier = Modifier.size(14.dp),
+                                    modifier =
+                                        Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(50)),
                                 )
-                                Text(
-                                    text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
-                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                // 点评论=回复该条(官方交互);点赞按钮在右侧独立处理点击
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            replyTarget = comment
+                                            postText = ""
+                                            showPostDialog = true
+                                        },
+                                ) {
+                                    Text(
+                                        text =
+                                            listOfNotNull(
+                                                comment.nickname,
+                                                comment.location,
+                                                comment.timeStr,
+                                            ).joinToString(" · "),
+                                        style = typo().labelSmall,
+                                        color = dark.subtitle,
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    NeteaseEmojiText(
+                                        text = comment.content,
+                                        style = typo().bodyMedium,
+                                        color = dark.content,
+                                    )
+                                    // 本条是回复时引用的父评论摘要(官方 app "回复 @xx: ..." 同款)
+                                    comment.beRepliedNickname?.let { repliedTo ->
+                                        NeteaseEmojiText(
+                                            text = "回复 @${repliedTo}: ${comment.beRepliedContent.orEmpty()}",
+                                            style = typo().labelSmall,
+                                            color = dark.subtitle,
+                                            maxLines = 2,
+                                            modifier = Modifier.padding(top = 2.dp),
+                                        )
+                                    }
+                                    val commentId = comment.commentId
+                                    if (comment.replyCount > 0 && commentId != null) {
+                                        TextButton(
+                                            onClick = {
+                                                if (expandedCommentId == commentId) {
+                                                    collapseFloor()
+                                                } else {
+                                                    collapseFloor()
+                                                    expandedCommentId = commentId
+                                                    loadFloorPage(commentId, -1L, isFirstPage = true)
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 4.dp),
+                                            modifier = Modifier.height(26.dp),
+                                        ) {
+                                            Text(
+                                                text =
+                                                    stringResource(
+                                                        Res.string.n_replies,
+                                                        formatCompactCount(comment.replyCount),
+                                                    ) + " ›",
+                                                style = typo().labelMedium,
+                                                color = dark.subtitle,
+                                            )
+                                        }
+                                    }
+                                }
+                                // 点赞/取消点赞:乐观更新,风控/未登录拒绝时回退并 toast 服务端文案
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    modifier =
+                                        Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { toggleLike(comment, isFloor = false) }
+                                            .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = if (comment.liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                                        contentDescription = null,
+                                        tint = if (comment.liked) Color(0xFFEC4141) else dark.subtitle,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Text(
+                                        text = comment.likedCount?.let { formatCompactCount(it) } ?: "",
+                                        style = typo().labelSmall,
+                                        color = if (comment.liked) Color(0xFFEC4141) else dark.subtitle,
+                                    )
+                                }
+                            }
+                            // 楼中楼展开区:缩进对齐主评论内容列(20+36+12)
+                            val expandedId = comment.commentId
+                            if (expandedId != null && expandedCommentId == expandedId) {
+                                Column(Modifier.padding(start = 68.dp)) {
+                                    floorComments.forEach { reply ->
+                                        Row(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(end = 20.dp, bottom = 8.dp),
+                                        ) {
+                                            AsyncImage(
+                                                model = reply.avatarUrl,
+                                                contentDescription = null,
+                                                modifier =
+                                                    Modifier
+                                                        .size(24.dp)
+                                                        .clip(RoundedCornerShape(50)),
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column(
+                                                Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        if (reply.commentId != null) {
+                                                            replyTarget = reply
+                                                            postText = ""
+                                                            showPostDialog = true
+                                                        }
+                                                    },
+                                            ) {
+                                                Text(
+                                                    text =
+                                                        listOfNotNull(
+                                                            reply.nickname,
+                                                            reply.location,
+                                                            reply.timeStr,
+                                                        ).joinToString(" · "),
+                                                    style = typo().labelSmall,
+                                                    color = dark.subtitle,
+                                                )
+                                                NeteaseEmojiText(
+                                                    text = reply.content,
+                                                    style = typo().bodySmall,
+                                                    color = dark.content,
+                                                )
+                                            }
+                                            // 楼层回复同样可点赞(乐观+失败回退)
+                                            Column(
+                                                horizontalAlignment = Alignment.End,
+                                                modifier =
+                                                    Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { toggleLike(reply, isFloor = true) }
+                                                        .padding(start = 8.dp),
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (reply.liked) SimpIcons.Favorite else SimpIcons.FavoriteBorder,
+                                                    contentDescription = null,
+                                                    tint = if (reply.liked) Color(0xFFEC4141) else dark.subtitle,
+                                                    modifier = Modifier.size(12.dp),
+                                                )
+                                                reply.likedCount?.let { count ->
+                                                    Text(
+                                                        text = formatCompactCount(count),
+                                                        style = typo().labelSmall,
+                                                        color = if (reply.liked) Color(0xFFEC4141) else dark.subtitle,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    when {
+                                        floorFailed ->
+                                            TextButton(
+                                                onClick = {
+                                                    loadFloorPage(
+                                                        expandedId,
+                                                        floorCursor ?: -1L,
+                                                        isFirstPage = floorComments.isEmpty(),
+                                                    )
+                                                },
+                                            ) {
+                                                Text(text = stringResource(Res.string.retry), style = typo().labelMedium)
+                                            }
+                                        floorLoading -> Box(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                        }
+                                        // 尾部占位滚进组合视口即自动续拉(时间戳游标),拉完为止
+                                        floorCursor != null -> Box(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            LaunchedEffect(floorComments.size, floorCursor) {
+                                                loadFloorPage(expandedId, floorCursor ?: -1L, isFirstPage = false)
+                                            }
+                                        }
+                                        floorComments.isNotEmpty() -> TextButton(onClick = { collapseFloor() }) {
+                                            Text(
+                                                text = stringResource(Res.string.collapse_replies),
+                                                style = typo().labelMedium,
+                                                color = dark.subtitle,
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -4230,17 +4992,121 @@ fun NeteaseCommentsSheet(
                             contentAlignment = Alignment.Center,
                         ) {
                             when {
-                                loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                hasMore -> TextButton(onClick = { loadMore() }) {
-                                    Text(text = stringResource(Res.string.more), style = typo().labelMedium)
+                                failed ->
+                                    TextButton(
+                                        onClick = { if (comments.isEmpty()) loadFirst(sort) else loadMore() },
+                                    ) {
+                                        Text(text = stringResource(Res.string.retry), style = typo().labelMedium)
+                                    }
+                                loading && comments.isEmpty() ->
+                                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                                comments.isEmpty() ->
+                                    Text(
+                                        text = stringResource(Res.string.no_comments),
+                                        style = typo().labelMedium,
+                                        color = dark.subtitle,
+                                    )
+                                hasMore -> {
+                                    // 尾部占位滚进组合视口(LazyColumn 预组合=近底)即自动翻页;
+                                    // key 挂列表长度,每页落地后自然续拉下一页
+                                    LaunchedEffect(comments.size, cursor, sort) {
+                                        com.maxrave.logger.Logger.w("NeteaseComments", "tail effect fired: size=${comments.size} sort=$sort")
+                                        loadMore()
+                                    }
+                                    if (loadingMore) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    }
                                 }
-                                else -> Text(
-                                    text = stringResource(Res.string.end_of_list),
-                                    style = typo().labelSmall,
-                                    color = rememberSurfaceDarkColors().subtitle,
+                                else ->
+                                    Text(
+                                        text = stringResource(Res.string.end_of_list),
+                                        style = typo().labelSmall,
+                                        color = dark.subtitle,
+                                    )
+                            }
+                        }
+                    }
+                }
+                // 节目评论发布写通道未验证——输入栏整行隐藏(2026-09-29)
+                if (threadId == null && !isPodcast) Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .background(dark.container)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = dark.handle.copy(alpha = 0.35f),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                            // 回复目标在输入框内部展示(用户定案,不单独出按钮)
+                            replyTarget?.let { target ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        text = stringResource(Res.string.reply_hint, target.nickname ?: ""),
+                                        style = typo().labelSmall,
+                                        color = dark.content,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Icon(
+                                        imageVector = SimpIcons.Close,
+                                        contentDescription = "Cancel reply",
+                                        tint = dark.subtitle,
+                                        modifier =
+                                            Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .clickable { replyTarget = null }
+                                                .padding(2.dp),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                            Box(
+                                contentAlignment = Alignment.CenterStart,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 32.dp),
+                            ) {
+                                if (postText.isEmpty()) {
+                                    Text(
+                                        text = stringResource(Res.string.post_comment_hint),
+                                        style = typo().bodyMedium,
+                                        color = dark.subtitle,
+                                        maxLines = 1,
+                                    )
+                                }
+                                BasicTextField(
+                                    value = postText,
+                                    onValueChange = { postText = it },
+                                    textStyle = typo().bodyMedium.copy(color = dark.content),
+                                    cursorBrush = SolidColor(dark.content),
+                                    maxLines = 3,
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        enabled = postText.isNotBlank() && !posting,
+                        onClick = { submitPost() },
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.send),
+                            style = typo().labelMedium,
+                            color = if (postText.isNotBlank()) dark.content else dark.subtitle,
+                        )
                     }
                 }
             }

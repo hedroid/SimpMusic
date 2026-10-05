@@ -88,6 +88,9 @@ import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.LocalForceDarkText
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
+import com.maxrave.simpmusic.viewModel.SharedViewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -102,6 +105,8 @@ import simpmusic.composeapp.generated.resources.podcasts
 import simpmusic.composeapp.generated.resources.radio
 import simpmusic.composeapp.generated.resources.you
 import kotlin.math.roundToInt
+
+// rememberActualPlaying 提升到了 PlaybackIndicators.kt(下载管理行也要同款两态指示)
 
 /**
  * This is the song item in the playlist or other places.
@@ -271,11 +276,23 @@ fun SongFullWidthItems(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // The slot shows on the current row; whether the bars animate follows the
+                    // player — paused keeps the frozen equalizer, not a dancing one.
+                    val actuallyPlaying = rememberActualPlaying()
                     Crossfade(isPlaying) {
                         if (it) {
-                            AudioPlayingIndicator(
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                            Crossfade(actuallyPlaying, label = "rowPlayingAnim") { playingNow ->
+                                if (playingNow) {
+                                    AudioPlayingIndicator(
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                } else {
+                                    AudioPlayingIndicator(
+                                        modifier = Modifier.fillMaxSize(),
+                                        paused = true,
+                                    )
+                                }
+                            }
                         } else if (index == null) {
                             val thumb = track?.thumbnails?.lastOrNull()?.url ?: songEntity?.thumbnails
                             AsyncImage(
@@ -432,11 +449,21 @@ fun SuggestItems(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(modifier = Modifier.size(40.dp)) {
+                val actuallyPlaying = rememberActualPlaying()
                 Crossfade(isPlaying) {
                     if (it) {
-                        AudioPlayingIndicator(
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        Crossfade(actuallyPlaying, label = "suggestPlayingAnim") { playingNow ->
+                            if (playingNow) {
+                                AudioPlayingIndicator(
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                AudioPlayingIndicator(
+                                    modifier = Modifier.fillMaxSize(),
+                                    paused = true,
+                                )
+                            }
+                        }
                     } else {
                         val thumb = track.thumbnails?.lastOrNull()?.url
                         AsyncImage(
