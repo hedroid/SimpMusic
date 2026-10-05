@@ -278,8 +278,8 @@ internal fun AppleMusicLyricsView(
         if (showShareSheet && lyricsData != null) {
             ShareLyricsSheet(
                 lines = lyricsData.toShareLyricsLines(),
-                songTitle = state.screenData.nowPlayingTitle,
-                artistName = state.screenData.artistName,
+                songTitle = state.displayTitle,
+                artistName = state.displayArtistName,
                 // The track's already-decoded artwork. A URL would still be loading at the moment
                 // the card is captured, and would come out blank.
                 artwork = state.screenData.bitmap,

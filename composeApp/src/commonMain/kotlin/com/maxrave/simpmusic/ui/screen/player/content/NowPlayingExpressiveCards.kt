@@ -173,6 +173,7 @@ internal fun ExpressiveArtworkCardPage(
     val colorScheme = MaterialTheme.colorScheme
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentArtworkPage = page == state.currentOrderIndex
+    val isVisualArtworkPage = page == state.visualOrderIndex
     val pageHasCanvas =
         !state.artworkMotionInProgress &&
             isCurrentArtworkPage &&
@@ -335,9 +336,7 @@ internal fun ExpressiveArtworkCardPage(
                 val pagerSettledHere by remember {
                     derivedStateOf { state.artworkPagerState.settledPage == page }
                 }
-                // Pager 与播放器都确认同一页后再提升为视觉当前页。按钮和手势的事件
-                // 到达顺序相反，单独依赖任一侧都会在交接窗口提前切一次页内状态。
-                val pageShowsCurrentChrome = pagerSettledHere && isCurrentArtworkPage
+                val pageShowsCurrentChrome = pagerSettledHere && isVisualArtworkPage
                 PlayerPageArtwork(
                     pageTrack = pageTrack,
                     isCurrentPage = pageShowsCurrentChrome,
@@ -903,8 +902,8 @@ internal fun ExpressiveBelowTheFold(
         if (showShareLyricsSheet) {
             ShareLyricsSheet(
                 lines = lyricsData.toShareLyricsLines(),
-                songTitle = state.screenData.nowPlayingTitle,
-                artistName = state.screenData.artistName,
+                songTitle = state.displayTitle,
+                artistName = state.displayArtistName,
                 artwork = state.screenData.bitmap,
                 seedColor = state.startColor.value,
                 initialLineIndex = state.currentLyricLineIndex,
@@ -971,7 +970,7 @@ internal fun ExpressiveCollapsedToolbar(
                                 .wrapContentHeight(),
                         ) {
                             Text(
-                                text = state.screenData.nowPlayingTitle,
+                                text = state.displayTitle,
                                 style = typo().bodyMedium,
                                 color = Color.White,
                                 maxLines = 1,
@@ -985,7 +984,7 @@ internal fun ExpressiveCollapsedToolbar(
                             )
                             LazyRow(verticalAlignment = Alignment.CenterVertically) {
                                 item {
-                                    AnimatedVisibility(visible = state.screenData.isExplicit) {
+                                    AnimatedVisibility(visible = state.displayIsExplicit) {
                                         ExplicitBadge(
                                             modifier =
                                                 Modifier
@@ -995,10 +994,10 @@ internal fun ExpressiveCollapsedToolbar(
                                     }
                                 }
                                 item(
-                                    key = state.screenData.artistName,
+                                    key = state.displayArtistName,
                                 ) {
                                     Text(
-                                        text = state.screenData.artistName,
+                                        text = state.displayArtistName,
                                         style = typo().bodySmall,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,

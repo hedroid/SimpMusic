@@ -3,6 +3,7 @@ package com.maxrave.simpmusic.ui.screen.player.content
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
@@ -655,7 +656,12 @@ internal fun ExpressiveTrackInfoRow(
         // While a canvas hides the big artwork, a small thumbnail joins the row — Classic
         // verbatim (its shared NowPlayingTrackInfoRow does exactly this). Switched off by the
         // fullscreen lyrics landscape layout, which shows the full artwork right above the row.
-        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
+        // 55dp 高于文字行,出现/消失会改行高:显式 tween 防默认 spring 过冲推挤下方布局。
+        AnimatedVisibility(
+            visible = showCanvasThumbnail && state.screenData.canvasData != null,
+            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -683,10 +689,13 @@ internal fun ExpressiveTrackInfoRow(
         Column(Modifier.weight(1f)) {
             // 切歌文字过渡(与 Classic 同款):裸 Text 硬切 + marquee 重置读作"闪一下"。
             AnimatedContent(
-                targetState = state.screenData.nowPlayingTitle,
+                targetState = state.displayTitle,
                 transitionSpec = {
+                    // 默认 SizeTransform 是 spring:中英文歌名 1px 的测量行高差会被放大成
+                    // 5-6px 过冲,整页下方内容跟着弹跳。tween 与 fade 同步,无反向修正。
                     (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                        SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
                 label = "expressiveTitle",
             ) { title ->
@@ -709,7 +718,11 @@ internal fun ExpressiveTrackInfoRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AnimatedVisibility(visible = state.screenData.isExplicit) {
+                AnimatedVisibility(
+                    visible = state.displayIsExplicit,
+                    enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                    exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                ) {
                     ExplicitBadge(
                         modifier =
                             Modifier
@@ -718,10 +731,12 @@ internal fun ExpressiveTrackInfoRow(
                     )
                 }
                 AnimatedContent(
-                    targetState = state.screenData.artistName,
+                    targetState = state.displayArtistName,
                     transitionSpec = {
+                        // 同标题:尺寸跟随 tween,不吃默认 spring 过冲。
                         (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                            (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                            SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                     },
                     modifier = Modifier.weight(1f),
                     label = "expressiveArtist",

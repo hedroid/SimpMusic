@@ -78,7 +78,6 @@ import com.maxrave.simpmusic.expect.ui.rememberVideoAspectRatio
 import com.maxrave.simpmusic.extension.GradientAngle
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.extension.KeepScreenOn
-import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.expect.hapticTapFeedback
 import com.maxrave.simpmusic.extension.getColorFromPalette
 import com.maxrave.simpmusic.extension.getScreenSizeInfo
@@ -350,37 +349,19 @@ fun NowPlayingScreenContent(
             initialPage = currentOrderIndex.coerceAtLeast(0),
             pageCount = { artworkQueue.size.coerceAtLeast(1) },
         )
+    // `PagerState.settledPage` changes to the target before the final snap animation has actually
+    // stopped. Keep a stricter visual commit index that advances only after scrolling is false;
+    // metadata/palette and the player seek must not steal frames from the cover's final approach.
+    var visualOrderIndex by remember { mutableIntStateOf(currentOrderIndex.coerceAtLeast(0)) }
     var isAnimatingFromPlayer by remember { mutableStateOf(false) }
     var isUserDraggingActive by remember { mutableStateOf(false) }
     // Whether a real finger-drag is waiting to be turned into a seek. See the latch below.
     var pendingUserSwipe by remember { mutableStateOf(false) }
-
-    LaunchedEffect(currentOrderIndex, nowPlayingVideoId, artworkQueue) {
-        Logger.w(
-            TAG,
-            "ARTWORK_PROBE model order=$currentOrderIndex player=${mediaPlayerHandler.currentOrderIndex()} " +
-                "video=$nowPlayingVideoId queue=${artworkQueue.map { it.videoId }} " +
-                "pager=${artworkPagerState.currentPage}/${artworkPagerState.settledPage}/${artworkPagerState.targetPage}",
-        )
-    }
-
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow {
-            listOf(
-                artworkPagerState.currentPage,
-                artworkPagerState.settledPage,
-                artworkPagerState.targetPage,
-                if (artworkPagerState.isScrollInProgress) 1 else 0,
-            )
-        }.distinctUntilChanged().collect { pager ->
-            Logger.w(
-                TAG,
-                "ARTWORK_PROBE pager current=${pager[0]} settled=${pager[1]} target=${pager[2]} " +
-                    "scroll=${pager[3]} model=$currentOrderIndex player=${mediaPlayerHandler.currentOrderIndex()} " +
-                    "drag=$isUserDraggingActive fromPlayer=$isAnimatingFromPlayer pending=$pendingUserSwipe",
-            )
-        }
-    }
+    // Explicit ownership hand-off for gesture navigation. Once the pager settles, it owns the
+    // visual result and sends one seek to the player. The matching player transition consumes this
+    // token as an ACK; it must never issue another pager movement. External transitions (buttons,
+    // auto advance, queue taps) have no token and are the only events allowed to drive the pager.
+    var awaitingPagerSeekVideoId by remember { mutableStateOf<String?>(null) }
 
     // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
     // by the outer Modifier.scrollable on the Column) and programmatic
@@ -403,24 +384,22 @@ fun NowPlayingScreenContent(
 
     // ① Player → Pager: follow track changes.
     //
-    // 直接操控 + 单次落位（用户 2026-10-04 定调）：拖动归手指，松手后落位只走一次；播放器
-    // 切歌回调在这里只许"确认"——targetPage/settledPage 已在目标页时绝不发 scroll 指令。
-    // 第二次位移（手势切歌封面"来回一下"）就是本 effect 在落位窗口内被播放器回调再次触发
-    // 造成的：旧守卫读的 currentPage 在快照调度下滞后于落位动画，一拍没对齐就重新接管。
-    // 只有 Pager 完全不在目标页（按钮切歌/队列重排/灰歌 SKIP 跳页）才由这里接管：相邻页走
-    // 与手势落位同一条无过冲曲线（ArtworkPagerSnapAnimation，共用 flingBehavior 的落位），
-    // 非相邻跳转 snap 直跳，避免扫过几十张无关封面。
-    // Keyed on the track ALONE for the re-entrancy reasons documented below.
-    LaunchedEffect(currentOrderIndex) {
+    // Player → Pager. A gesture-originated transition is only an acknowledgement. Everything else
+    // is an external track change and may move the pager exactly once.
+    LaunchedEffect(currentOrderIndex, nowPlayingVideoId) {
         val target = currentOrderIndex
+        val awaitingVideoId = awaitingPagerSeekVideoId
+        if (awaitingVideoId != null && awaitingVideoId == nowPlayingVideoId) {
+            awaitingPagerSeekVideoId = null
+            return@LaunchedEffect
+        }
+        // The player moved somewhere other than the requested gesture page (failed item, queue
+        // mutation, remote control). Release gesture ownership and follow the actual player.
+        if (awaitingVideoId != null && awaitingVideoId != nowPlayingVideoId) {
+            awaitingPagerSeekVideoId = null
+        }
         val pagerOnTarget =
             artworkPagerState.targetPage == target || artworkPagerState.settledPage == target
-        Logger.w(
-            TAG,
-            "ARTWORK_PROBE playerToPager target=$target current=${artworkPagerState.currentPage} " +
-                "settled=${artworkPagerState.settledPage} targetPage=${artworkPagerState.targetPage} " +
-                "onTarget=$pagerOnTarget drag=$isUserDraggingActive",
-        )
         if (pagerOnTarget) return@LaunchedEffect
         if (!isUserDraggingActive &&
             artworkQueue.isNotEmpty() &&
@@ -465,15 +444,18 @@ fun NowPlayingScreenContent(
     // AppleMusicQueueView already uses rememberUpdatedState for exactly this hazard (its offset).
     val latestOrderIndex by rememberUpdatedState(currentOrderIndex)
     val latestQueueSize by rememberUpdatedState(artworkQueue.size)
+    val latestArtworkQueue by rememberUpdatedState(artworkQueue)
     LaunchedEffect(artworkPagerState) {
-        snapshotFlow { artworkPagerState.settledPage }
+        snapshotFlow {
+            artworkPagerState.settledPage to artworkPagerState.isScrollInProgress
+        }
             .distinctUntilChanged()
-            .collect { settled ->
-                Logger.w(
-                    TAG,
-                    "ARTWORK_PROBE pagerSettled=$settled model=$latestOrderIndex " +
-                        "fromPlayer=$isAnimatingFromPlayer pending=$pendingUserSwipe",
-                )
+            .collect { (settled, scrolling) ->
+                // Compose publishes settledPage while the last part of the snap is still moving.
+                // Dispatching Media3 there makes its synchronous transition/data work drop those
+                // final frames, which looks exactly like the cover jumping sideways to the target.
+                if (scrolling) return@collect
+                visualOrderIndex = settled
                 if (isAnimatingFromPlayer) return@collect
                 // The seek is a response to a SWIPE, so there must have been one. This is what
                 // stops the Apple Music queue from being overruled: tapping a row seeks correctly,
@@ -488,6 +470,8 @@ fun NowPlayingScreenContent(
                 if (settled == orderIndex) return@collect
 
                 runCatching {
+                    // Set before dispatch: Media3 may publish the transition synchronously.
+                    awaitingPagerSeekVideoId = latestArtworkQueue.getOrNull(settled)?.videoId
                     when (val action = computeSeekAction(settled, orderIndex)) {
                         ArtworkSeekAction.Next -> {
                             sharedViewModel.onUIEvent(UIEvent.Next)
@@ -502,32 +486,26 @@ fun NowPlayingScreenContent(
                             mediaPlayerHandler.playMediaItemInMediaSource(action.index)
                         }
                         ArtworkSeekAction.NoOp -> {
+                            awaitingPagerSeekVideoId = null
                             Unit
                         }
                     }
                 }.onFailure { error ->
+                    awaitingPagerSeekVideoId = null
                     Logger.w(TAG, "ArtworkPager seek failed: ${error.message}")
                 }
             }
     }
 
-    // ③ "拉断橡皮筋"震感:用户拖动中页面跨越一半(currentPage 跳变,松手必翻页)的那一刻
-    // 震一次,受触感设置门控。信号选型(实测):currentPageOffsetFraction/targetPage 都不是
-    // snapshot state,拖动中 snapshotFlow 看不见它们变化;currentPage 是 mutableStateOf
-    // 且跨半即时跳变——拖动中与 settledPage(整个拖动期间恒为起点页)比较即可。拖回起点
-    // 不震、再拉再震、多页拖动每跨一页震一次;自动连播/程序化 snap 不经 isUserDraggingActive,
-    // 不会误震;全局点击观察器按位移排除拖动,无双重震动。
-    LaunchedEffect(artworkPagerState) {
-        snapshotFlow { if (isUserDraggingActive) artworkPagerState.currentPage else null }
-            .distinctUntilChanged()
-            .collect { page ->
-                if (page != null && page != artworkPagerState.settledPage) {
-                    HapticFeedback.tap()
-                }
-            }
+    // Do not let a failed seek leave ownership latched forever. A normal transition consumes the
+    // token immediately; this path only runs for a player that never acknowledged the request.
+    LaunchedEffect(awaitingPagerSeekVideoId) {
+        val expected = awaitingPagerSeekVideoId ?: return@LaunchedEffect
+        delay(3_000)
+        if (awaitingPagerSeekVideoId == expected) awaitingPagerSeekVideoId = null
     }
 
-    // ④ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
+    // ③ Queue mutation guard — when queue shrinks below currentPage, scroll to last index
     // to avoid IndexOutOfBoundsException during recomposition.
     LaunchedEffect(artworkQueue.size) {
         if (artworkQueue.isNotEmpty() && artworkPagerState.currentPage >= artworkQueue.size) {
@@ -810,6 +788,7 @@ fun NowPlayingScreenContent(
             artworkQueue = artworkQueue,
             artworkPageKeys = artworkPageKeys,
             currentOrderIndex = currentOrderIndex,
+            visualOrderIndex = visualOrderIndex,
             artworkPagerState = artworkPagerState,
             artworkMotionInProgress = isAnimatingFromPlayer || artworkPagerState.isScrollInProgress,
             startColor = startColor,
@@ -846,8 +825,8 @@ fun NowPlayingScreenContent(
             // 调色板重新生成落地后,动画从用户正看着的颜色平滑走向新色,不再闪上一首的旧色。
             onSnapPaletteColor = { color ->
                 coroutineScope.launch {
-                    startColor.snapTo(color)
-                    endColor.snapTo(PlayerBackdropColor)
+                    startColor.animateTo(color, animationSpec = tween(220))
+                    endColor.animateTo(PlayerBackdropColor, animationSpec = tween(220))
                 }
             },
             onToggleControls = {

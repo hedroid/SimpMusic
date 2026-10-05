@@ -757,7 +757,7 @@ private fun AppleMusicMainView(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = state.screenData.nowPlayingTitle,
+                                        text = state.displayTitle,
                                         style = typography.compactTitle,
                                         maxLines = 1,
                                         modifier =
@@ -768,7 +768,7 @@ private fun AppleMusicMainView(
                                     )
                                     Spacer(modifier = Modifier.height(3.dp))
                                     Text(
-                                        text = state.screenData.artistName,
+                                        text = state.displayArtistName,
                                         style = typography.compactArtist,
                                         maxLines = 1,
                                         modifier =
@@ -890,7 +890,7 @@ internal fun AppleMusicMainTitleRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = state.screenData.nowPlayingTitle,
+                text = state.displayTitle,
                 style = typography.mainTitle,
                 maxLines = 1,
                 modifier =
@@ -901,11 +901,11 @@ internal fun AppleMusicMainTitleRow(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.screenData.isExplicit) {
+                if (state.displayIsExplicit) {
                     ExplicitBadge(modifier = Modifier.size(20.dp).padding(end = 4.dp))
                 }
                 Text(
-                    text = state.screenData.artistName,
+                    text = state.displayArtistName,
                     style = typography.mainArtist,
                     maxLines = 1,
                     modifier =
@@ -954,6 +954,7 @@ private fun AppleMusicArtworkPage(
 ) {
     val pageTrack = state.artworkQueue.getOrNull(page)
     val isCurrentPage = page == state.currentOrderIndex
+    val isVisualPage = page == state.visualOrderIndex
     // 翻页期间只移动静态封面。Surface/动态封面不参与 Pager 运动，避免播放器回调切换
     // currentOrderIndex 时这些重层在半途中拆装，制造看起来像封面闪烁的帧。
     val pageShowsFullscreen =
@@ -992,7 +993,7 @@ private fun AppleMusicArtworkPage(
             }
             PlayerPageArtwork(
                 pageTrack = pageTrack,
-                isCurrentPage = pagerSettledHere && isCurrentPage,
+                isCurrentPage = pagerSettledHere && isVisualPage,
                 isSettledPage = pagerSettledHere,
                 isPagerMoving = state.artworkMotionInProgress,
                 // Feeds the VM palette (and, at the flip, the page's mesh input — bitmap and seed

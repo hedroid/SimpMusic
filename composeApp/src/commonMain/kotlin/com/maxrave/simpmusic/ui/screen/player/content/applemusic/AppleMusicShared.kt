@@ -461,7 +461,7 @@ internal fun AppleMusicCompactHeader(
             // Ellipsis, not marquee: a marquee in this narrow header scrolls constantly and
             // snapshots as garbage ("Vill Be Okay … Eve" in the first device screenshots).
             Text(
-                text = state.screenData.nowPlayingTitle,
+                text = state.displayTitle,
                 style = typography.compactTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -469,11 +469,11 @@ internal fun AppleMusicCompactHeader(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.screenData.isExplicit) {
+                if (state.displayIsExplicit) {
                     ExplicitBadge(modifier = Modifier.size(20.dp).padding(end = 4.dp))
                 }
                 Text(
-                    text = state.screenData.artistName,
+                    text = state.displayArtistName,
                     style = typography.compactArtist,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

@@ -17,6 +17,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -346,15 +347,17 @@ fun NowPlayingContentSpotify(
                 ) { page ->
                     val pageTrack = state.artworkQueue.getOrNull(page)
                     val isCurrentArtworkPage = page == state.currentOrderIndex
+                    val isVisualArtworkPage = page == state.visualOrderIndex
                     val pageHasCanvas =
                         !state.artworkMotionInProgress &&
                             isCurrentArtworkPage &&
                             state.screenData.canvasData != null
 
-                    // Per-page palette state for the gradient backdrop.
-                    // The bitmap is fed in by Layer 2's adjacent-thumbnail AsyncImage
-                    // (onSuccess), so we use the SAME bitmap that's painted on screen —
-                    // matches the outer Column's palette extraction characteristics.
+                    // Per-page palette state. Adjacent artwork is decoded before it becomes
+                    // current, so the shell can glide to its palette after the pager settles.
+                    // The colour itself is deliberately NOT painted as a fullscreen pager page:
+                    // two opaque page backgrounds create a moving, full-height colour seam that
+                    // reads as a flash even when the artwork movement is perfectly continuous.
                     val pagePaletteState = rememberPaletteState()
                     // (fix) 起步色=壳层当前 startColor,不是 Black:滑入页若为新组合(如打开
                     // 播放页后的首次滑动、远跳),它的按页调色板要 ~100-300ms 才落地,期间
@@ -378,16 +381,9 @@ fun NowPlayingContentSpotify(
                             }
                     }
 
-                    // (fix 滑切背景闪/追色平台段)壳层 startColor 对齐本页按页渐变现值的时机
-                    // 有两个,都不依赖 currentOrderIndex(它要等播放器转场确认,网易源
-                    // ~0.3-0.4s——那段时间壳层渐变停在上一首的颜色,Layer 0 一淡出就是
-                    // 一段旧色平台,读作"背景跳一下"):
-                    // ①用户滑到本页停稳(settledPage)那一刻——此时本页 Layer 0 顶在最上
-                    //   面,snap 到它自己的颜色在视觉上是零变化;flip 后 Layer 0 淡出,
-                    //   底下的壳层渐变已经就位,不存在平台段;
-                    // ②flip 成当前页(settled 时调色板还没落地的兜底;远跳新建页从种子色
-                    //   起步,snap 无害)。
-                    // 黑色守卫:按页色尚未就绪时不 snap,绝不把背景闪黑。
+                    // Commit the prepared colour only after the page is visually settled. The
+                    // outer shell animates to it while remaining spatially fixed, matching the
+                    // standard music-player behaviour: artwork moves, ambient colour dissolves.
                     val pagerSettledHere by remember {
                         derivedStateOf { state.artworkPagerState.settledPage == page }
                     }
@@ -395,7 +391,7 @@ fun NowPlayingContentSpotify(
                     // 按钮路径是播放器先变，手势路径是 Pager 先落位；只认任意一侧都会
                     // 让两条路径中的一条提前切调色板/角标，随后另一侧回调时再切一次。
                     // AND 让过渡期间没有页做状态提升，只移动完整的静态页面。
-                    val pageShowsCurrentChrome = pagerSettledHere && isCurrentArtworkPage
+                    val pageShowsCurrentChrome = pagerSettledHere && isVisualArtworkPage
                     LaunchedEffect(isCurrentArtworkPage, pagerSettledHere, pageTrack?.videoId) {
                         if (pageShowsCurrentChrome && pageStartColor.value != Color.Black) {
                             actions.onSnapPaletteColor(pageStartColor.value)
@@ -436,47 +432,6 @@ fun NowPlayingContentSpotify(
                                     },
                                 ),
                     ) {
-                        // ── Layer 0: per-page backdrop (adjacent pages only) ──
-                        // Palette gradient (startColor → endColor) so the adjacent page never
-                        // falls back to a flat dark void during a swipe.
-                        // The CURRENT page skips this layer so the existing gradient / canvas on
-                        // the Column stays visible — but the skip must FADE, not flip: the flip
-                        // lands in the same recomposition that turns the page current, while the
-                        // shell's snap/animation catches up a frame or two later, so a hard
-                        // skip exposed one-to-three frames of the shell gradient still holding
-                        // the OUTGOING track's colour — the "background flashes the old colour
-                        // on settle" that survived the first fix round. A 250ms fade-out keeps
-                        // the page's own colour on screen while the shell lands underneath it.
-                        if (pageTrack != null) {
-                            // Fully qualified: the outer Column's ColumnScope.AnimatedVisibility
-                            // member otherwise shadows the top-level BoxScope overload.
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = !pageShowsCurrentChrome,
-                                enter = fadeIn(animationSpec = tween(0)),
-                                exit = fadeOut(animationSpec = tween(PAGE_BACKDROP_FADE_MS)),
-                            ) {
-                                // Palette is fed by Layer 2's adjacent-thumbnail AsyncImage
-                                // (see below) so the gradient color stays consistent with
-                                // the bitmap actually painted for that page.
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.linearGradient(
-                                                    colors =
-                                                        listOf(
-                                                            pageStartColor.value,
-                                                            Color.Black,
-                                                        ),
-                                                    start = state.gradientOffset.start,
-                                                    end = state.gradientOffset.end,
-                                                ),
-                                            ),
-                                )
-                            }
-                        }
-
                         // ── Layer 1: fullscreen canvas backdrop (current track + canvas data) ──
                         if (pageHasCanvas) {
                             Crossfade(targetState = state.screenData.canvasData?.isVideo) { isVideo ->
@@ -1674,7 +1629,7 @@ fun NowPlayingContentSpotify(
                                     .wrapContentHeight(),
                             ) {
                                 Text(
-                                    text = state.screenData.nowPlayingTitle,
+                                    text = state.displayTitle,
                                     style = typo().bodyMedium,
                                     color = Color.White,
                                     maxLines = 1,
@@ -1688,7 +1643,11 @@ fun NowPlayingContentSpotify(
                                 )
                                 LazyRow(verticalAlignment = Alignment.CenterVertically) {
                                     item {
-                                        AnimatedVisibility(visible = state.screenData.isExplicit) {
+                                        AnimatedVisibility(
+                                            visible = state.displayIsExplicit,
+                                            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                                            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                                        ) {
                                             ExplicitBadge(
                                                 modifier =
                                                     Modifier
@@ -1699,10 +1658,10 @@ fun NowPlayingContentSpotify(
                                         }
                                     }
                                     item(
-                                        key = state.screenData.artistName,
+                                        key = state.displayArtistName,
                                     ) {
                                         Text(
-                                            text = state.screenData.artistName,
+                                            text = state.displayArtistName,
                                             style = typo().bodySmall,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
@@ -1774,8 +1733,8 @@ fun NowPlayingContentSpotify(
         if (showShareLyricsSheet) {
             ShareLyricsSheet(
                 lines = lyricsData.toShareLyricsLines(),
-                songTitle = state.screenData.nowPlayingTitle,
-                artistName = state.screenData.artistName,
+                songTitle = state.displayTitle,
+                artistName = state.displayArtistName,
                 artwork = state.screenData.bitmap,
                 seedColor = state.startColor.value,
                 initialLineIndex = state.currentLyricLineIndex,
@@ -1804,7 +1763,13 @@ internal fun NowPlayingTrackInfoRow(
                 .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedVisibility(showCanvasThumbnail && state.screenData.canvasData != null) {
+        // canvas 缩略图 55dp 高于文字行:出现/消失会改行高,默认 spring 过冲会把下方
+        // 布局弹一下,与标题区同一类病,换成无过冲 tween。
+        AnimatedVisibility(
+            visible = showCanvasThumbnail && state.screenData.canvasData != null,
+            enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
             AsyncImage(
                 model =
                     ImageRequest
@@ -1833,10 +1798,14 @@ internal fun NowPlayingTrackInfoRow(
             // 切歌文字过渡:旧结构是裸 Text 硬切 + marquee 重置,和封面 550ms crossfade 不同
             // 步,读作"闪一下"。Spotify 同款上滑淡入淡出,过渡内文字各自带 marquee。
             AnimatedContent(
-                targetState = state.screenData.nowPlayingTitle,
+                targetState = state.displayTitle,
                 transitionSpec = {
+                    // 默认 SizeTransform 是 spring:中英文歌名 1px 的测量行高差会被放大成
+                    // 5-6px 过冲,把进度条以下的整页内容推得上下弹跳。跟 fade 同步的
+                    // tween 让尺寸平滑走完,不做反向修正。
                     (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                        (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                        SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                 },
                 label = "nowPlayingTitle",
             ) { title ->
@@ -1858,8 +1827,12 @@ internal fun NowPlayingTrackInfoRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                item(state.screenData.isExplicit) {
-                    AnimatedVisibility(visible = state.screenData.isExplicit) {
+                item(state.displayIsExplicit) {
+                    AnimatedVisibility(
+                        visible = state.displayIsExplicit,
+                        enter = fadeIn(tween(220)) + expandVertically(tween(220)),
+                        exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+                    ) {
                         ExplicitBadge(
                             modifier =
                                 Modifier
@@ -1869,12 +1842,14 @@ internal fun NowPlayingTrackInfoRow(
                         )
                     }
                 }
-                item(state.screenData.artistName) {
+                item(state.displayArtistName) {
                     AnimatedContent(
-                        targetState = state.screenData.artistName,
+                        targetState = state.displayArtistName,
                         transitionSpec = {
+                            // 同标题:尺寸跟随 tween,不吃默认 spring 过冲(艺人名中英文行高差同理)。
                             (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 3 }) togetherWith
-                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 })
+                                (fadeOut(tween(160)) + slideOutVertically(tween(160)) { -it / 3 }) using
+                                SizeTransform(sizeAnimationSpec = { _, _ -> tween(220) })
                         },
                         label = "nowPlayingArtist",
                     ) { artist ->
@@ -2169,4 +2144,3 @@ internal fun ColumnScope.SpotifyPlaybackControls(
 
 // 邻页渐变层在翻成当前页时的淡出时长:盖住壳层 startColor snap/动画追上来的 1-3 帧
 // (硬跳过会露出还停在上一首歌颜色的壳层渐变,即滑停瞬间"背景闪旧色")。
-private val PAGE_BACKDROP_FADE_MS = 250

@@ -3,7 +3,9 @@ package com.maxrave.simpmusic.ui.screen.player.content
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector4D
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
@@ -63,15 +65,19 @@ internal fun NowPlayingScreenData.LyricsData?.canVote(): Boolean {
 internal val PlayerBackdropColor = Color(0xFF121212)
 
 /**
- * 封面 pager 的统一落位曲线。这里刻意不用 spring：手势松开时 Pager 会把横向速度
- * 传给弹簧，即使临界阻尼也可能先越过目标再反向修正，表现为新封面左右跳一次。
- * 200ms 强 ease-out 严格单向收敛；拖动阶段仍由手指 1:1 控制，仅松手后的剩余距离走它。
+ * 封面 Pager 的统一落位曲线。禁止 spring：Pager 会把松手速度传给它，即使是
+ * 临界阻尼也可能越过目标后回拉。固定时长、单调的 tween 只从松手位置向目标页移动，
+ * 不存在反向分量。与下面的高摩擦 decay 组合，彻底撤销旧版橡皮筋手感。
  */
 internal val ArtworkPagerSnapAnimation: AnimationSpec<Float> =
     tween(
-        durationMillis = 200,
-        easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f),
+        durationMillis = 240,
+        easing = LinearOutSlowInEasing,
     )
+
+/** 快速消掉 fling 速度，不让 Pager 先飞过目标页再返向吸附。 */
+private val ArtworkPagerDecayAnimation: DecayAnimationSpec<Float> =
+    exponentialDecay(frictionMultiplier = 8f)
 
 /** 迷你播放条原有的拉断回弹；与全屏封面 Pager 的单向吸附刻意分离。 */
 internal val ArtworkSnapSpring: AnimationSpec<Float> =
@@ -93,6 +99,7 @@ internal fun rememberArtworkPagerFlingBehavior(state: PagerState): TargetedFling
     PagerDefaults.flingBehavior(
         state = state,
         pagerSnapDistance = PagerSnapDistance.atMost(1),
+        decayAnimationSpec = ArtworkPagerDecayAnimation,
         snapAnimationSpec = ArtworkPagerSnapAnimation,
     )
 
@@ -182,6 +189,8 @@ class NowPlayingContentState(
      */
     val artworkPageKeys: List<String> = emptyList(),
     val currentOrderIndex: Int,
+    /** Pager 已经落稳、用户此刻实际看到的页面。文字和颜色只跟它走。 */
+    val visualOrderIndex: Int,
     val artworkPagerState: PagerState,
     /** 手势拖动、惯性落位或按钮触发的程序化翻页期间均为 true；封面据此锁住可见位图。 */
     val artworkMotionInProgress: Boolean,
@@ -213,7 +222,24 @@ class NowPlayingContentState(
      * its video frame from this one value, so a frame and the spacer that measures it cannot drift.
      */
     val videoAspectRatio: Float = 16f / 9,
-)
+) {
+    val visualTrack: Track?
+        get() = artworkQueue.getOrNull(visualOrderIndex)
+
+    val displayTitle: String
+        get() = visualTrack?.title ?: screenData.nowPlayingTitle
+
+    val displayArtistName: String
+        get() =
+            visualTrack
+                ?.artists
+                ?.joinToString(", ") { it.name }
+                ?.takeIf { it.isNotBlank() }
+                ?: screenData.artistName
+
+    val displayIsExplicit: Boolean
+        get() = visualTrack?.isExplicit ?: screenData.isExplicit
+}
 
 /**
  * Everything a Now Playing content layer can do. All callbacks land in the shell, which owns
@@ -225,10 +251,10 @@ class NowPlayingContentActions(
     val onSeekToQueueIndex: (Int) -> Unit,
     val onArtworkBitmap: (ImageBitmap) -> Unit,
     /**
-     * (fix 滑切背景闪)Spotify 主题:邻页翻成当前页的瞬间,把壳层 startColor 先 SNAP 到
-     * 该页自己的按页渐变色(用户此刻正看着的颜色)。否则邻页的 per-page backdrop 层随
+     * Spotify 主题:邻页翻成当前页后,让壳层 startColor 平滑收敛到该页自己的按页渐变色。
+     * 否则邻页的 per-page backdrop 层随
      * "current 跳过 Layer 0"的设计关掉,露出还停在**上一首歌**颜色的壳层渐变,调色板
-     * 重新生成后才从旧色动画到新色——滑切瞬间背景"旧色闪一下再变过去"的根源。
+     * 重新生成后才从旧色动画到新色——滑切瞬间背景会出现旧色平台。
      */
     val onSnapPaletteColor: (Color) -> Unit = {},
     val onToggleControls: () -> Unit,
