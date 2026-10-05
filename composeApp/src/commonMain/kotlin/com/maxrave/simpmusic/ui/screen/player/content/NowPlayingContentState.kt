@@ -17,6 +17,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -33,6 +34,7 @@ import com.maxrave.domain.data.model.streams.TimeLine
 import com.maxrave.domain.data.player.GenericCastState
 import com.maxrave.domain.mediaservice.handler.ControlState
 import com.maxrave.domain.mediaservice.handler.RepeatState
+import com.maxrave.simpmusic.expect.HapticFeedback
 import com.maxrave.simpmusic.extension.GradientOffset
 import com.maxrave.simpmusic.viewModel.LyricsProvider
 import com.maxrave.simpmusic.viewModel.NowPlayingScreenData
@@ -96,6 +98,7 @@ internal fun Modifier.artworkDragPager(
     val thresholdPx = with(LocalDensity.current) { 56.dp.toPx() }
     var startPage by remember(pager) { mutableIntStateOf(0) }
     var dragPx by remember(pager) { mutableFloatStateOf(0f) }
+    var snapHapticArmed by remember(pager) { mutableStateOf(true) }
     val dragState = rememberDraggableState { delta ->
         val pageWidth = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat()
         if (pageWidth > 0f) {
@@ -105,6 +108,12 @@ internal fun Modifier.artworkDragPager(
             )
             val consumed = next - dragPx
             dragPx = next
+            if (snapHapticArmed && (dragPx <= -thresholdPx || dragPx >= thresholdPx)) {
+                snapHapticArmed = false
+                HapticFeedback.tap()
+            } else if (!snapHapticArmed && dragPx > -thresholdPx && dragPx < thresholdPx) {
+                snapHapticArmed = true
+            }
             pager.dispatchRawDelta(-consumed)
         }
     }
@@ -115,6 +124,7 @@ internal fun Modifier.artworkDragPager(
         onDragStarted = {
             startPage = pager.settledPage
             dragPx = 0f
+            snapHapticArmed = true
             onDragChanged(true)
         },
         onDragStopped = {
