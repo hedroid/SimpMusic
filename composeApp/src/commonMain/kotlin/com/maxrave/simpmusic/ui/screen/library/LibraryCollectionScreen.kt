@@ -339,7 +339,7 @@ fun DownloadedManagementBody(
             ) {
                 RippleIconButton(
                     imageVector = SimpIcons.PlayCircle,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(32.dp),
                     fillMaxSize = true,
                     tint = MaterialTheme.colorScheme.onBackground,
                     contentDescription = stringResource(Res.string.play),
