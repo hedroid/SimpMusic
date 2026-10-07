@@ -71,6 +71,7 @@ import simpmusic.composeapp.generated.resources.podcast_no_programs
 import simpmusic.composeapp.generated.resources.podcast_order_earliest
 import simpmusic.composeapp.generated.resources.podcast_order_latest
 import simpmusic.composeapp.generated.resources.podcast_programs
+import simpmusic.composeapp.generated.resources.podcast_programs_all_paid
 import simpmusic.composeapp.generated.resources.podcast_programs_unavailable
 import simpmusic.composeapp.generated.resources.retry
 import simpmusic.composeapp.generated.resources.podcast_subscribe
@@ -192,17 +193,18 @@ fun NeteaseRadioDetailScreen(
                         Text(
                             text =
                                 stringResource(
-                                    if (uiState.programsUnavailable) {
-                                        Res.string.podcast_programs_unavailable
-                                    } else {
-                                        Res.string.podcast_no_programs
+                                    when {
+                                        // 原始页有节目但全部不可播(付费等)=内容在,只是播不了
+                                        uiState.rawProgramCount > 0 -> Res.string.podcast_programs_all_paid
+                                        uiState.programsUnavailable -> Res.string.podcast_programs_unavailable
+                                        else -> Res.string.podcast_no_programs
                                     },
                                 ),
                             style = typo().bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         if (uiState.programsUnavailable) {
-                            // 音乐合集型电台 byradio 恒空 / 405 频控——静置或稍后重试
+                            // byradio 失败(网络波动/405 频控)——静置或稍后重试
                             Button(
                                 onClick = { viewModel.retry() },
                                 modifier = Modifier.padding(top = 12.dp),

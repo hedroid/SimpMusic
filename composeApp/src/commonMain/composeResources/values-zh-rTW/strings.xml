@@ -240,6 +240,7 @@
     <string name="podcast_hottest_radios">最熱電臺</string>
     <string name="podcast_category_empty">該分類暫無電臺</string>
     <string name="podcast_no_programs">暫無節目</string>
+    <string name="podcast_programs_all_paid">該電台的節目均為付費內容，暫無可播放的節目</string>
     <string name="podcast_subscribe">訂閱</string>
     <string name="podcast_subscribed">已訂閱</string>
     <string name="podcast_unsubscribe_toast">已取消訂閱</string>

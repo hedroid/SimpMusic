@@ -983,6 +983,7 @@
     <string name="podcast_hottest_radios">最热电台</string>
     <string name="podcast_category_empty">该分类暂无电台</string>
     <string name="podcast_no_programs">暂无节目</string>
+    <string name="podcast_programs_all_paid">该电台的节目均为付费内容，暂无可播放的节目</string>
     <string name="podcast_subscribe">订阅</string>
     <string name="podcast_subscribed">已订阅</string>
     <string name="podcast_unsubscribe_toast">已取消订阅</string>

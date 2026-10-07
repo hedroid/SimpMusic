@@ -186,7 +186,7 @@ class NeteaseRadioDetailViewModel(
         }
     }
 
-    /** 重试(不可用态/失败的入口);成功但空且电台声明有节目=限流的静默空形态,也归不可用 */
+    /** 重试(不可用态/失败的入口);成功空响应=真没内容(列表端点是权威),不走这里 */
     fun retry() {
         _uiState.update { it.copy(loading = true, programsUnavailable = false) }
         loadPrograms()
@@ -211,17 +211,20 @@ class NeteaseRadioDetailViewModel(
                         // 换电台/切排序后到达的旧回包整包丢弃
                         if (gen != programsGeneration || radioId != radioIdAtStart) return@fold
                         // 不可播节目(mainSong 缺失)不进列表,显示列表==可播列表,下标对齐;
-                        // 原始页大小进 rawProgramCount 当服务端游标
+                        // 原始页大小进 rawProgramCount 当服务端游标。
+                        // 列表端点的成功空响应=内容权威,直接"暂无节目"(2026-10-07 探针:
+                        // 单田芳评书详情 programCount=100 是下架删内容后的脏元数据,byradio
+                        // 200+count=0 稳定空;旧"声明>0 且空=限流"判定把这种电台永久误显
+                        // "拉取失败")。风控两种形态:405 已在端点层转 Result.failure 走
+                        // onFailure;"200+空数据"形态由 repo 层 800ms 串行间隔防御
                         val playable = programs.filter { it.mainSongId != null }
-                        val declared = _uiState.value.radio?.programCount ?: 0
-                        val unavailable = playable.isEmpty() && declared > 0
                         _uiState.update {
                             it.copy(
                                 programs = playable,
                                 rawProgramCount = programs.size,
                                 hasMore = more,
                                 loading = false,
-                                programsUnavailable = unavailable,
+                                programsUnavailable = false,
                             )
                         }
                     },

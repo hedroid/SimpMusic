@@ -1043,6 +1043,7 @@
     <string name="podcast_hottest_radios">Hottest radios</string>
     <string name="podcast_category_empty">No radios in this category yet</string>
     <string name="podcast_no_programs">No programs yet</string>
+    <string name="podcast_programs_all_paid">All programs in this radio are paid content — nothing playable here yet</string>
     <string name="podcast_subscribe">Subscribe</string>
     <string name="podcast_subscribed">Subscribed</string>
     <string name="podcast_unsubscribe_toast">Unsubscribed</string>

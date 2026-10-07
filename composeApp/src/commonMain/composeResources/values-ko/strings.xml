@@ -509,6 +509,7 @@
     <string name="podcast_hottest_radios">가장 인기 있는 라디오</string>
     <string name="podcast_category_empty">이 카테고리에는 라디오가 없습니다</string>
     <string name="podcast_no_programs">아직 에피소드가 없습니다</string>
+    <string name="podcast_programs_all_paid">이 라디오의 에피소드는 모두 유료 콘텐츠로, 재생할 수 있는 것이 없습니다</string>
     <string name="podcast_subscribe">구독</string>
     <string name="podcast_subscribed">구독 중</string>
     <string name="podcast_unsubscribe_toast">구독을 해제했습니다</string>
