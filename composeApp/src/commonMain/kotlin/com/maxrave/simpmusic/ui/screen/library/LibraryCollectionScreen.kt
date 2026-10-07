@@ -1,5 +1,6 @@
 package com.maxrave.simpmusic.ui.screen.library
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,23 +33,29 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.maxrave.common.LibraryChipType
+import com.maxrave.domain.data.entities.SongEntity
 import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.toTrack
 import com.maxrave.simpmusic.extension.copy
@@ -67,10 +75,16 @@ import com.maxrave.simpmusic.ui.component.LibraryTilingItem
 import com.maxrave.simpmusic.ui.component.LibraryTilingState
 import com.maxrave.simpmusic.ui.component.NowPlayingBottomSheet
 import com.maxrave.simpmusic.ui.component.RippleIconButton
+import com.maxrave.simpmusic.ui.component.SearchBarEnter
+import com.maxrave.simpmusic.ui.component.SearchBarExit
 import com.maxrave.simpmusic.ui.component.SongFullWidthItems
 import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.icon.ArrowBackIosNew
 import com.maxrave.simpmusic.ui.icon.Check
+import com.maxrave.simpmusic.ui.icon.Close
+import com.maxrave.simpmusic.ui.icon.PlayCircle
+import com.maxrave.simpmusic.ui.icon.Search
+import com.maxrave.simpmusic.ui.icon.Shuffle
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.theme.seed
 import com.maxrave.simpmusic.ui.theme.typo
@@ -102,11 +116,15 @@ import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_added
 import simpmusic.composeapp.generated.resources.no_playlists_downloaded
+import simpmusic.composeapp.generated.resources.no_results_found
 import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
+import simpmusic.composeapp.generated.resources.play
 import simpmusic.composeapp.generated.resources.playlists
 import simpmusic.composeapp.generated.resources.remove_download_message
 import simpmusic.composeapp.generated.resources.remove_download_title
+import simpmusic.composeapp.generated.resources.search
+import simpmusic.composeapp.generated.resources.shuffle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,7 +146,7 @@ fun LibraryCollectionScreen(
         when (pageType) {
             LibraryChipType.LOCAL_PLAYLIST -> viewModel.getLocalPlaylist()
             LibraryChipType.FAVORITE_PLAYLIST -> viewModel.getPlaylistFavorite()
-            LibraryChipType.DOWNLOADED_PLAYLIST -> viewModel.getDownloadedPlaylist()
+            // 下载管理页:行数据走 dynamicPlaylistViewModel 的常驻实时流,无需装载
             LibraryChipType.FAVORITE_PODCAST -> viewModel.getFavoritePodcasts()
             else -> Unit
         }
@@ -232,6 +250,7 @@ fun LibraryCollectionScreen(
  * 2026-10-01 用户定稿:tab 不再按内容分(歌曲/视频/播客),改为按状态分——行全量混排,
  * 视角行渲染按”有无视频条目”切;统计(N首·总大小)放”已完成”磁贴副标题上。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadedManagementBody(
     topPadding: Dp,
@@ -253,6 +272,9 @@ fun DownloadedManagementBody(
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var deleteSelectionConfirm by remember { mutableStateOf(false) }
+    // "已完成"标签的搜索(2026-10-07 补齐旧下载页按钮逻辑):搜索图标开合,query 过滤已完成行
+    var showSearchBar by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
     // 暂停全部只对 DownloadManager 在途(下载中/排队)有效;转存中(EXPORTING)不走队列停不了
     val hasPausable = managementRows.any { listOf(it.audioStatus.sortRank(), it.videoStatus?.sortRank() ?: 9).any { r -> r == 0 || r == 2 } }
     val hasPaused = managementRows.any { it.audioStatus == DownloadEntryStatus.PAUSED || it.videoStatus == DownloadEntryStatus.PAUSED }
@@ -302,7 +324,78 @@ fun DownloadedManagementBody(
             }
         }
         val isInProgressTab = downloadedSection == DownloadedSection.InProgress
-        val tabRows = if (isInProgressTab) inFlightRows else completedRows
+        // 搜索只作用于"已完成"标签(旧下载页同款判定:标题/任一艺人包含即命中)
+        val tabRows =
+            when {
+                isInProgressTab -> inFlightRows
+                showSearchBar && query.isNotEmpty() -> completedRows.filter { it.song.matches(query) }
+                else -> completedRows
+            }
+        // "已完成"标签操作行(2026-10-07 用户定:补齐旧下载页的播放/随机/搜索按钮,逻辑同款)
+        if (!isInProgressTab) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                RippleIconButton(
+                    imageVector = SimpIcons.PlayCircle,
+                    modifier = Modifier.size(48.dp),
+                    fillMaxSize = true,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    contentDescription = stringResource(Res.string.play),
+                    onClick = dynamicPlaylistViewModel::playAllDownloaded,
+                )
+                RippleIconButton(
+                    imageVector = SimpIcons.Shuffle,
+                    modifier = Modifier.size(32.dp),
+                    fillMaxSize = true,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    contentDescription = stringResource(Res.string.shuffle),
+                    onClick = dynamicPlaylistViewModel::shuffleDownloaded,
+                )
+                Box(Modifier.padding(horizontal = 5.dp)) {
+                    RippleIconButton(
+                        imageVector = if (showSearchBar) SimpIcons.Close else SimpIcons.Search,
+                        modifier = Modifier.size(32.dp),
+                        fillMaxSize = true,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        contentDescription = stringResource(Res.string.search),
+                        onClick = { showSearchBar = !showSearchBar },
+                    )
+                }
+            }
+            AnimatedVisibility(showSearchBar, enter = SearchBarEnter, exit = SearchBarExit) {
+                SearchBar(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(45.dp)
+                            .padding(horizontal = 12.dp),
+                    inputField = {
+                        CompositionLocalProvider(LocalTextStyle provides typo().bodySmall) {
+                            SearchBarDefaults.InputField(
+                                query = query,
+                                onQueryChange = { query = it },
+                                onSearch = { showSearchBar = false },
+                                expanded = showSearchBar,
+                                onExpandedChange = { showSearchBar = it },
+                                placeholder = {
+                                    Text(
+                                        stringResource(Res.string.search),
+                                        style = typo().bodySmall,
+                                    )
+                                },
+                                leadingIcon = { Icon(SimpIcons.Search, contentDescription = null) },
+                            )
+                        }
+                    },
+                    expanded = false,
+                    onExpandedChange = {},
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                ) {
+                }
+            }
+        }
         Box(modifier = Modifier.weight(1f)) {
             if (tabRows.isEmpty()) {
                     // 空态=恒在顶:切页不再统一复位标题,从收起态的深滚动页切到空页时
@@ -312,10 +405,10 @@ fun DownloadedManagementBody(
                         Text(
                             text =
                                 stringResource(
-                                    if (isInProgressTab) {
-                                        Res.string.download_no_in_progress
-                                    } else {
-                                        Res.string.download_no_completed
+                                    when {
+                                        isInProgressTab -> Res.string.download_no_in_progress
+                                        showSearchBar && query.isNotEmpty() -> Res.string.no_results_found
+                                        else -> Res.string.download_no_completed
                                     },
                                 ),
                             style = typo().labelSmall,
@@ -572,10 +665,7 @@ private fun DownloadManagementRowItem(
         onLongClick = onEnterSelection,
         onSelectToggle = { onToggle(row.song.videoId) },
         onPlay = {
-            dynamicPlaylistViewModel.playSong(
-                row.song.videoId,
-                LibraryDynamicPlaylistType.Downloaded,
-            )
+            dynamicPlaylistViewModel.playDownloadedSong(row.song.videoId)
         },
         onPause = { dynamicPlaylistViewModel.pauseDownload(row.song.videoId) },
         onResume = { dynamicPlaylistViewModel.resumeDownload(row.song.videoId) },
@@ -652,3 +742,17 @@ private fun CreateLocalPlaylistSheet(
         }
     }
 }
+
+/**
+ * "已完成"标签搜索的命中判定(与旧下载页同款):标题或任一艺人包含即命中——
+ * 人们找"某歌手的全部歌"不比找单曲少,只搜标题看起来像坏了。
+ */
+private fun matchesQuery(
+    title: String,
+    artists: List<String>?,
+    query: String,
+): Boolean =
+    title.contains(query, ignoreCase = true) ||
+        artists?.any { it.contains(query, ignoreCase = true) } == true
+
+private fun SongEntity.matches(query: String): Boolean = matchesQuery(title, artistName, query)

@@ -34,6 +34,7 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import simpmusic.composeapp.generated.resources.Res
+import simpmusic.composeapp.generated.resources.downloaded
 import simpmusic.composeapp.generated.resources.playlist
 import simpmusic.composeapp.generated.resources.wrapped_recap_month
 import simpmusic.composeapp.generated.resources.wrapped_recap_month_year
@@ -326,17 +327,9 @@ class LibraryDynamicPlaylistViewModel(
         videoId: String,
         type: LibraryDynamicPlaylistType,
     ) {
-        // 下载页队列隔离(2026-10-01 用户反馈):点播客下载项组纯播客队列,点歌曲组纯歌曲
-        // 队列——两类不混排;播客队列挂 NETEASE_PODCAST_ 前缀哨兵,无尽钩子按播客早退
         val (targetList, playTrack) =
             when (type) {
                 LibraryDynamicPlaylistType.Favorite -> listFavoriteSong.value to listFavoriteSong.value.find { it.videoId == videoId }
-                LibraryDynamicPlaylistType.Downloaded -> {
-                    val all = listDownloadedSong.value
-                    val isPodcast = all.find { it.videoId == videoId }?.neteaseProgramId != null
-                    val scoped = if (isPodcast) all.filter { it.neteaseProgramId != null } else all.filter { it.neteaseProgramId == null }
-                    scoped to scoped.find { it.videoId == videoId }
-                }
                 LibraryDynamicPlaylistType.Followed -> return
                 LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value to listMostPlayedSong.value.find { it.videoId == videoId }
                 is LibraryDynamicPlaylistType.MonthlyRecap ->
@@ -346,12 +339,11 @@ class LibraryDynamicPlaylistViewModel(
                 else -> return
             }
         if (playTrack == null) return
-        val isPodcastQueue = playTrack.neteaseProgramId != null
         setQueueData(
             QueueData.Data(
                 listTracks = targetList.toArrayListTrack(),
                 firstPlayedTrack = playTrack.toTrack(),
-                playlistId = if (isPodcastQueue) "NETEASE_PODCAST_DOWNLOADED" else null,
+                playlistId = null,
                 playlistName = playlistName(type),
                 playlistType = PlaylistType.RADIO,
                 continuation = null,
@@ -364,10 +356,91 @@ class LibraryDynamicPlaylistViewModel(
         )
     }
 
+    /** 下载管理页"已完成"标签的队列名,与旧下载页(已删)的 playlistName(Downloaded) 同形 */
+    private fun downloadedQueueName(): String =
+        "${getString(Res.string.playlist)} ${getString(Res.string.downloaded)}"
+
+    /**
+     * 下载管理页行点击播放(旧下载页 playSong 的 Downloaded 分支转正,2026-10-07 页面删除):
+     * 点播客下载项组纯播客队列,点歌曲组纯歌曲队列——两类不混排;播客队列挂
+     * NETEASE_PODCAST_ 前缀哨兵,无尽钩子按播客早退
+     */
+    fun playDownloadedSong(videoId: String) {
+        val all = listDownloadedSong.value
+        val isPodcastQueue = all.find { it.videoId == videoId }?.neteaseProgramId != null
+        val scoped =
+            if (isPodcastQueue) {
+                all.filter { it.neteaseProgramId != null }
+            } else {
+                all.filter { it.neteaseProgramId == null }
+            }
+        val playTrack = scoped.find { it.videoId == videoId } ?: return
+        setQueueData(
+            QueueData.Data(
+                listTracks = scoped.toArrayListTrack(),
+                firstPlayedTrack = playTrack.toTrack(),
+                playlistId = if (isPodcastQueue) "NETEASE_PODCAST_DOWNLOADED" else null,
+                playlistName = downloadedQueueName(),
+                playlistType = PlaylistType.RADIO,
+                continuation = null,
+            ),
+        )
+        loadMediaItem(
+            playTrack.toTrack(),
+            Config.PLAYLIST_CLICK,
+            scoped.indexOf(playTrack).coerceAtLeast(0),
+        )
+    }
+
+    /**
+     * 下载管理页"已完成"标签的整体播放/随机,按钮逻辑与旧下载页(已删)的 playAll/shuffle
+     * 一致:目标列表 = listDownloadedSong(文件路径在或旧缓存 state=3),随机=快照洗牌当前曲置首
+     */
+    fun playAllDownloaded() {
+        val targetList = listDownloadedSong.value
+        val firstTrack = targetList.firstOrNull() ?: return
+        setQueueData(
+            QueueData.Data(
+                listTracks = targetList.toArrayListTrack(),
+                firstPlayedTrack = firstTrack.toTrack(),
+                playlistId = null,
+                playlistName = downloadedQueueName(),
+                playlistType = PlaylistType.RADIO,
+                continuation = null,
+            ),
+        )
+        loadMediaItem(
+            firstTrack.toTrack(),
+            Config.PLAYLIST_CLICK,
+            0,
+        )
+    }
+
+    fun shuffleDownloaded() {
+        val targetList = listDownloadedSong.value
+        if (targetList.isEmpty()) return
+        val shuffledList = targetList.shuffled()
+        val firstTrack = shuffledList.first()
+        setQueueData(
+            QueueData.Data(
+                listTracks = shuffledList.toArrayListTrack(),
+                firstPlayedTrack = firstTrack.toTrack(),
+                playlistId = null,
+                playlistName = downloadedQueueName(),
+                playlistType = PlaylistType.RADIO,
+                continuation = null,
+            ),
+        )
+        loadMediaItem(
+            firstTrack.toTrack(),
+            Config.PLAYLIST_CLICK,
+            0,
+        )
+    }
+
     private fun getSongList(type: LibraryDynamicPlaylistType): List<SongEntity> =
         when (type) {
             LibraryDynamicPlaylistType.Favorite -> listFavoriteSong.value
-            LibraryDynamicPlaylistType.Downloaded -> listDownloadedSong.value
             LibraryDynamicPlaylistType.MostPlayed -> listMostPlayedSong.value
             is LibraryDynamicPlaylistType.MonthlyRecap -> listMonthlyRecapSong.value
             is LibraryDynamicPlaylistType.ArtistLiked -> listArtistLikedSong.value

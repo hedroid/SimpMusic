@@ -5,7 +5,6 @@ import com.maxrave.common.Config
 import com.maxrave.common.LibraryChipType
 import com.maxrave.data.repository.NeteaseRepositoryImpl
 import com.maxrave.domain.data.entities.AlbumEntity
-import com.maxrave.domain.data.entities.DownloadState.STATE_NOT_DOWNLOADED
 import com.maxrave.domain.data.entities.LocalPlaylistEntity
 import com.maxrave.domain.data.entities.PlaylistEntity
 import com.maxrave.domain.data.entities.SongEntity
@@ -37,7 +36,6 @@ import com.maxrave.simpmusic.ui.screen.home.analytics.monthFullNameResource
 import com.maxrave.simpmusic.extension.neteaseWriteErrorString
 import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.viewModel.base.BaseViewModel
-import com.maxrave.simpmusic.viewModel.base.removeExclusiveTrackDownloads
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
@@ -144,10 +142,6 @@ class LibraryViewModel(
     private val _favoritePodcasts: MutableStateFlow<LocalResource<List<PlaylistType>>> =
         MutableStateFlow(LocalResource.Loading())
     val favoritePodcasts: StateFlow<LocalResource<List<PlaylistType>>> get() = _favoritePodcasts.asStateFlow()
-
-    private val _downloadedPlaylist: MutableStateFlow<LocalResource<List<PlaylistType>>> =
-        MutableStateFlow(LocalResource.Loading())
-    val downloadedPlaylist: StateFlow<LocalResource<List<PlaylistType>>> get() = _downloadedPlaylist.asStateFlow()
 
     private val _chartPlaylists: MutableStateFlow<LocalResource<List<ChartItem>>> =
         MutableStateFlow(LocalResource.Loading())
@@ -950,65 +944,6 @@ class LibraryViewModel(
 //                    _listLocalPlaylist.postValue(values)
                 _yourLocalPlaylist.value = LocalResource.Success(values.reversed())
             }
-        }
-    }
-
-    fun getDownloadedPlaylist() {
-        viewModelScope.launch {
-            playlistRepository.getAllDownloadedPlaylist().combine(
-                localPlaylistRepository.getDownloadedLocalPlaylists(),
-            ) { remote, local ->
-                (remote + local).sortedByDescending {
-                    when (it) {
-                        is AlbumEntity -> it.downloadedAt
-                        is PlaylistEntity -> it.downloadedAt
-                        is LocalPlaylistEntity -> it.downloadedAt
-                        else -> null
-                    }
-                }
-            }.collect { values ->
-                _downloadedPlaylist.value = LocalResource.Success(values)
-            }
-        }
-    }
-
-    /**
-     * Remove one playlist's/album's download from the Library grid (long-press). Same shape as the
-     * detail screens' removal, minus their watchers: reset the container first, then remove the
-     * downloads of the songs it owns exclusively — tracks another downloaded container references
-     * keep their files, so deleting A never breaks B's offline copy.
-     */
-    fun removeDownloadedPlaylist(item: PlaylistType) {
-        viewModelScope.launch {
-            val tracks =
-                when (item) {
-                    is PlaylistEntity -> {
-                        playlistRepository.updatePlaylistDownloadState(item.id, STATE_NOT_DOWNLOADED)
-                        item.tracks
-                    }
-
-                    is AlbumEntity -> {
-                        albumRepository.updateAlbumDownloadState(item.browseId, STATE_NOT_DOWNLOADED)
-                        item.tracks
-                    }
-
-                    is LocalPlaylistEntity -> {
-                        localPlaylistRepository.updateLocalPlaylistDownloadState(STATE_NOT_DOWNLOADED, item.id)
-                        item.tracks
-                    }
-
-                    else -> return@launch
-                } ?: return@launch
-            removeExclusiveTrackDownloads(
-                tracks = tracks,
-                songRepository = songRepository,
-                downloadUtils = downloadUtils,
-                playlistRepository = playlistRepository,
-                albumRepository = albumRepository,
-                localPlaylistRepository = localPlaylistRepository,
-            )
-            makeToast(getString(Res.string.removed_download))
-            getDownloadedPlaylist()
         }
     }
 

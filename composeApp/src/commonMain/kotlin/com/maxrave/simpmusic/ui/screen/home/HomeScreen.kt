@@ -88,6 +88,7 @@ import com.kmpalette.loader.rememberNetworkLoader
 import com.kmpalette.rememberDominantColorState
 import com.maxrave.common.CHART_SUPPORTED_COUNTRY
 import com.maxrave.common.Config
+import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.data.model.browse.album.Track
 import com.maxrave.domain.data.model.home.HomeItem
 import com.maxrave.domain.data.model.home.chart.Chart
@@ -134,12 +135,11 @@ import com.maxrave.simpmusic.ui.navigation.destination.home.MoodDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.NotificationDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.RecentlySongsDestination
 import com.maxrave.simpmusic.ui.navigation.destination.home.SettingsDestination
-import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
+import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryCollectionDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.ArtistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PodcastDestination
 import com.maxrave.simpmusic.ui.navigation.destination.list.PlaylistDestination
 import com.maxrave.simpmusic.ui.navigation.destination.login.LoginDestination
-import com.maxrave.simpmusic.ui.screen.library.LibraryDynamicPlaylistType
 import com.maxrave.simpmusic.ui.theme.desktopPanelDark
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.HomeViewModel
@@ -502,10 +502,12 @@ fun HomeScreen(
                         val ytLoggedOut by dataStoreManager.cookie.collectAsStateWithLifecycle("")
                         OfflineErrorState(
                             onRetry = onRefresh,
+                            // 旧"已下载歌曲"动态歌单页已删(2026-10-07):跳下载管理页,
+                            // 独立路由默认落在"已完成"标签
                             onOpenDownloaded = {
                                 navController.navigate(
-                                    LibraryDynamicPlaylistDestination(
-                                        type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
+                                    LibraryCollectionDestination(
+                                        LibraryChipType.DOWNLOADED_PLAYLIST.name,
                                     ),
                                 )
                             },

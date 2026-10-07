@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,7 +66,6 @@ import coil3.request.crossfade
 import com.maxrave.common.LibraryChipType
 import com.maxrave.domain.source.MusicSource
 import com.maxrave.domain.data.entities.SongEntity
-import com.maxrave.domain.data.type.PlaylistType
 import com.maxrave.domain.utils.LocalResource
 import com.maxrave.logger.Logger
 import com.maxrave.simpmusic.extension.copy
@@ -80,11 +78,8 @@ import com.maxrave.simpmusic.ui.component.LibraryItem
 import com.maxrave.simpmusic.ui.component.LibraryItemState
 import com.maxrave.simpmusic.ui.component.LibraryItemType
 import com.maxrave.simpmusic.ui.component.LibraryTilingBox
-import com.maxrave.simpmusic.ui.component.LibraryTilingItem
-import com.maxrave.simpmusic.ui.component.LibraryTilingState
 import com.maxrave.simpmusic.ui.component.ListenTogetherIconButton
 import com.maxrave.simpmusic.ui.component.RippleIconButton
-import com.maxrave.simpmusic.ui.component.rememberSurfaceDarkColors
 import com.maxrave.simpmusic.ui.component.selection.SelectedSongsBottomSheet
 import com.maxrave.simpmusic.ui.component.selection.SongSelectionTopAppBar
 import com.maxrave.simpmusic.ui.component.selection.rememberSongSelectionState
@@ -93,7 +88,6 @@ import com.maxrave.simpmusic.ui.icon.PeopleAlt
 import com.maxrave.simpmusic.ui.icon.SimpIcons
 import com.maxrave.simpmusic.ui.navigation.destination.home.ListenTogetherDestination
 import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryCollectionDestination
-import com.maxrave.simpmusic.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.maxrave.simpmusic.ui.theme.typo
 import com.maxrave.simpmusic.viewModel.LibraryViewModel
 import com.maxrave.simpmusic.viewModel.NeteasePodcastViewModel
@@ -122,7 +116,6 @@ import simpmusic.composeapp.generated.resources.chart
 import simpmusic.composeapp.generated.resources.cancel
 import simpmusic.composeapp.generated.resources.create
 import simpmusic.composeapp.generated.resources.delete
-import simpmusic.composeapp.generated.resources.downloaded_collections
 import simpmusic.composeapp.generated.resources.downloaded_playlists
 import simpmusic.composeapp.generated.resources.favorite
 import simpmusic.composeapp.generated.resources.favorite_playlists
@@ -135,7 +128,6 @@ import simpmusic.composeapp.generated.resources.no_charts_found
 import simpmusic.composeapp.generated.resources.no_favorite_playlists
 import simpmusic.composeapp.generated.resources.no_favorite_podcasts
 import simpmusic.composeapp.generated.resources.no_playlists_added
-import simpmusic.composeapp.generated.resources.no_playlists_downloaded
 import simpmusic.composeapp.generated.resources.playlist_name
 import simpmusic.composeapp.generated.resources.playlist_name_cannot_be_empty
 import simpmusic.composeapp.generated.resources.playlists
@@ -170,7 +162,6 @@ fun LibraryScreen(
     val listCanvasSong by viewModel.listCanvasSong.collectAsStateWithLifecycle()
     val yourLocalPlaylist by viewModel.yourLocalPlaylist.collectAsStateWithLifecycle()
     val favoritePlaylist by viewModel.favoritePlaylist.collectAsStateWithLifecycle()
-    val downloadedPlaylist by viewModel.downloadedPlaylist.collectAsStateWithLifecycle()
     val favoritePodcasts by viewModel.favoritePodcasts.collectAsStateWithLifecycle()
     val chartPlaylists by viewModel.chartPlaylists.collectAsStateWithLifecycle()
     val recentlyAdded by viewModel.recentlyAdded.collectAsStateWithLifecycle()
@@ -193,10 +184,6 @@ fun LibraryScreen(
     LaunchedEffect(showSelectionSheet) {
         if (showSelectionSheet) selectionViewModel.checkAllDownloaded(selectionState.selected.toList())
     }
-    // The playlist/album tile long-pressed in the downloaded grid, awaiting the confirm dialog.
-    // Plain remember: the payload is not saveable and the dialog is short-lived enough that a
-    // process death mid-confirm can just start over.
-    var removeDownloadTarget by remember { mutableStateOf<PlaylistType?>(null) }
     // 顶栏头像=当前音源登录账号的头像(用户 2026-09-30):网易源=云村账号,其它=Google 账号
     val accountThumbnail by viewModel.sourceAccountThumbnail.collectAsStateWithLifecycle()
     val hazeState =
@@ -386,9 +373,10 @@ fun LibraryScreen(
                 neteasePodcastViewModel.onPageSelected()
             }
 
-            LibraryChipType.DOWNLOADED_PLAYLIST -> {
-                viewModel.getDownloadedPlaylist()
-            }
+            // 下载管理 chip 页:行数据由 LibraryDynamicPlaylistViewModel 的
+            // observeDownloadManagement 常驻实时流提供,选中时无需再拉
+            // (旧"已下载歌单"网格已于 2026-10-07 随旧下载页一起删除)
+            LibraryChipType.DOWNLOADED_PLAYLIST -> Unit
 
             LibraryChipType.CHART -> {
                 if (chartPlaylists.data.isNullOrEmpty()) {
@@ -561,56 +549,6 @@ fun LibraryScreen(
                     },
                 ) {
                     viewModel.getPlaylistFavorite()
-                }
-            }
-
-            LibraryChipType.DOWNLOADED_PLAYLIST -> {
-                GridLibraryPlaylist(
-                    navController,
-                    innerPadding.copy(top = topAppBarHeight, bottom = lockedBottomPadding),
-                    downloadedPlaylist,
-                    emptyText = Res.string.no_playlists_downloaded,
-                    onScrolling = tabScrolling,
-                    header = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            LibraryTilingBox(
-                                navController = navController,
-                                onOpenPlaylists = openLibraryPlaylists,
-                                onOpenCollections = openLibraryCollections,
-                                onOpenPodcasts = openLibraryPodcasts,
-                                onOpenDownloads = openLibraryDownloads,
-                            )
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                            ) {
-                                LibraryTilingItem(
-                                    // 管理页已并入"下载中/已完成"两视角(2026-10-01),入口
-                                    // 磁贴不再叫"歌曲",用通用"下载"
-                                    state = LibraryTilingState.Downloaded,
-                                    onClick = {
-                                        navController.navigate(
-                                            LibraryDynamicPlaylistDestination(
-                                                type = LibraryDynamicPlaylistType.Downloaded.toStringParams(),
-                                            ),
-                                        )
-                                    },
-                                )
-                                Text(
-                                    text = stringResource(Res.string.downloaded_collections),
-                                    style = typo().titleMedium,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.padding(top = 20.dp, bottom = 4.dp),
-                                )
-                            }
-                        }
-                    },
-                    onRemoveDownload = { item ->
-                        removeDownloadTarget = item
-                    },
-                ) {
-                    viewModel.getDownloadedPlaylist()
                 }
             }
 
@@ -926,29 +864,6 @@ fun LibraryScreen(
                 onNeteasePlaylistClick = { playlist ->
                     selectionViewModel.addToNeteasePlaylist(playlist.browseId, selectedIds)
                     selectionState.exit()
-                },
-            )
-        }
-        removeDownloadTarget?.let { target ->
-            AlertDialog(
-                containerColor = rememberSurfaceDarkColors().container,
-                titleContentColor = rememberSurfaceDarkColors().content,
-                textContentColor = rememberSurfaceDarkColors().content,
-                title = { Text(text = stringResource(Res.string.remove_download_title)) },
-                text = { Text(text = stringResource(Res.string.remove_download_message)) },
-                onDismissRequest = { removeDownloadTarget = null },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.removeDownloadedPlaylist(target)
-                        removeDownloadTarget = null
-                    }) {
-                        Text(text = stringResource(Res.string.delete))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { removeDownloadTarget = null }) {
-                        Text(text = stringResource(Res.string.cancel))
-                    }
                 },
             )
         }
