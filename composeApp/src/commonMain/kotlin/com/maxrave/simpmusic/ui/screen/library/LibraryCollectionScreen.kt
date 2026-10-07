@@ -331,15 +331,17 @@ fun DownloadedManagementBody(
                 showSearchBar && query.isNotEmpty() -> completedRows.filter { it.song.matches(query) }
                 else -> completedRows
             }
-        // "已完成"标签操作行(2026-10-07 用户定:补齐旧下载页的播放/随机/搜索按钮,逻辑同款)
+        // "已完成"标签操作行(2026-10-07 用户定:补齐旧下载页的播放/随机/搜索按钮,逻辑同款;
+        // 播放 48dp 大一档,行内垂直居中对齐——用户 2026-10-07 定)
         if (!isInProgressTab) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp),
                 horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 RippleIconButton(
                     imageVector = SimpIcons.PlayCircle,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(48.dp),
                     fillMaxSize = true,
                     tint = MaterialTheme.colorScheme.onBackground,
                     contentDescription = stringResource(Res.string.play),
